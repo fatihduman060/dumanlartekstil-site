@@ -20,4 +20,4 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./site/
-          server-dir: /public_html/bitke.com.tr/
+          server-dir: /bitke.com.tr/
