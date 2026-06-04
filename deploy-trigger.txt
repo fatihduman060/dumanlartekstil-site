@@ -1,1 +1,1 @@
-trigger
+trigger 2026-06-04 custom-domain-deploy
