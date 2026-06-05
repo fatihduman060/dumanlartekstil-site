@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy website
 
 on:
   push:
@@ -19,11 +19,5 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}
           local-dir: ./
-          state-name: .ftp-deploy-sync-state-${{ github.run_id }}.json
-          log-level: verbose
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github/**
+          server-dir: /bitke.com.tr/
