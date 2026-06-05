@@ -1,0 +1,3 @@
+DirectoryIndex index.html index.php index.html.bak
+AddType text/html .bak
+Options -Indexes
