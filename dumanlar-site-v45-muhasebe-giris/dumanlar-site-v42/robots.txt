@@ -1,6 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /muhasebe/
-
-Sitemap: https://www.dumanlartekstil.com.tr/sitemap.xml
-Host: www.dumanlartekstil.com.tr
