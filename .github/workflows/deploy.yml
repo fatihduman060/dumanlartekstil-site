@@ -21,6 +21,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: ${{ secrets.FTP_SERVER_DIR }}
           local-dir: ./
+          dangerous-clean-slate: true
           state-name: .ftp-deploy-sync-state-${{ github.run_id }}.json
           log-level: verbose
           exclude: |
