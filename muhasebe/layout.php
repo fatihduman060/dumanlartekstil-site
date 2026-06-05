@@ -1,0 +1,82 @@
+<?php
+require_once __DIR__ . '/bootstrap.php';
+
+function page_header(string $title, string $active = ''): void
+{
+    $u = current_user();
+    $nav = [
+        ['dashboard', 'dashboard.php', 'Genel Bakış', '⌂'],
+        ['cariler', 'cariler.php', 'Cariler', '◎'],
+        ['hareketler', 'hareketler.php', 'Hareketler', '↕'],
+        ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'],
+        ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
+    ];
+    if (is_admin()) {
+        $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
+        $nav[] = ['loglar', 'loglar.php', 'Loglar', '☰'];
+    }
+    ?>
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title><?php echo e($title); ?> | <?php echo e(APP_NAME); ?></title>
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/muhasebe.css?v=46" />
+</head>
+<body class="app-page">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="dashboard.php" aria-label="Bitke Muhasebe">
+        <img src="../assets/img/header-logo-only.png" alt="Bitke" />
+        <span>Muhasebe</span>
+      </a>
+      <nav class="side-nav" aria-label="Panel menüsü">
+        <?php foreach ($nav as $item): ?>
+          <a class="<?php echo $active === $item[0] ? 'active' : ''; ?>" href="<?php echo e($item[1]); ?>">
+            <span class="nav-ico"><?php echo e($item[3]); ?></span>
+            <span><?php echo e($item[2]); ?></span>
+          </a>
+        <?php endforeach; ?>
+      </nav>
+      <div class="side-footer">
+        <span><?php echo e(role_label($u['role'] ?? 'viewer')); ?></span>
+        <strong><?php echo e($u['display_name'] ?? 'Kullanıcı'); ?></strong>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <button class="menu-toggle" type="button" data-menu-toggle>☰</button>
+        <div>
+          <p>Bitke özel alan</p>
+          <h1><?php echo e($title); ?></h1>
+        </div>
+        <div class="top-actions">
+          <a class="ghost-link" href="../" target="_blank" rel="noopener">Siteyi aç</a>
+          <a class="logout-link" href="logout.php">Çıkış</a>
+        </div>
+      </header>
+      <?php foreach (get_flashes() as $flash): ?>
+        <div class="alert alert-<?php echo e($flash['type']); ?>"><?php echo e($flash['message']); ?></div>
+      <?php endforeach; ?>
+<?php }
+
+function page_footer(): void
+{
+    ?>
+    </main>
+  </div>
+  <script src="assets/muhasebe.js?v=46"></script>
+</body>
+</html>
+<?php }
+
+function badge(string $label, string $tone = 'neutral'): string
+{
+    return '<span class="badge badge-' . e($tone) . '">' . e($label) . '</span>';
+}
