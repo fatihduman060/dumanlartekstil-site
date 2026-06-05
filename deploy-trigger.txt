@@ -1,1 +1,1 @@
-deploy 2026-06-05 force-full-upload
+deploy 2026-06-05 clean
