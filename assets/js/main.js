@@ -60,6 +60,34 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
   });
 });
 
+// Ürün grupları görseli üzerindeki tıklama alanlarını düzeltir.
+(() => {
+  document.querySelectorAll('.product-groups-frame').forEach((frame) => {
+    frame.style.position = 'relative';
+    frame.style.display = 'block';
+
+    const hotspots = [
+      { selector: '.product-hotspot-men', left: '0%', top: '0%', width: '34%', height: '100%' },
+      { selector: '.product-hotspot-women', left: '33%', top: '0%', width: '34%', height: '100%' },
+      { selector: '.product-hotspot-kids', left: '66%', top: '0%', width: '34%', height: '100%' },
+    ];
+
+    hotspots.forEach((item) => {
+      const link = frame.querySelector(item.selector);
+      if (!link) return;
+      link.style.position = 'absolute';
+      link.style.left = item.left;
+      link.style.top = item.top;
+      link.style.width = item.width;
+      link.style.height = item.height;
+      link.style.display = 'block';
+      link.style.zIndex = '20';
+      link.style.cursor = 'pointer';
+      link.style.background = 'rgba(255,255,255,0)';
+      link.style.pointerEvents = 'auto';
+    });
+  });
+})();
 
 // V44 product gallery carousel
 (() => {
