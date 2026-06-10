@@ -53,6 +53,16 @@ function pdf_short($text, $max): string
     return rtrim(substr($text, 0, max(0, $max - 3))) . '...';
 }
 
+function pdf_check_fill(string $direction): array
+{
+    return $direction === 'verilecek' ? [1.000, 0.943, 0.933] : [0.933, 0.973, 0.941];
+}
+
+function pdf_check_stroke(string $direction): array
+{
+    return $direction === 'verilecek' ? [0.900, 0.520, 0.480] : [0.470, 0.760, 0.560];
+}
+
 class SimpleStatementPdf
 {
     private $pages = [];
@@ -249,9 +259,16 @@ $tableHeader = function($cols) use ($pdf, &$y, $left, $right, $newPageIfNeeded) 
     $y += 15;
 };
 
-$tableRow = function($cols, $values, $shade = false) use ($pdf, &$y, $left, $right, $newPageIfNeeded) {
+$tableRow = function($cols, $values, $shade = false, $fill = null, $stripe = null) use ($pdf, &$y, $left, $right, $newPageIfNeeded) {
     $newPageIfNeeded(17);
-    if ($shade) $pdf->rect($left, $y, $right - $left, 14, [0.985,0.975,0.955], null);
+    if ($fill) {
+        $pdf->rect($left, $y, $right - $left, 14, $fill, null);
+    } elseif ($shade) {
+        $pdf->rect($left, $y, $right - $left, 14, [0.985,0.975,0.955], null);
+    }
+    if ($stripe) {
+        $pdf->rect($left, $y, 4, 14, $stripe, null);
+    }
     $x = $left;
     foreach ($cols as $idx => $c) {
         $align = $c[3] ?? 'left';
@@ -267,16 +284,17 @@ $tableRow = function($cols, $values, $shade = false) use ($pdf, &$y, $left, $rig
 $header();
 $boxW = 126;
 $boxes = [
-    ['Giren', pdf_money($cashIn)],
-    ['Cikan', pdf_money($cashOut)],
-    ['Net nakit', pdf_money($cashNet)],
-    ['Hesap bakiyesi', pdf_money($accountSummary['total'])],
-    ['Alinacak cek', pdf_money($checkTotals['alinacak']) . ' / ' . $checkTotals['alinacak_count'] . ' adet'],
-    ['Verilecek cek', pdf_money($checkTotals['verilecek']) . ' / ' . $checkTotals['verilecek_count'] . ' adet'],
+    ['Giren', pdf_money($cashIn), [1,1,1], [0.84,0.80,0.72]],
+    ['Cikan', pdf_money($cashOut), [1,1,1], [0.84,0.80,0.72]],
+    ['Net nakit', pdf_money($cashNet), [1,1,1], [0.84,0.80,0.72]],
+    ['Hesap bakiyesi', pdf_money($accountSummary['total']), [1,1,1], [0.84,0.80,0.72]],
+    ['Alinacak cek', pdf_money($checkTotals['alinacak']) . ' / ' . $checkTotals['alinacak_count'] . ' adet', pdf_check_fill('alinacak'), pdf_check_stroke('alinacak')],
+    ['Verilecek cek', pdf_money($checkTotals['verilecek']) . ' / ' . $checkTotals['verilecek_count'] . ' adet', pdf_check_fill('verilecek'), pdf_check_stroke('verilecek')],
 ];
 $x = $left;
 foreach ($boxes as $b) {
-    $pdf->rect($x, $y, $boxW - 8, 38, [1,1,1], [0.84,0.80,0.72]);
+    $pdf->rect($x, $y, $boxW - 8, 38, $b[2], $b[3]);
+    $pdf->rect($x, $y, 4, 38, $b[3], null);
     $pdf->text($x + 8, $y + 14, $b[0], 6.8, true);
     $pdf->text($x + 8, $y + 30, $b[1], 9, true, 'left', 22);
     $x += $boxW;
@@ -331,13 +349,15 @@ $tableHeader($cols);
 $i=0;
 if (!$checks) $tableRow($cols, ['-', 'Bu ay vadesi gelen cek yok', '-', '-', '-']);
 foreach ($checks as $ch) {
+    $fill = pdf_check_fill($ch['direction']);
+    $stripe = pdf_check_stroke($ch['direction']);
     $tableRow($cols, [
         tr_date($ch['due_date']),
         check_direction_label($ch['direction']),
         $ch['cari_name'] ?: '-',
         trim(($ch['bank_name'] ?: '-') . ' / ' . ($ch['check_no'] ?: '-')),
         pdf_money($ch['amount']),
-    ], $i++ % 2 === 1);
+    ], false, $fill, $stripe);
 }
 
 $pdf->output('bitke-hesap-dokumleri-' . $month . '.pdf');
