@@ -23,7 +23,10 @@ function dashboard_cashflow_rows(string $period): array
     if ($meta['group'] === 'day') {
         $start = $today->modify('-' . ($meta['steps'] - 1) . ' days');
         $end = $today;
-        $sqlGroup = "date(movement_date)";
+        $sqlDate = "COALESCE(NULLIF(due_date,''), movement_date)";
+        $sqlGroup = "date($sqlDate)";
+        $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
+        $checkGroup = "date(COALESCE(NULLIF(closed_at,''), due_date))";
         for ($i = $meta['steps'] - 1; $i >= 0; $i--) {
             $d = $today->modify('-' . $i . ' days');
             $key = $d->format('Y-m-d');
@@ -40,7 +43,10 @@ function dashboard_cashflow_rows(string $period): array
         $year = (int)$today->format('Y');
         $start = new DateTimeImmutable($year . '-01-01');
         $end = new DateTimeImmutable($year . '-12-31');
-        $sqlGroup = "strftime('%Y-%m', movement_date)";
+        $sqlDate = "COALESCE(NULLIF(due_date,''), movement_date)";
+        $sqlGroup = "strftime('%Y-%m', $sqlDate)";
+        $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
+        $checkGroup = "strftime('%Y-%m', COALESCE(NULLIF(closed_at,''), due_date))";
         for ($m = 1; $m <= 12; $m++) {
             $d = new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $m));
             $key = $d->format('Y-m');
@@ -58,7 +64,10 @@ function dashboard_cashflow_rows(string $period): array
         $firstYear = $currentYear - ($meta['steps'] - 1);
         $start = new DateTimeImmutable($firstYear . '-01-01');
         $end = new DateTimeImmutable($currentYear . '-12-31');
-        $sqlGroup = "strftime('%Y', movement_date)";
+        $sqlDate = "COALESCE(NULLIF(due_date,''), movement_date)";
+        $sqlGroup = "strftime('%Y', $sqlDate)";
+        $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
+        $checkGroup = "strftime('%Y', COALESCE(NULLIF(closed_at,''), due_date))";
         for ($y = $firstYear; $y <= $currentYear; $y++) {
             $key = (string)$y;
             $rows[$key] = [
@@ -73,7 +82,10 @@ function dashboard_cashflow_rows(string $period): array
     } else {
         $start = $today->modify('first day of this month')->modify('-' . ($meta['steps'] - 1) . ' months');
         $end = $today->modify('last day of this month');
-        $sqlGroup = "strftime('%Y-%m', movement_date)";
+        $sqlDate = "COALESCE(NULLIF(due_date,''), movement_date)";
+        $sqlGroup = "strftime('%Y-%m', $sqlDate)";
+        $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
+        $checkGroup = "strftime('%Y-%m', COALESCE(NULLIF(closed_at,''), due_date))";
         for ($i = $meta['steps'] - 1; $i >= 0; $i--) {
             $d = $today->modify('first day of this month')->modify('-' . $i . ' months');
             $key = $d->format('Y-m');
@@ -90,9 +102,10 @@ function dashboard_cashflow_rows(string $period): array
 
     $stmt = db()->prepare("SELECT {$sqlGroup} AS period_key, movement_type, SUM(amount) AS total
         FROM movements
-        WHERE movement_date >= ?
-          AND movement_date <= ?
+        WHERE {$sqlDate} >= ?
+          AND {$sqlDate} <= ?
           AND COALESCE(is_cancelled,0)=0
+          AND COALESCE(source_type,'') NOT IN ('check_acceptance','check_reversal')
           AND movement_type IN ('tahsilat','gelir','odeme','gider')
         GROUP BY period_key, movement_type
         ORDER BY period_key ASC");
@@ -101,7 +114,23 @@ function dashboard_cashflow_rows(string $period): array
         $key = (string)$r['period_key'];
         $type = (string)$r['movement_type'];
         if (!isset($rows[$key]) || !array_key_exists($type, $rows[$key])) continue;
-        $rows[$key][$type] = (float)$r['total'];
+        $rows[$key][$type] += (float)$r['total'];
+    }
+
+    $stmt = db()->prepare("SELECT {$checkGroup} AS period_key, status, SUM(amount) AS total
+        FROM checks
+        WHERE {$checkDate} >= ?
+          AND {$checkDate} <= ?
+          AND COALESCE(is_cancelled,0)=0
+          AND status IN ('tahsil_edildi','odendi')
+        GROUP BY period_key, status
+        ORDER BY period_key ASC");
+    $stmt->execute([$startSql, $endSql]);
+    foreach ($stmt->fetchAll() as $r) {
+        $key = (string)$r['period_key'];
+        if (!isset($rows[$key])) continue;
+        if ($r['status'] === 'tahsil_edildi') $rows[$key]['tahsilat'] += (float)$r['total'];
+        if ($r['status'] === 'odendi') $rows[$key]['odeme'] += (float)$r['total'];
     }
     foreach ($rows as &$r) {
         $r['in'] = $r['gelir'] + $r['tahsilat'];
@@ -118,9 +147,10 @@ $monthEnd = date('Y-m-t');
 $weekAhead = date('Y-m-d', strtotime('+7 days'));
 $totals = dashboard_totals();
 $monthTotals = dashboard_totals($monthStart, $monthEnd);
-$monthCashIn = (float)$monthTotals['gelir'] + (float)$monthTotals['tahsilat'];
-$monthCashOut = (float)$monthTotals['gider'] + (float)$monthTotals['odeme'];
-$monthCashNet = $monthCashIn - $monthCashOut;
+$monthCashTotals = cashflow_totals($monthStart, $monthEnd);
+$monthCashIn = (float)$monthCashTotals['in'];
+$monthCashOut = (float)$monthCashTotals['out'];
+$monthCashNet = (float)$monthCashTotals['net'];
 $netPosition = (float)$totals['net_alacak'] - (float)$totals['net_verecek'];
 $checkTotals = check_totals(null, null, true);
 $accountSummary = account_summary();
@@ -133,7 +163,7 @@ $docCount = (int)db()->query("SELECT COUNT(*) FROM movements WHERE document_path
     + (int)db()->query("SELECT COUNT(*) FROM private_receivables WHERE document_path IS NOT NULL AND document_path != ''")->fetchColumn()
     + (int)db()->query("SELECT COUNT(*) FROM standalone_documents WHERE document_path IS NOT NULL AND document_path != ''")->fetchColumn();
 $recent = db()->query("SELECT m.*, c.name AS cari_name, cat.name AS category_name, a.name AS account_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id LEFT JOIN categories cat ON cat.id=m.category_id LEFT JOIN accounts a ON a.id=m.account_id WHERE COALESCE(m.is_cancelled,0)=0 ORDER BY m.movement_date DESC, m.id DESC LIMIT 8")->fetchAll();
-$dueMovStmt = db()->prepare("SELECT m.*, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.due_date IS NOT NULL AND m.due_date <= ? AND m.movement_type IN ('alacak','verecek') ORDER BY m.due_date ASC, m.id DESC LIMIT 8");
+$dueMovStmt = db()->prepare("SELECT m.*, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND COALESCE(m.source_type,'') NOT IN ('check_acceptance','check_reversal') AND m.due_date IS NOT NULL AND m.due_date <= ? AND m.movement_type IN ('alacak','verecek') ORDER BY m.due_date ASC, m.id DESC LIMIT 8");
 $dueMovStmt->execute([$weekAhead]);
 $dueMovements = $dueMovStmt->fetchAll();
 $dueCheckStmt = db()->prepare("SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.status='bekliyor' AND ch.due_date <= ? ORDER BY ch.due_date ASC, ch.id DESC LIMIT 8");
@@ -157,7 +187,7 @@ $topPayables = db()->query("SELECT c.id, c.name,
   FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
   GROUP BY c.id HAVING net < 0 ORDER BY net ASC LIMIT 5")->fetchAll();
 $upcomingPayments = [];
-$payMoveStmt = db()->prepare("SELECT 'Verecek' AS source_type, m.due_date, m.amount, m.description, c.id AS cari_id, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_type='verecek' AND m.due_date BETWEEN ? AND ? ORDER BY m.due_date ASC LIMIT 8");
+$payMoveStmt = db()->prepare("SELECT 'Verecek' AS source_type, m.due_date, m.amount, m.description, c.id AS cari_id, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND COALESCE(m.source_type,'') NOT IN ('check_acceptance','check_reversal') AND m.movement_type='verecek' AND m.due_date BETWEEN ? AND ? ORDER BY m.due_date ASC LIMIT 8");
 $payMoveStmt->execute([$today, $monthEnd]);
 foreach ($payMoveStmt->fetchAll() as $row) $upcomingPayments[] = $row;
 $payCheckStmt = db()->prepare("SELECT 'Çek' AS source_type, ch.due_date, ch.amount, TRIM(COALESCE(ch.bank_name,'') || ' ' || COALESCE(ch.check_no,'')) AS description, c.id AS cari_id, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.status='bekliyor' AND ch.direction='verilecek' AND ch.due_date BETWEEN ? AND ? ORDER BY ch.due_date ASC LIMIT 8");
@@ -284,15 +314,15 @@ page_header('Genel Bakış', 'dashboard');
     <p>Bu ay kasaya giren/çıkan ve mevcut kasa-banka durumu.</p>
   </div>
   <div class="stats-grid four section-stats">
-    <article class="stat-card cash"><span>Bu ay giren para</span><strong class="text-success"><?php echo e(money($monthCashIn)); ?></strong><small>Gelir + tahsilat</small></article>
-    <article class="stat-card cash"><span>Bu ay çıkan para</span><strong class="text-danger"><?php echo e(money($monthCashOut)); ?></strong><small>Gider + ödeme</small></article>
+    <article class="stat-card cash"><span>Bu ay giren para</span><strong class="text-success"><?php echo e(money($monthCashIn)); ?></strong><small>Vade/tahsil tarihine göre</small></article>
+    <article class="stat-card cash"><span>Bu ay çıkan para</span><strong class="text-danger"><?php echo e(money($monthCashOut)); ?></strong><small>Vade/ödeme tarihine göre</small></article>
     <article class="stat-card cash"><span>Bu ay nakit neti</span><strong class="<?php echo $monthCashNet >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($monthCashNet)); ?></strong><small>Giren - çıkan</small></article>
     <article class="stat-card soft"><span>Genel kasa/banka</span><strong class="<?php echo $accountSummary['total'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($accountSummary['total'])); ?></strong><small>Tüm hesap bakiyesi</small></article>
     <article class="stat-card soft"><span>Kasa toplamı</span><strong><?php echo e(money($accountSummary['kasa'])); ?></strong><small>Nakit hesapları</small></article>
     <article class="stat-card soft"><span>Banka toplamı</span><strong><?php echo e(money($accountSummary['banka'])); ?></strong><small>Banka hesapları</small></article>
     <article class="stat-card soft"><span>Aktif hesap</span><strong><?php echo e($accountSummary['active']); ?></strong><small>Kasa/banka/POS</small></article>
   </div>
-  <p class="calc-note"><strong>Bu ay nakit neti</strong> = gelir + tahsilat - gider - ödeme. Cari bakiyeden ayrı, gerçek para giriş/çıkışını gösterir.</p>
+  <p class="calc-note"><strong>Bu ay nakit neti</strong> = vade/tahsil tarihine göre giren para - çıkan para. Bekleyen çekler nakit sayılmaz.</p>
 </section>
 
 <section class="dashboard-section">

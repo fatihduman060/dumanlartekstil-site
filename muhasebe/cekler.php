@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($oldCheck) {
                 $stmt = db()->prepare('UPDATE checks SET status=?, account_id=COALESCE(?, account_id), closed_at=?, updated_at=? WHERE id=?');
                 $stmt->execute([$newStatus, $accountId, in_array($newStatus, ['tahsil_edildi','odendi','ciro_edildi','iade','karsiliksiz','protestolu','iptal'], true) ? now() : null, now(), $id]);
+                sync_check_cari_movement($id);
                 sync_check_account_transaction($id);
                 log_action('Çek durumu güncellendi', '#' . $id . ' → ' . check_status_label($newStatus)); audit_action('cek', $id, 'durum_guncellendi', $oldCheck, ['status'=>$newStatus,'account_id'=>$accountId], check_status_label($newStatus));
                 flash('success', 'Çek durumu güncellendi: ' . check_status_label($newStatus));
@@ -65,12 +66,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = db()->prepare('UPDATE checks SET cari_id=:cari_id, account_id=:account_id, direction=:direction, status=:status, amount=:amount, issue_date=:issue_date, due_date=:due_date, bank_name=:bank_name, branch_name=:branch_name, check_no=:check_no, drawer=:drawer, description=:description, document_path=:document_path, document_name=:document_name, document_mime=:document_mime, closed_at=:closed_at, updated_at=:updated_at WHERE id=:id');
             $payload['updated_at'] = now(); $payload['id'] = $id; $stmt->execute($payload);
             delete_replaced_upload($oldDoc, $doc);
+            sync_check_cari_movement($id);
             sync_check_account_transaction($id);
             log_action('Çek güncellendi', '#' . $id . ' ' . check_direction_label($direction) . ' ' . money($amount)); audit_action('cek', $id, 'guncellendi', $oldCheck, $payload, check_direction_label($direction)); flash('success','Çek güncellendi.');
         } else {
             $stmt = db()->prepare('INSERT INTO checks (cari_id, account_id, direction, status, amount, issue_date, due_date, bank_name, branch_name, check_no, drawer, description, document_path, document_name, document_mime, closed_at, created_by, created_at, updated_at) VALUES (:cari_id, :account_id, :direction, :status, :amount, :issue_date, :due_date, :bank_name, :branch_name, :check_no, :drawer, :description, :document_path, :document_name, :document_mime, :closed_at, :created_by, :created_at, :updated_at)');
             $payload['created_by'] = current_user()['id']; $payload['created_at'] = now(); $payload['updated_at'] = now(); $stmt->execute($payload);
             $newId = (int)db()->lastInsertId();
+            sync_check_cari_movement($newId);
             sync_check_account_transaction($newId);
             log_action('Çek eklendi', check_direction_label($direction) . ' ' . money($amount)); audit_action('cek', $newId, 'eklendi', null, $payload, check_direction_label($direction)); flash('success','Çek eklendi.');
         }
@@ -85,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reason = trim($_POST['cancel_reason'] ?? 'Liste üzerinden iptal');
             db()->prepare('UPDATE checks SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')
                 ->execute([now(), current_user()['id'], $reason, now(), $id]);
+            sync_check_cari_movement($id);
             sync_check_account_transaction($id);
             log_action('Çek iptal edildi', '#' . $id . ' ' . money($ch['amount']));
             audit_action('cek', $id, 'iptal', $ch, ['is_cancelled'=>1,'cancel_reason'=>$reason], money($ch['amount']));
@@ -150,7 +154,7 @@ page_header('Çekler', 'cekler');
       <div class="two-col"><label>Yön<select name="direction" required><?php foreach(check_directions() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['direction'] ?? '')===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select></label><label>Durum<select name="status" required><?php foreach(check_statuses() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['status'] ?? 'bekliyor')===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select></label></div>
       <div class="two-col"><label>Tutar<input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>"></label><label>Vade tarihi<input name="due_date" type="date" required value="<?php echo e($edit['due_date'] ?? date('Y-m-d')); ?>"></label></div>
       <div class="two-col"><label>Çek tarihi<input name="issue_date" type="date" value="<?php echo e($edit['issue_date'] ?? ''); ?>"></label><label>Cari<select name="cari_id"><option value="">Cari seçilmedi</option><?php foreach($cariler as $c): $selected=(string)($edit['cari_id'] ?? ($_GET['cari_id'] ?? ''))===(string)$c['id']; ?><option value="<?php echo e($c['id']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($c['name']); ?></option><?php endforeach; ?></select></label></div>
-      <label>Tahsil/ödeme hesabı<select name="account_id"><option value="">Kasa/banka seçilmedi</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo ((string)($edit['account_id'] ?? '')===(string)$a['id'])?'selected':''; ?>><?php echo e($a['name']); ?> — <?php echo e(account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select><small>Tahsil edildi/ödendi durumunda kasa-banka hareketi oluşturur.</small></label>
+      <label>Tahsil/ödeme hesabı<select name="account_id"><option value="">Kasa/banka seçilmedi</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo ((string)($edit['account_id'] ?? '')===(string)$a['id'])?'selected':''; ?>><?php echo e($a['name']); ?> — <?php echo e(account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select><small>Bekliyor durumunda kasa/bankaya işlemez. Sadece Tahsil edildi/Ödendi yapılınca gerçek nakit hareketi oluşur.</small></label>
       <div class="two-col"><label>Banka<input name="bank_name" value="<?php echo e($edit['bank_name'] ?? ''); ?>"></label><label>Şube<input name="branch_name" value="<?php echo e($edit['branch_name'] ?? ''); ?>"></label></div>
       <div class="two-col"><label>Çek no<input name="check_no" value="<?php echo e($edit['check_no'] ?? ''); ?>"></label><label>Keşideci / Veren<input name="drawer" value="<?php echo e($edit['drawer'] ?? ''); ?>"></label></div>
       <label>Açıklama<textarea name="description" rows="3"><?php echo e($edit['description'] ?? ''); ?></textarea></label>
@@ -185,10 +189,12 @@ page_header('Çekler', 'cekler');
             $isSoon = !$cancelled && $ch['status'] === 'bekliyor' && $ch['due_date'] >= $today && $ch['due_date'] <= $weekAhead;
             $rowClass = $cancelled ? 'row-cancelled' : ($isOverdue ? 'row-overdue' : ($isSoon ? 'row-soon' : ''));
             $quickAction = '';
-            if (can_write() && !$cancelled && $ch['status'] === 'bekliyor') {
+            if (can_write() && !$cancelled && $ch['status'] === 'bekliyor' && $ch['due_date'] <= $today) {
                 $newSt = $ch['direction'] === 'alinacak' ? 'tahsil_edildi' : 'odendi';
                 $newStLabel = $ch['direction'] === 'alinacak' ? 'Tahsil edildi' : 'Ödendi';
+                $badSt = 'karsiliksiz';
                 $quickAction = '<form method="post" class="quick-status-form">' . csrf_field() . '<input type="hidden" name="action" value="quick_status"><input type="hidden" name="id" value="' . e($ch['id']) . '"><input type="hidden" name="status" value="' . e($newSt) . '"><button class="btn-quick-ok" title="' . e($newStLabel) . ' olarak işaretle">✓</button></form>';
+                $quickAction .= '<form method="post" class="quick-status-form" onsubmit="return confirm(\'Bu çek ödenmedi/karşılıksız olarak işaretlensin mi? Cari bakiye tekrar açılacak.\');">' . csrf_field() . '<input type="hidden" name="action" value="quick_status"><input type="hidden" name="id" value="' . e($ch['id']) . '"><input type="hidden" name="status" value="' . e($badSt) . '"><button title="Ödenmedi / karşılıksız işaretle">Ödenmedi</button></form>';
             }
         ?>
         <tr class="<?php echo $rowClass; ?>">
