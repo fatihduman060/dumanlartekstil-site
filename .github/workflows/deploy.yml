@@ -56,6 +56,7 @@ jobs:
           server-dir: /bitke.com.tr/muhasebe/
           local-dir: ./muhasebe/
           state-name: .ftp-deploy-sync-state-muhasebe.json
+          timeout: 120000
           dangerous-clean-slate: false
           exclude: |
             **/.git*
