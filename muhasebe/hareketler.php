@@ -56,10 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = db()->prepare('SELECT * FROM movements WHERE id=?');
             $stmt->execute([$id]);
             $oldMovement = $stmt->fetch() ?: null;
-            if ($oldMovement && is_check_source_movement($oldMovement['source_type'] ?? '')) {
-                flash('error', 'Bu hareket çek kaydından otomatik oluştu. Değişiklik için çek sayfasını kullanın.');
-                redirect('cekler.php?edit=' . (int)($oldMovement['source_id'] ?? 0));
-            }
             $oldDoc = $oldMovement ? ['path'=>$oldMovement['document_path'] ?? null, 'name'=>$oldMovement['document_name'] ?? null, 'mime'=>$oldMovement['document_mime'] ?? null] : null;
         }
         try {
@@ -106,10 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = db()->prepare('SELECT * FROM movements WHERE id=?');
         $stmt->execute([$id]);
         $m = $stmt->fetch();
-        if ($m && is_check_source_movement($m['source_type'] ?? '')) {
-            flash('error', 'Bu hareket çekten otomatik oluştu. İptal/durum değişikliği çek sayfasından yapılmalı.');
-            redirect('cekler.php?edit=' . (int)($m['source_id'] ?? 0));
-        }
         if ($m && (int)($m['is_cancelled'] ?? 0) === 0) {
             db()->prepare('UPDATE movements SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')
                 ->execute([now(), current_user()['id'], trim($_POST['cancel_reason'] ?? 'İptal edildi'), now(), $id]);
@@ -132,10 +124,6 @@ if (!empty($_GET['edit'])) {
     if ($edit && (int)($edit['is_cancelled'] ?? 0) === 1) {
         flash('error', 'İptal edilmiş hareket düzenlenemez. Gerekirse yeni düzeltme hareketi girin.');
         redirect('hareketler.php?include_cancelled=1');
-    }
-    if ($edit && is_check_source_movement($edit['source_type'] ?? '')) {
-        flash('error', 'Bu hareket çek kaydından otomatik oluştu. Değişiklik için çek kaydını düzenleyin.');
-        redirect('cekler.php?edit=' . (int)($edit['source_id'] ?? 0));
     }
 }
 
@@ -213,16 +201,16 @@ page_header('Hareketler', 'hareketler');
         <thead><tr><th>Tarih</th><th>Tip</th><th>Cari</th><th>Kategori/Hesap</th><th>Açıklama</th><th>Belge</th><th class="right">Tutar</th><th></th></tr></thead>
         <tbody>
           <?php if (!$movements): ?><tr><td colspan="8" class="empty">Hareket bulunamadı.</td></tr><?php endif; ?>
-          <?php foreach($movements as $m): $cancelled=(int)($m['is_cancelled'] ?? 0)===1; $isCheckAuto=is_check_source_movement($m['source_type'] ?? ''); ?>
+          <?php foreach($movements as $m): $cancelled=(int)($m['is_cancelled'] ?? 0)===1; ?>
           <tr class="<?php echo $cancelled ? 'row-cancelled' : ''; ?>">
             <td><?php echo e(tr_date($m['movement_date'])); ?><small><?php echo $m['due_date'] ? 'Vade: '.e(tr_date($m['due_date'])) : ''; ?></small></td>
             <td><?php echo $cancelled ? badge('İptal','neutral') : badge(movement_label($m['movement_type']), movement_tone($m['movement_type'])); ?></td>
             <td><?php echo $m['cari_id'] ? '<a href="cari-detay.php?id='.e($m['cari_id']).'">'.e($m['cari_name']).'</a>' : '-'; ?></td>
             <td><?php echo e($m['category_name'] ?: '-'); ?><small><?php echo e($m['account_name'] ?: ''); ?></small></td>
-            <td><?php echo e($m['description'] ?: '-'); ?><small><?php echo e($m['payment_method'] ?: ''); ?> <?php echo $isCheckAuto ? ' · Çekten otomatik' : ''; ?> <?php echo $cancelled ? ' · İptal: '.e($m['cancel_reason'] ?: '') : ''; ?></small></td>
+            <td><?php echo e($m['description'] ?: '-'); ?><small><?php echo e($m['payment_method'] ?: ''); ?> <?php echo $cancelled ? ' · İptal: '.e($m['cancel_reason'] ?: '') : ''; ?></small></td>
             <td><?php echo $m['document_path'] ? '<a href="belge-indir.php?id='.e($m['id']).'" target="_blank">'.e(document_type_label($m['document_type'])).'</a>' : '-'; ?></td>
             <td class="right"><strong><?php echo e(money($m['amount'])); ?></strong></td>
-            <td class="row-actions"><?php if($isCheckAuto): ?><a href="cekler.php?edit=<?php echo e($m['source_id']); ?>">Çeke git</a><span class="muted">Otomatik</span><?php elseif(!$cancelled): ?><a href="hareketler.php?edit=<?php echo e($m['id']); ?>">Düzenle</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Hareket silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button></form><?php endif; ?><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?></td>
+            <td class="row-actions"><?php if(!$cancelled): ?><a href="hareketler.php?edit=<?php echo e($m['id']); ?>">Düzenle</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Hareket silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button></form><?php endif; ?><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?></td>
           </tr>
           <?php endforeach; ?>
         </tbody>

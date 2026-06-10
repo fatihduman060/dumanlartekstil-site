@@ -3,10 +3,10 @@
 // İlk kurulum kullanıcı bilgisi README-KURULUM.txt içindedir.
 
 const APP_NAME = 'Bitke Muhasebe Paneli';
-const APP_VERSION = 'v50.27';
+const APP_VERSION = 'v50.21';
 const APP_TIMEZONE = 'Europe/Istanbul';
 const APP_BASE_PATH = '/muhasebe';
-const DB_SCHEMA_VERSION = 5027;
+const DB_SCHEMA_VERSION = 5021;
 
 const DB_PATH = __DIR__ . '/storage/bitke_muhasebe.sqlite';
 const UPLOAD_DIR = __DIR__ . '/storage/uploads';

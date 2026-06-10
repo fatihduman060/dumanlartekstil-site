@@ -42,36 +42,6 @@ if ($type === 'checks') {
     log_action('Çek CSV indirildi', $filenamePrefix); fclose($out); exit;
 }
 
-
-if ($type === 'payment_calendar') {
-    $start = substr((string)($_GET['start'] ?? date('Y-m-01')), 0, 10);
-    $end = substr((string)($_GET['end'] ?? date('Y-m-t')), 0, 10);
-    if ($start > $end) { $tmp = $start; $start = $end; $end = $tmp; }
-    $rows = payment_calendar_rows($start, $end, true);
-    $summary = payment_calendar_summary($rows);
-    fputcsv($out, ['ÖDEME TAKVİMİ'], ';');
-    fputcsv($out, ['Dönem', tr_date($start) . ' - ' . tr_date($end)], ';');
-    fputcsv($out, ['Beklenen Alacak', number_format((float)$summary['in'], 2, ',', '.')], ';');
-    fputcsv($out, ['Yapılacak Ödeme', number_format((float)$summary['out'], 2, ',', '.')], ';');
-    fputcsv($out, ['Net', number_format((float)$summary['net'], 2, ',', '.')], ';');
-    fputcsv($out, [], ';');
-    fputcsv($out, ['Vade', 'Tür', 'Kaynak', 'Cari', 'Açıklama', 'Durum', 'Tutar'], ';');
-    foreach ($rows as $r) {
-        fputcsv($out, [
-            $r['date'],
-            $r['kind'],
-            $r['source'],
-            $r['cari_name'],
-            $r['description'],
-            $r['status'],
-            number_format((float)$r['amount'], 2, ',', '.')
-        ], ';');
-    }
-    log_action('Ödeme Takvimi Excel indirildi', $filenamePrefix);
-    fclose($out);
-    exit;
-}
-
 if ($type === 'cariler') {
     $rows = db()->query('SELECT * FROM cariler ORDER BY name ASC')->fetchAll();
     fputcsv($out,['ID','Tip','Ad/Ünvan','Yetkili','Şehir','Vergi No','Vergi Dairesi','Telefon','E-posta','Adres','IBAN','Not','Net Bakiye'], ';');

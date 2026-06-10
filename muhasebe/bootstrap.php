@@ -261,20 +261,12 @@ function init_db(PDO $pdo): void
     ensure_column($pdo, 'movements', 'cancelled_at', 'TEXT');
     ensure_column($pdo, 'movements', 'cancelled_by', 'INTEGER');
     ensure_column($pdo, 'movements', 'cancel_reason', 'TEXT');
-    ensure_column($pdo, 'movements', 'source_type', 'TEXT');
-    ensure_column($pdo, 'movements', 'source_id', 'INTEGER');
-    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_movements_source ON movements(source_type, source_id)");
     ensure_column($pdo, 'checks', 'account_id', 'INTEGER');
     ensure_column($pdo, 'checks', 'closed_at', 'TEXT');
     ensure_column($pdo, 'checks', 'is_cancelled', 'INTEGER NOT NULL DEFAULT 0');
     ensure_column($pdo, 'checks', 'cancelled_at', 'TEXT');
     ensure_column($pdo, 'checks', 'cancelled_by', 'INTEGER');
     ensure_column($pdo, 'checks', 'cancel_reason', 'TEXT');
-    ensure_column($pdo, 'checks', 'ciro_cari_id', 'INTEGER');
-    ensure_column($pdo, 'checks', 'ciro_date', 'TEXT');
-    ensure_column($pdo, 'checks', 'ciro_note', 'TEXT');
-    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_checks_status_due ON checks(status, due_date)");
-    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_checks_ciro_cari ON checks(ciro_cari_id)");
 
     $accountCount = (int)$pdo->query('SELECT COUNT(*) FROM accounts')->fetchColumn();
     if ($accountCount === 0) {
@@ -303,10 +295,7 @@ function init_db(PDO $pdo): void
     }
 
     // v50.20+: önceki paketlerden gelen kasa/banka kaynak hareketleri tek seferlik toparlansın.
-    // v50.22+: vadeli nakit hareketlerinde işlem tarihi yerine vade/tahsil tarihi kullanılsın.
-    // v50.23+: çekler cariye otomatik hareket olarak işlensin; bekleyen çek nakit sayılmasın.
-    if ($currentSchemaVersion < 5023) {
-        sync_all_check_cari_movements(false);
+    if ($currentSchemaVersion < 5020) {
         repair_account_sync(false);
     }
 
@@ -622,14 +611,14 @@ function role_label(string $role): string { return ['admin'=>'Yönetici','editor
 function check_directions(): array
 {
     return [
-        'alinacak' => ['label'=>'Alınan Çek', 'tone'=>'success'],
-        'verilecek' => ['label'=>'Verilen Çek', 'tone'=>'warning'],
+        'alinacak' => ['label'=>'Alınacak Çek', 'tone'=>'success'],
+        'verilecek' => ['label'=>'Verilecek Çek', 'tone'=>'warning'],
     ];
 }
 function check_statuses(): array
 {
     return [
-        'bekliyor' => ['label'=>'Portföyde','tone'=>'info'],
+        'bekliyor' => ['label'=>'Bekliyor','tone'=>'info'],
         'tahsil_edildi' => ['label'=>'Tahsil edildi','tone'=>'success'],
         'odendi' => ['label'=>'Ödendi','tone'=>'success'],
         'ciro_edildi' => ['label'=>'Ciro edildi','tone'=>'warning'],
@@ -643,227 +632,6 @@ function check_direction_label(string $key): string { $m=check_directions(); ret
 function check_direction_tone(string $key): string { $m=check_directions(); return $m[$key]['tone'] ?? 'neutral'; }
 function check_status_label(string $key): string { $m=check_statuses(); return $m[$key]['label'] ?? $key; }
 function check_status_tone(string $key): string { $m=check_statuses(); return $m[$key]['tone'] ?? 'neutral'; }
-
-function check_source_types(): array
-{
-    return ['check_acceptance', 'check_reversal', 'check_ciro_payment', 'check_ciro_reversal'];
-}
-function is_check_source_movement($sourceType): bool
-{
-    return in_array((string)$sourceType, check_source_types(), true);
-}
-function check_acceptance_movement_type(string $direction): string
-{
-    return $direction === 'verilecek' ? 'odeme' : 'tahsilat';
-}
-function check_reversal_movement_type(string $direction): string
-{
-    return $direction === 'verilecek' ? 'verecek' : 'alacak';
-}
-function check_reversal_required(string $status): bool
-{
-    return in_array($status, ['karsiliksiz', 'protestolu', 'iade', 'iptal'], true);
-}
-function check_closed_statuses(): array
-{
-    return ['tahsil_edildi','odendi','ciro_edildi','iade','karsiliksiz','protestolu','iptal'];
-}
-function check_ciro_payment_required(array $check): bool
-{
-    $status = (string)($check['status'] ?? '');
-    return (string)($check['direction'] ?? '') === 'alinacak'
-        && ($status === 'ciro_edildi' || check_reversal_required($status))
-        && !empty($check['ciro_cari_id']);
-}
-function check_ciro_reversal_required(array $check): bool
-{
-    return (string)($check['direction'] ?? '') === 'alinacak'
-        && check_reversal_required((string)($check['status'] ?? ''))
-        && !empty($check['ciro_cari_id']);
-}
-function check_ciro_date(array $check): string
-{
-    $ciroDate = trim((string)($check['ciro_date'] ?? ''));
-    if ($ciroDate !== '') return substr($ciroDate, 0, 10);
-    return check_close_date($check);
-}
-function check_entry_date(array $check): string
-{
-    $created = trim((string)($check['created_at'] ?? ''));
-    if ($created !== '') return substr($created, 0, 10);
-    $issue = trim((string)($check['issue_date'] ?? ''));
-    if ($issue !== '') return substr($issue, 0, 10);
-    return date('Y-m-d');
-}
-function check_close_date(array $check): string
-{
-    $closed = trim((string)($check['closed_at'] ?? ''));
-    if ($closed !== '') return substr($closed, 0, 10);
-    return date('Y-m-d');
-}
-function check_category_id(): ?int
-{
-    try {
-        $stmt = db()->prepare("SELECT id FROM categories WHERE name = ? LIMIT 1");
-        $stmt->execute(['Çek']);
-        $id = $stmt->fetchColumn();
-        return $id ? (int)$id : null;
-    } catch (Throwable $e) { return null; }
-}
-function check_movement_description(array $check, string $kind): string
-{
-    $parts = [];
-    $parts[] = $kind === 'reversal' ? 'Çek ödenmedi/geri döndü' : 'Çek cariye işlendi';
-    $parts[] = check_direction_label((string)($check['direction'] ?? ''));
-    if (!empty($check['bank_name'])) $parts[] = (string)$check['bank_name'];
-    if (!empty($check['check_no'])) $parts[] = 'No: ' . (string)$check['check_no'];
-    if (!empty($check['status']) && $kind === 'reversal') $parts[] = 'Durum: ' . check_status_label((string)$check['status']);
-    if (!empty($check['description'])) $parts[] = (string)$check['description'];
-    return '[Sistem] ' . implode(' / ', array_filter($parts, fn($v) => trim((string)$v) !== ''));
-}
-function check_ciro_movement_description(array $check, string $kind): string
-{
-    $parts = [];
-    $parts[] = $kind === 'reversal' ? 'Ciro edilen çek karşılıksız/geri döndü' : 'Çek ciro edildi';
-    if (!empty($check['bank_name'])) $parts[] = (string)$check['bank_name'];
-    if (!empty($check['check_no'])) $parts[] = 'No: ' . (string)$check['check_no'];
-    if (!empty($check['status']) && $kind === 'reversal') $parts[] = 'Durum: ' . check_status_label((string)$check['status']);
-    if (!empty($check['ciro_note'])) $parts[] = (string)$check['ciro_note'];
-    if (!empty($check['description'])) $parts[] = (string)$check['description'];
-    return '[Sistem] ' . implode(' / ', array_filter($parts, fn($v) => trim((string)$v) !== ''));
-}
-function find_legacy_check_acceptance_movement_id(array $check, string $movementType): ?int
-{
-    if (empty($check['cari_id']) || empty($check['due_date'])) return null;
-    $sql = "SELECT id FROM movements
-        WHERE cari_id = ?
-          AND movement_type = ?
-          AND ABS(amount - ?) < 0.005
-          AND COALESCE(is_cancelled,0)=0
-          AND (source_type IS NULL OR source_type = '')
-          AND COALESCE(due_date,'') = ?
-          AND (UPPER(COALESCE(payment_method,'')) LIKE '%ÇEK%'
-               OR UPPER(COALESCE(payment_method,'')) LIKE '%CEK%'
-               OR UPPER(COALESCE(description,'')) LIKE '%ÇEK%'
-               OR UPPER(COALESCE(description,'')) LIKE '%CEK%')
-        ORDER BY CASE WHEN account_id IS NULL THEN 0 ELSE 1 END, id ASC
-        LIMIT 1";
-    $stmt = db()->prepare($sql);
-    $stmt->execute([(int)$check['cari_id'], $movementType, (float)$check['amount'], (string)$check['due_date']]);
-    $id = $stmt->fetchColumn();
-    return $id ? (int)$id : null;
-}
-function upsert_check_generated_movement(array $check, string $sourceType, string $movementType, string $movementDate, string $description): ?int
-{
-    if (empty($check['id']) || empty($check['cari_id']) || (float)($check['amount'] ?? 0) <= 0) return null;
-    $pdo = db();
-    $stmt = $pdo->prepare('SELECT id FROM movements WHERE source_type=? AND source_id=? ORDER BY id ASC LIMIT 1');
-    $stmt->execute([$sourceType, (int)$check['id']]);
-    $movementId = (int)($stmt->fetchColumn() ?: 0);
-
-    if ($movementId <= 0 && $sourceType === 'check_acceptance') {
-        $movementId = (int)(find_legacy_check_acceptance_movement_id($check, $movementType) ?: 0);
-    }
-
-    $payload = [
-        'cari_id' => (int)$check['cari_id'],
-        'category_id' => check_category_id(),
-        'account_id' => null,
-        'movement_type' => $movementType,
-        'amount' => (float)$check['amount'],
-        'movement_date' => $movementDate,
-        'due_date' => !empty($check['due_date']) ? (string)$check['due_date'] : null,
-        'payment_method' => 'ÇEK',
-        'description' => $description,
-        'document_type' => null,
-        'document_path' => null,
-        'document_name' => null,
-        'document_mime' => null,
-        'source_type' => $sourceType,
-        'source_id' => (int)$check['id'],
-        'updated_at' => now(),
-    ];
-
-    if ($movementId > 0) {
-        $sql = 'UPDATE movements SET cari_id=:cari_id, category_id=:category_id, account_id=:account_id, movement_type=:movement_type, amount=:amount, movement_date=:movement_date, due_date=:due_date, payment_method=:payment_method, description=:description, document_type=:document_type, document_path=:document_path, document_name=:document_name, document_mime=:document_mime, source_type=:source_type, source_id=:source_id, is_cancelled=0, cancelled_at=NULL, cancelled_by=NULL, cancel_reason=NULL, updated_at=:updated_at WHERE id=:id';
-        $payload['id'] = $movementId;
-        $pdo->prepare($sql)->execute($payload);
-    } else {
-        $sql = 'INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, source_type, source_id, created_by, created_at, updated_at) VALUES (:cari_id, :category_id, :account_id, :movement_type, :amount, :movement_date, :due_date, :payment_method, :description, :document_type, :document_path, :document_name, :document_mime, :source_type, :source_id, :created_by, :created_at, :updated_at)';
-        $payload['created_by'] = $check['created_by'] ?? (current_user()['id'] ?? null);
-        $payload['created_at'] = now();
-        $pdo->prepare($sql)->execute($payload);
-        $movementId = (int)$pdo->lastInsertId();
-    }
-
-    // Çekten oluşan cari hareketleri kasa/banka hareketi üretmez.
-    sync_movement_account_transaction($movementId);
-    return $movementId;
-}
-function cancel_check_generated_movements(int $checkId, ?string $sourceType = null, string $reason = 'Çek durumuna göre otomatik kapatıldı'): void
-{
-    $where = 'source_id=? AND source_type IN (\'' . implode("','", check_source_types()) . '\')';
-    $params = [$checkId];
-    if ($sourceType !== null) { $where = 'source_id=? AND source_type=?'; $params = [$checkId, $sourceType]; }
-    db()->prepare("UPDATE movements SET is_cancelled=1, cancelled_at=COALESCE(cancelled_at, ?), cancelled_by=COALESCE(cancelled_by, ?), cancel_reason=COALESCE(NULLIF(cancel_reason,''), ?), updated_at=? WHERE $where AND COALESCE(is_cancelled,0)=0")
-        ->execute(array_merge([now(), current_user()['id'] ?? null, $reason, now()], $params));
-}
-function sync_check_cari_movement(int $checkId): void
-{
-    $stmt = db()->prepare('SELECT * FROM checks WHERE id=?');
-    $stmt->execute([$checkId]);
-    $check = $stmt->fetch();
-    if (!$check) return;
-
-    if ((int)($check['is_cancelled'] ?? 0) === 1 || empty($check['cari_id']) || (float)($check['amount'] ?? 0) <= 0) {
-        cancel_check_generated_movements($checkId, null, 'Çek iptal edildi veya cari/tutar eksik');
-        return;
-    }
-
-    // 1) Çek portföye girdiği anda cari kapanır; kasa/banka etkilenmez.
-    $acceptanceType = check_acceptance_movement_type((string)$check['direction']);
-    upsert_check_generated_movement($check, 'check_acceptance', $acceptanceType, check_entry_date($check), check_movement_description($check, 'acceptance'));
-
-    // 2) Alınan çek ciro edilirse, kime ciro edildiyse onun vereceğini düşürür; yine kasa/banka etkilenmez.
-    if (check_ciro_payment_required($check)) {
-        $ciroCheck = $check;
-        $ciroCheck['cari_id'] = (int)$check['ciro_cari_id'];
-        upsert_check_generated_movement($ciroCheck, 'check_ciro_payment', 'odeme', check_ciro_date($check), check_ciro_movement_description($check, 'payment'));
-    } else {
-        cancel_check_generated_movements($checkId, 'check_ciro_payment', 'Çek ciro durumunda değil');
-    }
-
-    // 3) Çek karşılıksız/protestolu/iade/iptal olursa, kimden alındıysa onun alacağı tekrar açılır.
-    if (check_reversal_required((string)$check['status'])) {
-        $reversalType = check_reversal_movement_type((string)$check['direction']);
-        upsert_check_generated_movement($check, 'check_reversal', $reversalType, check_close_date($check), check_movement_description($check, 'reversal'));
-    } else {
-        cancel_check_generated_movements($checkId, 'check_reversal', 'Çek geçerli/portföyde/tahsil edildi/ödendi/ciro edildi durumunda');
-    }
-
-    // 4) Ciro edilen çek geri dönerse, kime ciro edildiyse ona olan borç tekrar açılır.
-    if (check_ciro_reversal_required($check)) {
-        $ciroCheck = $check;
-        $ciroCheck['cari_id'] = (int)$check['ciro_cari_id'];
-        upsert_check_generated_movement($ciroCheck, 'check_ciro_reversal', 'verecek', check_close_date($check), check_ciro_movement_description($check, 'reversal'));
-    } else {
-        cancel_check_generated_movements($checkId, 'check_ciro_reversal', 'Ciro edilen çek geri dönmedi');
-    }
-}
-function sync_all_check_cari_movements(bool $withLog = true): array
-{
-    $ids = db()->query('SELECT id FROM checks ORDER BY id ASC')->fetchAll(PDO::FETCH_COLUMN);
-    $summary = ['checks' => 0];
-    foreach ($ids as $id) {
-        sync_check_cari_movement((int)$id);
-        $summary['checks']++;
-    }
-    if ($withLog) {
-        log_action('Çek cari hareket senkronu', 'Senkron edilen çek: ' . $summary['checks']);
-        audit_action('cek', null, 'guncellendi', null, $summary, 'Çek cari hareket senkronu');
-    }
-    return $summary;
-}
 
 function private_receivable_statuses(): array
 {
@@ -1065,203 +833,6 @@ function monthly_summary(int $months = 6): array
     return array_values($rows);
 }
 
-
-function payment_calendar_rows(string $start, string $end, bool $includePrivateReceivables = true): array
-{
-    $start = substr(trim($start), 0, 10) ?: date('Y-m-01');
-    $end = substr(trim($end), 0, 10) ?: date('Y-m-t');
-    if ($start > $end) { $tmp = $start; $start = $end; $end = $tmp; }
-
-    $rows = [];
-    $today = date('Y-m-d');
-
-    $addRow = function(array $row) use (&$rows, $today): void {
-        $date = substr((string)($row['date'] ?? ''), 0, 10);
-        if ($date === '') $date = $today;
-        $direction = (string)($row['direction'] ?? 'in');
-        $amount = (float)($row['amount'] ?? 0);
-        if ($amount <= 0) return;
-        $status = (string)($row['status'] ?? 'Vade bekliyor');
-        $tone = (string)($row['tone'] ?? ($direction === 'in' ? 'info' : 'warning'));
-        if ($date < $today) { $status = 'Gecikmiş / günü geçmiş'; $tone = 'danger'; }
-        if ($date === $today) { $status = 'Bugün'; $tone = $direction === 'in' ? 'success' : 'warning'; }
-        $rows[] = [
-            'date' => $date,
-            'direction' => $direction,
-            'kind' => $direction === 'in' ? 'Alacak' : 'Ödeme',
-            'source' => (string)($row['source'] ?? 'Cari'),
-            'source_key' => (string)($row['source_key'] ?? 'movement'),
-            'cari_id' => !empty($row['cari_id']) ? (int)$row['cari_id'] : null,
-            'cari_name' => (string)($row['cari_name'] ?? '-'),
-            'description' => (string)($row['description'] ?? ''),
-            'status' => $status,
-            'tone' => $tone,
-            'amount' => $amount,
-            'link' => (string)($row['link'] ?? ''),
-            'sort_order' => (int)($row['sort_order'] ?? ($direction === 'in' ? 10 : 20)),
-        ];
-    };
-
-    // Cari hareketlerden vadeli alacak/verecekler. Vade yoksa işlem tarihi takvim tarihi kabul edilir.
-    $stmt = db()->prepare("SELECT m.*, c.name AS cari_name
-        FROM movements m
-        LEFT JOIN cariler c ON c.id=m.cari_id
-        WHERE COALESCE(m.is_cancelled,0)=0
-          AND m.movement_type IN ('alacak','verecek')
-          AND date(COALESCE(NULLIF(m.due_date,''), m.movement_date)) >= ?
-          AND date(COALESCE(NULLIF(m.due_date,''), m.movement_date)) <= ?
-        ORDER BY date(COALESCE(NULLIF(m.due_date,''), m.movement_date)) ASC, m.id ASC");
-    $stmt->execute([$start, $end]);
-    foreach ($stmt->fetchAll() as $m) {
-        $isIn = (string)$m['movement_type'] === 'alacak';
-        $sourceType = (string)($m['source_type'] ?? '');
-        $source = 'Cari hareket';
-        if ($sourceType === 'check_reversal') $source = 'Geri dönen çek';
-        if ($sourceType === 'check_ciro_reversal') $source = 'Ciro geri dönüşü';
-        $addRow([
-            'date' => $m['due_date'] ?: $m['movement_date'],
-            'direction' => $isIn ? 'in' : 'out',
-            'source' => $source,
-            'source_key' => 'movement',
-            'cari_id' => $m['cari_id'] ?? null,
-            'cari_name' => $m['cari_name'] ?? '-',
-            'description' => trim((string)($m['description'] ?? '')) !== '' ? (string)$m['description'] : movement_label((string)$m['movement_type']),
-            'status' => 'Cari vadesi',
-            'tone' => $isIn ? 'info' : 'warning',
-            'amount' => (float)$m['amount'],
-            'link' => 'hareketler.php?q=' . urlencode((string)($m['description'] ?? '')),
-            'sort_order' => $isIn ? 10 : 20,
-        ]);
-    }
-
-    // Portföydeki çekler. Tahsil/ödendi/ciro/iptal/karşılıksız olanlar beklenen alacak/ödeme toplamına dahil edilmez.
-    $stmt = db()->prepare("SELECT ch.*, c.name AS cari_name
-        FROM checks ch
-        LEFT JOIN cariler c ON c.id=ch.cari_id
-        WHERE COALESCE(ch.is_cancelled,0)=0
-          AND ch.status='bekliyor'
-          AND ch.due_date >= ?
-          AND ch.due_date <= ?
-        ORDER BY ch.due_date ASC, ch.id ASC");
-    $stmt->execute([$start, $end]);
-    foreach ($stmt->fetchAll() as $ch) {
-        $isIn = (string)$ch['direction'] === 'alinacak';
-        $descParts = [];
-        if (!empty($ch['bank_name'])) $descParts[] = (string)$ch['bank_name'];
-        if (!empty($ch['branch_name'])) $descParts[] = (string)$ch['branch_name'];
-        if (!empty($ch['check_no'])) $descParts[] = 'No: ' . (string)$ch['check_no'];
-        if (!empty($ch['drawer'])) $descParts[] = 'Keşideci: ' . (string)$ch['drawer'];
-        if (!empty($ch['description'])) $descParts[] = (string)$ch['description'];
-        $addRow([
-            'date' => $ch['due_date'],
-            'direction' => $isIn ? 'in' : 'out',
-            'source' => $isIn ? 'Alınan çek' : 'Verilen çek',
-            'source_key' => 'check',
-            'cari_id' => $ch['cari_id'] ?? null,
-            'cari_name' => $ch['cari_name'] ?? '-',
-            'description' => implode(' / ', array_filter($descParts, fn($v) => trim((string)$v) !== '')),
-            'status' => 'Çek vadesi bekliyor',
-            'tone' => $isIn ? 'success' : 'warning',
-            'amount' => (float)$ch['amount'],
-            'link' => 'cekler.php?q=' . urlencode((string)($ch['check_no'] ?? '')),
-            'sort_order' => $isIn ? 11 : 21,
-        ]);
-    }
-
-    if ($includePrivateReceivables) {
-        $stmt = db()->prepare("SELECT pr.*, c.name AS cari_name
-            FROM private_receivables pr
-            LEFT JOIN cariler c ON c.id=pr.cari_id
-            WHERE pr.status='acik'
-              AND pr.receivable_date >= ?
-              AND pr.receivable_date <= ?
-            ORDER BY pr.receivable_date ASC, pr.id ASC");
-        $stmt->execute([$start, $end]);
-        foreach ($stmt->fetchAll() as $pr) {
-            $addRow([
-                'date' => $pr['receivable_date'],
-                'direction' => 'in',
-                'source' => 'Özel alacak',
-                'source_key' => 'private_receivable',
-                'cari_id' => $pr['cari_id'] ?? null,
-                'cari_name' => $pr['cari_name'] ?? '-',
-                'description' => trim((string)($pr['description'] ?? '')) !== '' ? (string)$pr['description'] : 'Özel alacak kaydı',
-                'status' => 'Özel alacak vadesi',
-                'tone' => 'special',
-                'amount' => (float)$pr['amount'],
-                'link' => 'ozel-alacaklar.php?q=' . urlencode((string)($pr['description'] ?? '')),
-                'sort_order' => 12,
-            ]);
-        }
-    }
-
-    usort($rows, function($a, $b) {
-        $cmp = strcmp((string)$a['date'], (string)$b['date']);
-        if ($cmp !== 0) return $cmp;
-        $cmp = ((int)$a['sort_order']) <=> ((int)$b['sort_order']);
-        if ($cmp !== 0) return $cmp;
-        return strcmp((string)$a['cari_name'], (string)$b['cari_name']);
-    });
-    return $rows;
-}
-
-function payment_calendar_summary(array $rows): array
-{
-    $summary = [
-        'in' => 0.0,
-        'out' => 0.0,
-        'net' => 0.0,
-        'in_count' => 0,
-        'out_count' => 0,
-        'total_count' => 0,
-        'sources' => [],
-    ];
-    foreach ($rows as $row) {
-        $amount = (float)($row['amount'] ?? 0);
-        $dir = (string)($row['direction'] ?? 'in');
-        if ($dir === 'out') { $summary['out'] += $amount; $summary['out_count']++; }
-        else { $summary['in'] += $amount; $summary['in_count']++; }
-        $source = (string)($row['source'] ?? 'Diğer');
-        if (!isset($summary['sources'][$source])) $summary['sources'][$source] = ['in'=>0.0,'out'=>0.0,'count'=>0];
-        $summary['sources'][$source][$dir === 'out' ? 'out' : 'in'] += $amount;
-        $summary['sources'][$source]['count']++;
-        $summary['total_count']++;
-    }
-    $summary['net'] = $summary['in'] - $summary['out'];
-    return $summary;
-}
-
-function payment_calendar_group_summary(array $rows, string $period = 'monthly'): array
-{
-    $groups = [];
-    foreach ($rows as $row) {
-        $date = (string)($row['date'] ?? '');
-        if ($period === 'yearly') {
-            $key = substr($date, 0, 7);
-            $label = month_label($key);
-        } else {
-            $key = $date;
-            $label = tr_date($date);
-        }
-        if (!isset($groups[$key])) {
-            $groups[$key] = ['key'=>$key, 'label'=>$label, 'in'=>0.0, 'out'=>0.0, 'net'=>0.0, 'count'=>0];
-        }
-        if (($row['direction'] ?? 'in') === 'out') $groups[$key]['out'] += (float)$row['amount'];
-        else $groups[$key]['in'] += (float)$row['amount'];
-        $groups[$key]['count']++;
-    }
-    foreach ($groups as &$g) $g['net'] = $g['in'] - $g['out'];
-    unset($g);
-    ksort($groups);
-    return array_values($groups);
-}
-
-function payment_calendar_period_label(string $start, string $end): string
-{
-    if ($start === $end) return tr_date($start);
-    return tr_date($start) . ' - ' . tr_date($end);
-}
-
 function document_types(): array
 {
     return [
@@ -1297,14 +868,13 @@ function accounts_for_select(bool $activeOnly = true): array
     $sql .= ' ORDER BY account_type ASC, name ASC';
     return db()->query($sql)->fetchAll();
 }
-function account_balance(int $accountId, ?string $asOfDate = null): float
+function account_balance(int $accountId): float
 {
-    $asOfDate = $asOfDate ?: date('Y-m-d');
     $stmt = db()->prepare("SELECT opening_balance FROM accounts WHERE id=?");
     $stmt->execute([$accountId]);
     $opening = (float)($stmt->fetchColumn() ?: 0);
-    $stmt = db()->prepare("SELECT direction, SUM(amount) AS total FROM account_transactions WHERE account_id=? AND transaction_date <= ? GROUP BY direction");
-    $stmt->execute([$accountId, $asOfDate]);
+    $stmt = db()->prepare("SELECT direction, SUM(amount) AS total FROM account_transactions WHERE account_id=? GROUP BY direction");
+    $stmt->execute([$accountId]);
     foreach ($stmt->fetchAll() as $r) {
         if ($r['direction'] === 'in') $opening += (float)$r['total'];
         if ($r['direction'] === 'out') $opening -= (float)$r['total'];
@@ -1331,54 +901,6 @@ function movement_cash_direction(string $type): ?string
     if (in_array($type, ['odeme','gider'], true)) return 'out';
     return null;
 }
-function movement_effective_cash_date(array $movement): string
-{
-    $type = (string)($movement['movement_type'] ?? '');
-    $dueDate = trim((string)($movement['due_date'] ?? ''));
-    $movementDate = trim((string)($movement['movement_date'] ?? ''));
-    if (movement_cash_direction($type) && $dueDate !== '') return $dueDate;
-    return $movementDate !== '' ? $movementDate : date('Y-m-d');
-}
-function check_effective_cash_date(array $check): string
-{
-    $closedAt = trim((string)($check['closed_at'] ?? ''));
-    if ($closedAt !== '') return substr($closedAt, 0, 10);
-    return trim((string)($check['due_date'] ?? '')) ?: date('Y-m-d');
-}
-function cashflow_totals(?string $start = null, ?string $end = null): array
-{
-    $totals = ['in'=>0,'out'=>0,'net'=>0,'gelir'=>0,'tahsilat'=>0,'gider'=>0,'odeme'=>0,'cek_giris'=>0,'cek_cikis'=>0];
-    $cashDate = "COALESCE(NULLIF(due_date,''), movement_date)";
-    $where = ["COALESCE(is_cancelled,0)=0", "COALESCE(source_type,'') NOT IN ('check_acceptance','check_reversal','check_ciro_payment','check_ciro_reversal')", "movement_type IN ('tahsilat','gelir','odeme','gider')"];
-    $params = [];
-    if ($start) { $where[] = $cashDate . ' >= ?'; $params[] = $start; }
-    if ($end) { $where[] = $cashDate . ' <= ?'; $params[] = $end; }
-    $stmt = db()->prepare('SELECT movement_type, SUM(amount) AS total FROM movements WHERE ' . implode(' AND ', $where) . ' GROUP BY movement_type');
-    $stmt->execute($params);
-    foreach ($stmt->fetchAll() as $r) {
-        $type = (string)$r['movement_type'];
-        $amount = (float)$r['total'];
-        if (isset($totals[$type])) $totals[$type] += $amount;
-        $direction = movement_cash_direction($type);
-        if ($direction) $totals[$direction] += $amount;
-    }
-
-    $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
-    $where = ["COALESCE(is_cancelled,0)=0", "status IN ('tahsil_edildi','odendi')"];
-    $params = [];
-    if ($start) { $where[] = $checkDate . ' >= ?'; $params[] = $start; }
-    if ($end) { $where[] = $checkDate . ' <= ?'; $params[] = $end; }
-    $stmt = db()->prepare('SELECT status, SUM(amount) AS total FROM checks WHERE ' . implode(' AND ', $where) . ' GROUP BY status');
-    $stmt->execute($params);
-    foreach ($stmt->fetchAll() as $r) {
-        $amount = (float)$r['total'];
-        if ($r['status'] === 'tahsil_edildi') { $totals['cek_giris'] += $amount; $totals['in'] += $amount; }
-        if ($r['status'] === 'odendi') { $totals['cek_cikis'] += $amount; $totals['out'] += $amount; }
-    }
-
-    $totals['net'] = $totals['in'] - $totals['out'];
-    return $totals;
-}
 function sync_movement_account_transaction(int $movementId): void
 {
     db()->prepare("DELETE FROM account_transactions WHERE source_type='movement' AND source_id=?")->execute([$movementId]);
@@ -1386,15 +908,13 @@ function sync_movement_account_transaction(int $movementId): void
     $stmt->execute([$movementId]);
     $m = $stmt->fetch();
     if (!$m || (int)($m['is_cancelled'] ?? 0) === 1) return;
-    if (is_check_source_movement($m['source_type'] ?? '')) return;
     $direction = movement_cash_direction($m['movement_type']);
     if (!$direction || empty($m['account_id'])) return;
     $desc = movement_label($m['movement_type']);
     if (!empty($m['cari_name'])) $desc .= ' - ' . $m['cari_name'];
     if (!empty($m['description'])) $desc .= ' / ' . $m['description'];
-    $cashDate = movement_effective_cash_date($m);
     db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        ->execute([(int)$m['account_id'], $direction, (float)$m['amount'], $cashDate, 'movement', $movementId, $desc, $m['created_by'] ?: (current_user()['id'] ?? null), now()]);
+        ->execute([(int)$m['account_id'], $direction, (float)$m['amount'], $m['movement_date'], 'movement', $movementId, $desc, $m['created_by'] ?: (current_user()['id'] ?? null), now()]);
 }
 function sync_check_account_transaction(int $checkId): void
 {
@@ -1410,9 +930,8 @@ function sync_check_account_transaction(int $checkId): void
     $desc = check_status_label($ch['status']) . ' - ' . check_direction_label($ch['direction']);
     if (!empty($ch['cari_name'])) $desc .= ' - ' . $ch['cari_name'];
     if (!empty($ch['check_no'])) $desc .= ' / Çek No: ' . $ch['check_no'];
-    $cashDate = check_effective_cash_date($ch);
     db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        ->execute([(int)$ch['account_id'], $direction, (float)$ch['amount'], $cashDate, 'check', $checkId, $desc, $ch['created_by'] ?: (current_user()['id'] ?? null), now()]);
+        ->execute([(int)$ch['account_id'], $direction, (float)$ch['amount'], $ch['due_date'], 'check', $checkId, $desc, $ch['created_by'] ?: (current_user()['id'] ?? null), now()]);
 }
 
 function repair_account_sync(bool $withLog = true): array
@@ -1430,7 +949,6 @@ function repair_account_sync(bool $withLog = true): array
 
         $movementIds = $pdo->query("SELECT id FROM movements
             WHERE COALESCE(is_cancelled,0)=0
-              AND COALESCE(source_type,'') NOT IN ('check_acceptance','check_reversal','check_ciro_payment','check_ciro_reversal')
               AND account_id IS NOT NULL
               AND movement_type IN ('tahsilat','gelir','odeme','gider')
             ORDER BY id ASC")->fetchAll(PDO::FETCH_COLUMN);

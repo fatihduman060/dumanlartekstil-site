@@ -23,10 +23,7 @@ function dashboard_cashflow_rows(string $period): array
     if ($meta['group'] === 'day') {
         $start = $today->modify('-' . ($meta['steps'] - 1) . ' days');
         $end = $today;
-        $sqlDate = "COALESCE(NULLIF(due_date,''), movement_date)";
-        $sqlGroup = "date($sqlDate)";
-        $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
-        $checkGroup = "date(COALESCE(NULLIF(closed_at,''), due_date))";
+        $sqlGroup = "date(movement_date)";
         for ($i = $meta['steps'] - 1; $i >= 0; $i--) {
             $d = $today->modify('-' . $i . ' days');
             $key = $d->format('Y-m-d');
@@ -43,10 +40,7 @@ function dashboard_cashflow_rows(string $period): array
         $year = (int)$today->format('Y');
         $start = new DateTimeImmutable($year . '-01-01');
         $end = new DateTimeImmutable($year . '-12-31');
-        $sqlDate = "COALESCE(NULLIF(due_date,''), movement_date)";
-        $sqlGroup = "strftime('%Y-%m', $sqlDate)";
-        $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
-        $checkGroup = "strftime('%Y-%m', COALESCE(NULLIF(closed_at,''), due_date))";
+        $sqlGroup = "strftime('%Y-%m', movement_date)";
         for ($m = 1; $m <= 12; $m++) {
             $d = new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $m));
             $key = $d->format('Y-m');
@@ -64,10 +58,7 @@ function dashboard_cashflow_rows(string $period): array
         $firstYear = $currentYear - ($meta['steps'] - 1);
         $start = new DateTimeImmutable($firstYear . '-01-01');
         $end = new DateTimeImmutable($currentYear . '-12-31');
-        $sqlDate = "COALESCE(NULLIF(due_date,''), movement_date)";
-        $sqlGroup = "strftime('%Y', $sqlDate)";
-        $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
-        $checkGroup = "strftime('%Y', COALESCE(NULLIF(closed_at,''), due_date))";
+        $sqlGroup = "strftime('%Y', movement_date)";
         for ($y = $firstYear; $y <= $currentYear; $y++) {
             $key = (string)$y;
             $rows[$key] = [
@@ -82,10 +73,7 @@ function dashboard_cashflow_rows(string $period): array
     } else {
         $start = $today->modify('first day of this month')->modify('-' . ($meta['steps'] - 1) . ' months');
         $end = $today->modify('last day of this month');
-        $sqlDate = "COALESCE(NULLIF(due_date,''), movement_date)";
-        $sqlGroup = "strftime('%Y-%m', $sqlDate)";
-        $checkDate = "date(COALESCE(NULLIF(closed_at,''), due_date))";
-        $checkGroup = "strftime('%Y-%m', COALESCE(NULLIF(closed_at,''), due_date))";
+        $sqlGroup = "strftime('%Y-%m', movement_date)";
         for ($i = $meta['steps'] - 1; $i >= 0; $i--) {
             $d = $today->modify('first day of this month')->modify('-' . $i . ' months');
             $key = $d->format('Y-m');
@@ -102,10 +90,9 @@ function dashboard_cashflow_rows(string $period): array
 
     $stmt = db()->prepare("SELECT {$sqlGroup} AS period_key, movement_type, SUM(amount) AS total
         FROM movements
-        WHERE {$sqlDate} >= ?
-          AND {$sqlDate} <= ?
+        WHERE movement_date >= ?
+          AND movement_date <= ?
           AND COALESCE(is_cancelled,0)=0
-          AND COALESCE(source_type,'') NOT IN ('check_acceptance','check_reversal')
           AND movement_type IN ('tahsilat','gelir','odeme','gider')
         GROUP BY period_key, movement_type
         ORDER BY period_key ASC");
@@ -114,23 +101,7 @@ function dashboard_cashflow_rows(string $period): array
         $key = (string)$r['period_key'];
         $type = (string)$r['movement_type'];
         if (!isset($rows[$key]) || !array_key_exists($type, $rows[$key])) continue;
-        $rows[$key][$type] += (float)$r['total'];
-    }
-
-    $stmt = db()->prepare("SELECT {$checkGroup} AS period_key, status, SUM(amount) AS total
-        FROM checks
-        WHERE {$checkDate} >= ?
-          AND {$checkDate} <= ?
-          AND COALESCE(is_cancelled,0)=0
-          AND status IN ('tahsil_edildi','odendi')
-        GROUP BY period_key, status
-        ORDER BY period_key ASC");
-    $stmt->execute([$startSql, $endSql]);
-    foreach ($stmt->fetchAll() as $r) {
-        $key = (string)$r['period_key'];
-        if (!isset($rows[$key])) continue;
-        if ($r['status'] === 'tahsil_edildi') $rows[$key]['tahsilat'] += (float)$r['total'];
-        if ($r['status'] === 'odendi') $rows[$key]['odeme'] += (float)$r['total'];
+        $rows[$key][$type] = (float)$r['total'];
     }
     foreach ($rows as &$r) {
         $r['in'] = $r['gelir'] + $r['tahsilat'];
@@ -147,23 +118,11 @@ $monthEnd = date('Y-m-t');
 $weekAhead = date('Y-m-d', strtotime('+7 days'));
 $totals = dashboard_totals();
 $monthTotals = dashboard_totals($monthStart, $monthEnd);
-$monthCashTotals = cashflow_totals($monthStart, $monthEnd);
-$monthCashIn = (float)$monthCashTotals['in'];
-$monthCashOut = (float)$monthCashTotals['out'];
-$monthCashNet = (float)$monthCashTotals['net'];
-$rawNetAlacak = (float)$totals['net_alacak'];
-$rawNetVerecek = (float)$totals['net_verecek'];
-$remainingReceivable = max(0, $rawNetAlacak);
-$remainingPayable = max(0, $rawNetVerecek);
-$overCollected = max(0, -$rawNetAlacak);
-$overPaid = max(0, -$rawNetVerecek);
-$netPosition = $rawNetAlacak - $rawNetVerecek;
+$monthCashIn = (float)$monthTotals['gelir'] + (float)$monthTotals['tahsilat'];
+$monthCashOut = (float)$monthTotals['gider'] + (float)$monthTotals['odeme'];
+$monthCashNet = $monthCashIn - $monthCashOut;
+$netPosition = (float)$totals['net_alacak'] - (float)$totals['net_verecek'];
 $checkTotals = check_totals(null, null, true);
-$pendingReceivableChecks = (float)$checkTotals['alinacak'];
-$pendingPayableChecks = (float)$checkTotals['verilecek'];
-$totalReceivablePosition = $remainingReceivable + $pendingReceivableChecks;
-$totalPayablePosition = $remainingPayable + $pendingPayableChecks;
-$readableNetPosition = $totalReceivablePosition - $totalPayablePosition;
 $accountSummary = account_summary();
 $checkSoon = check_totals($today, $weekAhead, true);
 $overdueChecks = overdue_check_count();
@@ -174,7 +133,7 @@ $docCount = (int)db()->query("SELECT COUNT(*) FROM movements WHERE document_path
     + (int)db()->query("SELECT COUNT(*) FROM private_receivables WHERE document_path IS NOT NULL AND document_path != ''")->fetchColumn()
     + (int)db()->query("SELECT COUNT(*) FROM standalone_documents WHERE document_path IS NOT NULL AND document_path != ''")->fetchColumn();
 $recent = db()->query("SELECT m.*, c.name AS cari_name, cat.name AS category_name, a.name AS account_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id LEFT JOIN categories cat ON cat.id=m.category_id LEFT JOIN accounts a ON a.id=m.account_id WHERE COALESCE(m.is_cancelled,0)=0 ORDER BY m.movement_date DESC, m.id DESC LIMIT 8")->fetchAll();
-$dueMovStmt = db()->prepare("SELECT m.*, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND COALESCE(m.source_type,'') NOT IN ('check_acceptance','check_reversal') AND m.due_date IS NOT NULL AND m.due_date <= ? AND m.movement_type IN ('alacak','verecek') ORDER BY m.due_date ASC, m.id DESC LIMIT 8");
+$dueMovStmt = db()->prepare("SELECT m.*, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.due_date IS NOT NULL AND m.due_date <= ? AND m.movement_type IN ('alacak','verecek') ORDER BY m.due_date ASC, m.id DESC LIMIT 8");
 $dueMovStmt->execute([$weekAhead]);
 $dueMovements = $dueMovStmt->fetchAll();
 $dueCheckStmt = db()->prepare("SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.status='bekliyor' AND ch.due_date <= ? ORDER BY ch.due_date ASC, ch.id DESC LIMIT 8");
@@ -198,7 +157,7 @@ $topPayables = db()->query("SELECT c.id, c.name,
   FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
   GROUP BY c.id HAVING net < 0 ORDER BY net ASC LIMIT 5")->fetchAll();
 $upcomingPayments = [];
-$payMoveStmt = db()->prepare("SELECT 'Verecek' AS source_type, m.due_date, m.amount, m.description, c.id AS cari_id, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND COALESCE(m.source_type,'') NOT IN ('check_acceptance','check_reversal') AND m.movement_type='verecek' AND m.due_date BETWEEN ? AND ? ORDER BY m.due_date ASC LIMIT 8");
+$payMoveStmt = db()->prepare("SELECT 'Verecek' AS source_type, m.due_date, m.amount, m.description, c.id AS cari_id, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_type='verecek' AND m.due_date BETWEEN ? AND ? ORDER BY m.due_date ASC LIMIT 8");
 $payMoveStmt->execute([$today, $monthEnd]);
 foreach ($payMoveStmt->fetchAll() as $row) $upcomingPayments[] = $row;
 $payCheckStmt = db()->prepare("SELECT 'Çek' AS source_type, ch.due_date, ch.amount, TRIM(COALESCE(ch.bank_name,'') || ' ' || COALESCE(ch.check_no,'')) AS description, c.id AS cari_id, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.status='bekliyor' AND ch.direction='verilecek' AND ch.due_date BETWEEN ? AND ? ORDER BY ch.due_date ASC LIMIT 8");
@@ -307,16 +266,16 @@ page_header('Genel Bakış', 'dashboard');
 
 <section class="dashboard-section">
   <div class="dashboard-section-head">
-    <div><span>Cari Durum</span><h3>Alacak, verecek ve çek portföyü</h3></div>
-    <p>Burada cari açıklar ile bekleyen çekler birlikte okunur; çek tahsil edilmeden kasa/banka tarafına para yazılmaz.</p>
+    <div><span>Cari Durum</span><h3>Genel cari pozisyon</h3></div>
+    <p>Alacak, verecek ve genel durum ayrı ayrı okunur.</p>
   </div>
   <div class="stats-grid four section-stats">
     <article class="stat-card"><span>Toplam cari</span><strong><?php echo e($cariCount); ?></strong><small>Kişi / firma kartı</small></article>
-    <article class="stat-card"><span>Alacağım</span><strong><?php echo e(money($totalReceivablePosition)); ?></strong><small>Cari açık: <?php echo e(money($remainingReceivable)); ?><br>Portföyde alınan çek: <?php echo e(money($pendingReceivableChecks)); ?><?php echo $overCollected > 0 ? '<br>Fazla tahsilat/avans: ' . e(money($overCollected)) : ''; ?></small></article>
-    <article class="stat-card"><span>Vereceğim</span><strong><?php echo e(money($totalPayablePosition)); ?></strong><small>Cari açık: <?php echo e(money($remainingPayable)); ?><br>Portföyde verilen çek: <?php echo e(money($pendingPayableChecks)); ?><?php echo $overPaid > 0 ? '<br>Fazla ödeme/avans: ' . e(money($overPaid)) : ''; ?></small></article>
-    <article class="stat-card status"><span>Genel durum</span><strong class="<?php echo $readableNetPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($readableNetPosition)); ?></strong><small>Alacağım - vereceğim</small></article>
+    <article class="stat-card"><span>Net alacak</span><strong><?php echo e(money($totals['net_alacak'])); ?></strong><small>Alacak - tahsilat</small></article>
+    <article class="stat-card"><span>Net verecek</span><strong><?php echo e(money($totals['net_verecek'])); ?></strong><small>Verecek - ödeme</small></article>
+    <article class="stat-card status"><span>Genel durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small>Net alacak - net verecek</small></article>
   </div>
-  <p class="calc-note"><strong>Okuma notu:</strong> <strong>Alacağım</strong> = kalan cari alacak + portföyde alınan çek. <strong>Vereceğim</strong> = kalan cari verecek + portföyde verilen çek. Bekleyen çekler bu kartlarda görünür ama <strong>nakit girişi/çıkışı sayılmaz</strong>; tahsil edildi/ödendi yapılınca kasa-banka tarafına geçer. Çek bozulursa sistem cari borcu tekrar açar.</p>
+  <p class="calc-note"><strong>Genel durum</strong> = net alacak - net verecek. Pozitifse genel olarak alacaklı, negatifse borçlu görünürsün.</p>
 </section>
 
 <section class="dashboard-section">
@@ -325,27 +284,27 @@ page_header('Genel Bakış', 'dashboard');
     <p>Bu ay kasaya giren/çıkan ve mevcut kasa-banka durumu.</p>
   </div>
   <div class="stats-grid four section-stats">
-    <article class="stat-card cash"><span>Bu ay giren para</span><strong class="text-success"><?php echo e(money($monthCashIn)); ?></strong><small>Vade/tahsil tarihine göre</small></article>
-    <article class="stat-card cash"><span>Bu ay çıkan para</span><strong class="text-danger"><?php echo e(money($monthCashOut)); ?></strong><small>Vade/ödeme tarihine göre</small></article>
+    <article class="stat-card cash"><span>Bu ay giren para</span><strong class="text-success"><?php echo e(money($monthCashIn)); ?></strong><small>Gelir + tahsilat</small></article>
+    <article class="stat-card cash"><span>Bu ay çıkan para</span><strong class="text-danger"><?php echo e(money($monthCashOut)); ?></strong><small>Gider + ödeme</small></article>
     <article class="stat-card cash"><span>Bu ay nakit neti</span><strong class="<?php echo $monthCashNet >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($monthCashNet)); ?></strong><small>Giren - çıkan</small></article>
     <article class="stat-card soft"><span>Genel kasa/banka</span><strong class="<?php echo $accountSummary['total'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($accountSummary['total'])); ?></strong><small>Tüm hesap bakiyesi</small></article>
     <article class="stat-card soft"><span>Kasa toplamı</span><strong><?php echo e(money($accountSummary['kasa'])); ?></strong><small>Nakit hesapları</small></article>
     <article class="stat-card soft"><span>Banka toplamı</span><strong><?php echo e(money($accountSummary['banka'])); ?></strong><small>Banka hesapları</small></article>
     <article class="stat-card soft"><span>Aktif hesap</span><strong><?php echo e($accountSummary['active']); ?></strong><small>Kasa/banka/POS</small></article>
   </div>
-  <p class="calc-note"><strong>Bu ay nakit neti</strong> = vade/tahsil tarihine göre giren para - çıkan para. Bekleyen çekler nakit sayılmaz.</p>
+  <p class="calc-note"><strong>Bu ay nakit neti</strong> = gelir + tahsilat - gider - ödeme. Cari bakiyeden ayrı, gerçek para giriş/çıkışını gösterir.</p>
 </section>
 
 <section class="dashboard-section">
   <div class="dashboard-section-head">
     <div><span>Çek Takibi</span><h3>Çek vade ve bekleyenler</h3></div>
-    <p>Alınan, verilen, ciro edilen, yaklaşan ve vadesi geçen çekler.</p>
+    <p>Alınacak, verilecek, yaklaşan ve vadesi geçen çekler.</p>
   </div>
   <div class="stats-grid four section-stats">
-    <article class="stat-card soft"><span>Portföyde alınan çek</span><strong><?php echo e(money($checkTotals['alinacak'])); ?></strong><small><?php echo e($checkTotals['alinacak_count']); ?> adet</small></article>
-    <article class="stat-card soft"><span>Portföyde verilen çek</span><strong><?php echo e(money($checkTotals['verilecek'])); ?></strong><small><?php echo e($checkTotals['verilecek_count']); ?> adet</small></article>
+    <article class="stat-card soft"><span>Bekleyen alınacak çek</span><strong><?php echo e(money($checkTotals['alinacak'])); ?></strong><small><?php echo e($checkTotals['alinacak_count']); ?> adet</small></article>
+    <article class="stat-card soft"><span>Bekleyen verilecek çek</span><strong><?php echo e(money($checkTotals['verilecek'])); ?></strong><small><?php echo e($checkTotals['verilecek_count']); ?> adet</small></article>
     <article class="stat-card soft"><span>7 gün içinde alınacak</span><strong><?php echo e(money($checkSoon['alinacak'])); ?></strong><small>Vadesi yaklaşan çek</small></article>
-    <article class="stat-card soft"><span>Vadesi geçen çek</span><strong class="<?php echo $overdueChecks>0?'text-danger':''; ?>"><?php echo e($overdueChecks); ?></strong><small>Portföyde kayıt</small></article>
+    <article class="stat-card soft"><span>Vadesi geçen çek</span><strong class="<?php echo $overdueChecks>0?'text-danger':''; ?>"><?php echo e($overdueChecks); ?></strong><small>Bekleyen kayıt</small></article>
   </div>
   <p class="calc-note"><strong>Çek takibi</strong> bekleyen çekleri ve vadeleri gösterir; tahsil edildi/ödendi yapılınca kasa-banka tarafı ayrıca etkilenir.</p>
 </section>
