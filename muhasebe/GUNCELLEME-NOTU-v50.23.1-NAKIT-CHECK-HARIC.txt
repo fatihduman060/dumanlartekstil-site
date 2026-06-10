@@ -1,0 +1,6 @@
+v50.23.1 - Nakit kartlarında çeklerin hariç tutulması
+
+- Genel Bakış > Bu ay giren/çıkan para kartları artık çek ve çek devir hareketlerini nakit gibi saymaz.
+- Çekler cari bakiyeyi etkilemeye devam eder, ancak gerçek kasa/banka nakit akışı kartlarında ayrıca gösterilmez.
+- Grafik verileri de aynı filtreyle güncellendi.
+- Veritabanı şema değişikliği yoktur; storage klasörü pakete dahil değildir.

@@ -1,0 +1,35 @@
+Bitke Muhasebe v50.23 - Çek Devir Denge Güncellemesi
+
+Bu güncellemenin amacı:
+- Önceden cari bakiyeleri çekler düşülmüş net bakiye olarak girilen sistemlerde,
+  sonradan çek sayfasına eklenen eski çeklerin cariyi ikinci kez düşürmesini engellemek.
+
+Yeni mantık:
+- Çek sayfasına girilen çek yine hareketler/cari ekstrede görünür.
+- Alınacak çek için tahsilat hareketi oluşur.
+- Verilecek çek için ödeme hareketi oluşur.
+- Ancak v50.23'e kadar sistemde bulunan mevcut çekler "eski/devir çek" kabul edilir.
+- Bu mevcut çekler için otomatik olarak aynı tutarda bir denge hareketi oluşturulur:
+  * Alınacak çek: Alacak + Tahsilat = net etki sıfır
+  * Verilecek çek: Verecek + Ödeme = net etki sıfır
+- Böylece önce girilmiş net cari bakiyesi bozulmaz.
+
+Örnek:
+- Cari başlangıçta 300 TL borçlu girilmiş.
+- Eski 1.200 TL alınacak çek sonradan çek listesine girilmiş.
+- Sistem 1.200 TL alacak denge + 1.200 TL tahsilat çek hareketi oluşturur.
+- Cari net etki 0 olur, bakiye yine 300 TL kalır.
+
+Yeni çekler:
+- Bundan sonra eklenen normal yeni çeklerde "eski/devir çek" seçeneği işaretlenmezse çek cariyi normal şekilde etkiler.
+- Geçmişten gelen ve cari bakiyeye daha önce net olarak dahil edilmiş bir çek sonradan girilecekse formdaki
+  "Bu çek eski/devir çek" kutusu işaretlenmelidir.
+
+Kurulum:
+1. Mevcut storage klasörünü silmeyin, taşımayın, üzerine yazmayın.
+2. Mutlaka storage/bitke_muhasebe.sqlite dosyasının yedeğini alın.
+3. Bu paketteki PHP dosyalarını muhasebe klasörüne atıp var olanların üzerine yazın.
+4. Site ilk açıldığında veritabanı güncellemesi otomatik çalışır.
+
+Not:
+- Bu paket storage klasörü içermez, canlı veritabanını ezmez.
