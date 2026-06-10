@@ -8,7 +8,13 @@ $cashTotals = cashflow_totals($start, $end);
 $reportCashIn = (float)$cashTotals['in'];
 $reportCashOut = (float)$cashTotals['out'];
 $reportCashNet = (float)$cashTotals['net'];
-$reportNetPosition = (float)$totals['net_alacak'] - (float)$totals['net_verecek'];
+$rawReportNetAlacak = (float)$totals['net_alacak'];
+$rawReportNetVerecek = (float)$totals['net_verecek'];
+$reportRemainingReceivable = max(0, $rawReportNetAlacak);
+$reportRemainingPayable = max(0, $rawReportNetVerecek);
+$reportOverCollected = max(0, -$rawReportNetAlacak);
+$reportOverPaid = max(0, -$rawReportNetVerecek);
+$reportNetPosition = $rawReportNetAlacak - $rawReportNetVerecek;
 $checkTotalsRange = check_totals($start, $end, false);
 $stmt = db()->prepare("SELECT cat.name, cat.type, SUM(m.amount) AS total FROM movements m LEFT JOIN categories cat ON cat.id=m.category_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? GROUP BY cat.id ORDER BY total DESC");
 $stmt->execute([$start,$end]); $categoryTotals = $stmt->fetchAll();
@@ -42,13 +48,13 @@ page_header('Raporlar', 'raporlar');
 </section>
 
 <section class="stats-grid five report-block report-position-grid">
-  <article class="stat-card status report-hero-stat"><span>Genel Durum</span><strong class="<?php echo $reportNetPosition>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportNetPosition)); ?></strong><small>Net alacak - net verecek</small></article>
-  <article class="stat-card"><span>Kalan alacak</span><strong><?php echo e(money($totals['net_alacak'])); ?></strong><small>Alacak - tahsilat</small></article>
-  <article class="stat-card"><span>Kalan verecek</span><strong><?php echo e(money($totals['net_verecek'])); ?></strong><small>Verecek - ödeme</small></article>
+  <article class="stat-card status report-hero-stat"><span>Genel Durum</span><strong class="<?php echo $reportNetPosition>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportNetPosition)); ?></strong><small>Ham net cari bakiye</small></article>
+  <article class="stat-card"><span>Kalan alacak</span><strong><?php echo e(money($reportRemainingReceivable)); ?></strong><small><?php echo $reportOverCollected > 0 ? 'Fazla tahsilat/avans: ' . e(money($reportOverCollected)) : 'Alacak - tahsilat'; ?></small></article>
+  <article class="stat-card"><span>Kalan verecek</span><strong><?php echo e(money($reportRemainingPayable)); ?></strong><small><?php echo $reportOverPaid > 0 ? 'Fazla ödeme/avans: ' . e(money($reportOverPaid)) : 'Verecek - ödeme'; ?></small></article>
   <article class="stat-card cash"><span>Nakit neti</span><strong class="<?php echo $reportCashNet>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportCashNet)); ?></strong><small>Vade/tahsil tarihine göre</small></article>
   <article class="stat-card special"><span>Özel alacak</span><strong><?php echo e(money($privateSummary['acik'])); ?></strong><small>Genel duruma dahil değil</small></article>
 </section>
-<p class="calc-note report-calc-note"><strong>Okuma notu:</strong> Genel Durum = net alacak - net verecek. Nakit Neti = vade/tahsil tarihine göre giren para - çıkan para. Bekleyen çekler nakit sayılmaz. Özel Alacak bu iki hesaba dahil edilmez.</p>
+<p class="calc-note report-calc-note"><strong>Okuma notu:</strong> Kalan alacak/verecek eksi gösterilmez; fazla tahsilat veya fazla ödeme varsa avans gibi küçük yazıda görünür. Genel Durum ham net cari bakiyedir. Nakit Neti = vade/tahsil tarihine göre giren para - çıkan para. Bekleyen çekler nakit sayılmaz. Özel Alacak bu iki hesaba dahil edilmez.</p>
 
 <section class="stats-grid four report-block">
   <article class="stat-card"><span>Alacak</span><strong><?php echo e(money($totals['alacak'])); ?></strong><small>Brüt alacak</small></article>

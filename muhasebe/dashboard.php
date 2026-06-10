@@ -151,7 +151,13 @@ $monthCashTotals = cashflow_totals($monthStart, $monthEnd);
 $monthCashIn = (float)$monthCashTotals['in'];
 $monthCashOut = (float)$monthCashTotals['out'];
 $monthCashNet = (float)$monthCashTotals['net'];
-$netPosition = (float)$totals['net_alacak'] - (float)$totals['net_verecek'];
+$rawNetAlacak = (float)$totals['net_alacak'];
+$rawNetVerecek = (float)$totals['net_verecek'];
+$remainingReceivable = max(0, $rawNetAlacak);
+$remainingPayable = max(0, $rawNetVerecek);
+$overCollected = max(0, -$rawNetAlacak);
+$overPaid = max(0, -$rawNetVerecek);
+$netPosition = $rawNetAlacak - $rawNetVerecek;
 $checkTotals = check_totals(null, null, true);
 $accountSummary = account_summary();
 $checkSoon = check_totals($today, $weekAhead, true);
@@ -297,15 +303,15 @@ page_header('Genel Bakış', 'dashboard');
 <section class="dashboard-section">
   <div class="dashboard-section-head">
     <div><span>Cari Durum</span><h3>Genel cari pozisyon</h3></div>
-    <p>Alacak, verecek ve genel durum ayrı ayrı okunur.</p>
+    <p>Kalan alacak/verecek eksiye düşürülmeden okunur; fazlalık varsa avans gibi ayrıca belirtilir.</p>
   </div>
   <div class="stats-grid four section-stats">
     <article class="stat-card"><span>Toplam cari</span><strong><?php echo e($cariCount); ?></strong><small>Kişi / firma kartı</small></article>
-    <article class="stat-card"><span>Net alacak</span><strong><?php echo e(money($totals['net_alacak'])); ?></strong><small>Alacak - tahsilat</small></article>
-    <article class="stat-card"><span>Net verecek</span><strong><?php echo e(money($totals['net_verecek'])); ?></strong><small>Verecek - ödeme</small></article>
-    <article class="stat-card status"><span>Genel durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small>Net alacak - net verecek</small></article>
+    <article class="stat-card"><span>Kalan alacak</span><strong><?php echo e(money($remainingReceivable)); ?></strong><small><?php echo $overCollected > 0 ? 'Fazla tahsilat/avans: ' . e(money($overCollected)) : 'Alacak - tahsilat'; ?></small></article>
+    <article class="stat-card"><span>Kalan verecek</span><strong><?php echo e(money($remainingPayable)); ?></strong><small><?php echo $overPaid > 0 ? 'Fazla ödeme/avans: ' . e(money($overPaid)) : 'Verecek - ödeme'; ?></small></article>
+    <article class="stat-card status"><span>Genel durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small>Ham net cari bakiye</small></article>
   </div>
-  <p class="calc-note"><strong>Genel durum</strong> = net alacak - net verecek. Pozitifse genel olarak alacaklı, negatifse borçlu görünürsün.</p>
+  <p class="calc-note"><strong>Okuma notu:</strong> Kalan alacak ve kalan verecek eksi gösterilmez. Tahsilat/ödeme ilgili borçtan fazlaysa bu fark avans/fazla ödeme olarak küçük yazıda görünür. <strong>Genel durum</strong> yine ham net cari bakiyeyi gösterir; pozitifse genel olarak alacaklı, negatifse borçlu görünürsün.</p>
 </section>
 
 <section class="dashboard-section">
