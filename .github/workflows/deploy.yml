@@ -53,8 +53,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          server-dir: /bitke.com.tr/muhasebe/
           local-dir: ./muhasebe/
+          state-name: .ftp-deploy-sync-state-muhasebe.json
           dangerous-clean-slate: false
           exclude: |
             **/.git*
