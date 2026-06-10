@@ -1,0 +1,62 @@
+/* Çek yönü renk kodları: alınacak yeşil, verilecek kırmızı */
+:root{
+  --check-in-bg:#eef8f1;
+  --check-in-bg-strong:#e4f4e9;
+  --check-in-border:#86c79d;
+  --check-in-text:#1f6f3d;
+  --check-out-bg:#fff1ef;
+  --check-out-bg-strong:#ffe7e3;
+  --check-out-border:#e5a098;
+  --check-out-text:#9f332c;
+}
+
+/* Yön kolonu 2. kolonda olan çek tablolarında satırları hafif renklendir. */
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-success) td{
+  background:var(--check-in-bg);
+}
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-warning) td,
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-danger) td{
+  background:var(--check-out-bg);
+}
+
+/* Rozetler daha net okunsun. */
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-success) td:nth-child(2) .badge-success{
+  background:var(--check-in-bg-strong);
+  color:var(--check-in-text);
+  border:1px solid var(--check-in-border);
+}
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-warning) td:nth-child(2) .badge-warning,
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-danger) td:nth-child(2) .badge-danger{
+  background:var(--check-out-bg-strong);
+  color:var(--check-out-text);
+  border:1px solid var(--check-out-border);
+}
+
+/* Vade uyarıları yön renginin üstüne binmesin ama görünür kalsın. */
+.table-wrap table tbody tr.row-overdue td{
+  background:#fff0ef !important;
+}
+.table-wrap table tbody tr.row-soon td{
+  background:#fffbe8 !important;
+}
+.table-wrap table tbody tr.row-overdue:has(td:nth-child(2) .badge-success) td:first-child,
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-success) td:first-child{
+  border-left:4px solid var(--check-in-border);
+}
+.table-wrap table tbody tr.row-overdue:has(td:nth-child(2) .badge-warning) td:first-child,
+.table-wrap table tbody tr.row-soon:has(td:nth-child(2) .badge-warning) td:first-child,
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-warning) td:first-child,
+.table-wrap table tbody tr:has(td:nth-child(2) .badge-danger) td:first-child{
+  border-left:4px solid var(--check-out-border);
+}
+
+.cek-legend .in-leg{color:var(--check-in-text)}
+.cek-legend .out-leg{color:var(--check-out-text)}
+
+@media print{
+  .table-wrap table tbody tr:has(td:nth-child(2) .badge-success) td,
+  .table-wrap table tbody tr:has(td:nth-child(2) .badge-warning) td,
+  .table-wrap table tbody tr:has(td:nth-child(2) .badge-danger) td{
+    background:#fff!important;
+  }
+}
