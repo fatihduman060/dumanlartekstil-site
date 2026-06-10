@@ -63,6 +63,11 @@ function pdf_check_stroke(string $direction): array
     return $direction === 'verilecek' ? [0.900, 0.520, 0.480] : [0.470, 0.760, 0.560];
 }
 
+function pdf_check_label(string $direction): string
+{
+    return $direction === 'verilecek' ? 'Verilen Cek' : 'Alinan Cek';
+}
+
 class SimpleStatementPdf
 {
     private $pages = [];
@@ -288,8 +293,8 @@ $boxes = [
     ['Cikan', pdf_money($cashOut), [1,1,1], [0.84,0.80,0.72]],
     ['Net nakit', pdf_money($cashNet), [1,1,1], [0.84,0.80,0.72]],
     ['Hesap bakiyesi', pdf_money($accountSummary['total']), [1,1,1], [0.84,0.80,0.72]],
-    ['Alinacak cek', pdf_money($checkTotals['alinacak']) . ' / ' . $checkTotals['alinacak_count'] . ' adet', pdf_check_fill('alinacak'), pdf_check_stroke('alinacak')],
-    ['Verilecek cek', pdf_money($checkTotals['verilecek']) . ' / ' . $checkTotals['verilecek_count'] . ' adet', pdf_check_fill('verilecek'), pdf_check_stroke('verilecek')],
+    ['Alinan cek', pdf_money($checkTotals['alinacak']) . ' / ' . $checkTotals['alinacak_count'] . ' adet', pdf_check_fill('alinacak'), pdf_check_stroke('alinacak')],
+    ['Verilen cek', pdf_money($checkTotals['verilecek']) . ' / ' . $checkTotals['verilecek_count'] . ' adet', pdf_check_fill('verilecek'), pdf_check_stroke('verilecek')],
 ];
 $x = $left;
 foreach ($boxes as $b) {
@@ -353,7 +358,7 @@ foreach ($checks as $ch) {
     $stripe = pdf_check_stroke($ch['direction']);
     $tableRow($cols, [
         tr_date($ch['due_date']),
-        check_direction_label($ch['direction']),
+        pdf_check_label($ch['direction']),
         $ch['cari_name'] ?: '-',
         trim(($ch['bank_name'] ?: '-') . ' / ' . ($ch['check_no'] ?: '-')),
         pdf_money($ch['amount']),
