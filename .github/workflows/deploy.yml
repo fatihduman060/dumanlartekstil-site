@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy PHP files to hosting
+    name: Deploy muhasebe PHP files to hosting
     runs-on: ubuntu-latest
 
     steps:
@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Repoda/deploy paketinde hassas dosya kontrolü yapılıyor..."
-          if git ls-files | grep -E '(^storage/|\.sqlite($|-)|\.db($|-)|\.zip$|\.tar$|\.tar\.gz$|\.rar$|\.7z$)' ; then
+          if git ls-files | grep -E '(^muhasebe/storage/|^storage/|\.sqlite($|-)|\.db($|-)|\.zip$|\.tar$|\.tar\.gz$|\.rar$|\.7z$)' ; then
             echo "HATA: storage, sqlite/db, yedek veya zip dosyası repoya girmiş. Deploy durduruldu." >&2
             exit 1
           fi
@@ -38,8 +38,8 @@ jobs:
             echo "PHP syntax kontrolü başlıyor..."
             while IFS= read -r -d '' file; do
               php -l "$file" >/dev/null
-            done < <(find . -type f -name '*.php' \
-              -not -path './storage/*' \
+            done < <(find muhasebe -type f -name '*.php' \
+              -not -path 'muhasebe/storage/*' \
               -not -path './.git/*' \
               -print0)
             echo "PHP syntax temiz."
@@ -54,7 +54,7 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: ${{ secrets.FTP_SERVER_DIR }}
-          local-dir: ./
+          local-dir: ./muhasebe/
           dangerous-clean-slate: false
           exclude: |
             **/.git*
