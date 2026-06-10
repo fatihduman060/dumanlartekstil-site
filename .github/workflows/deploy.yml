@@ -1,4 +1,4 @@
-name: Deploy website
+name: Bitke Deploy
 
 on:
   push:
@@ -6,18 +6,73 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: bitke-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
+    name: Deploy PHP files to hosting
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: FTP deploy
+      - name: Block sensitive files
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Repoda/deploy paketinde hassas dosya kontrolü yapılıyor..."
+          if git ls-files | grep -E '(^storage/|\.sqlite($|-)|\.db($|-)|\.zip$|\.tar$|\.tar\.gz$|\.rar$|\.7z$)' ; then
+            echo "HATA: storage, sqlite/db, yedek veya zip dosyası repoya girmiş. Deploy durduruldu." >&2
+            exit 1
+          fi
+          echo "Hassas dosya yok. Devam."
+
+      - name: Optional PHP syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v php >/dev/null 2>&1; then
+            echo "PHP syntax kontrolü başlıyor..."
+            while IFS= read -r -d '' file; do
+              php -l "$file" >/dev/null
+            done < <(find . -type f -name '*.php' \
+              -not -path './storage/*' \
+              -not -path './.git/*' \
+              -print0)
+            echo "PHP syntax temiz."
+          else
+            echo "Runner içinde PHP yok; syntax kontrolü atlandı."
+          fi
+
+      - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
           local-dir: ./
-          server-dir: /bitke.com.tr/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            .github/**/*
+            storage/**
+            storage/**/*
+            **/*.sqlite
+            **/*.sqlite-*
+            **/*.db
+            **/*.db-*
+            **/*.zip
+            **/*.tar
+            **/*.tar.gz
+            **/*.rar
+            **/*.7z
+            .env
+            .env.*
+            .DS_Store
+            Thumbs.db

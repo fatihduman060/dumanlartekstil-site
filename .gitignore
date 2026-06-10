@@ -1,0 +1,30 @@
+# Bitke Muhasebe - canlı veri asla repoya girmesin
+storage/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Ortam / gizli ayarlar
+.env
+.env.*
+!.env.example
+
+# Sistem dosyaları
+.DS_Store
+Thumbs.db
+
+# Log / cache
+*.log
+.cache/
+tmp/
+temp/
+
+# Editör
+.vscode/
+.idea/

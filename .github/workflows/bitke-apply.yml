@@ -1,0 +1,211 @@
+name: Bitke Apply Bridge
+
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency:
+  group: bitke-apply
+  cancel-in-progress: false
+
+env:
+  BRIDGE_MARKER: BITKE_APPLY_V1
+  BRIDGE_ISSUE_NUMBER: "1"
+  BRIDGE_ALLOWED_USER: Ahmet1991
+
+jobs:
+  apply:
+    name: Apply files from Issue comment
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.issue.number == 1 &&
+      github.actor == 'Ahmet1991' &&
+      contains(github.event.comment.body, 'BITKE_APPLY_V1')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply payload
+        shell: bash
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path, PurePosixPath
+
+          marker = os.environ.get("BRIDGE_MARKER", "BITKE_APPLY_V1")
+          body = os.environ.get("COMMENT_BODY", "")
+
+          if marker not in body:
+              print("Marker yok, çıkılıyor.")
+              sys.exit(0)
+
+          raw = body.split(marker, 1)[1].strip()
+
+          # Markdown code fence temizliği: ```json ... ``` veya ``` ... ```
+          if raw.startswith("```"):
+              raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
+              raw = re.sub(r"\s*```\s*$", "", raw)
+
+          # Yorum içinde ekstra metin varsa ilk JSON objesini yakala
+          first = raw.find("{")
+          last = raw.rfind("}")
+          if first == -1 or last == -1 or last <= first:
+              raise SystemExit("JSON payload bulunamadı.")
+          raw_json = raw[first:last + 1]
+
+          payload = json.loads(raw_json)
+          message = str(payload.get("message") or "Bitke Apply Bridge update").strip()
+          files = payload.get("files")
+          if not isinstance(files, list) or not files:
+              raise SystemExit("Payload içinde dolu bir files array olmak zorunda.")
+
+          safe_root_files = {
+              ".htaccess",
+              "README.md",
+              "composer.json",
+              "composer.lock",
+              "deploy-version.txt",
+              "index.php",
+          }
+
+          allowed_dirs = (
+              "assets/",
+              "includes/",
+              "public/",
+              "config/",
+              "migrations/",
+              "database/",
+              "tools/",
+          )
+
+          forbidden_prefixes = (
+              ".github/",
+              "storage/",
+              ".git/",
+              "vendor/",
+              "node_modules/",
+          )
+
+          forbidden_suffixes = (
+              ".sqlite",
+              ".db",
+              ".zip",
+              ".tar",
+              ".gz",
+              ".rar",
+              ".7z",
+          )
+
+          def is_allowed_path(path_text: str) -> bool:
+              if not isinstance(path_text, str) or not path_text.strip():
+                  return False
+              normalized = path_text.replace("\\", "/").strip()
+              p = PurePosixPath(normalized)
+              if p.is_absolute() or ".." in p.parts:
+                  return False
+              s = str(p)
+              if s.startswith(forbidden_prefixes):
+                  return False
+              lower = s.lower()
+              if lower.endswith(forbidden_suffixes):
+                  return False
+              if s in safe_root_files:
+                  return True
+              if "/" not in s and s.endswith(".php"):
+                  return True
+              if s.startswith(allowed_dirs):
+                  return True
+              return False
+
+          changed = []
+          deleted = []
+
+          for item in files:
+              if not isinstance(item, dict):
+                  raise SystemExit("files içindeki her eleman obje olmalı.")
+              path_text = item.get("path")
+              if not is_allowed_path(path_text):
+                  raise SystemExit(f"Bu yola yazmak yasak: {path_text!r}")
+
+              path = Path(path_text)
+              if item.get("delete") is True:
+                  if path.exists():
+                      if path.is_dir():
+                          raise SystemExit(f"Klasör silme yasak: {path_text}")
+                      path.unlink()
+                      deleted.append(path_text)
+                  continue
+
+              if "content" not in item:
+                  raise SystemExit(f"content veya delete:true gerekli: {path_text}")
+
+              content = item["content"]
+              if not isinstance(content, str):
+                  raise SystemExit(f"content string olmalı: {path_text}")
+
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(content, encoding="utf-8", newline="")
+              changed.append(path_text)
+
+          Path(".bitke-apply-message.txt").write_text(message, encoding="utf-8")
+          print("Yazılan dosyalar:", changed)
+          print("Silinen dosyalar:", deleted)
+          PY
+
+      - name: Block sensitive files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files --others --modified --exclude-standard | grep -E '(^storage/|\.sqlite($|-)|\.db($|-)|\.zip$|\.tar$|\.tar\.gz$|\.rar$|\.7z$)' ; then
+            echo "HATA: Bridge hassas dosya üretmeye çalıştı. İşlem durduruldu." >&2
+            exit 1
+          fi
+
+      - name: Optional PHP syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v php >/dev/null 2>&1; then
+            while IFS= read -r -d '' file; do
+              php -l "$file" >/dev/null
+            done < <(find . -type f -name '*.php' \
+              -not -path './storage/*' \
+              -not -path './.git/*' \
+              -print0)
+            echo "PHP syntax temiz."
+          else
+            echo "PHP yok; syntax kontrolü atlandı."
+          fi
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT_MESSAGE="$(cat .bitke-apply-message.txt 2>/dev/null || echo 'Bitke Apply Bridge update')"
+          rm -f .bitke-apply-message.txt
+
+          if git diff --quiet && git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo "Değişiklik yok, commit atılmadı."
+            exit 0
+          fi
+
+          git config user.name "bitke-apply-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "$COMMIT_MESSAGE"
+          git push origin main
