@@ -12,15 +12,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $type = $_POST['movement_type'] ?? '';
         $amount = decimal_from_input($_POST['amount'] ?? '0');
         $date = $_POST['movement_date'] ?: date('Y-m-d');
-        if (!isset(movement_types()[$type]) || $amount <= 0) {
+        if (!isset(movement_entry_types()[$type]) || $amount <= 0) {
             flash('error', 'Hareket tipi ve tutar kontrol edilmeli.');
             redirect('hareketler.php');
         }
+        if (is_private_receivable_movement($type)) {
+            if ($id > 0) {
+                flash('error', 'Özel alacak normal hareket düzenleme içinden dönüştürülemez. Yeni kayıt olarak ekleyin.');
+                redirect('hareketler.php');
+            }
+            $cariIdForPrivate = ($_POST['cari_id'] ?? '') !== '' ? (int)$_POST['cari_id'] : 0;
+            if ($cariIdForPrivate <= 0) {
+                flash('error', 'Özel alacak için mutlaka cari seçilmeli.');
+                redirect('hareketler.php');
+            }
+            try {
+                $doc = handle_upload('document');
+            } catch (Throwable $e) {
+                flash('error', $e->getMessage());
+                redirect('hareketler.php');
+            }
+            $stmt = db()->prepare('INSERT INTO private_receivables (cari_id, status, amount, receivable_date, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $privatePayload = [
+                $cariIdForPrivate,
+                'acik',
+                $amount,
+                $date,
+                trim($_POST['description'] ?? ''),
+                $_POST['document_type'] ?: null,
+                $doc['path'], $doc['name'], $doc['mime'],
+                current_user()['id'] ?? null,
+                now(), now()
+            ];
+            $stmt->execute($privatePayload);
+            $newPrivateId = (int)db()->lastInsertId();
+            log_action('Özel alacak eklendi', '#' . $cariIdForPrivate . ' - ' . money($amount)); audit_action('ozel_alacak', $newPrivateId, 'eklendi', null, ['cari_id'=>$cariIdForPrivate,'amount'=>$amount,'date'=>$date,'description'=>trim($_POST['description'] ?? '')], '#' . $cariIdForPrivate);
+            flash('success', 'Özel alacak kaydedildi. Genel cari bakiyeyi, kasa/bankayı ve dashboard toplamlarını etkilemez.');
+            redirect('cari-detay.php?id=' . $cariIdForPrivate);
+        }
         $oldDoc = null;
+        $oldMovement = null;
         if ($id > 0) {
-            $stmt = db()->prepare('SELECT document_path AS path, document_name AS name, document_mime AS mime FROM movements WHERE id=?');
+            $stmt = db()->prepare('SELECT * FROM movements WHERE id=?');
             $stmt->execute([$id]);
-            $oldDoc = $stmt->fetch() ?: null;
+            $oldMovement = $stmt->fetch() ?: null;
+            $oldDoc = $oldMovement ? ['path'=>$oldMovement['document_path'] ?? null, 'name'=>$oldMovement['document_name'] ?? null, 'mime'=>$oldMovement['document_mime'] ?? null] : null;
         }
         try {
             $doc = handle_upload('document', $oldDoc);
@@ -46,15 +82,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id > 0) {
             $stmt = db()->prepare('UPDATE movements SET cari_id=?, category_id=?, account_id=?, movement_type=?, amount=?, movement_date=?, due_date=?, payment_method=?, description=?, document_type=?, document_path=?, document_name=?, document_mime=?, updated_at=? WHERE id=?');
             $stmt->execute(array_merge($payload, [now(), $id]));
+            delete_replaced_upload($oldDoc, $doc);
             sync_movement_account_transaction($id);
-            log_action('Hareket güncellendi', '#' . $id . ' ' . movement_label($type) . ' ' . money($amount));
+            log_action('Hareket güncellendi', '#' . $id . ' ' . movement_label($type) . ' ' . money($amount)); audit_action('hareket', $id, 'guncellendi', $oldMovement, ['type'=>$type,'amount'=>$amount,'date'=>$date,'cari_id'=>$payload[0],'account_id'=>$accountId], movement_label($type));
             flash('success', 'Hareket güncellendi.');
         } else {
             $stmt = db()->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute(array_merge($payload, [current_user()['id'], now(), now()]));
             $newId = (int)db()->lastInsertId();
             sync_movement_account_transaction($newId);
-            log_action('Hareket eklendi', movement_label($type) . ' ' . money($amount));
+            log_action('Hareket eklendi', movement_label($type) . ' ' . money($amount)); audit_action('hareket', $newId, 'eklendi', null, ['type'=>$type,'amount'=>$amount,'date'=>$date,'cari_id'=>$payload[0],'account_id'=>$accountId], movement_label($type));
             flash('success', 'Hareket eklendi.');
         }
         redirect('hareketler.php');
@@ -69,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->prepare('UPDATE movements SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')
                 ->execute([now(), current_user()['id'], trim($_POST['cancel_reason'] ?? 'İptal edildi'), now(), $id]);
             sync_movement_account_transaction($id);
-            log_action('Hareket iptal edildi', '#' . $id . ' ' . movement_label($m['movement_type']) . ' ' . money($m['amount']));
+            log_action('Hareket iptal edildi', '#' . $id . ' ' . movement_label($m['movement_type']) . ' ' . money($m['amount'])); audit_action('hareket', $id, 'iptal', $m, ['is_cancelled'=>1,'cancel_reason'=>trim($_POST['cancel_reason'] ?? 'İptal edildi')], movement_label($m['movement_type']));
             flash('success', 'Hareket iptal edildi. Kayıt silinmedi; işlem geçmişinde korunuyor.');
         }
         redirect('hareketler.php');
@@ -84,6 +121,10 @@ if (!empty($_GET['edit'])) {
     $stmt = db()->prepare('SELECT * FROM movements WHERE id=?');
     $stmt->execute([(int)$_GET['edit']]);
     $edit = $stmt->fetch() ?: null;
+    if ($edit && (int)($edit['is_cancelled'] ?? 0) === 1) {
+        flash('error', 'İptal edilmiş hareket düzenlenemez. Gerekirse yeni düzeltme hareketi girin.');
+        redirect('hareketler.php?include_cancelled=1');
+    }
 }
 
 $q = trim($_GET['q'] ?? '');
@@ -119,7 +160,7 @@ page_header('Hareketler', 'hareketler');
       <?php echo csrf_field(); ?>
       <input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id'] ?? 0); ?>">
       <div class="two-col">
-        <label>Tip<select name="movement_type" required data-cash-type><?php foreach (movement_types() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['movement_type'] ?? ($_GET['movement_type'] ?? ''))===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select></label>
+        <label>Tip<select name="movement_type" required data-cash-type><?php $entryTypes = $edit ? movement_types() : movement_entry_types(); foreach ($entryTypes as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['movement_type'] ?? ($_GET['movement_type'] ?? ''))===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select><small>Özel Alacak seçilirse genel bakiyeye işlemez; sadece seçilen carinin özel alanına kaydolur.</small></label>
         <label>Tutar<input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>"></label>
       </div>
       <div class="two-col">
@@ -169,7 +210,7 @@ page_header('Hareketler', 'hareketler');
             <td><?php echo e($m['description'] ?: '-'); ?><small><?php echo e($m['payment_method'] ?: ''); ?> <?php echo $cancelled ? ' · İptal: '.e($m['cancel_reason'] ?: '') : ''; ?></small></td>
             <td><?php echo $m['document_path'] ? '<a href="belge-indir.php?id='.e($m['id']).'" target="_blank">'.e(document_type_label($m['document_type'])).'</a>' : '-'; ?></td>
             <td class="right"><strong><?php echo e(money($m['amount'])); ?></strong></td>
-            <td class="row-actions"><a href="hareketler.php?edit=<?php echo e($m['id']); ?>">Düzenle</a><?php if(can_write() && !$cancelled): ?><form method="post" onsubmit="return confirm('Hareket silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button></form><?php endif; ?></td>
+            <td class="row-actions"><?php if(!$cancelled): ?><a href="hareketler.php?edit=<?php echo e($m['id']); ?>">Düzenle</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Hareket silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button></form><?php endif; ?><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?></td>
           </tr>
           <?php endforeach; ?>
         </tbody>

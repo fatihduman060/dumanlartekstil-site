@@ -40,6 +40,29 @@ function db(): PDO
 
 function init_db(PDO $pdo): void
 {
+    $schemaVersion = defined('DB_SCHEMA_VERSION') ? (int)DB_SCHEMA_VERSION : 5020;
+
+    // Settings tablosu schema versiyonunu okuyabilmek için en başta hazırlanır.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+    )");
+
+    $currentSchemaVersion = 0;
+    try {
+        $stmt = $pdo->prepare('SELECT value FROM settings WHERE key=?');
+        $stmt->execute(['db_schema_version']);
+        $currentSchemaVersion = (int)($stmt->fetchColumn() ?: 0);
+    } catch (Throwable $e) {
+        $currentSchemaVersion = 0;
+    }
+
+    // Schema güncelse her istekte PRAGMA/ALTER/CREATE kontrollerini tekrar yapma.
+    if ($currentSchemaVersion >= $schemaVersion) {
+        return;
+    }
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
@@ -120,6 +143,41 @@ function init_db(PDO $pdo): void
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS private_receivables (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cari_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'acik',
+        amount REAL NOT NULL CHECK(amount >= 0),
+        receivable_date TEXT NOT NULL,
+        description TEXT,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(cari_id) REFERENCES cariler(id) ON DELETE CASCADE,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+    )");
+
+    ensure_column($pdo, 'private_receivables', 'document_type', 'TEXT');
+    ensure_column($pdo, 'private_receivables', 'document_path', 'TEXT');
+    ensure_column($pdo, 'private_receivables', 'document_name', 'TEXT');
+    ensure_column($pdo, 'private_receivables', 'document_mime', 'TEXT');
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS standalone_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cari_id INTEGER,
+        document_date TEXT NOT NULL,
+        document_type TEXT,
+        document_path TEXT NOT NULL,
+        document_name TEXT,
+        document_mime TEXT,
+        description TEXT,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(cari_id) REFERENCES cariler(id) ON DELETE SET NULL,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+    )");
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -130,6 +188,28 @@ function init_db(PDO $pdo): void
         created_at TEXT NOT NULL,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
     )");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        username TEXT,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER,
+        action TEXT NOT NULL,
+        old_value TEXT,
+        new_value TEXT,
+        detail TEXT,
+        ip TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+    )");
+
+    // Minimal audit log hızlı filtrelensin diye indeksler. Sadece kritik veri değişiklikleri tutulur.
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_logs(created_at)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(username)");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -183,6 +263,10 @@ function init_db(PDO $pdo): void
     ensure_column($pdo, 'movements', 'cancel_reason', 'TEXT');
     ensure_column($pdo, 'checks', 'account_id', 'INTEGER');
     ensure_column($pdo, 'checks', 'closed_at', 'TEXT');
+    ensure_column($pdo, 'checks', 'is_cancelled', 'INTEGER NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'checks', 'cancelled_at', 'TEXT');
+    ensure_column($pdo, 'checks', 'cancelled_by', 'INTEGER');
+    ensure_column($pdo, 'checks', 'cancel_reason', 'TEXT');
 
     $accountCount = (int)$pdo->query('SELECT COUNT(*) FROM accounts')->fetchColumn();
     if ($accountCount === 0) {
@@ -209,6 +293,15 @@ function init_db(PDO $pdo): void
         $stmt = $pdo->prepare('INSERT INTO categories (name, type, created_at) VALUES (?, ?, ?)');
         foreach ($defaults as $row) $stmt->execute([$row[0], $row[1], $now]);
     }
+
+    // v50.20+: önceki paketlerden gelen kasa/banka kaynak hareketleri tek seferlik toparlansın.
+    if ($currentSchemaVersion < 5020) {
+        repair_account_sync(false);
+    }
+
+    $pdo->prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at")
+        ->execute(['db_schema_version', (string)$schemaVersion, now()]);
 }
 
 function ensure_column(PDO $pdo, string $table, string $column, string $definition): void
@@ -280,6 +373,7 @@ function require_login(): void
 {
     if (!is_logged_in() || !current_user()) redirect('index.php');
     enforce_session_timeout();
+    run_automatic_backup_if_due();
 }
 function user_role(): string { $u = current_user(); return $u['role'] ?? 'viewer'; }
 function can_write(): bool { return in_array(user_role(), ['admin','editor'], true); }
@@ -345,6 +439,74 @@ function log_action(string $action, string $detail = ''): void
         $stmt = db()->prepare('INSERT INTO logs (user_id, username, action, detail, ip, created_at) VALUES (?, ?, ?, ?, ?, ?)');
         $stmt->execute([$u['id'] ?? null, $u['username'] ?? null, $action, $detail, client_ip(), now()]);
     } catch (Throwable $e) {}
+}
+
+function audit_action(string $entityType, ?int $entityId, string $action, $oldValue = null, $newValue = null, string $detail = ''): void
+{
+    try {
+        $u = current_user();
+        $oldJson = $oldValue === null ? null : json_encode($oldValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $newJson = $newValue === null ? null : json_encode($newValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $stmt = db()->prepare('INSERT INTO audit_logs (user_id, username, entity_type, entity_id, action, old_value, new_value, detail, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$u['id'] ?? null, $u['username'] ?? null, $entityType, $entityId, $action, $oldJson, $newJson, $detail, client_ip(), now()]);
+    } catch (Throwable $e) {}
+}
+
+function audit_short(?string $json): string
+{
+    if (!$json) return '-';
+    $data = json_decode($json, true);
+    if (!is_array($data)) return (strlen((string)$json) > 120 ? substr((string)$json, 0, 120) . '...' : (string)$json);
+    $parts = [];
+    foreach ($data as $key => $value) {
+        if (is_array($value)) $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($value === null || $value === '') continue;
+        $parts[] = $key . ': ' . $value;
+        if (count($parts) >= 5) break;
+    }
+    return $parts ? (strlen(implode(' · ', $parts)) > 160 ? substr(implode(' · ', $parts), 0, 160) . '...' : implode(' · ', $parts)) : '-';
+}
+
+function audit_entity_label(string $type): string
+{
+    return [
+        'cari' => 'Cari',
+        'hareket' => 'Hareket',
+        'cek' => 'Çek',
+        'ozel_alacak' => 'Özel Alacak',
+        'hesap' => 'Kasa/Banka Hesabı',
+        'hesap_hareketi' => 'Kasa/Banka Hareketi',
+        'kullanici' => 'Kullanıcı',
+        'yedek' => 'Yedekleme',
+        'kategori' => 'Kategori',
+        'belge' => 'Belge',
+    ][$type] ?? $type;
+}
+
+function audit_action_label(string $action): string
+{
+    return [
+        'eklendi' => 'Eklendi',
+        'guncellendi' => 'Güncellendi',
+        'silindi' => 'Silindi',
+        'iptal' => 'İptal edildi',
+        'durum_guncellendi' => 'Durum güncellendi',
+        'virman' => 'Virman',
+        'geri_yukleme' => 'Geri yükleme',
+    ][$action] ?? $action;
+}
+
+function audit_action_tone(string $action): string
+{
+    return [
+        'eklendi' => 'success',
+        'guncellendi' => 'info',
+        'durum_guncellendi' => 'info',
+        'silindi' => 'danger',
+        'iptal' => 'warning',
+        'geri_yukleme' => 'danger',
+        'virman' => 'special',
+    ][$action] ?? 'neutral';
 }
 
 function setting_get(string $key, ?string $default = null): ?string
@@ -429,8 +591,21 @@ function movement_types(): array
         'gider' => ['label'=>'Gider','tone'=>'danger'],
     ];
 }
-function movement_label(string $type): string { $t = movement_types(); return $t[$type]['label'] ?? $type; }
-function movement_tone(string $type): string { $t = movement_types(); return $t[$type]['tone'] ?? 'neutral'; }
+function movement_entry_types(): array
+{
+    $types = movement_types();
+    $ordered = [];
+    foreach ($types as $key => $meta) {
+        $ordered[$key] = $meta;
+        if ($key === 'alacak') {
+            $ordered['ozel_alacak'] = ['label'=>'Özel Alacak','tone'=>'special'];
+        }
+    }
+    return $ordered;
+}
+function is_private_receivable_movement(string $type): bool { return $type === 'ozel_alacak'; }
+function movement_label(string $type): string { $t = movement_entry_types(); return $t[$type]['label'] ?? $type; }
+function movement_tone(string $type): string { $t = movement_entry_types(); return $t[$type]['tone'] ?? 'neutral'; }
 function role_label(string $role): string { return ['admin'=>'Yönetici','editor'=>'Düzenleyici','viewer'=>'Görüntüleyici'][$role] ?? $role; }
 
 function check_directions(): array
@@ -458,6 +633,57 @@ function check_direction_tone(string $key): string { $m=check_directions(); retu
 function check_status_label(string $key): string { $m=check_statuses(); return $m[$key]['label'] ?? $key; }
 function check_status_tone(string $key): string { $m=check_statuses(); return $m[$key]['tone'] ?? 'neutral'; }
 
+function private_receivable_statuses(): array
+{
+    return [
+        'acik' => ['label'=>'Açık','tone'=>'info'],
+        'kapandi' => ['label'=>'Kapandı','tone'=>'success'],
+        'iptal' => ['label'=>'İptal','tone'=>'neutral'],
+    ];
+}
+function private_receivable_status_label(string $key): string { $m=private_receivable_statuses(); return $m[$key]['label'] ?? $key; }
+function private_receivable_status_tone(string $key): string { $m=private_receivable_statuses(); return $m[$key]['tone'] ?? 'neutral'; }
+function private_receivable_summary(?int $cariId): array
+{
+    if (!$cariId) return ['acik'=>0,'kapandi'=>0,'iptal'=>0,'toplam'=>0,'count'=>0];
+    $stmt = db()->prepare('SELECT status, SUM(amount) AS total, COUNT(*) AS total_count FROM private_receivables WHERE cari_id=? GROUP BY status');
+    $stmt->execute([$cariId]);
+    $summary = ['acik'=>0,'kapandi'=>0,'iptal'=>0,'toplam'=>0,'count'=>0];
+    foreach ($stmt->fetchAll() as $row) {
+        $status = $row['status'] ?: 'acik';
+        if (!array_key_exists($status, $summary)) $summary[$status] = 0;
+        $summary[$status] += (float)($row['total'] ?? 0);
+        $summary['count'] += (int)($row['total_count'] ?? 0);
+    }
+    $summary['toplam'] = $summary['acik'] + $summary['kapandi'];
+    return $summary;
+}
+
+function private_receivable_totals(array $filters = []): array
+{
+    $where = [];
+    $params = [];
+    if (!empty($filters['status'])) { $where[] = 'pr.status=?'; $params[] = $filters['status']; }
+    if (!empty($filters['cari_id'])) { $where[] = 'pr.cari_id=?'; $params[] = (int)$filters['cari_id']; }
+    if (!empty($filters['start'])) { $where[] = 'pr.receivable_date>=?'; $params[] = $filters['start']; }
+    if (!empty($filters['end'])) { $where[] = 'pr.receivable_date<=?'; $params[] = $filters['end']; }
+    if (!empty($filters['q'])) { $where[] = '(pr.description LIKE ? OR c.name LIKE ? OR pr.document_name LIKE ?)'; $q = '%' . $filters['q'] . '%'; array_push($params, $q, $q, $q); }
+    $sql = 'SELECT pr.status, SUM(pr.amount) AS total, COUNT(*) AS total_count FROM private_receivables pr JOIN cariler c ON c.id=pr.cari_id';
+    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+    $sql .= ' GROUP BY pr.status';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    $summary = ['acik'=>0,'kapandi'=>0,'iptal'=>0,'toplam'=>0,'count'=>0];
+    foreach ($stmt->fetchAll() as $row) {
+        $status = $row['status'] ?: 'acik';
+        if (!array_key_exists($status, $summary)) $summary[$status] = 0;
+        $summary[$status] += (float)($row['total'] ?? 0);
+        $summary['count'] += (int)($row['total_count'] ?? 0);
+    }
+    $summary['toplam'] = $summary['acik'] + $summary['kapandi'];
+    return $summary;
+}
+
 function cari_balance(?int $cariId): array
 {
     if (!$cariId) return ['alacak'=>0,'tahsilat'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0,'net_alacak'=>0,'net_verecek'=>0,'net'=>0];
@@ -469,6 +695,77 @@ function cari_balance(?int $cariId): array
     $totals['net_verecek'] = $totals['verecek'] - $totals['odeme'];
     $totals['net'] = $totals['net_alacak'] - $totals['net_verecek'];
     return $totals;
+}
+
+
+function cari_open_period_balance(?int $cariId): array
+{
+    $empty = [
+        'alacak'=>0,'tahsilat'=>0,'net_alacak'=>0,
+        'verecek'=>0,'odeme'=>0,'net_verecek'=>0,'net'=>0,
+        'alacak_close_date'=>null,'verecek_close_date'=>null,
+        'alacak_close_id'=>0,'verecek_close_id'=>0,
+        'alacak_has_close'=>false,'verecek_has_close'=>false,
+    ];
+    if (!$cariId) return $empty;
+
+    $stmt = db()->prepare("SELECT id, movement_type, amount, movement_date FROM movements WHERE cari_id = ? AND COALESCE(is_cancelled,0)=0 AND movement_type IN ('alacak','tahsilat','verecek','odeme') ORDER BY movement_date ASC, id ASC");
+    $stmt->execute([$cariId]);
+    $rows = $stmt->fetchAll();
+    if (!$rows) return $empty;
+
+    $alacakRunning = 0.0;
+    $verecekRunning = 0.0;
+    $alacakCloseIndex = -1;
+    $verecekCloseIndex = -1;
+    $alacakCloseDate = null;
+    $verecekCloseDate = null;
+    $alacakCloseId = 0;
+    $verecekCloseId = 0;
+
+    foreach ($rows as $idx => $row) {
+        $type = $row['movement_type'];
+        $amount = (float)$row['amount'];
+        if ($type === 'alacak') $alacakRunning += $amount;
+        if ($type === 'tahsilat') $alacakRunning -= $amount;
+        if ($type === 'verecek') $verecekRunning += $amount;
+        if ($type === 'odeme') $verecekRunning -= $amount;
+
+        if (($type === 'alacak' || $type === 'tahsilat') && abs(round($alacakRunning, 2)) < 0.005) {
+            $alacakCloseIndex = $idx;
+            $alacakCloseDate = $row['movement_date'] ?? null;
+            $alacakCloseId = (int)$row['id'];
+        }
+        if (($type === 'verecek' || $type === 'odeme') && abs(round($verecekRunning, 2)) < 0.005) {
+            $verecekCloseIndex = $idx;
+            $verecekCloseDate = $row['movement_date'] ?? null;
+            $verecekCloseId = (int)$row['id'];
+        }
+    }
+
+    $period = $empty;
+    $period['alacak_has_close'] = $alacakCloseIndex >= 0;
+    $period['verecek_has_close'] = $verecekCloseIndex >= 0;
+    $period['alacak_close_date'] = $alacakCloseDate;
+    $period['verecek_close_date'] = $verecekCloseDate;
+    $period['alacak_close_id'] = $alacakCloseId;
+    $period['verecek_close_id'] = $verecekCloseId;
+
+    foreach ($rows as $idx => $row) {
+        $type = $row['movement_type'];
+        $amount = (float)$row['amount'];
+        if (($type === 'alacak' || $type === 'tahsilat') && $idx > $alacakCloseIndex) {
+            $period[$type] += $amount;
+        }
+        if (($type === 'verecek' || $type === 'odeme') && $idx > $verecekCloseIndex) {
+            $period[$type] += $amount;
+        }
+    }
+
+    $period['net_alacak'] = $period['alacak'] - $period['tahsilat'];
+    $period['net_verecek'] = $period['verecek'] - $period['odeme'];
+    $period['net'] = $period['net_alacak'] - $period['net_verecek'];
+    return $period;
 }
 
 function dashboard_totals(?string $start = null, ?string $end = null): array
@@ -491,7 +788,7 @@ function dashboard_totals(?string $start = null, ?string $end = null): array
 
 function check_totals(?string $start = null, ?string $end = null, bool $pendingOnly = true): array
 {
-    $where=[]; $params=[];
+    $where=["COALESCE(is_cancelled,0)=0"]; $params=[];
     if ($pendingOnly) $where[]="status = 'bekliyor'";
     if ($start) { $where[]='due_date >= ?'; $params[]=$start; }
     if ($end) { $where[]='due_date <= ?'; $params[]=$end; }
@@ -510,7 +807,7 @@ function check_totals(?string $start = null, ?string $end = null, bool $pendingO
 }
 function overdue_check_count(): int
 {
-    $stmt = db()->prepare("SELECT COUNT(*) FROM checks WHERE status='bekliyor' AND due_date < ?");
+    $stmt = db()->prepare("SELECT COUNT(*) FROM checks WHERE COALESCE(is_cancelled,0)=0 AND status='bekliyor' AND due_date < ?");
     $stmt->execute([date('Y-m-d')]);
     return (int)$stmt->fetchColumn();
 }
@@ -625,7 +922,7 @@ function sync_check_account_transaction(int $checkId): void
     $stmt = db()->prepare('SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE ch.id=?');
     $stmt->execute([$checkId]);
     $ch = $stmt->fetch();
-    if (!$ch || empty($ch['account_id'])) return;
+    if (!$ch || (int)($ch['is_cancelled'] ?? 0) === 1 || empty($ch['account_id'])) return;
     $direction = null;
     if ($ch['status'] === 'tahsil_edildi') $direction = 'in';
     if ($ch['status'] === 'odendi') $direction = 'out';
@@ -635,6 +932,54 @@ function sync_check_account_transaction(int $checkId): void
     if (!empty($ch['check_no'])) $desc .= ' / Çek No: ' . $ch['check_no'];
     db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         ->execute([(int)$ch['account_id'], $direction, (float)$ch['amount'], $ch['due_date'], 'check', $checkId, $desc, $ch['created_by'] ?: (current_user()['id'] ?? null), now()]);
+}
+
+function repair_account_sync(bool $withLog = true): array
+{
+    $pdo = db();
+    $summary = [
+        'deleted' => 0,
+        'movement_synced' => 0,
+        'check_synced' => 0,
+    ];
+
+    $pdo->beginTransaction();
+    try {
+        $summary['deleted'] = (int)$pdo->exec("DELETE FROM account_transactions WHERE source_type IN ('movement','check')");
+
+        $movementIds = $pdo->query("SELECT id FROM movements
+            WHERE COALESCE(is_cancelled,0)=0
+              AND account_id IS NOT NULL
+              AND movement_type IN ('tahsilat','gelir','odeme','gider')
+            ORDER BY id ASC")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($movementIds as $movementId) {
+            sync_movement_account_transaction((int)$movementId);
+            $summary['movement_synced']++;
+        }
+
+        $checkIds = $pdo->query("SELECT id FROM checks
+            WHERE COALESCE(is_cancelled,0)=0
+              AND account_id IS NOT NULL
+              AND status IN ('tahsil_edildi','odendi')
+            ORDER BY id ASC")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($checkIds as $checkId) {
+            sync_check_account_transaction((int)$checkId);
+            $summary['check_synced']++;
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+
+    if ($withLog) {
+        $detail = 'Silinen eski kaynak hareket: ' . $summary['deleted'] . ' · Hareket senkron: ' . $summary['movement_synced'] . ' · Çek senkron: ' . $summary['check_synced'];
+        log_action('Kasa/Banka senkron kontrolü', $detail);
+        audit_action('hesap_hareketi', null, 'guncellendi', null, $summary, 'Senkron kontrolü');
+    }
+
+    return $summary;
 }
 
 function ensure_upload_dir(string $subdir): string
@@ -648,7 +993,7 @@ function handle_upload(string $field, ?array $old = null): array
     if (empty($_FILES[$field]) || ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return $old ?: ['path'=>null,'name'=>null,'mime'=>null];
     $file = $_FILES[$field];
     if ($file['error'] !== UPLOAD_ERR_OK) throw new RuntimeException('Belge yüklenemedi. Dosya hatası: ' . $file['error']);
-    if ($file['size'] > MAX_UPLOAD_BYTES) throw new RuntimeException('Belge en fazla 5 MB olabilir.');
+    if ($file['size'] > MAX_UPLOAD_BYTES) throw new RuntimeException('Belge en fazla 10 MB olabilir.');
     $allowed=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','application/pdf'=>'pdf','image/heic'=>'heic','image/heif'=>'heif'];
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file($file['tmp_name']) ?: 'application/octet-stream';
@@ -659,6 +1004,24 @@ function handle_upload(string $field, ?array $old = null): array
     $target = $dir . '/' . $filename;
     if (!move_uploaded_file($file['tmp_name'], $target)) throw new RuntimeException('Belge sunucuya taşınamadı.');
     return ['path'=>$subdir . '/' . $filename, 'name'=>$file['name'], 'mime'=>$mime];
+}
+function delete_uploaded_file(?string $relativePath): bool
+{
+    $relativePath = trim((string)$relativePath);
+    if ($relativePath === '') return false;
+    $base = realpath(UPLOAD_DIR);
+    if (!$base) return false;
+    $full = realpath(UPLOAD_DIR . '/' . $relativePath);
+    if (!$full || strpos($full, $base . DIRECTORY_SEPARATOR) !== 0 || !is_file($full)) return false;
+    return @unlink($full);
+}
+function delete_replaced_upload(?array $oldDoc, array $newDoc): void
+{
+    $oldPath = trim((string)($oldDoc['path'] ?? ''));
+    $newPath = trim((string)($newDoc['path'] ?? ''));
+    if ($oldPath !== '' && $newPath !== '' && $oldPath !== $newPath) {
+        delete_uploaded_file($oldPath);
+    }
 }
 
 function categories(): array { return db()->query('SELECT * FROM categories ORDER BY name ASC')->fetchAll(); }
@@ -671,6 +1034,90 @@ function download_file(string $path, string $downloadName, string $mime = 'appli
     header('Content-Disposition: attachment; filename="' . basename($downloadName) . '"');
     readfile($path);
     exit;
+}
+
+function system_create_backup_file(string $prefix = 'bitke-muhasebe-yedek', bool $includeUploads = true): ?string
+{
+    if (!is_dir(BACKUP_DIR)) mkdir(BACKUP_DIR, 0755, true);
+    $safePrefix = preg_replace('/[^a-z0-9\-]/i', '-', $prefix) ?: 'bitke-muhasebe-yedek';
+    $name = $safePrefix . '-' . date('Ymd-His');
+    $zipPath = BACKUP_DIR . '/' . $name . '.zip';
+    if (class_exists('ZipArchive')) {
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
+            if (is_file(DB_PATH)) $zip->addFile(DB_PATH, 'bitke_muhasebe.sqlite');
+            if ($includeUploads) {
+                $uploadBase = realpath(UPLOAD_DIR);
+                if ($uploadBase && is_dir($uploadBase)) {
+                    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploadBase, FilesystemIterator::SKIP_DOTS));
+                    foreach ($it as $file) {
+                        if ($file->isFile()) {
+                            $rel = 'uploads/' . substr($file->getPathname(), strlen($uploadBase) + 1);
+                            $zip->addFile($file->getPathname(), $rel);
+                        }
+                    }
+                }
+            }
+            $zip->close();
+            return $zipPath;
+        }
+    }
+    $sqliteCopy = BACKUP_DIR . '/' . $name . '.sqlite';
+    if (is_file(DB_PATH) && copy(DB_PATH, $sqliteCopy)) return $sqliteCopy;
+    return null;
+}
+
+function backup_file_is_allowed(string $file): bool
+{
+    return (bool)preg_match('/^bitke-muhasebe-(yedek|otomatik|geri-yukleme-oncesi)-\d{8}-\d{6}\.(zip|sqlite)$/', basename($file));
+}
+
+function backup_file_list(): array
+{
+    $files = [];
+    if (!is_dir(BACKUP_DIR)) return $files;
+    foreach (glob(BACKUP_DIR . '/bitke-muhasebe-*.*') ?: [] as $f) {
+        $bn = basename($f);
+        if (backup_file_is_allowed($bn)) $files[] = ['name'=>$bn, 'size'=>filesize($f), 'time'=>filemtime($f)];
+    }
+    usort($files, fn($a,$b)=>$b['time']<=>$a['time']);
+    return $files;
+}
+
+function cleanup_automatic_backups(int $keep = 5): void
+{
+    $autos = array_values(array_filter(backup_file_list(), fn($f) => strpos($f['name'], 'bitke-muhasebe-otomatik-') === 0));
+    usort($autos, fn($a,$b)=>$b['time']<=>$a['time']);
+    foreach (array_slice($autos, max(1, $keep)) as $f) {
+        $path = BACKUP_DIR . '/' . $f['name'];
+        if (is_file($path)) @unlink($path);
+    }
+}
+
+function run_automatic_backup_if_due(): void
+{
+    static $checked = false;
+    if ($checked || !is_logged_in()) return;
+    $checked = true;
+    $today = date('Y-m-d');
+    if (setting_get('auto_backup_last_date', '') === $today) return;
+    $lockUntil = (int)setting_get('auto_backup_lock_until', '0');
+    if ($lockUntil > time()) return;
+    setting_set('auto_backup_lock_until', (string)(time() + 600));
+    try {
+        $created = system_create_backup_file('bitke-muhasebe-otomatik', true);
+        if ($created) {
+            setting_set('auto_backup_last_date', $today);
+            setting_set('auto_backup_last_file', basename($created));
+            setting_set('last_backup_date', $today);
+            setting_set('last_backup_file', basename($created));
+            cleanup_automatic_backups(5);
+            log_action('Otomatik yedek oluşturuldu', basename($created));
+        }
+    } catch (Throwable $e) {
+        log_action('Otomatik yedek hatası', $e->getMessage());
+    }
+    setting_set('auto_backup_lock_until', '0');
 }
 
 // Veritabanını ilk istekte hazırlansın ve migration çalışsın.

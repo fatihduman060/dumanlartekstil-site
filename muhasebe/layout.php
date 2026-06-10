@@ -7,6 +7,7 @@ function page_header(string $title, string $active = ''): void
     $nav = [
         ['dashboard', 'dashboard.php', 'Genel Bakış', '⌂'],
         ['cariler', 'cariler.php', 'Cariler', '◎'],
+        ['ozel_alacaklar', 'ozel-alacaklar.php', 'Özel Alacak', '◆'],
         ['hareketler', 'hareketler.php', 'Hareketler', '↕'],
         ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'],
         ['cekler', 'cekler.php', 'Çekler', '◈'],
@@ -32,7 +33,7 @@ function page_header(string $title, string $active = ''): void
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/muhasebe.css?v=50" />
+  <link rel="stylesheet" href="assets/muhasebe.css?v=514" />
 </head>
 <body class="app-page">
   <div class="app-shell">
@@ -76,7 +77,7 @@ function page_footer(): void
     ?>
     </main>
   </div>
-  <script src="assets/muhasebe.js?v=50"></script>
+  <script src="assets/muhasebe.js?v=513"></script>
 </body>
 </html>
 <?php }

@@ -1,91 +1,30 @@
-Bitke Muhasebe Paneli - v50
-============================
+Bitke Muhasebe Paneli v50.8 — Veri Korumalı Güncelleme
 
-Bu paket sadece /muhasebe klasörünü içerir. Ana site dosyalarına dokunmaz.
+YÜKLEME
+1) Bu paketin içindeki "muhasebe" klasörünü FTP ile /public_html içine yükleyin.
+2) FileZilla sorarsa "Üzerine yaz / overwrite" seçin.
+3) Mevcut canlı sistemdeki /public_html/muhasebe/storage klasörünü SİLMEYİN.
 
-Yükleme hedefi:
-/public_html/muhasebe
+BU PAKET VERİTABANI İÇERMEZ
+- bitke_muhasebe.sqlite yoktur.
+- Cari, hareket, kullanıcı, çek ve belge verilerini ezmez.
+- storage içinde yalnızca güvenlik amaçlı .htaccess dosyaları vardır.
 
-Temiz kurulum ilk giriş:
-Kullanıcı adı: admin
-Şifre: B!tkeV48#9M7sQp2@
+EKLENENLER
+- Günlük otomatik yedekleme: Panel ilk kullanıldığında günde 1 yedek alır.
+- Son 5 otomatik yedek saklanır.
+- Özel Alacak toplu raporu: ozel-alacaklar.php
+- Özel Alacak CSV ve PDF/Yazdır çıktısı.
+- Dashboard özel alacak, bu ay ödeme takibi, en yüksek alacak/borç görünümü.
+- Cari detayda sekmeli/pratik bölüm geçişleri.
+- Audit/değişiklik izi: kim ne ekledi, değiştirdi, sildi takip edilir.
+- storage / uploads / backups dış erişime kapatma için .htaccess güçlendirmesi.
 
-Not: V47/V48/V49'dan güncelleme yaparken storage klasörü korunursa mevcut kullanıcı/şifre aynen devam eder.
+KRİTİK KURAL
+/public_html/muhasebe/storage klasörünü silmeyin.
+Uzak dosyaları temizleme yapmayın.
+Sadece üzerine yazın.
 
-GÜNCELLEME KURALI
------------------
-Gerçek veri girildiyse:
-- /public_html/muhasebe/storage klasörünü SİLME.
-- Diğer dosyaları V50 ile üzerine yaz.
-- storage içinde SQLite veritabanı, yüklenen belgeler ve yedekler durur.
-
-Gerçek veri yoksa:
-- Mevcut muhasebe klasörünü silip bu paketteki muhasebe klasörünü yükleyebilirsin.
-
-V50 İLE GELENLER
-----------------
-1. Kasa/Banka modülü
-- Kasa, banka, POS ve diğer hesaplar.
-- Açılış bakiyesi.
-- Manuel kasa/banka girişi ve çıkışı.
-- Hesaplar arası virman.
-- Güncel kasa/banka bakiyesi.
-
-2. Tahsilat/ödeme sırasında kasa/banka seçimi
-- Tahsilat ve gelir seçilen hesaba giriş yazar.
-- Ödeme ve gider seçilen hesaptan çıkış yazar.
-- Alacak/verecek kayıtları kasa/banka hareketi oluşturmaz.
-
-3. Çek modülü geliştirmeleri
-- Yeni durumlar: ciro edildi, protestolu.
-- Tahsil edildi/ödendi durumunda seçilen kasa/banka hesabına hareket oluşturma.
-- Vade renkleri ve hızlı durum güncelleme korunur.
-
-4. Belge arşivi
-- Hareket ve çek belgeleri tek sayfada listelenir.
-- Belge türleri: fatura, dekont, makbuz, irsaliye, sözleşme, çek görseli, diğer.
-- Cari, tarih, kaynak ve belge türüne göre filtreleme.
-
-5. Cari detay geliştirmeleri
-- Tarih, tip, açıklama/belge arama ve iptal kayıtları filtresi.
-- Hızlı tahsilat/ödeme formunda kasa/banka ve belge yükleme.
-- Cari bazlı çek durum filtresi.
-
-6. Hareket iptal sistemi
-- Hareketler doğrudan silinmez, iptal edildi olarak işaretlenir.
-- İptal edilen hareketler cari bakiye ve raporlara dahil edilmez.
-- İptal kaydı loglarda korunur.
-
-7. Yedekten geri yükleme
-- ZIP veya SQLite yedek yüklenebilir.
-- Geri yükleme öncesi otomatik mevcut sistem yedeği alınır.
-- Onay için GERI YUKLE yazılması gerekir.
-
-8. Raporlar ve CSV çıktıları
-- Kasa/banka raporu.
-- Kasa/banka hareket CSV çıktısı.
-- Geliştirilmiş cari, hareket, çek CSV çıktıları.
-- Yazdır/PDF ekranları korunur.
-
-TEKNİK NOTLAR
--------------
-- PHP ile çalışır.
-- SQLite kullanır.
-- MySQL gerekmez.
-- Hostingde PHP PDO SQLite aktif olmalıdır.
-- ZIP yedek/geri yükleme için ZipArchive açık olursa belgeler de yedeğe dahil edilir.
-- .htaccess dosyaları da FTP'ye yüklenmelidir.
-
-CANLIYA ALMADAN ÖNCE
---------------------
-1. Varsa mevcut /muhasebe klasörünün komple yedeğini al.
-2. Gerçek veri varsa storage klasörünü silme.
-3. V50 dosyalarını yükle.
-4. Panele girip şu ekranları kontrol et:
-   - Genel Bakış
-   - Kasa/Banka
-   - Hareketler
-   - Çekler
-   - Belgeler
-   - Yedekleme
-5. İlk iş güçlü bir admin şifresi belirle.
+TEKNİK GEREKSİNİM
+Hostingde PHP PDO SQLite aktif olmalıdır.
+ZIP yedek için ZipArchive aktifse belgelerle birlikte ZIP alınır; kapalıysa SQLite kopyası alınır.

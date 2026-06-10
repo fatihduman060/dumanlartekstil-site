@@ -2,34 +2,6 @@
 require_once __DIR__ . '/layout.php';
 require_admin();
 
-function create_backup_file(string $prefix = 'bitke-muhasebe-yedek'): ?string
-{
-    if (!is_dir(BACKUP_DIR)) mkdir(BACKUP_DIR, 0755, true);
-    $name = $prefix . '-' . date('Ymd-His');
-    $zipPath = BACKUP_DIR . '/' . $name . '.zip';
-    if (class_exists('ZipArchive')) {
-        $zip = new ZipArchive();
-        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
-            if (is_file(DB_PATH)) $zip->addFile(DB_PATH, 'bitke_muhasebe.sqlite');
-            $uploadBase = realpath(UPLOAD_DIR);
-            if ($uploadBase && is_dir($uploadBase)) {
-                $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploadBase, FilesystemIterator::SKIP_DOTS));
-                foreach ($it as $file) {
-                    if ($file->isFile()) {
-                        $rel = 'uploads/' . substr($file->getPathname(), strlen($uploadBase) + 1);
-                        $zip->addFile($file->getPathname(), $rel);
-                    }
-                }
-            }
-            $zip->close();
-            return $zipPath;
-        }
-    }
-    $sqliteCopy = BACKUP_DIR . '/' . $name . '.sqlite';
-    if (is_file(DB_PATH) && copy(DB_PATH, $sqliteCopy)) return $sqliteCopy;
-    return null;
-}
-
 function restore_sqlite_file(string $source): void
 {
     if (!is_file($source)) throw new RuntimeException('Geri yüklenecek veritabanı bulunamadı.');
@@ -79,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $action = $_POST['action'] ?? '';
     if ($action === 'create') {
-        $created = create_backup_file();
+        $created = system_create_backup_file('bitke-muhasebe-yedek');
         if ($created) {
             setting_set('last_backup_date', date('Y-m-d'));
             setting_set('last_backup_file', basename($created));
@@ -105,11 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Sadece .zip, .sqlite veya .db yedek dosyası yüklenebilir.');
             redirect('yedekler.php');
         }
-        $pre = create_backup_file('bitke-muhasebe-geri-yukleme-oncesi');
+        $pre = system_create_backup_file('bitke-muhasebe-geri-yukleme-oncesi');
         try {
             if ($ext === 'zip') restore_zip_file($file['tmp_name']);
             else restore_sqlite_file($file['tmp_name']);
             log_action('Yedekten geri yüklendi', $file['name'] . ($pre ? ' / önceki yedek: ' . basename($pre) : ''));
+            audit_action('yedek', null, 'geri_yukleme', null, ['dosya'=>$file['name'], 'islem_oncesi_yedek'=>$pre ? basename($pre) : 'yok'], 'Yedekten geri yükleme');
             flash('success', 'Yedek geri yüklendi. Güvenlik için çıkış yapıp tekrar giriş yapmanız önerilir.');
         } catch (Throwable $e) {
             flash('error', 'Geri yükleme başarısız: ' . $e->getMessage() . ($pre ? ' Mevcut sistemin işlem öncesi yedeği oluşturuldu: ' . basename($pre) : ''));
@@ -119,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete') {
         $file = basename($_POST['file'] ?? '');
         $path = BACKUP_DIR . '/' . $file;
-        if ($file && is_file($path) && preg_match('/^bitke-muhasebe-(yedek|geri-yukleme-oncesi)-\d{8}-\d{6}\.(zip|sqlite)$/', $file)) {
+        if ($file && is_file($path) && backup_file_is_allowed($file)) {
             unlink($path); log_action('Yedek silindi', $file); flash('success','Yedek silindi.');
         }
         redirect('yedekler.php');
@@ -129,20 +102,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if (!empty($_GET['download'])) {
     $file = basename($_GET['download']);
     $path = BACKUP_DIR . '/' . $file;
-    if (!preg_match('/^bitke-muhasebe-(yedek|geri-yukleme-oncesi)-\d{8}-\d{6}\.(zip|sqlite)$/', $file)) { http_response_code(400); exit('Geçersiz dosya.'); }
+    if (!backup_file_is_allowed($file)) { http_response_code(400); exit('Geçersiz dosya.'); }
     download_file($path, $file, substr($file, -4) === '.zip' ? 'application/zip' : 'application/octet-stream');
 }
 
-$files = [];
-if (is_dir(BACKUP_DIR)) {
-    foreach (glob(BACKUP_DIR . '/bitke-muhasebe-*.*') ?: [] as $f) {
-        $bn = basename($f);
-        if (preg_match('/^bitke-muhasebe-(yedek|geri-yukleme-oncesi)-\d{8}-\d{6}\.(zip|sqlite)$/', $bn)) {
-            $files[] = ['name'=>$bn, 'size'=>filesize($f), 'time'=>filemtime($f)];
-        }
-    }
-    usort($files, fn($a,$b)=>$b['time']<=>$a['time']);
-}
+$files = backup_file_list();
+$autoLast = setting_get('auto_backup_last_date');
+$autoLastFile = setting_get('auto_backup_last_file', '');
 
 $lastBackup = setting_get('last_backup_date');
 $lastBackupFile = setting_get('last_backup_file', '');
@@ -166,6 +132,11 @@ page_header('Yedekleme', 'yedekler');
 <div class="backup-status-bar backup-old">⚠️ Henüz yedek alınmamış. Verilerinizi korumak için bir yedek oluşturun.</div>
 <?php endif; ?>
 
+<div class="backup-status-bar backup-ok auto-backup-note">
+  🤖 Otomatik yedekleme aktif: Sistem ilk panel kullanımında günde 1 yedek alır, son 5 otomatik yedeği saklar.
+  <?php if ($autoLast): ?><span>Son otomatik: <strong><?php echo e(tr_date($autoLast)); ?></strong></span><?php endif; ?>
+</div>
+
 <section class="hero-card">
   <div>
     <span class="status-pill">Veri güvenliği</span>
@@ -177,9 +148,10 @@ page_header('Yedekleme', 'yedekler');
   </div>
 </section>
 
-<section class="stats-grid two" style="margin-top:0">
+<section class="stats-grid three" style="margin-top:0">
   <article class="stat-card"><span>Toplam yedek sayısı</span><strong><?php echo count($files); ?></strong><small><?php echo class_exists('ZipArchive') ? '✅ ZIP + belgeler aktif' : '⚠️ Sadece SQLite / ZIP geri yükleme kapalı'; ?></small></article>
   <article class="stat-card <?php echo (!$lastBackup || $daysSince >= 7) ? '' : 'soft'; ?>"><span>Son yedek tarihi</span><strong class="<?php echo (!$lastBackup || $daysSince >= 7) ? 'text-danger' : 'text-success'; ?>"><?php echo $lastBackup ? e(tr_date($lastBackup)) : 'Yok'; ?></strong><small><?php echo $daysSince !== null ? $daysSince . ' gün önce' : 'Henüz yedek alınmamış'; ?></small></article>
+  <article class="stat-card soft"><span>Otomatik yedek</span><strong><?php echo $autoLast ? e(tr_date($autoLast)) : 'Hazır'; ?></strong><small><?php echo $autoLastFile ? e($autoLastFile) : 'İlk kullanımda oluşur'; ?></small></article>
 </section>
 
 <section class="content-grid compact">
@@ -190,10 +162,10 @@ page_header('Yedekleme', 'yedekler');
         <thead><tr><th>Dosya</th><th>Tür</th><th>Oluşturma</th><th class="right">Boyut</th><th></th></tr></thead>
         <tbody>
           <?php if(!$files): ?><tr><td colspan="5" class="empty">Henüz yedek yok. Yukarıdan ilk yedeği oluşturun.</td></tr><?php endif; ?>
-          <?php foreach($files as $f): $isZip = substr($f['name'], -4) === '.zip'; $isLatest = $f['name'] === $lastBackupFile; ?>
+          <?php foreach($files as $f): $isZip = substr($f['name'], -4) === '.zip'; $isAuto = strpos($f['name'], 'bitke-muhasebe-otomatik-') === 0; $isLatest = $f['name'] === $lastBackupFile; ?>
           <tr <?php echo $isLatest ? 'class="latest-backup-row"' : ''; ?>>
             <td><strong><?php echo e($f['name']); ?></strong><?php if ($isLatest): ?><small class="soon-tag">Son yedek</small><?php endif; ?></td>
-            <td><?php echo $isZip ? '<span class="badge badge-success">ZIP</span>' : '<span class="badge badge-info">SQLite</span>'; ?></td>
+            <td><?php echo $isAuto ? '<span class="badge badge-special">Otomatik</span>' : ($isZip ? '<span class="badge badge-success">ZIP</span>' : '<span class="badge badge-info">SQLite</span>'); ?></td>
             <td><?php echo e(date('d.m.Y H:i', $f['time'])); ?></td>
             <td class="right"><?php echo e(bytes_human($f['size'])); ?></td>
             <td class="row-actions"><a href="yedekler.php?download=<?php echo e(urlencode($f['name'])); ?>">⇩ İndir</a><form method="post" onsubmit="return confirm('Yedek silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="file" value="<?php echo e($f['name']); ?>"><button>Sil</button></form></td>

@@ -7,12 +7,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'add') {
         $name = trim($_POST['name'] ?? ''); $type = $_POST['type'] ?? 'genel';
         if ($name !== '') {
-            try { db()->prepare('INSERT INTO categories (name, type, created_at) VALUES (?, ?, ?)')->execute([$name,$type,now()]); log_action('Kategori eklendi',$name); flash('success','Kategori eklendi.'); }
+            try { db()->prepare('INSERT INTO categories (name, type, created_at) VALUES (?, ?, ?)')->execute([$name,$type,now()]); $newCategoryId=(int)db()->lastInsertId(); log_action('Kategori eklendi',$name); audit_action('kategori', $newCategoryId, 'eklendi', null, ['name'=>$name,'type'=>$type], $name); flash('success','Kategori eklendi.'); }
             catch(Throwable $e){ flash('error','Bu kategori zaten var olabilir.'); }
         }
     }
     if ($action === 'delete') {
-        $id=(int)($_POST['id']??0); $stmt=db()->prepare('SELECT name FROM categories WHERE id=?'); $stmt->execute([$id]); $name=$stmt->fetchColumn(); db()->prepare('DELETE FROM categories WHERE id=?')->execute([$id]); log_action('Kategori silindi',(string)$name); flash('success','Kategori silindi.');
+        $id=(int)($_POST['id']??0); $stmt=db()->prepare('SELECT * FROM categories WHERE id=?'); $stmt->execute([$id]); $oldCategory=$stmt->fetch(); $name=$oldCategory['name'] ?? ''; db()->prepare('DELETE FROM categories WHERE id=?')->execute([$id]); log_action('Kategori silindi',(string)$name); if($oldCategory) audit_action('kategori', $id, 'silindi', $oldCategory, null, (string)$name); flash('success','Kategori silindi.');
     }
     redirect('kategoriler.php');
 }

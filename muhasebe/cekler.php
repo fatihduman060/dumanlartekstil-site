@@ -15,11 +15,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $accountId = ($_POST['account_id'] ?? '') !== '' ? (int)$_POST['account_id'] : null;
         $allowed = array_keys(check_statuses());
         if ($id > 0 && in_array($newStatus, $allowed, true)) {
-            $stmt = db()->prepare('UPDATE checks SET status=?, account_id=COALESCE(?, account_id), closed_at=?, updated_at=? WHERE id=?');
-            $stmt->execute([$newStatus, $accountId, in_array($newStatus, ['tahsil_edildi','odendi','ciro_edildi','iade','karsiliksiz','protestolu','iptal'], true) ? now() : null, now(), $id]);
-            sync_check_account_transaction($id);
-            log_action('Çek durumu güncellendi', '#' . $id . ' → ' . check_status_label($newStatus));
-            flash('success', 'Çek durumu güncellendi: ' . check_status_label($newStatus));
+            $oldStmt = db()->prepare('SELECT * FROM checks WHERE id=? AND COALESCE(is_cancelled,0)=0');
+            $oldStmt->execute([$id]);
+            $oldCheck = $oldStmt->fetch() ?: null;
+            if ($oldCheck) {
+                $stmt = db()->prepare('UPDATE checks SET status=?, account_id=COALESCE(?, account_id), closed_at=?, updated_at=? WHERE id=?');
+                $stmt->execute([$newStatus, $accountId, in_array($newStatus, ['tahsil_edildi','odendi','ciro_edildi','iade','karsiliksiz','protestolu','iptal'], true) ? now() : null, now(), $id]);
+                sync_check_account_transaction($id);
+                log_action('Çek durumu güncellendi', '#' . $id . ' → ' . check_status_label($newStatus)); audit_action('cek', $id, 'durum_guncellendi', $oldCheck, ['status'=>$newStatus,'account_id'=>$accountId], check_status_label($newStatus));
+                flash('success', 'Çek durumu güncellendi: ' . check_status_label($newStatus));
+            }
         }
         redirect('cekler.php' . ($_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : ''));
     }
@@ -33,8 +38,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!isset(check_directions()[$direction]) || !isset(check_statuses()[$status]) || $amount <= 0 || $due === '') {
             flash('error', 'Çek yönü, durum, tutar ve vade tarihi kontrol edilmeli.'); redirect('cekler.php');
         }
-        $oldDoc = null;
-        if ($id > 0) { $stmt = db()->prepare('SELECT document_path AS path, document_name AS name, document_mime AS mime FROM checks WHERE id=?'); $stmt->execute([$id]); $oldDoc = $stmt->fetch() ?: null; }
+        $oldDoc = null; $oldCheck = null;
+        if ($id > 0) {
+            $stmt = db()->prepare('SELECT * FROM checks WHERE id=?');
+            $stmt->execute([$id]);
+            $oldCheck = $stmt->fetch() ?: null;
+            if (!$oldCheck || (int)($oldCheck['is_cancelled'] ?? 0) === 1) {
+                flash('error', 'İptal edilmiş çek düzenlenemez. Gerekirse yeni çek kaydı girin.');
+                redirect('cekler.php?include_cancelled=1');
+            }
+            $oldDoc = ['path'=>$oldCheck['document_path'] ?? null, 'name'=>$oldCheck['document_name'] ?? null, 'mime'=>$oldCheck['document_mime'] ?? null];
+        }
         try { $doc = handle_upload('document', $oldDoc); } catch (Throwable $e) { flash('error', $e->getMessage()); redirect('cekler.php'); }
         $payload = [
             'cari_id' => ($_POST['cari_id'] ?? '') !== '' ? (int)$_POST['cari_id'] : null,
@@ -50,20 +64,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id > 0) {
             $stmt = db()->prepare('UPDATE checks SET cari_id=:cari_id, account_id=:account_id, direction=:direction, status=:status, amount=:amount, issue_date=:issue_date, due_date=:due_date, bank_name=:bank_name, branch_name=:branch_name, check_no=:check_no, drawer=:drawer, description=:description, document_path=:document_path, document_name=:document_name, document_mime=:document_mime, closed_at=:closed_at, updated_at=:updated_at WHERE id=:id');
             $payload['updated_at'] = now(); $payload['id'] = $id; $stmt->execute($payload);
+            delete_replaced_upload($oldDoc, $doc);
             sync_check_account_transaction($id);
-            log_action('Çek güncellendi', '#' . $id . ' ' . check_direction_label($direction) . ' ' . money($amount)); flash('success','Çek güncellendi.');
+            log_action('Çek güncellendi', '#' . $id . ' ' . check_direction_label($direction) . ' ' . money($amount)); audit_action('cek', $id, 'guncellendi', $oldCheck, $payload, check_direction_label($direction)); flash('success','Çek güncellendi.');
         } else {
             $stmt = db()->prepare('INSERT INTO checks (cari_id, account_id, direction, status, amount, issue_date, due_date, bank_name, branch_name, check_no, drawer, description, document_path, document_name, document_mime, closed_at, created_by, created_at, updated_at) VALUES (:cari_id, :account_id, :direction, :status, :amount, :issue_date, :due_date, :bank_name, :branch_name, :check_no, :drawer, :description, :document_path, :document_name, :document_mime, :closed_at, :created_by, :created_at, :updated_at)');
             $payload['created_by'] = current_user()['id']; $payload['created_at'] = now(); $payload['updated_at'] = now(); $stmt->execute($payload);
             $newId = (int)db()->lastInsertId();
             sync_check_account_transaction($newId);
-            log_action('Çek eklendi', check_direction_label($direction) . ' ' . money($amount)); flash('success','Çek eklendi.');
+            log_action('Çek eklendi', check_direction_label($direction) . ' ' . money($amount)); audit_action('cek', $newId, 'eklendi', null, $payload, check_direction_label($direction)); flash('success','Çek eklendi.');
         }
         redirect('cekler.php');
     }
-    if ($action === 'delete') {
-        $id = (int)($_POST['id'] ?? 0); $stmt = db()->prepare('SELECT * FROM checks WHERE id=?'); $stmt->execute([$id]); $ch=$stmt->fetch();
-        if ($ch) { db()->prepare("DELETE FROM account_transactions WHERE source_type='check' AND source_id=?")->execute([$id]); db()->prepare('DELETE FROM checks WHERE id=?')->execute([$id]); log_action('Çek silindi', '#' . $id . ' ' . money($ch['amount'])); flash('success','Çek silindi.'); }
+    if ($action === 'cancel') {
+        $id = (int)($_POST['id'] ?? 0);
+        $stmt = db()->prepare('SELECT * FROM checks WHERE id=?');
+        $stmt->execute([$id]);
+        $ch = $stmt->fetch();
+        if ($ch && (int)($ch['is_cancelled'] ?? 0) === 0) {
+            $reason = trim($_POST['cancel_reason'] ?? 'Liste üzerinden iptal');
+            db()->prepare('UPDATE checks SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')
+                ->execute([now(), current_user()['id'], $reason, now(), $id]);
+            sync_check_account_transaction($id);
+            log_action('Çek iptal edildi', '#' . $id . ' ' . money($ch['amount']));
+            audit_action('cek', $id, 'iptal', $ch, ['is_cancelled'=>1,'cancel_reason'=>$reason], money($ch['amount']));
+            flash('success','Çek iptal edildi. Kayıt silinmedi; geçmişte korunuyor.');
+        }
         redirect('cekler.php');
     }
 }
@@ -71,9 +97,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $cariler = cariler_for_select();
 $accounts = accounts_for_select(true);
 $edit = null;
-if (!empty($_GET['edit'])) { $stmt = db()->prepare('SELECT * FROM checks WHERE id=?'); $stmt->execute([(int)$_GET['edit']]); $edit = $stmt->fetch() ?: null; }
+if (!empty($_GET['edit'])) {
+    $stmt = db()->prepare('SELECT * FROM checks WHERE id=?');
+    $stmt->execute([(int)$_GET['edit']]);
+    $edit = $stmt->fetch() ?: null;
+    if ($edit && (int)($edit['is_cancelled'] ?? 0) === 1) {
+        flash('error', 'İptal edilmiş çek düzenlenemez. Gerekirse yeni çek kaydı girin.');
+        redirect('cekler.php?include_cancelled=1');
+    }
+}
 $q = trim($_GET['q'] ?? ''); $cariId = trim($_GET['cari_id'] ?? ''); $direction = trim($_GET['direction'] ?? ''); $status = trim($_GET['status'] ?? ''); $accountId = trim($_GET['account_id'] ?? ''); $start = trim($_GET['start'] ?? ''); $end = trim($_GET['end'] ?? '');
+$includeCancelled = isset($_GET['include_cancelled']) && $_GET['include_cancelled'] === '1';
 $where=[]; $params=[];
+if (!$includeCancelled) { $where[]='COALESCE(ch.is_cancelled,0)=0'; }
 if ($q !== '') { $where[]='(ch.bank_name LIKE ? OR ch.branch_name LIKE ? OR ch.check_no LIKE ? OR ch.drawer LIKE ? OR ch.description LIKE ? OR c.name LIKE ? OR a.name LIKE ?)'; array_push($params, "%$q%","%$q%","%$q%","%$q%","%$q%","%$q%","%$q%"); }
 if ($cariId !== '') { $where[]='ch.cari_id=?'; $params[]=(int)$cariId; }
 if ($direction !== '') { $where[]='ch.direction=?'; $params[]=$direction; }
@@ -83,10 +119,10 @@ if ($start !== '') { $where[]='ch.due_date>=?'; $params[]=$start; }
 if ($end !== '') { $where[]='ch.due_date<=?'; $params[]=$end; }
 $sql="SELECT ch.*, c.name AS cari_name, a.name AS account_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id LEFT JOIN accounts a ON a.id=ch.account_id"; if ($where) $sql.=' WHERE '.implode(' AND ',$where); $sql.=' ORDER BY ch.due_date ASC, ch.id DESC LIMIT 500';
 $stmt=db()->prepare($sql); $stmt->execute($params); $checks=$stmt->fetchAll();
-$totals = ['alinacak'=>0,'verilecek'=>0]; foreach($checks as $ch) if($ch['status']==='bekliyor') $totals[$ch['direction']] += (float)$ch['amount'];
+$totals = ['alinacak'=>0,'verilecek'=>0]; foreach($checks as $ch) if((int)($ch['is_cancelled'] ?? 0) === 0 && $ch['status']==='bekliyor') $totals[$ch['direction']] += (float)$ch['amount'];
 $overdueCount = 0; $soonCount = 0;
 foreach ($checks as $ch) {
-    if ($ch['status'] !== 'bekliyor') continue;
+    if ((int)($ch['is_cancelled'] ?? 0) === 1 || $ch['status'] !== 'bekliyor') continue;
     if ($ch['due_date'] < $today) $overdueCount++;
     elseif ($ch['due_date'] <= $weekAhead) $soonCount++;
 }
@@ -135,6 +171,7 @@ page_header('Çekler', 'cekler');
       <select name="account_id"><option value="">Tüm hesaplar</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo $accountId!=='' && (int)$accountId===(int)$a['id']?'selected':''; ?>><?php echo e($a['name']); ?></option><?php endforeach; ?></select>
       <input type="date" name="start" value="<?php echo e($start); ?>">
       <input type="date" name="end" value="<?php echo e($end); ?>">
+      <label class="check tiny"><input type="checkbox" name="include_cancelled" value="1" <?php echo $includeCancelled?'checked':''; ?>> İptal edilenleri göster</label>
       <button class="btn btn-secondary" type="submit">Filtrele</button>
     </form>
     <div class="table-wrap">
@@ -143,11 +180,12 @@ page_header('Çekler', 'cekler');
         <tbody>
         <?php if(!$checks): ?><tr><td colspan="8" class="empty">Çek bulunamadı.</td></tr><?php endif; ?>
         <?php foreach($checks as $ch):
-            $isOverdue = $ch['status'] === 'bekliyor' && $ch['due_date'] < $today;
-            $isSoon = $ch['status'] === 'bekliyor' && $ch['due_date'] >= $today && $ch['due_date'] <= $weekAhead;
-            $rowClass = $isOverdue ? 'row-overdue' : ($isSoon ? 'row-soon' : '');
+            $cancelled = (int)($ch['is_cancelled'] ?? 0) === 1;
+            $isOverdue = !$cancelled && $ch['status'] === 'bekliyor' && $ch['due_date'] < $today;
+            $isSoon = !$cancelled && $ch['status'] === 'bekliyor' && $ch['due_date'] >= $today && $ch['due_date'] <= $weekAhead;
+            $rowClass = $cancelled ? 'row-cancelled' : ($isOverdue ? 'row-overdue' : ($isSoon ? 'row-soon' : ''));
             $quickAction = '';
-            if (can_write() && $ch['status'] === 'bekliyor') {
+            if (can_write() && !$cancelled && $ch['status'] === 'bekliyor') {
                 $newSt = $ch['direction'] === 'alinacak' ? 'tahsil_edildi' : 'odendi';
                 $newStLabel = $ch['direction'] === 'alinacak' ? 'Tahsil edildi' : 'Ödendi';
                 $quickAction = '<form method="post" class="quick-status-form">' . csrf_field() . '<input type="hidden" name="action" value="quick_status"><input type="hidden" name="id" value="' . e($ch['id']) . '"><input type="hidden" name="status" value="' . e($newSt) . '"><button class="btn-quick-ok" title="' . e($newStLabel) . ' olarak işaretle">✓</button></form>';
@@ -160,18 +198,22 @@ page_header('Çekler', 'cekler');
             <?php echo $ch['issue_date'] ? '<small>' . e(tr_date($ch['issue_date'])) . '</small>' : ''; ?>
           </td>
           <td><?php echo badge(check_direction_label($ch['direction']), check_direction_tone($ch['direction'])); ?></td>
-          <td><?php echo badge(check_status_label($ch['status']), check_status_tone($ch['status'])); ?></td>
+          <td><?php echo $cancelled ? badge('İptal','neutral') : badge(check_status_label($ch['status']), check_status_tone($ch['status'])); ?><?php echo $cancelled && !empty($ch['cancel_reason']) ? '<small>'.e($ch['cancel_reason']).'</small>' : ''; ?></td>
           <td><?php echo $ch['cari_id'] ? '<a href="cari-detay.php?id='.e($ch['cari_id']).'">'.e($ch['cari_name']).'</a>' : '-'; ?></td>
           <td><?php echo e($ch['bank_name'] ?: '-'); ?><small><?php echo e(trim(($ch['branch_name'] ?: '') . ' ' . ($ch['check_no'] ?: ''))); ?></small><?php echo $ch['drawer'] ? '<small>' . e($ch['drawer']) . '</small>' : ''; ?></td>
           <td><?php echo e($ch['account_name'] ?: '-'); ?><small><?php echo $ch['document_path'] ? '<a href="cek-belge-indir.php?id='.e($ch['id']).'" target="_blank">Belge</a>' : ''; ?></small></td>
           <td class="right"><strong><?php echo e(money($ch['amount'])); ?></strong></td>
           <td class="row-actions">
             <?php echo $quickAction; ?>
-            <a href="cekler.php?edit=<?php echo e($ch['id']); ?>">Düzenle</a>
-            <?php if(can_write()): ?>
-            <form method="post" onsubmit="return confirm('Çek silinsin mi?');">
-              <?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($ch['id']); ?>"><button>Sil</button>
-            </form>
+            <?php if(!$cancelled): ?>
+              <a href="cekler.php?edit=<?php echo e($ch['id']); ?>">Düzenle</a>
+              <?php if(can_write()): ?>
+              <form method="post" onsubmit="return confirm('Çek silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');">
+                <?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($ch['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button>
+              </form>
+              <?php endif; ?>
+            <?php else: ?>
+              <span class="muted">Kayıt korundu</span>
             <?php endif; ?>
           </td>
         </tr>

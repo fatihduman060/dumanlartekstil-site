@@ -7,6 +7,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $action = $_POST['action'] ?? '';
 
+    if ($action === 'repair_sync') {
+        require_admin();
+        try {
+            $sync = repair_account_sync(true);
+            flash('success', 'Kasa/banka senkron kontrolü tamamlandı. Hareket: ' . $sync['movement_synced'] . ', çek: ' . $sync['check_synced'] . ', temizlenen eski kaynak kayıt: ' . $sync['deleted'] . '.');
+        } catch (Throwable $e) {
+            flash('error', 'Senkron kontrolü yapılamadı: ' . $e->getMessage());
+        }
+        redirect('hesaplar.php');
+    }
+
     if ($action === 'save_account') {
         $id = (int)($_POST['id'] ?? 0);
         $type = $_POST['account_type'] ?? 'kasa';
@@ -19,14 +30,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $payload = [$type, $name, trim($_POST['iban'] ?? ''), trim($_POST['bank_name'] ?? ''), $opening, isset($_POST['is_active']) ? 1 : 0, trim($_POST['notes'] ?? '')];
         if ($id > 0) {
+            $oldStmt = db()->prepare('SELECT * FROM accounts WHERE id=?');
+            $oldStmt->execute([$id]);
+            $oldAccount = $oldStmt->fetch() ?: null;
             db()->prepare('UPDATE accounts SET account_type=?, name=?, iban=?, bank_name=?, opening_balance=?, is_active=?, notes=?, updated_at=? WHERE id=?')
                 ->execute(array_merge($payload, [now(), $id]));
-            log_action('Kasa/Banka hesabı güncellendi', $name);
+            log_action('Kasa/Banka hesabı güncellendi', $name); audit_action('hesap', $id, 'guncellendi', $oldAccount, ['type'=>$type,'name'=>$name,'opening_balance'=>$opening,'is_active'=>isset($_POST['is_active']) ? 1 : 0], $name);
             flash('success', 'Hesap güncellendi.');
         } else {
             db()->prepare('INSERT INTO accounts (account_type, name, iban, bank_name, opening_balance, is_active, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
                 ->execute(array_merge($payload, [now(), now()]));
-            log_action('Kasa/Banka hesabı eklendi', $name);
+            $newAccountId = (int)db()->lastInsertId();
+            log_action('Kasa/Banka hesabı eklendi', $name); audit_action('hesap', $newAccountId, 'eklendi', null, ['type'=>$type,'name'=>$name,'opening_balance'=>$opening,'is_active'=>isset($_POST['is_active']) ? 1 : 0], $name);
             flash('success', 'Hesap eklendi.');
         }
         redirect('hesaplar.php');
@@ -43,7 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)')
             ->execute([$accountId, $direction, $amount, $date, 'manual', trim($_POST['description'] ?? ''), current_user()['id'], now()]);
-        log_action('Kasa/Banka manuel hareket eklendi', ($direction === 'in' ? 'Giriş ' : 'Çıkış ') . money($amount));
+        $newTransactionId = (int)db()->lastInsertId();
+        log_action('Kasa/Banka manuel hareket eklendi', ($direction === 'in' ? 'Giriş ' : 'Çıkış ') . money($amount)); audit_action('hesap_hareketi', $newTransactionId, 'eklendi', null, ['account_id'=>$accountId,'direction'=>$direction,'amount'=>$amount,'date'=>$date], 'manuel');
         flash('success', 'Manuel hesap hareketi eklendi.');
         redirect('hesaplar.php');
     }
@@ -66,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)')
                 ->execute([$to, 'in', $amount, $date, 'transfer', $stamp . ' - ' . $desc, current_user()['id'], now()]);
             db()->commit();
-            log_action('Kasa/Banka virman', money($amount));
+            log_action('Kasa/Banka virman', money($amount)); audit_action('hesap_hareketi', null, 'virman', null, ['from'=>$from,'to'=>$to,'amount'=>$amount,'date'=>$date], $stamp);
             flash('success', 'Virman kaydı oluşturuldu.');
         } catch (Throwable $e) {
             db()->rollBack();
@@ -82,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $tr = $stmt->fetch();
         if ($tr) {
             db()->prepare('DELETE FROM account_transactions WHERE id=?')->execute([$id]);
-            log_action('Kasa/Banka hareketi silindi', '#' . $id . ' ' . money($tr['amount']));
+            log_action('Kasa/Banka hareketi silindi', '#' . $id . ' ' . money($tr['amount'])); audit_action('hesap_hareketi', $id, 'silindi', $tr, null, money($tr['amount']));
             flash('success', 'Hesap hareketi silindi.');
         }
         redirect('hesaplar.php');
@@ -112,6 +128,22 @@ page_header('Kasa / Banka', 'hesaplar');
   <article class="stat-card soft"><span>Banka</span><strong><?php echo e(money($summary['banka'])); ?></strong><small>Banka hesapları</small></article>
   <article class="stat-card soft"><span>Aktif hesap</span><strong><?php echo e($summary['active']); ?></strong><small>Kullanımdaki hesap</small></article>
 </section>
+
+<?php if (is_admin()): ?>
+<section class="panel-card soft-alert">
+  <div class="card-head">
+    <div>
+      <h3>Kasa/Banka senkron kontrolü</h3>
+      <span>Hareket veya çek düzenlemelerinden sonra kaynak kasa/banka hareketlerini yeniden eşler. Manuel ve virman kayıtlarına dokunmaz.</span>
+    </div>
+    <form method="post" onsubmit="return confirm('Kasa/banka kaynak hareketleri kontrol edilip yeniden eşlensin mi?');">
+      <?php echo csrf_field(); ?>
+      <input type="hidden" name="action" value="repair_sync">
+      <button class="btn btn-secondary" type="submit">Senkron kontrol et</button>
+    </form>
+  </div>
+</section>
+<?php endif; ?>
 
 <section class="form-grid">
   <article class="panel-card form-card">

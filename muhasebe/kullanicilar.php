@@ -8,15 +8,29 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         $username=trim($_POST['username']??''); $display=trim($_POST['display_name']??''); $password=$_POST['password']??''; $role=$_POST['role']??'viewer';
         if($username===''||$display===''||strlen($password)<8){ flash('error','Kullanıcı adı, isim ve en az 8 karakter şifre gerekli.'); redirect('kullanicilar.php'); }
         if(!in_array($role, ['admin','editor','viewer'], true)) $role = 'viewer';
-        try{ db()->prepare('INSERT INTO users (username,display_name,password_hash,role,is_active,created_at,updated_at) VALUES (?,?,?,?,1,?,?)')->execute([$username,$display,password_hash($password,PASSWORD_DEFAULT),$role,now(),now()]); log_action('Kullanıcı eklendi',$username); flash('success','Kullanıcı eklendi.'); }catch(Throwable $e){ flash('error','Kullanıcı eklenemedi. Aynı kullanıcı adı olabilir.'); }
+        try{
+            db()->prepare('INSERT INTO users (username,display_name,password_hash,role,is_active,created_at,updated_at) VALUES (?,?,?,?,1,?,?)')->execute([$username,$display,password_hash($password,PASSWORD_DEFAULT),$role,now(),now()]);
+            $newUserId = (int)db()->lastInsertId();
+            log_action('Kullanıcı eklendi',$username);
+            audit_action('kullanici', $newUserId, 'eklendi', null, ['username'=>$username,'display_name'=>$display,'role'=>$role,'is_active'=>1], $username);
+            flash('success','Kullanıcı eklendi.');
+        }catch(Throwable $e){ flash('error','Kullanıcı eklenemedi. Aynı kullanıcı adı olabilir.'); }
     }
     if($action==='update'){
         $id=(int)($_POST['id']??0); $role=$_POST['role']??'viewer'; $active=isset($_POST['is_active'])?1:0; $display=trim($_POST['display_name']??'');
         if(!in_array($role, ['admin','editor','viewer'], true)) $role = 'viewer';
         if($id===(int)current_user()['id'] && !$active){ flash('error','Kendi kullanıcınızı pasifleştiremezsiniz.'); redirect('kullanicilar.php'); }
+        $oldStmt = db()->prepare('SELECT id, username, display_name, role, is_active FROM users WHERE id=?');
+        $oldStmt->execute([$id]);
+        $oldUser = $oldStmt->fetch();
         db()->prepare('UPDATE users SET display_name=?, role=?, is_active=?, updated_at=? WHERE id=?')->execute([$display,$role,$active,now(),$id]);
-        if(!empty($_POST['password'])){ if(strlen($_POST['password'])<8){ flash('error','Şifre en az 8 karakter olmalı.'); redirect('kullanicilar.php'); } db()->prepare('UPDATE users SET password_hash=?, updated_at=? WHERE id=?')->execute([password_hash($_POST['password'],PASSWORD_DEFAULT),now(),$id]); }
-        log_action('Kullanıcı güncellendi','#'.$id); flash('success','Kullanıcı güncellendi.');
+        $passwordChanged = false;
+        if(!empty($_POST['password'])){ if(strlen($_POST['password'])<8){ flash('error','Şifre en az 8 karakter olmalı.'); redirect('kullanicilar.php'); } db()->prepare('UPDATE users SET password_hash=?, updated_at=? WHERE id=?')->execute([password_hash($_POST['password'],PASSWORD_DEFAULT),now(),$id]); $passwordChanged = true; }
+        log_action('Kullanıcı güncellendi','#'.$id);
+        if ($oldUser) {
+            audit_action('kullanici', $id, 'guncellendi', $oldUser, ['display_name'=>$display,'role'=>$role,'is_active'=>$active,'password_changed'=>$passwordChanged ? 'evet' : 'hayır'], $oldUser['username'] ?? ('#'.$id));
+        }
+        flash('success','Kullanıcı güncellendi.');
     }
     redirect('kullanicilar.php');
 }

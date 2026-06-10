@@ -4,6 +4,10 @@ require_login();
 $start = $_GET['start'] ?? date('Y-m-01');
 $end = $_GET['end'] ?? date('Y-m-t');
 $totals = dashboard_totals($start, $end);
+$reportCashIn = (float)$totals['gelir'] + (float)$totals['tahsilat'];
+$reportCashOut = (float)$totals['gider'] + (float)$totals['odeme'];
+$reportCashNet = $reportCashIn - $reportCashOut;
+$reportNetPosition = (float)$totals['net_alacak'] - (float)$totals['net_verecek'];
 $checkTotalsRange = check_totals($start, $end, false);
 $stmt = db()->prepare("SELECT cat.name, cat.type, SUM(m.amount) AS total FROM movements m LEFT JOIN categories cat ON cat.id=m.category_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? GROUP BY cat.id ORDER BY total DESC");
 $stmt->execute([$start,$end]); $categoryTotals = $stmt->fetchAll();
@@ -16,9 +20,10 @@ $stmt = db()->prepare("SELECT c.id,c.name,
  SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END) AS odeme
  FROM cariler c JOIN movements m ON m.cari_id=c.id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? GROUP BY c.id ORDER BY ABS((alacak-tahsilat)-(verecek-odeme)) DESC LIMIT 20");
 $stmt->execute([$start,$end]); $cariTotals=$stmt->fetchAll();
-$stmt = db()->prepare("SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE ch.due_date BETWEEN ? AND ? ORDER BY ch.due_date ASC LIMIT 30");
+$stmt = db()->prepare("SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.due_date BETWEEN ? AND ? ORDER BY ch.due_date ASC LIMIT 30");
 $stmt->execute([$start,$end]); $checks=$stmt->fetchAll();
 $accountSummary = account_summary();
+$privateSummary = private_receivable_totals(['start'=>$start, 'end'=>$end]);
 $accountRows = accounts_for_select(false);
 $acctStmt = db()->prepare("SELECT at.*, a.name AS account_name, a.account_type FROM account_transactions at JOIN accounts a ON a.id=at.account_id WHERE at.transaction_date BETWEEN ? AND ? ORDER BY at.transaction_date DESC, at.id DESC LIMIT 50");
 $acctStmt->execute([$start,$end]); $accountTransactions = $acctStmt->fetchAll();
@@ -27,22 +32,38 @@ $print = isset($_GET['print']);
 page_header('Raporlar', 'raporlar');
 ?>
 <section class="panel-card report-controls <?php echo $print?'print-hide':''; ?>">
-  <form class="filterbar" method="get"><input type="date" name="start" value="<?php echo e($start); ?>"><input type="date" name="end" value="<?php echo e($end); ?>"><button class="btn btn-secondary">Raporla</button><a class="btn btn-primary" href="export.php?type=movements&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Hareket CSV</a><a class="btn btn-secondary" href="export.php?type=checks&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Çek CSV</a><a class="btn btn-secondary" href="export.php?type=account_transactions&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Kasa/Banka CSV</a><a class="btn btn-secondary" href="raporlar.php?start=<?php echo e($start); ?>&end=<?php echo e($end); ?>&print=1" target="_blank">PDF/Yazdır</a></form>
+  <form class="filterbar" method="get"><input type="date" name="start" value="<?php echo e($start); ?>"><input type="date" name="end" value="<?php echo e($end); ?>"><button class="btn btn-secondary">Raporla</button><a class="btn btn-primary" href="export.php?type=movements&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Hareket CSV</a><a class="btn btn-secondary" href="export.php?type=checks&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Çek CSV</a><a class="btn btn-secondary" href="export.php?type=account_transactions&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Kasa/Banka CSV</a><a class="btn btn-secondary" href="ozel-alacaklar.php?start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Özel Alacak</a><a class="btn btn-secondary" href="raporlar.php?start=<?php echo e($start); ?>&end=<?php echo e($end); ?>&print=1" target="_blank">PDF/Yazdır</a></form>
+  <div class="report-period-note">Seçili dönem: <strong><?php echo e(tr_date($start)); ?> - <?php echo e(tr_date($end)); ?></strong>. Aşağıdaki kartlar bu tarih aralığına göre hesaplanır.</div>
 </section>
 
 <section class="panel-card report-controls <?php echo $print?'print-hide':''; ?>">
   <form class="filterbar" method="get" action="cari-ekstre.php" target="_blank"><select name="id" required><option value="">Cari seçerek ekstre aç</option><?php foreach($cariler as $c): ?><option value="<?php echo e($c['id']); ?>"><?php echo e($c['name']); ?></option><?php endforeach; ?></select><input type="date" name="start" value="<?php echo e($start); ?>"><input type="date" name="end" value="<?php echo e($end); ?>"><button class="btn btn-primary">Cari ekstresi / PDF</button></form>
 </section>
 
+<section class="stats-grid five report-block report-position-grid">
+  <article class="stat-card status report-hero-stat"><span>Genel Durum</span><strong class="<?php echo $reportNetPosition>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportNetPosition)); ?></strong><small>Net alacak - net verecek</small></article>
+  <article class="stat-card"><span>Kalan alacak</span><strong><?php echo e(money($totals['net_alacak'])); ?></strong><small>Alacak - tahsilat</small></article>
+  <article class="stat-card"><span>Kalan verecek</span><strong><?php echo e(money($totals['net_verecek'])); ?></strong><small>Verecek - ödeme</small></article>
+  <article class="stat-card cash"><span>Nakit neti</span><strong class="<?php echo $reportCashNet>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportCashNet)); ?></strong><small>Giren - çıkan</small></article>
+  <article class="stat-card special"><span>Özel alacak</span><strong><?php echo e(money($privateSummary['acik'])); ?></strong><small>Genel duruma dahil değil</small></article>
+</section>
+<p class="calc-note report-calc-note"><strong>Okuma notu:</strong> Genel Durum = net alacak - net verecek. Nakit Neti = giren para - çıkan para. Özel Alacak bu iki hesaba dahil edilmez.</p>
+
 <section class="stats-grid four report-block">
-  <article class="stat-card"><span>Alacak</span><strong><?php echo e(money($totals['alacak'])); ?></strong><small>Kalan: <?php echo e(money($totals['net_alacak'])); ?></small></article>
+  <article class="stat-card"><span>Alacak</span><strong><?php echo e(money($totals['alacak'])); ?></strong><small>Brüt alacak</small></article>
   <article class="stat-card"><span>Tahsilat</span><strong><?php echo e(money($totals['tahsilat'])); ?></strong><small>Seçili tarih aralığı</small></article>
-  <article class="stat-card"><span>Verecek</span><strong><?php echo e(money($totals['verecek'])); ?></strong><small>Kalan: <?php echo e(money($totals['net_verecek'])); ?></small></article>
-  <article class="stat-card"><span>Gelir - gider</span><strong class="<?php echo $totals['net_gelir_gider']>=0?'text-success':'text-danger'; ?>"><?php echo e(money($totals['net_gelir_gider'])); ?></strong><small>Gelir: <?php echo e(money($totals['gelir'])); ?> / Gider: <?php echo e(money($totals['gider'])); ?></small></article>
+  <article class="stat-card"><span>Verecek</span><strong><?php echo e(money($totals['verecek'])); ?></strong><small>Brüt verecek</small></article>
+  <article class="stat-card"><span>Giren / Çıkan</span><strong class="<?php echo $reportCashNet>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportCashNet)); ?></strong><small>Giriş: <?php echo e(money($reportCashIn)); ?> / Çıkış: <?php echo e(money($reportCashOut)); ?></small></article>
 </section>
 <section class="stats-grid two report-block">
   <article class="stat-card soft"><span>Aralıktaki alınacak çek</span><strong><?php echo e(money($checkTotalsRange['alinacak'])); ?></strong><small><?php echo e($checkTotalsRange['alinacak_count']); ?> adet</small></article>
   <article class="stat-card soft"><span>Aralıktaki verilecek çek</span><strong><?php echo e(money($checkTotalsRange['verilecek'])); ?></strong><small><?php echo e($checkTotalsRange['verilecek_count']); ?> adet</small></article>
+</section>
+
+<section class="stats-grid three report-block">
+  <article class="stat-card special"><span>Özel Alacak Açık</span><strong><?php echo e(money($privateSummary['acik'])); ?></strong><small>Genel cari toplamına dahil değildir</small></article>
+  <article class="stat-card soft"><span>Özel Alacak Kapandı</span><strong><?php echo e(money($privateSummary['kapandi'])); ?></strong><small>Seçili tarih aralığı</small></article>
+  <article class="stat-card soft"><span>Özel Alacak kayıt</span><strong><?php echo e((string)$privateSummary['count']); ?></strong><small><a href="ozel-alacaklar.php?start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Detay raporu aç</a></small></article>
 </section>
 
 <section class="stats-grid four report-block">

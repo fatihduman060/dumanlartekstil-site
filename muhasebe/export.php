@@ -27,6 +27,7 @@ if ($type === 'movements') {
 
 if ($type === 'checks') {
     $where=[]; $params=[];
+    if (empty($_GET['include_cancelled'])) $where[]='COALESCE(ch.is_cancelled,0)=0';
     if (!empty($_GET['start'])) { $where[]='ch.due_date>=?'; $params[]=$_GET['start']; }
     if (!empty($_GET['end'])) { $where[]='ch.due_date<=?'; $params[]=$_GET['end']; }
     if (!empty($_GET['cari_id'])) { $where[]='ch.cari_id=?'; $params[]=(int)$_GET['cari_id']; }
@@ -36,8 +37,8 @@ if ($type === 'checks') {
     $sql="SELECT ch.*, c.name AS cari_name, a.name AS account_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id LEFT JOIN accounts a ON a.id=ch.account_id";
     if ($where) $sql.=' WHERE '.implode(' AND ',$where); $sql.=' ORDER BY ch.due_date ASC, ch.id DESC';
     $stmt=db()->prepare($sql); $stmt->execute($params); $rows=$stmt->fetchAll();
-    fputcsv($out,['ID','Yön','Durum','Çek Tarihi','Vade','Cari','Kasa/Banka','Banka','Şube','Çek No','Keşideci','Açıklama','Tutar','Belge'], ';');
-    foreach($rows as $r) fputcsv($out,[$r['id'],check_direction_label($r['direction']),check_status_label($r['status']),$r['issue_date'],$r['due_date'],$r['cari_name'],$r['account_name'],$r['bank_name'],$r['branch_name'],$r['check_no'],$r['drawer'],$r['description'],number_format((float)$r['amount'],2,',','.'),$r['document_name']], ';');
+    fputcsv($out,['ID','Yön','Durum','İptal Durumu','Çek Tarihi','Vade','Cari','Kasa/Banka','Banka','Şube','Çek No','Keşideci','Açıklama','Tutar','Belge'], ';');
+    foreach($rows as $r) fputcsv($out,[$r['id'],check_direction_label($r['direction']),check_status_label($r['status']),((int)($r['is_cancelled'] ?? 0)===1?'İptal':'Aktif'),$r['issue_date'],$r['due_date'],$r['cari_name'],$r['account_name'],$r['bank_name'],$r['branch_name'],$r['check_no'],$r['drawer'],$r['description'],number_format((float)$r['amount'],2,',','.'),$r['document_name']], ';');
     log_action('Çek CSV indirildi', $filenamePrefix); fclose($out); exit;
 }
 
@@ -46,6 +47,23 @@ if ($type === 'cariler') {
     fputcsv($out,['ID','Tip','Ad/Ünvan','Yetkili','Şehir','Vergi No','Vergi Dairesi','Telefon','E-posta','Adres','IBAN','Not','Net Bakiye'], ';');
     foreach($rows as $r) { $b=cari_balance((int)$r['id']); fputcsv($out,[$r['id'],$r['cari_type'],$r['name'],$r['authorized_person'],$r['city'],$r['tax_no'],$r['tax_office'],$r['phone'],$r['email'],$r['address'],$r['iban'],$r['notes'],number_format((float)$b['net'],2,',','.')], ';'); }
     log_action('Cari CSV indirildi', $filenamePrefix); fclose($out); exit;
+}
+
+
+if ($type === 'private_receivables') {
+    $where=[]; $params=[];
+    if (!empty($_GET['status']) && isset(private_receivable_statuses()[$_GET['status']])) { $where[]='pr.status=?'; $params[]=$_GET['status']; }
+    if (!empty($_GET['start'])) { $where[]='pr.receivable_date>=?'; $params[]=$_GET['start']; }
+    if (!empty($_GET['end'])) { $where[]='pr.receivable_date<=?'; $params[]=$_GET['end']; }
+    if (!empty($_GET['cari_id'])) { $where[]='pr.cari_id=?'; $params[]=(int)$_GET['cari_id']; }
+    if (!empty($_GET['q'])) { $where[]='(pr.description LIKE ? OR c.name LIKE ? OR pr.document_name LIKE ?)'; $q='%'.$_GET['q'].'%'; array_push($params,$q,$q,$q); }
+    $sql="SELECT pr.*, c.name AS cari_name, u.display_name AS user_name FROM private_receivables pr JOIN cariler c ON c.id=pr.cari_id LEFT JOIN users u ON u.id=pr.created_by";
+    if ($where) $sql.=' WHERE '.implode(' AND ',$where);
+    $sql.=' ORDER BY pr.receivable_date DESC, pr.id DESC';
+    $stmt=db()->prepare($sql); $stmt->execute($params); $rows=$stmt->fetchAll();
+    fputcsv($out,['ID','Tarih','Cari','Durum','Açıklama','Belge Türü','Belge','Tutar','Ekleyen','Oluşturma'], ';');
+    foreach($rows as $r) fputcsv($out,[$r['id'],$r['receivable_date'],$r['cari_name'],private_receivable_status_label($r['status']),$r['description'],document_type_label($r['document_type']),$r['document_name'],number_format((float)$r['amount'],2,',','.'),$r['user_name'],$r['created_at']], ';');
+    log_action('Özel Alacak CSV indirildi', $filenamePrefix); fclose($out); exit;
 }
 
 if ($type === 'account_transactions') {
