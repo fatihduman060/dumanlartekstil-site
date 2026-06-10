@@ -159,6 +159,11 @@ $overCollected = max(0, -$rawNetAlacak);
 $overPaid = max(0, -$rawNetVerecek);
 $netPosition = $rawNetAlacak - $rawNetVerecek;
 $checkTotals = check_totals(null, null, true);
+$pendingReceivableChecks = (float)$checkTotals['alinacak'];
+$pendingPayableChecks = (float)$checkTotals['verilecek'];
+$totalReceivablePosition = $remainingReceivable + $pendingReceivableChecks;
+$totalPayablePosition = $remainingPayable + $pendingPayableChecks;
+$readableNetPosition = $totalReceivablePosition - $totalPayablePosition;
 $accountSummary = account_summary();
 $checkSoon = check_totals($today, $weekAhead, true);
 $overdueChecks = overdue_check_count();
@@ -302,16 +307,16 @@ page_header('Genel Bakış', 'dashboard');
 
 <section class="dashboard-section">
   <div class="dashboard-section-head">
-    <div><span>Cari Durum</span><h3>Genel cari pozisyon</h3></div>
-    <p>Kalan alacak/verecek eksiye düşürülmeden okunur; fazlalık varsa avans gibi ayrıca belirtilir.</p>
+    <div><span>Cari Durum</span><h3>Alacak, verecek ve çek portföyü</h3></div>
+    <p>Burada cari açıklar ile bekleyen çekler birlikte okunur; çek tahsil edilmeden kasa/banka tarafına para yazılmaz.</p>
   </div>
   <div class="stats-grid four section-stats">
     <article class="stat-card"><span>Toplam cari</span><strong><?php echo e($cariCount); ?></strong><small>Kişi / firma kartı</small></article>
-    <article class="stat-card"><span>Kalan alacak</span><strong><?php echo e(money($remainingReceivable)); ?></strong><small><?php echo $overCollected > 0 ? 'Fazla tahsilat/avans: ' . e(money($overCollected)) : 'Alacak - tahsilat'; ?></small></article>
-    <article class="stat-card"><span>Kalan verecek</span><strong><?php echo e(money($remainingPayable)); ?></strong><small><?php echo $overPaid > 0 ? 'Fazla ödeme/avans: ' . e(money($overPaid)) : 'Verecek - ödeme'; ?></small></article>
-    <article class="stat-card status"><span>Genel durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small>Ham net cari bakiye</small></article>
+    <article class="stat-card"><span>Alacağım</span><strong><?php echo e(money($totalReceivablePosition)); ?></strong><small>Cari açık: <?php echo e(money($remainingReceivable)); ?><br>Portföyde alınan çek: <?php echo e(money($pendingReceivableChecks)); ?><?php echo $overCollected > 0 ? '<br>Fazla tahsilat/avans: ' . e(money($overCollected)) : ''; ?></small></article>
+    <article class="stat-card"><span>Vereceğim</span><strong><?php echo e(money($totalPayablePosition)); ?></strong><small>Cari açık: <?php echo e(money($remainingPayable)); ?><br>Portföyde verilen çek: <?php echo e(money($pendingPayableChecks)); ?><?php echo $overPaid > 0 ? '<br>Fazla ödeme/avans: ' . e(money($overPaid)) : ''; ?></small></article>
+    <article class="stat-card status"><span>Genel durum</span><strong class="<?php echo $readableNetPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($readableNetPosition)); ?></strong><small>Alacağım - vereceğim</small></article>
   </div>
-  <p class="calc-note"><strong>Okuma notu:</strong> Kalan alacak ve kalan verecek eksi gösterilmez. Tahsilat/ödeme ilgili borçtan fazlaysa bu fark avans/fazla ödeme olarak küçük yazıda görünür. <strong>Genel durum</strong> yine ham net cari bakiyeyi gösterir; pozitifse genel olarak alacaklı, negatifse borçlu görünürsün.</p>
+  <p class="calc-note"><strong>Okuma notu:</strong> <strong>Alacağım</strong> = kalan cari alacak + portföyde alınan çek. <strong>Vereceğim</strong> = kalan cari verecek + portföyde verilen çek. Bekleyen çekler bu kartlarda görünür ama <strong>nakit girişi/çıkışı sayılmaz</strong>; tahsil edildi/ödendi yapılınca kasa-banka tarafına geçer. Çek bozulursa sistem cari borcu tekrar açar.</p>
 </section>
 
 <section class="dashboard-section">
@@ -334,13 +339,13 @@ page_header('Genel Bakış', 'dashboard');
 <section class="dashboard-section">
   <div class="dashboard-section-head">
     <div><span>Çek Takibi</span><h3>Çek vade ve bekleyenler</h3></div>
-    <p>Alınacak, verilecek, yaklaşan ve vadesi geçen çekler.</p>
+    <p>Alınan, verilen, ciro edilen, yaklaşan ve vadesi geçen çekler.</p>
   </div>
   <div class="stats-grid four section-stats">
-    <article class="stat-card soft"><span>Bekleyen alınacak çek</span><strong><?php echo e(money($checkTotals['alinacak'])); ?></strong><small><?php echo e($checkTotals['alinacak_count']); ?> adet</small></article>
-    <article class="stat-card soft"><span>Bekleyen verilecek çek</span><strong><?php echo e(money($checkTotals['verilecek'])); ?></strong><small><?php echo e($checkTotals['verilecek_count']); ?> adet</small></article>
+    <article class="stat-card soft"><span>Portföyde alınan çek</span><strong><?php echo e(money($checkTotals['alinacak'])); ?></strong><small><?php echo e($checkTotals['alinacak_count']); ?> adet</small></article>
+    <article class="stat-card soft"><span>Portföyde verilen çek</span><strong><?php echo e(money($checkTotals['verilecek'])); ?></strong><small><?php echo e($checkTotals['verilecek_count']); ?> adet</small></article>
     <article class="stat-card soft"><span>7 gün içinde alınacak</span><strong><?php echo e(money($checkSoon['alinacak'])); ?></strong><small>Vadesi yaklaşan çek</small></article>
-    <article class="stat-card soft"><span>Vadesi geçen çek</span><strong class="<?php echo $overdueChecks>0?'text-danger':''; ?>"><?php echo e($overdueChecks); ?></strong><small>Bekleyen kayıt</small></article>
+    <article class="stat-card soft"><span>Vadesi geçen çek</span><strong class="<?php echo $overdueChecks>0?'text-danger':''; ?>"><?php echo e($overdueChecks); ?></strong><small>Portföyde kayıt</small></article>
   </div>
   <p class="calc-note"><strong>Çek takibi</strong> bekleyen çekleri ve vadeleri gösterir; tahsil edildi/ödendi yapılınca kasa-banka tarafı ayrıca etkilenir.</p>
 </section>
