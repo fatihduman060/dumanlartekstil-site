@@ -181,7 +181,7 @@ page_header('Yedekleme', 'yedekler');
     <div class="security-note"><strong>Önemli:</strong> Geri yükleme mevcut veritabanını seçtiğiniz yedekle değiştirir. İşlemden önce otomatik “geri-yükleme-öncesi” yedeği alınır.</div>
     <form method="post" enctype="multipart/form-data" class="stack-form" onsubmit="return confirm('Mevcut veriler yedek dosyasıyla değiştirilecek. Devam edilsin mi?');">
       <?php echo csrf_field(); ?><input type="hidden" name="action" value="restore">
-      <label>ZIP / SQLite yedek dosyası<input type="file" name="backup_file" accept=".zip,.sqlite,.db" required></label>
+      <label>ZIP / SQLite yedek dosyası<input type="file" name="backup_file" required><small>iPhone dosya seçicide SQLite gri görünürse bu alan artık tüm dosyaları gösterecek; yükleme sırasında yine sadece .zip, .sqlite veya .db kabul edilir.</small></label>
       <label>Onay için yazın: <strong>GERI YUKLE</strong><input name="confirm_phrase" placeholder="GERI YUKLE" required></label>
       <button class="btn btn-danger" type="submit">Yedeği geri yükle</button>
     </form>
