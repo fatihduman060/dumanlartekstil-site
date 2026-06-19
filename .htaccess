@@ -8,6 +8,9 @@ Options -Indexes
     Header set Pragma "no-cache"
     Header set Expires "0"
   </FilesMatch>
+  <FilesMatch "\.(html|htm)$">
+    Header set Clear-Site-Data '"cache"'
+  </FilesMatch>
 </IfModule>
 
 <IfModule mod_expires.c>
@@ -16,4 +19,9 @@ Options -Indexes
   ExpiresByType text/css "access plus 0 seconds"
   ExpiresByType application/javascript "access plus 0 seconds"
   ExpiresByType text/javascript "access plus 0 seconds"
+</IfModule>
+
+<IfModule mod_substitute.c>
+  AddOutputFilterByType SUBSTITUTE text/html
+  Substitute "s|<script src=\"assets/js/main.js\" defer></script>|<script src=\"assets/js/main.js?v=navfix4\" defer></script><script src=\"assets/js/nav-hotfix-v3.js?v=navfix4\" defer></script>|ni"
 </IfModule>
