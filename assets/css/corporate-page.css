@@ -408,6 +408,17 @@
   line-height: 1.7;
 }
 
+/* Dropdown hover bridge fix */
+.nav-dropdown-corporate .nav-dropdown-panel {
+  top: 100% !important;
+  margin-top: 0 !important;
+}
+
+.nav-dropdown-corporate {
+  padding-bottom: 14px;
+  margin-bottom: -14px;
+}
+
 @media (max-width: 1200px) {
   .corporate-kpi-strip,
   .values-grid {
@@ -448,6 +459,11 @@
   .corporate-final-cta {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .nav-dropdown-corporate {
+    padding-bottom: 0;
+    margin-bottom: 0;
   }
 }
 
