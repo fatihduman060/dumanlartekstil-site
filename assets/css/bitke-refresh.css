@@ -1,0 +1,168 @@
+/* Bitke / Dumanlar homepage refresh - safe overlay styles */
+.home-page {
+  background: #f4f6f9;
+}
+
+.home-page .hero {
+  min-height: clamp(560px, 66vh, 720px);
+  display: flex;
+  align-items: center;
+}
+
+.home-page .hero::before {
+  background:
+    linear-gradient(90deg, rgba(7,21,35,1) 0%, rgba(7,21,35,.98) 30%, rgba(7,21,35,.78) 48%, rgba(7,21,35,.24) 66%, rgba(7,21,35,.08) 100%),
+    radial-gradient(circle at 14% 42%, rgba(225,189,104,.16), transparent 27%),
+    url("../img/hero-production-v11.webp") right center / auto 100% no-repeat;
+}
+
+.home-page .hero-content {
+  max-width: 780px;
+  padding-top: 70px;
+  padding-bottom: 58px;
+}
+
+.home-page .hero-text {
+  max-width: 620px;
+  font-size: 17px;
+}
+
+.home-page .hero-actions .btn {
+  min-width: 188px;
+  box-shadow: 0 18px 44px rgba(0,0,0,.16);
+}
+
+.home-page .hero-stats div {
+  min-width: 150px;
+  border-color: rgba(225,189,104,.34);
+  background: rgba(255,255,255,.075);
+}
+
+.home-page .feature-band {
+  box-shadow: 0 26px 60px rgba(7,21,35,.16);
+}
+
+.b2b-proof-strip {
+  background: #fff;
+  padding: 22px 76px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  border-bottom: 1px solid #e7ebf0;
+}
+
+.b2b-proof-strip article {
+  border: 1px solid #e7ebf0;
+  border-radius: 16px;
+  padding: 18px 18px 17px;
+  background: linear-gradient(180deg, #fff, #f8fafc);
+  box-shadow: 0 12px 28px rgba(7,21,35,.06);
+}
+
+.b2b-proof-strip strong {
+  display: block;
+  color: #071523;
+  font-size: 15px;
+  letter-spacing: .01em;
+  margin-bottom: 6px;
+}
+
+.b2b-proof-strip span {
+  color: #536174;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.home-page .brands-section,
+.home-page .products-section,
+.home-page .quality-row {
+  position: relative;
+}
+
+.home-page .product-card {
+  border: 1px solid rgba(201,154,63,.22);
+  background: linear-gradient(180deg, #fff, #fafbfc);
+  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+}
+
+.home-page .product-card:hover,
+.home-page .product-card:focus-within {
+  transform: translateY(-6px);
+  border-color: rgba(201,154,63,.55);
+  box-shadow: 0 24px 55px rgba(7,21,35,.13);
+}
+
+.home-page .product-card .product-link {
+  display: inline-flex;
+  margin-top: 14px;
+  color: #071523;
+  font-weight: 900;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  border-bottom: 2px solid #c99a3f;
+  padding-bottom: 5px;
+}
+
+.home-page .product-note {
+  border: 1px solid rgba(201,154,63,.24);
+  box-shadow: 0 16px 38px rgba(7,21,35,.08);
+}
+
+.home-page .private-label {
+  overflow: hidden;
+}
+
+.home-page .private-label::after {
+  content: "";
+  position: absolute;
+  right: -120px;
+  top: -120px;
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(225,189,104,.17), transparent 64%);
+  pointer-events: none;
+}
+
+.home-page .whatsapp-float {
+  box-shadow: 0 20px 45px rgba(7,21,35,.28);
+}
+
+@media (max-width: 1100px) {
+  .b2b-proof-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 20px 28px;
+  }
+}
+
+@media (max-width: 720px) {
+  .home-page .hero {
+    min-height: 620px;
+  }
+
+  .home-page .hero::before {
+    background:
+      linear-gradient(180deg, rgba(7,21,35,.98) 0%, rgba(7,21,35,.92) 44%, rgba(7,21,35,.72) 100%),
+      url("../img/hero-production-v11.webp") center bottom / auto 74% no-repeat;
+  }
+
+  .home-page .hero-content {
+    width: calc(100% - 32px);
+    padding: 42px 16px 38px;
+  }
+
+  .home-page .hero-actions .btn {
+    width: 100%;
+  }
+
+  .home-page .hero-stats div {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0;
+  }
+
+  .b2b-proof-strip {
+    grid-template-columns: 1fr;
+    padding: 18px 16px;
+  }
+}
