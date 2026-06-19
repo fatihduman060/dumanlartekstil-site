@@ -408,15 +408,168 @@
   line-height: 1.7;
 }
 
-/* Dropdown hover bridge fix */
-.nav-dropdown-corporate .nav-dropdown-panel {
-  top: 100% !important;
-  margin-top: 0 !important;
+/* Premium corporate dropdown */
+.site-header,
+.main-nav {
+  overflow: visible !important;
 }
 
 .nav-dropdown-corporate {
-  padding-bottom: 14px;
-  margin-bottom: -14px;
+  position: relative !important;
+  padding-bottom: 18px !important;
+  margin-bottom: -18px !important;
+}
+
+.nav-dropdown-corporate::before {
+  content: "";
+  position: absolute;
+  left: -34px;
+  right: -34px;
+  top: 100%;
+  height: 24px;
+  pointer-events: auto;
+}
+
+.nav-dropdown-corporate .nav-dropdown-panel {
+  left: 50% !important;
+  top: calc(100% + 2px) !important;
+  width: min(520px, calc(100vw - 32px)) !important;
+  padding: 18px !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(225,189,104,.22), transparent 36%),
+    linear-gradient(145deg, rgba(6,18,31,.98), rgba(9,31,52,.98)) !important;
+  border: 1px solid rgba(225,189,104,.42) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 34px 90px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.08) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transform: translateX(-50%) translateY(12px) scale(.985) !important;
+  overflow: hidden !important;
+}
+
+.nav-dropdown-corporate .nav-dropdown-panel::before {
+  content: "Kurumsal İçerikler";
+  grid-column: 1 / -1;
+  display: block;
+  padding: 4px 4px 12px;
+  color: #e1bd68;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(225,189,104,.18);
+}
+
+.nav-dropdown-corporate .nav-dropdown-panel::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  background: #091f34;
+  border-left: 1px solid rgba(225,189,104,.42);
+  border-top: 1px solid rgba(225,189,104,.42);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.nav-dropdown-corporate:hover .nav-dropdown-panel,
+.nav-dropdown-corporate:focus-within .nav-dropdown-panel,
+.nav-dropdown-corporate.is-open .nav-dropdown-panel {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: translateX(-50%) translateY(0) scale(1) !important;
+}
+
+.nav-dropdown-corporate .nav-dropdown-panel a {
+  position: relative !important;
+  min-height: 78px !important;
+  display: grid !important;
+  grid-template-columns: 38px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 14px 14px 12px !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+  border-radius: 16px !important;
+  background: rgba(255,255,255,.045) !important;
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
+  letter-spacing: -.01em !important;
+  text-transform: none !important;
+  white-space: normal !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease !important;
+}
+
+.nav-dropdown-corporate .nav-dropdown-panel a::before {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(225,189,104,.22), rgba(201,154,63,.08));
+  border: 1px solid rgba(225,189,104,.34);
+  color: #e1bd68;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 12px 24px rgba(0,0,0,.12);
+}
+
+.nav-dropdown-corporate .nav-dropdown-panel a::after {
+  content: "";
+  grid-column: 2;
+  display: block;
+  margin-top: -18px;
+  color: #aebccc;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(2)::before { content: "🏢"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(2)::after { content: "1975'ten bugüne firma yolculuğu"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(3)::before { content: "🕰"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(3)::after { content: "Ticaret ve imalat geçmişi"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(4)::before { content: "⚙"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(4)::after { content: "Makine parkı ve üretim kapasitesi"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(5)::before { content: "🎯"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(5)::after { content: "Müşteri odaklı üretim anlayışı"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(6)::before { content: "🚀"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(6)::after { content: "Ulusal ve uluslararası hedefler"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(7)::before { content: "◆"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(7)::after { content: "Kalite, güven ve sürekli gelişim"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(8)::before { content: "✓"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(8)::after { content: "Kalite her şeyden önce gelir"; }
+
+.nav-dropdown-corporate .nav-dropdown-panel a:hover,
+.nav-dropdown-corporate .nav-dropdown-panel a:focus {
+  transform: translateY(-2px) !important;
+  border-color: rgba(225,189,104,.55) !important;
+  background: rgba(225,189,104,.11) !important;
+  color: #e1bd68 !important;
+  box-shadow: 0 18px 34px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+
+.corporate-info-premium {
+  display: none !important;
+}
+
+#hakkimizda,
+#tarihce,
+#uretim-gucu,
+#misyonumuz,
+#vizyonumuz,
+#degerlerimiz,
+#kalite-politikasi {
+  scroll-margin-top: 120px;
 }
 
 @media (max-width: 1200px) {
@@ -462,8 +615,25 @@
   }
 
   .nav-dropdown-corporate {
-    padding-bottom: 0;
-    margin-bottom: 0;
+    width: 100% !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .nav-dropdown-corporate .nav-dropdown-panel {
+    position: static !important;
+    width: 100% !important;
+    transform: none !important;
+    grid-template-columns: 1fr !important;
+    margin-top: 8px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    box-shadow: none !important;
+  }
+
+  .nav-dropdown-corporate .nav-dropdown-panel::after {
+    display: none;
   }
 }
 
