@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy website and muhasebe files to hosting
+  deploy-site:
+    name: Deploy public website files to hosting
     runs-on: ubuntu-latest
 
     steps:
@@ -30,24 +30,7 @@ jobs:
           fi
           echo "Hassas dosya yok. Devam."
 
-      - name: Optional PHP syntax check
-        shell: bash
-        run: |
-          set -euo pipefail
-          if command -v php >/dev/null 2>&1; then
-            echo "PHP syntax kontrolü başlıyor..."
-            while IFS= read -r -d '' file; do
-              php -l "$file" >/dev/null
-            done < <(find muhasebe -type f -name '*.php' \
-              -not -path 'muhasebe/storage/*' \
-              -not -path './.git/*' \
-              -print0)
-            echo "PHP syntax temiz."
-          else
-            echo "Runner içinde PHP yok; syntax kontrolü atlandı."
-          fi
-
-      - name: Deploy public website files to hosting
+      - name: Deploy website files to hosting
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -56,7 +39,7 @@ jobs:
           server-dir: /bitke.com.tr/
           local-dir: ./
           state-name: .ftp-deploy-sync-state-site.json
-          timeout: 300000
+          timeout: 600000
           dangerous-clean-slate: false
           exclude: |
             **/.git*
@@ -65,39 +48,6 @@ jobs:
             .github/**/*
             muhasebe/**
             muhasebe/**/*
-            storage/**
-            storage/**/*
-            **/*.sqlite
-            **/*.sqlite-*
-            **/*.db
-            **/*.db-*
-            **/*.zip
-            **/*.tar
-            **/*.tar.gz
-            **/*.rar
-            **/*.7z
-            .env
-            .env.*
-            .ftp-deploy-sync-state*.json
-            .DS_Store
-            Thumbs.db
-
-      - name: Deploy muhasebe PHP files to hosting
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /bitke.com.tr/muhasebe/
-          local-dir: ./muhasebe/
-          state-name: .ftp-deploy-sync-state-muhasebe.json
-          timeout: 300000
-          dangerous-clean-slate: false
-          exclude: |
-            **/.git*
-            **/.git*/**
-            .github/**
-            .github/**/*
             storage/**
             storage/**/*
             **/*.sqlite
