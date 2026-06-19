@@ -118,3 +118,96 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
     setActive(0);
   });
 })();
+
+// Homepage refresh: lightweight premium layer without touching the accounting panel/storage.
+(() => {
+  const refreshHref = 'assets/css/bitke-refresh.css';
+  if (!document.querySelector(`link[href="${refreshHref}"]`)) {
+    const refreshStyles = document.createElement('link');
+    refreshStyles.rel = 'stylesheet';
+    refreshStyles.href = refreshHref;
+    document.head.appendChild(refreshStyles);
+  }
+
+  if (!document.body.classList.contains('home-page')) return;
+
+  const heroTitle = document.querySelector('.hero h1');
+  if (heroTitle) {
+    heroTitle.innerHTML = 'Çorap Üretiminde <strong>Markalara Özel Güçlü Çözüm</strong>';
+  }
+
+  const heroText = document.querySelector('.hero-text');
+  if (heroText) {
+    heroText.textContent = 'BİTKE ve MOFİY markalarımızla toptan satış kanallarına, mağazalara ve özel marka projelerine uygun; planlı, kaliteli ve sürdürülebilir çorap üretimi sunuyoruz.';
+  }
+
+  const primaryCta = document.querySelector('.hero-actions .btn-gold');
+  if (primaryCta) primaryCta.textContent = 'Ürün Gruplarını İncele';
+
+  const outlineCta = document.querySelector('.hero-actions .btn-outline');
+  if (outlineCta) outlineCta.textContent = 'Toptan Üretim Talebi';
+
+  const statItems = document.querySelectorAll('.hero-stats div');
+  const statContent = [
+    ['Toptan', 'Satış Kanalı'],
+    ['Özel Marka', 'Üretim Desteği'],
+    ['Erbaa / Tokat', 'Üretim Merkezi'],
+  ];
+  statItems.forEach((item, index) => {
+    const [title, text] = statContent[index] || [];
+    if (!title) return;
+    const strong = item.querySelector('strong');
+    const span = item.querySelector('span');
+    if (strong) strong.textContent = title;
+    if (span) span.textContent = text;
+  });
+
+  const featureTexts = [
+    ['Güven & Kalite', 'Ürün, iplik ve sevkiyat süreçlerinde kalite odaklı ilerliyoruz.'],
+    ['Planlı Üretim', 'Talep, numune, üretim ve teslimat adımlarını kontrollü şekilde yönetiyoruz.'],
+    ['Markaya Uyum', 'Renk, desen, etiket ve ambalaj detaylarını satış kanalınıza göre planlıyoruz.'],
+    ['Uzun Vadeli İş Birliği', 'Toptan satış ve özel üretim taleplerinde sürdürülebilir çözümler sunuyoruz.'],
+  ];
+  document.querySelectorAll('.feature-band article').forEach((article, index) => {
+    const [title, text] = featureTexts[index] || [];
+    const heading = article.querySelector('h2');
+    const paragraph = article.querySelector('p');
+    if (heading && title) heading.textContent = title;
+    if (paragraph && text) paragraph.textContent = text;
+  });
+
+  const featureBand = document.querySelector('.feature-band');
+  if (featureBand && !document.querySelector('.b2b-proof-strip')) {
+    const proof = document.createElement('section');
+    proof.className = 'b2b-proof-strip reveal is-visible';
+    proof.setAttribute('aria-label', 'Dumanlar üretim avantajları');
+    proof.innerHTML = `
+      <article><strong>Toptan Satış Odaklı</strong><span>Mağaza, pazar yeri ve bayi kanallarına uygun ürün grupları.</span></article>
+      <article><strong>Özel Marka Üretimi</strong><span>Etiket, ambalaj, desen ve iplik seçeneklerinde esnek planlama.</span></article>
+      <article><strong>Numune Süreci</strong><span>Üretim öncesi beklentiyi netleştiren kontrollü hazırlık adımları.</span></article>
+      <article><strong>Profesyonel İletişim</strong><span>Teklif ve üretim talepleri için doğrudan WhatsApp iletişimi.</span></article>
+    `;
+    featureBand.insertAdjacentElement('afterend', proof);
+  }
+
+  const productLinks = new Map([
+    ['Erkek Çorap', 'erkek-corap.html'],
+    ['Kadın Çorap', 'urunler.html#kadin-corap'],
+    ['Çocuk Çorap', 'urunler.html#cocuk-corap'],
+    ['Spor Çorap', 'urunler.html'],
+    ['Havlu & Bambu Çorap', 'bambu-corap.html'],
+    ['Özel Marka Üretimi', 'ozel-marka-uretimi.html'],
+  ]);
+
+  document.querySelectorAll('.products-section .product-card').forEach((card) => {
+    if (card.querySelector('.product-link')) return;
+    const title = card.querySelector('h3')?.textContent?.trim();
+    const href = productLinks.get(title);
+    if (!href) return;
+    const link = document.createElement('a');
+    link.className = 'product-link';
+    link.href = href;
+    link.textContent = 'Detayları Gör';
+    card.appendChild(link);
+  });
+})();
