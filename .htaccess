@@ -23,5 +23,6 @@ Options -Indexes
 
 <IfModule mod_substitute.c>
   AddOutputFilterByType SUBSTITUTE text/html
-  Substitute "s|<script src=\"assets/js/main.js\" defer></script>|<script src=\"assets/js/main.js?v=navfix4\" defer></script><script src=\"assets/js/nav-hotfix-v3.js?v=navfix4\" defer></script>|ni"
+  Substitute "s|<script src=\"assets/js/main.js\" defer></script>|<script src=\"assets/js/main.js?v=navfix5\" defer></script><script src=\"assets/js/nav-hotfix-v3.js?v=navfix5\" defer></script>|ni"
+  Substitute "s|</head>|<link rel=\"stylesheet\" href=\"assets/css/mobile-footer-fix-v1.css?v=navfix5\" /></head>|ni"
 </IfModule>
