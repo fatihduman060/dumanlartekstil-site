@@ -237,6 +237,8 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
     ['Kalite Politikası', 'kurumsal.html#kalite-politikasi'],
   ];
 
+  const isMobileMenu = () => window.innerWidth <= 900;
+
   document.querySelectorAll('.main-nav').forEach((menu) => {
     if (menu.querySelector('.nav-dropdown-corporate')) return;
     const corporateLink = Array.from(menu.querySelectorAll('a')).find((link) => link.getAttribute('href') === 'kurumsal.html');
@@ -253,12 +255,36 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
     panel.innerHTML = dropdownItems.map(([label, href]) => `<a href="${href}">${label}</a>`).join('');
     wrapper.appendChild(panel);
 
+    corporateLink.setAttribute('aria-haspopup', 'true');
+    corporateLink.setAttribute('aria-expanded', 'false');
+
     corporateLink.addEventListener('click', (event) => {
-      if (window.innerWidth > 900) return;
-      if (!wrapper.classList.contains('is-open')) {
-        event.preventDefault();
-        wrapper.classList.add('is-open');
-      }
+      if (!isMobileMenu()) return;
+      event.preventDefault();
+      const nextState = !wrapper.classList.contains('is-open');
+      wrapper.classList.toggle('is-open', nextState);
+      corporateLink.setAttribute('aria-expanded', String(nextState));
+    });
+
+    panel.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('click', () => {
+        if (!isMobileMenu()) return;
+        wrapper.classList.remove('is-open');
+        corporateLink.setAttribute('aria-expanded', 'false');
+        if (nav) nav.classList.remove('open');
+        if (toggle) {
+          toggle.setAttribute('aria-expanded', 'false');
+          toggle.setAttribute('aria-label', 'Menüyü aç');
+        }
+      });
+    });
+  });
+
+  window.addEventListener('resize', () => {
+    if (isMobileMenu()) return;
+    document.querySelectorAll('.nav-dropdown-corporate.is-open').forEach((dropdown) => {
+      dropdown.classList.remove('is-open');
+      dropdown.querySelector('a[href="kurumsal.html"]')?.setAttribute('aria-expanded', 'false');
     });
   });
 
@@ -308,7 +334,7 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
-        transition: opacity .18s ease, transform .18s ease, visibility .18s ease;
+        transition: opacity .18s ease, transform .18s ease, visibility .18s ease, max-height .25s ease;
         z-index: 9999;
       }
       .nav-dropdown:hover .nav-dropdown-panel,
@@ -338,9 +364,57 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
       .corporate-info-premium { display: none !important; }
       #hakkimizda, #tarihce, #uretim-gucu, #misyonumuz, #vizyonumuz, #degerlerimiz, #kalite-politikasi { scroll-margin-top: 120px; }
       @media (max-width: 900px) {
+        .main-nav.open {
+          max-height: calc(100vh - 128px) !important;
+          overflow-y: auto !important;
+          -webkit-overflow-scrolling: touch !important;
+          padding-bottom: 34px !important;
+        }
         .main-nav .nav-dropdown { width: 100%; flex-direction: column; align-items: stretch; }
-        .nav-dropdown-panel { position: static; width: 100%; transform: none !important; margin-top: 6px; opacity: 1; visibility: visible; pointer-events: auto; box-shadow: none; }
-        .nav-dropdown-panel a { padding-left: 22px !important; }
+        .main-nav .nav-dropdown > a { width: 100%; justify-content: space-between; }
+        .main-nav .nav-dropdown.is-open > a::after { transform: rotate(180deg); }
+        .nav-dropdown-panel {
+          position: static !important;
+          width: 100% !important;
+          display: grid !important;
+          grid-template-columns: 1fr !important;
+          gap: 10px !important;
+          max-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+          overflow: hidden !important;
+          transform: none !important;
+          border: 0 !important;
+          box-shadow: none !important;
+          background: transparent !important;
+        }
+        .nav-dropdown.is-open .nav-dropdown-panel {
+          max-height: 820px !important;
+          margin: 14px 0 18px !important;
+          padding: 18px !important;
+          opacity: 1 !important;
+          visibility: visible !important;
+          pointer-events: auto !important;
+          border: 1px solid rgba(225,189,104,.36) !important;
+          border-radius: 24px !important;
+          background: rgba(7,21,35,.96) !important;
+        }
+        .nav-dropdown-panel a {
+          min-height: 0 !important;
+          padding: 14px 16px !important;
+          white-space: normal !important;
+          font-size: 15px !important;
+        }
+        .whatsapp-float {
+          right: 18px !important;
+          bottom: max(22px, env(safe-area-inset-bottom)) !important;
+          width: 68px !important;
+          height: 68px !important;
+        }
+        .site-footer { padding-bottom: 108px !important; }
       }
     `;
     document.head.appendChild(style);
