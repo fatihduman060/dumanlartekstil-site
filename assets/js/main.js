@@ -211,3 +211,43 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
     card.appendChild(link);
   });
 })();
+
+// Corporate page compatibility fixes for uploaded image filenames and KPI visibility.
+(() => {
+  if (!document.body.classList.contains('corporate-page')) return;
+
+  document.querySelectorAll('img[src$="/fabrikadis.png"], img[src="assets/img/bitkekurumsal/fabrikadis.png"]').forEach((img) => {
+    img.src = 'assets/img/bitkekurumsal/fabrikadış.png';
+  });
+
+  if (!document.getElementById('corporate-runtime-fixes')) {
+    const style = document.createElement('style');
+    style.id = 'corporate-runtime-fixes';
+    style.textContent = `
+      .corporate-kpi-strip article {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        min-height: 132px !important;
+        padding: 24px 18px !important;
+      }
+      .corporate-kpi-strip strong {
+        display: block !important;
+        color: #e1bd68 !important;
+        font-size: clamp(25px, 2.45vw, 38px) !important;
+        letter-spacing: -.04em !important;
+        line-height: 1 !important;
+        margin: 0 0 10px !important;
+      }
+      .corporate-kpi-strip span {
+        display: block !important;
+        color: #d7e0eb !important;
+        font-size: 12px !important;
+        line-height: 1.55 !important;
+        text-transform: uppercase !important;
+        letter-spacing: .08em !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+})();
