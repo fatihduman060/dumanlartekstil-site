@@ -7,14 +7,17 @@ if (toggle && nav) {
     toggle.setAttribute('aria-expanded', String(isOpen));
     toggle.setAttribute('aria-label', isOpen ? 'Menüyü kapat' : 'Menüyü aç');
   });
-  nav.querySelectorAll('a').forEach((link) => {
-    link.addEventListener('click', () => {
+}
+
+document.querySelectorAll('.main-nav a').forEach((link) => {
+  link.addEventListener('click', () => {
+    if (!link.closest('.nav-dropdown') && nav && toggle) {
       nav.classList.remove('open');
       toggle.setAttribute('aria-expanded', 'false');
       toggle.setAttribute('aria-label', 'Menüyü aç');
-    });
+    }
   });
-}
+});
 
 document.querySelectorAll('.teklif-formu').forEach((form) => {
   const messageInput = form.querySelector('.whatsapp-message');
@@ -29,8 +32,7 @@ document.querySelectorAll('.teklif-formu').forEach((form) => {
     const textParts = ['Merhaba, Dumanlar A.Ş. web sitesinden teklif talebi oluşturmak istiyorum.', '', `Ad Soyad / Firma: ${name}`, `Telefon veya E-posta: ${contact}`];
     if (subject) textParts.push(`Talep Konusu: ${subject}`);
     textParts.push(`Talep Detayı: ${message}`);
-    const text = textParts.join('\n');
-    messageInput.value = text;
+    messageInput.value = textParts.join('\n');
   });
 });
 
@@ -66,30 +68,30 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
     frame.style.position = 'relative';
     frame.style.display = 'block';
 
-    const hotspots = [
+    [
       { selector: '.product-hotspot-men', left: '0%', top: '0%', width: '34%', height: '100%' },
       { selector: '.product-hotspot-women', left: '33%', top: '0%', width: '34%', height: '100%' },
       { selector: '.product-hotspot-kids', left: '66%', top: '0%', width: '34%', height: '100%' },
-    ];
-
-    hotspots.forEach((item) => {
+    ].forEach((item) => {
       const link = frame.querySelector(item.selector);
       if (!link) return;
-      link.style.position = 'absolute';
-      link.style.left = item.left;
-      link.style.top = item.top;
-      link.style.width = item.width;
-      link.style.height = item.height;
-      link.style.display = 'block';
-      link.style.zIndex = '20';
-      link.style.cursor = 'pointer';
-      link.style.background = 'rgba(255,255,255,0)';
-      link.style.pointerEvents = 'auto';
+      Object.assign(link.style, {
+        position: 'absolute',
+        left: item.left,
+        top: item.top,
+        width: item.width,
+        height: item.height,
+        display: 'block',
+        zIndex: '20',
+        cursor: 'pointer',
+        background: 'rgba(255,255,255,0)',
+        pointerEvents: 'auto',
+      });
     });
   });
 })();
 
-// V44 product gallery carousel
+// Product gallery carousel
 (() => {
   document.querySelectorAll('[data-gallery]').forEach((gallery) => {
     const track = gallery.querySelector('.gallery-track');
@@ -132,14 +134,10 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
   if (!document.body.classList.contains('home-page')) return;
 
   const heroTitle = document.querySelector('.hero h1');
-  if (heroTitle) {
-    heroTitle.innerHTML = 'Çorap Üretiminde <strong>Markalara Özel Güçlü Çözüm</strong>';
-  }
+  if (heroTitle) heroTitle.innerHTML = 'Çorap Üretiminde <strong>Markalara Özel Güçlü Çözüm</strong>';
 
   const heroText = document.querySelector('.hero-text');
-  if (heroText) {
-    heroText.textContent = 'BİTKE ve MOFİY markalarımızla toptan satış kanallarına, mağazalara ve özel marka projelerine uygun; planlı, kaliteli ve sürdürülebilir çorap üretimi sunuyoruz.';
-  }
+  if (heroText) heroText.textContent = 'BİTKE ve MOFİY markalarımızla toptan satış kanallarına, mağazalara ve özel marka projelerine uygun; planlı, kaliteli ve sürdürülebilir çorap üretimi sunuyoruz.';
 
   const primaryCta = document.querySelector('.hero-actions .btn-gold');
   if (primaryCta) primaryCta.textContent = 'Ürün Gruplarını İncele';
@@ -147,13 +145,12 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
   const outlineCta = document.querySelector('.hero-actions .btn-outline');
   if (outlineCta) outlineCta.textContent = 'Toptan Üretim Talebi';
 
-  const statItems = document.querySelectorAll('.hero-stats div');
   const statContent = [
     ['Toptan', 'Satış Kanalı'],
     ['Özel Marka', 'Üretim Desteği'],
     ['Erbaa / Tokat', 'Üretim Merkezi'],
   ];
-  statItems.forEach((item, index) => {
+  document.querySelectorAll('.hero-stats div').forEach((item, index) => {
     const [title, text] = statContent[index] || [];
     if (!title) return;
     const strong = item.querySelector('strong');
@@ -226,6 +223,128 @@ document.querySelectorAll('[data-cookie-accept], [data-cookie-decline]').forEach
       if (!target.querySelector('svg')) target.innerHTML = svg;
     });
   });
+})();
+
+// Kurumsal dropdown menu, anchor sections and corporate page cleanup.
+(() => {
+  const dropdownItems = [
+    ['Hakkımızda', 'kurumsal.html#hakkimizda'],
+    ['Tarihçe', 'kurumsal.html#tarihce'],
+    ['Üretim Gücü', 'kurumsal.html#uretim-gucu'],
+    ['Misyonumuz', 'kurumsal.html#misyonumuz'],
+    ['Vizyonumuz', 'kurumsal.html#vizyonumuz'],
+    ['Değerlerimiz', 'kurumsal.html#degerlerimiz'],
+    ['Kalite Politikası', 'kurumsal.html#kalite-politikasi'],
+  ];
+
+  document.querySelectorAll('.main-nav').forEach((menu) => {
+    if (menu.querySelector('.nav-dropdown-corporate')) return;
+    const corporateLink = Array.from(menu.querySelectorAll('a')).find((link) => link.getAttribute('href') === 'kurumsal.html');
+    if (!corporateLink) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'nav-dropdown nav-dropdown-corporate';
+    corporateLink.parentNode.insertBefore(wrapper, corporateLink);
+    wrapper.appendChild(corporateLink);
+
+    const panel = document.createElement('div');
+    panel.className = 'nav-dropdown-panel';
+    panel.setAttribute('aria-label', 'Kurumsal alt menü');
+    panel.innerHTML = dropdownItems.map(([label, href]) => `<a href="${href}">${label}</a>`).join('');
+    wrapper.appendChild(panel);
+
+    corporateLink.addEventListener('click', (event) => {
+      if (window.innerWidth > 900) return;
+      if (!wrapper.classList.contains('is-open')) {
+        event.preventDefault();
+        wrapper.classList.add('is-open');
+      }
+    });
+  });
+
+  const infoSection = document.querySelector('.corporate-info-premium');
+  if (infoSection) infoSection.remove();
+
+  if (document.body.classList.contains('corporate-page')) {
+    const setId = (selector, id) => {
+      const element = document.querySelector(selector);
+      if (element) element.id = id;
+    };
+    setId('.corporate-story', 'hakkimizda');
+    setId('.corporate-timeline', 'tarihce');
+    setId('.corporate-split.section-light', 'uretim-gucu');
+    setId('.corporate-values-premium', 'degerlerimiz');
+    setId('.corporate-quality', 'kalite-politikasi');
+    const valueArticles = document.querySelectorAll('.values-grid article');
+    if (valueArticles[0]) valueArticles[0].id = 'misyonumuz';
+    if (valueArticles[1]) valueArticles[1].id = 'vizyonumuz';
+
+    if (window.location.hash) {
+      setTimeout(() => {
+        document.querySelector(window.location.hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 120);
+    }
+  }
+
+  if (!document.getElementById('corporate-dropdown-styles')) {
+    const style = document.createElement('style');
+    style.id = 'corporate-dropdown-styles';
+    style.textContent = `
+      .site-header, .main-nav { overflow: visible !important; }
+      .main-nav .nav-dropdown { position: relative; display: flex; align-items: center; }
+      .main-nav .nav-dropdown > a { display: inline-flex; align-items: center; gap: 6px; }
+      .main-nav .nav-dropdown > a::after { content: '▾'; font-size: 10px; line-height: 1; margin-left: 2px; color: #c99a3f; }
+      .nav-dropdown-panel {
+        position: absolute;
+        left: 50%;
+        top: calc(100% + 18px);
+        width: 245px;
+        padding: 12px;
+        background: rgba(7,21,35,.98);
+        border: 1px solid rgba(201,154,63,.42);
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(0,0,0,.28);
+        transform: translateX(-50%) translateY(10px);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity .18s ease, transform .18s ease, visibility .18s ease;
+        z-index: 9999;
+      }
+      .nav-dropdown:hover .nav-dropdown-panel,
+      .nav-dropdown:focus-within .nav-dropdown-panel,
+      .nav-dropdown.is-open .nav-dropdown-panel {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+      .nav-dropdown-panel a {
+        display: block !important;
+        padding: 11px 12px !important;
+        color: #eef3f8 !important;
+        border-radius: 12px;
+        font-size: 13px !important;
+        font-weight: 800 !important;
+        letter-spacing: .02em;
+        text-transform: none !important;
+        white-space: nowrap;
+      }
+      .nav-dropdown-panel a:hover,
+      .nav-dropdown-panel a:focus {
+        background: rgba(201,154,63,.14);
+        color: #e1bd68 !important;
+      }
+      .corporate-info-premium { display: none !important; }
+      #hakkimizda, #tarihce, #uretim-gucu, #misyonumuz, #vizyonumuz, #degerlerimiz, #kalite-politikasi { scroll-margin-top: 120px; }
+      @media (max-width: 900px) {
+        .main-nav .nav-dropdown { width: 100%; flex-direction: column; align-items: stretch; }
+        .nav-dropdown-panel { position: static; width: 100%; transform: none !important; margin-top: 6px; opacity: 1; visibility: visible; pointer-events: auto; box-shadow: none; }
+        .nav-dropdown-panel a { padding-left: 22px !important; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
 })();
 
 // Corporate page compatibility fixes for uploaded image filenames and KPI visibility.
