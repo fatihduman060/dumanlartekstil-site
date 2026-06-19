@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy muhasebe PHP files to hosting
+    name: Deploy website and muhasebe files to hosting
     runs-on: ubuntu-latest
 
     steps:
@@ -47,7 +47,42 @@ jobs:
             echo "Runner içinde PHP yok; syntax kontrolü atlandı."
           fi
 
-      - name: Deploy via FTP
+      - name: Deploy public website files to hosting
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: /bitke.com.tr/
+          local-dir: ./
+          state-name: .ftp-deploy-sync-state-site.json
+          timeout: 300000
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            .github/**/*
+            muhasebe/**
+            muhasebe/**/*
+            storage/**
+            storage/**/*
+            **/*.sqlite
+            **/*.sqlite-*
+            **/*.db
+            **/*.db-*
+            **/*.zip
+            **/*.tar
+            **/*.tar.gz
+            **/*.rar
+            **/*.7z
+            .env
+            .env.*
+            .ftp-deploy-sync-state*.json
+            .DS_Store
+            Thumbs.db
+
+      - name: Deploy muhasebe PHP files to hosting
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -56,7 +91,7 @@ jobs:
           server-dir: /bitke.com.tr/muhasebe/
           local-dir: ./muhasebe/
           state-name: .ftp-deploy-sync-state-muhasebe.json
-          timeout: 120000
+          timeout: 300000
           dangerous-clean-slate: false
           exclude: |
             **/.git*
@@ -76,5 +111,6 @@ jobs:
             **/*.7z
             .env
             .env.*
+            .ftp-deploy-sync-state*.json
             .DS_Store
             Thumbs.db
