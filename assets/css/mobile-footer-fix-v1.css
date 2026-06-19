@@ -1,0 +1,221 @@
+/* Final mobile footer fix for exact footer layout */
+@media (max-width: 900px) {
+  html body .site-footer.footer-exact {
+    position: relative !important;
+    overflow: visible !important;
+    background:
+      radial-gradient(circle at 12% 0%, rgba(207,160,70,.17), transparent 34%),
+      radial-gradient(circle at 86% 72%, rgba(73,112,156,.11), transparent 36%),
+      linear-gradient(145deg, #03101c 0%, #020813 58%, #03070e 100%) !important;
+    border-top: 1px solid rgba(207,160,70,.36) !important;
+    padding: 0 0 118px !important;
+  }
+
+  html body .site-footer.footer-exact .footer-exact-stage {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 28px !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    aspect-ratio: auto !important;
+    padding: 44px 24px 34px !important;
+    margin: 0 !important;
+    background-image: none !important;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.035), transparent 18%),
+      radial-gradient(circle at 0% 0%, rgba(207,160,70,.13), transparent 42%) !important;
+    overflow: visible !important;
+  }
+
+  html body .site-footer.footer-exact .footer-links,
+  html body .site-footer.footer-exact .footer-contact-exact,
+  html body .site-footer.footer-exact .footer-copy,
+  html body .site-footer.footer-exact .footer-legal-exact {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 2 !important;
+  }
+
+  html body .site-footer.footer-exact .footer-links,
+  html body .site-footer.footer-exact .footer-contact-exact {
+    padding-bottom: 24px !important;
+    border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  }
+
+  html body .site-footer.footer-exact .footer-links h3,
+  html body .site-footer.footer-exact .footer-contact-exact h3 {
+    margin: 0 !important;
+    color: #f0c66e !important;
+    font-size: 20px !important;
+    line-height: 1.1 !important;
+    letter-spacing: .16em !important;
+    text-transform: uppercase !important;
+    font-weight: 900 !important;
+  }
+
+  html body .site-footer.footer-exact .footer-links h3::after,
+  html body .site-footer.footer-exact .footer-contact-exact h3::after {
+    content: "" !important;
+    display: block !important;
+    width: 58px !important;
+    height: 2px !important;
+    margin-top: 13px !important;
+    background: linear-gradient(90deg, #e0af51, rgba(224,175,81,.1)) !important;
+  }
+
+  html body .site-footer.footer-exact .footer-links nav {
+    display: grid !important;
+    gap: 13px !important;
+    margin: 20px 0 0 !important;
+    padding: 0 !important;
+  }
+
+  html body .site-footer.footer-exact .footer-links nav a {
+    display: block !important;
+    width: fit-content !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    color: #dce5f1 !important;
+    font-size: 18px !important;
+    line-height: 1.3 !important;
+    font-weight: 500 !important;
+    letter-spacing: -.02em !important;
+    text-decoration: none !important;
+  }
+
+  html body .site-footer.footer-exact .footer-contact-exact ul {
+    list-style: none !important;
+    display: grid !important;
+    gap: 0 !important;
+    margin: 22px 0 0 !important;
+    padding: 0 !important;
+  }
+
+  html body .site-footer.footer-exact .footer-contact-exact li {
+    display: grid !important;
+    grid-template-columns: 56px minmax(0, 1fr) !important;
+    gap: 16px !important;
+    align-items: center !important;
+    padding: 0 0 16px !important;
+    margin: 0 0 16px !important;
+    border-bottom: 1px solid rgba(255,255,255,.10) !important;
+  }
+
+  html body .site-footer.footer-exact .footer-contact-exact li:last-child {
+    margin-bottom: 0 !important;
+    border-bottom: 0 !important;
+  }
+
+  html body .site-footer.footer-exact .contact-icon {
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    border: 1.4px solid rgba(213,158,60,.95) !important;
+    border-radius: 999px !important;
+    display: grid !important;
+    place-items: center !important;
+    background: rgba(207,160,70,.08) !important;
+    color: #e5b156 !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.025) !important;
+  }
+
+  html body .site-footer.footer-exact .contact-icon svg {
+    display: block !important;
+    width: 22px !important;
+    height: 22px !important;
+    color: #e5b156 !important;
+    fill: #e5b156 !important;
+    stroke: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
+
+  html body .site-footer.footer-exact .contact-icon svg path,
+  html body .site-footer.footer-exact .contact-icon svg rect,
+  html body .site-footer.footer-exact .contact-icon svg circle {
+    fill: #e5b156 !important;
+    stroke: none !important;
+  }
+
+  html body .site-footer.footer-exact .footer-contact-exact b {
+    display: block !important;
+    margin: 0 0 6px !important;
+    color: #f0c66e !important;
+    font-size: 13px !important;
+    line-height: 1 !important;
+    font-weight: 900 !important;
+    letter-spacing: .10em !important;
+    text-transform: uppercase !important;
+  }
+
+  html body .site-footer.footer-exact .footer-contact-exact a,
+  html body .site-footer.footer-exact .footer-contact-exact strong {
+    display: block !important;
+    color: #eef3f8 !important;
+    font-size: 17px !important;
+    line-height: 1.35 !important;
+    font-weight: 500 !important;
+    overflow-wrap: anywhere !important;
+    letter-spacing: 0 !important;
+  }
+
+  html body .site-footer.footer-exact .footer-copy {
+    color: #aebbcc !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+    padding-top: 4px !important;
+  }
+
+  html body .site-footer.footer-exact .footer-legal-exact {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    color: #dce5f1 !important;
+    font-size: 17px !important;
+    line-height: 1.25 !important;
+    padding-top: 4px !important;
+  }
+
+  html body .site-footer.footer-exact .footer-legal-exact span {
+    display: none !important;
+  }
+
+  html body .site-footer.footer-exact .footer-legal-exact a {
+    display: block !important;
+    width: fit-content !important;
+    max-width: 100% !important;
+    padding: 9px 0 !important;
+    color: #dce5f1 !important;
+    text-decoration: none !important;
+  }
+
+  html body .whatsapp-float {
+    width: 58px !important;
+    height: 58px !important;
+    min-width: 58px !important;
+    min-height: 58px !important;
+    right: 18px !important;
+    bottom: max(86px, env(safe-area-inset-bottom)) !important;
+    z-index: 95 !important;
+    box-shadow: 0 14px 30px rgba(0,0,0,.28), 0 0 0 7px rgba(75,211,75,.13) !important;
+  }
+
+  html body .whatsapp-float::after {
+    inset: -6px !important;
+  }
+
+  html body .whatsapp-float-icon,
+  html body .whatsapp-float-icon svg {
+    width: 34px !important;
+    height: 34px !important;
+  }
+}
