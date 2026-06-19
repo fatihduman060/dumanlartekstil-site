@@ -110,6 +110,7 @@
 }
 
 .home-page .private-label {
+  position: relative;
   overflow: hidden;
 }
 
