@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1981 346" width="1981" height="346" role="img" aria-label="Bitke ve Mofiy markaları">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.52" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f4f7fb"/>
+    </linearGradient>
+    <radialGradient id="goldGlow" cx="18%" cy="25%" r="42%">
+      <stop offset="0" stop-color="#c99a3f" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#c99a3f" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softShadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#071523" flood-opacity="0.14"/>
+    </filter>
+    <filter id="blurGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+
+  <rect width="1981" height="346" fill="url(#bg)"/>
+  <rect width="1981" height="346" fill="url(#goldGlow)"/>
+  <path d="M1230 0H1981V346H1140C1270 285 1345 206 1364 112C1375 59 1322 24 1230 0Z" fill="#f7f9fc" opacity="0.9"/>
+  <path d="M0 344H1981" stroke="#e5e9ef" stroke-width="2"/>
+
+  <g transform="translate(120 44)">
+    <text x="0" y="16" fill="#c99a3f" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="900" letter-spacing="5">MARKALARIMIZ</text>
+    <g transform="translate(0 54)">
+      <ellipse cx="235" cy="104" rx="190" ry="62" fill="#c99a3f" opacity="0.16" filter="url(#blurGlow)">
+        <animate attributeName="opacity" values="0.10;0.20;0.10" dur="7.2s" repeatCount="indefinite"/>
+      </ellipse>
+      <image href="markalarlogo/bitke.png" x="0" y="0" width="430" height="176" preserveAspectRatio="xMidYMid meet" filter="url(#softShadow)">
+        <animateTransform attributeName="transform" type="translate" values="0 0; 9 -6; -5 6; 0 0" dur="7.2s" repeatCount="indefinite" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1;.42 0 .58 1"/>
+      </image>
+    </g>
+
+    <rect x="490" y="70" width="2" height="150" rx="1" fill="#c99a3f" opacity="0.55"/>
+
+    <g transform="translate(550 54)">
+      <ellipse cx="245" cy="104" rx="200" ry="62" fill="#c99a3f" opacity="0.14" filter="url(#blurGlow)">
+        <animate attributeName="opacity" values="0.18;0.10;0.18" dur="7.2s" repeatCount="indefinite"/>
+      </ellipse>
+      <image href="markalarlogo/mofiy.png" x="0" y="0" width="450" height="176" preserveAspectRatio="xMidYMid meet" filter="url(#softShadow)">
+        <animateTransform attributeName="transform" type="translate" values="0 0; -9 6; 5 -6; 0 0" dur="7.2s" begin="-2.1s" repeatCount="indefinite" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1;.42 0 .58 1"/>
+      </image>
+    </g>
+  </g>
+
+  <g transform="translate(1220 54)" opacity="0.9">
+    <rect x="0" y="122" width="610" height="96" rx="18" fill="#071523" opacity="0.08"/>
+    <rect x="24" y="84" width="520" height="134" rx="14" fill="#071523" opacity="0.10"/>
+    <path d="M42 218V118H540V218" fill="none" stroke="#071523" stroke-opacity="0.18" stroke-width="4"/>
+    <g stroke="#071523" stroke-opacity="0.16" stroke-width="3">
+      <path d="M80 118V218"/><path d="M140 118V218"/><path d="M200 118V218"/><path d="M260 118V218"/><path d="M320 118V218"/><path d="M380 118V218"/><path d="M440 118V218"/>
+    </g>
+    <rect x="60" y="54" width="340" height="48" rx="10" fill="#c99a3f" opacity="0.18"/>
+    <text x="80" y="84" fill="#071523" opacity="0.42" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="900" letter-spacing="4">DUMANLAR A.Ş.</text>
+  </g>
+</svg>
