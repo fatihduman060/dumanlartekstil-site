@@ -1,7 +1,42 @@
 /* Home brand motion: premium floating logo treatment */
+.home-page .brands-section {
+  position: relative !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(201,154,63,.10), transparent 30%),
+    linear-gradient(90deg, #ffffff 0%, #ffffff 48%, #f6f8fb 100%) !important;
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(201,154,63,.10), transparent 30%),
+    linear-gradient(90deg, #ffffff 0%, #ffffff 48%, #f6f8fb 100%) !important;
+}
+
+.home-page .brands-section::before,
+.home-page .brands-section::after {
+  display: none !important;
+  content: none !important;
+  background: none !important;
+}
+
+.home-page .brand-box,
+.home-page .about-box,
+.home-page .factory-card,
+.home-page .brand-hotspot {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+.home-page .brand-box {
+  background: rgba(255,255,255,.72) !important;
+  border-radius: 22px !important;
+  padding: 18px 22px 22px !important;
+  box-shadow: 0 22px 60px rgba(7,21,35,.07) !important;
+  backdrop-filter: blur(8px);
+}
+
 .home-page .brand-names {
   align-items: center;
   gap: 30px;
+  isolation: isolate;
 }
 
 .home-page .brand-names > .bitke,
@@ -15,9 +50,10 @@
   font-size: 0 !important;
   line-height: 0;
   color: transparent !important;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  background-color: transparent !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: contain !important;
   filter: drop-shadow(0 14px 22px rgba(7, 21, 35, .10));
   transform: translateZ(0);
   will-change: transform, filter;
@@ -26,19 +62,21 @@
 }
 
 .home-page .brand-names > .bitke {
-  background-image: url("../img/markalarlogo/bitke.png");
+  background-image: url("../img/markalarlogo/bitke.png") !important;
 }
 
 .home-page .brand-names > .mofiy {
   width: 258px;
-  background-image: url("../img/markalarlogo/mofiy.png");
+  background-image: url("../img/markalarlogo/mofiy.png") !important;
   animation-name: homeBrandFloatMofiy;
   animation-delay: -2.1s;
 }
 
 .home-page .brand-names > .bitke small,
-.home-page .brand-names > .mofiy small {
+.home-page .brand-names > .mofiy small,
+.home-page .brand-names > .bitke::first-letter {
   display: none !important;
+  color: transparent !important;
 }
 
 .home-page .brand-names > .bitke::after,
@@ -97,6 +135,9 @@
 }
 
 @media (max-width: 760px) {
+  .home-page .brand-box {
+    padding: 14px 14px 18px !important;
+  }
   .home-page .brand-names {
     justify-content: center;
     gap: 14px;
