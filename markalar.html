@@ -56,35 +56,13 @@
       z-index: -1;
     }
 
-    .brands-page .brand-logo-wordmark {
-      display: grid;
-      place-items: center;
-      text-align: center;
-      line-height: .88;
-      filter: drop-shadow(0 16px 28px rgba(0,0,0,.32));
-      transform: translateY(2px);
-    }
-
-    .brands-page .brand-logo-main {
+    .brands-page .brand-logo-panel img {
       display: block;
-      font-family: Georgia, 'Times New Roman', serif;
-      font-weight: 700;
-      letter-spacing: -.075em;
-      font-size: clamp(54px, 4.8vw, 80px);
-      white-space: nowrap;
-    }
-
-    .brands-page .brand-logo-socks {
-      display: block;
-      margin-top: 14px;
-      color: #d49a36;
-      font-family: Inter, Arial, sans-serif;
-      font-size: clamp(10px, .78vw, 14px);
-      font-weight: 800;
-      letter-spacing: .52em;
-      line-height: 1;
-      text-transform: uppercase;
-      text-shadow: 0 0 16px rgba(212,154,54,.34);
+      width: min(88%, 340px);
+      max-height: 122px;
+      margin: 0 auto;
+      object-fit: contain;
+      filter: drop-shadow(0 16px 28px rgba(0,0,0,.30));
     }
 
     .brands-page .brand-logo-panel-bitke {
@@ -106,29 +84,14 @@
         linear-gradient(145deg, #071523 0%, #182238 58%, #050b13 100%);
     }
 
-    .brands-page .word-bitke .c-navy { color: #071523; text-shadow: 0 0 1px rgba(255,255,255,.22); }
-    .brands-page .word-bitke .c-red { color: #cc1024; }
-    .brands-page .word-bitke .c-blue { color: #0a1b31; }
-
-    .brands-page .word-mofiy .c-teal { color: #17a4b6; }
-    .brands-page .word-mofiy .c-green { color: #79a848; }
-    .brands-page .word-mofiy .c-gold { color: #d4b243; }
-    .brands-page .word-mofiy .c-orange { color: #f27a17; }
-
-    .brands-page .word-bafiy .c-navy { color: #071523; text-shadow: 0 0 1px rgba(255,255,255,.22); }
-    .brands-page .word-bafiy .c-red { color: #d21e35; }
-    .brands-page .word-bafiy .c-teal { color: #14a7b7; }
-    .brands-page .word-bafiy .c-green { color: #7da646; }
-    .brands-page .word-bafiy .c-orange { color: #f28a12; }
-
     @media (max-width: 640px) {
       .brands-page .brand-logo-panel {
         min-height: 150px;
         padding: 22px;
       }
 
-      .brands-page .brand-logo-main {
-        font-size: clamp(48px, 14vw, 66px);
+      .brands-page .brand-logo-panel img {
+        max-height: 96px;
       }
     }
   </style>
@@ -184,12 +147,7 @@
       </div>
       <div class="premium-grid">
         <article class="premium-card">
-          <div class="brand-logo-panel brand-logo-panel-bitke" aria-label="Bitke Socks logo">
-            <div class="brand-logo-wordmark word-bitke">
-              <span class="brand-logo-main"><span class="c-navy">b</span><span class="c-red">i</span><span class="c-red">t</span><span class="c-blue">k</span><span class="c-blue">e</span></span>
-              <span class="brand-logo-socks">SOCKS</span>
-            </div>
-          </div>
+          <div class="brand-logo-panel brand-logo-panel-bitke"><img src="assets/img/markalarlogo/bitke.png" alt="Bitke Socks logo" loading="lazy" /></div>
           <h3>Bitke Socks</h3>
           <p>Günlük kullanıma uygun, konforlu, dayanıklı ve mağaza rafında kolay konumlandırılabilen çorap grupları için güçlü ana marka yaklaşımıdır.</p>
           <ul>
@@ -199,12 +157,7 @@
           </ul>
         </article>
         <article class="premium-card">
-          <div class="brand-logo-panel brand-logo-panel-mofiy" aria-label="Mofiy Socks logo">
-            <div class="brand-logo-wordmark word-mofiy">
-              <span class="brand-logo-main"><span class="c-teal">M</span><span class="c-green">o</span><span class="c-gold">f</span><span class="c-gold">i</span><span class="c-orange">y</span></span>
-              <span class="brand-logo-socks">SOCKS</span>
-            </div>
-          </div>
+          <div class="brand-logo-panel brand-logo-panel-mofiy"><img src="assets/img/markalarlogo/mofiy.png" alt="Mofiy Socks logo" loading="lazy" /></div>
           <h3>Mofiy Socks</h3>
           <p>Daha dinamik, renkli ve modern koleksiyon çizgisiyle genç, spor ve aktif kullanım ihtiyaçlarına cevap verebilen marka yapısını temsil eder.</p>
           <ul>
@@ -214,12 +167,7 @@
           </ul>
         </article>
         <article class="premium-card">
-          <div class="brand-logo-panel brand-logo-panel-bafiy" aria-label="Bafiy Socks logo">
-            <div class="brand-logo-wordmark word-bafiy">
-              <span class="brand-logo-main"><span class="c-navy">B</span><span class="c-red">a</span><span class="c-teal">f</span><span class="c-green">i</span><span class="c-orange">y</span></span>
-              <span class="brand-logo-socks">SOCKS</span>
-            </div>
-          </div>
+          <div class="brand-logo-panel brand-logo-panel-bafiy"><img src="assets/img/markalarlogo/bafiy.png" alt="Bafiy Socks logo" loading="lazy" /></div>
           <h3>Bafiy Socks</h3>
           <p>Marka ailesine yeni ve özgün bir çizgi kazandıran Bafiy; tekstil ürünlerinde çeşitliliği artıran tamamlayıcı bir marka alanı olarak konumlandırılır.</p>
           <ul>
