@@ -26,11 +26,12 @@
       'dumanlar-runtime-fixes-v8',
       'dumanlar-runtime-fixes-v9',
       'dumanlar-runtime-fixes-v10',
-      'dumanlar-runtime-fixes-v11'
+      'dumanlar-runtime-fixes-v11',
+      'dumanlar-runtime-fixes-v12'
     ].forEach((id) => document.getElementById(id)?.remove());
 
     const style = document.createElement('style');
-    style.id = 'dumanlar-runtime-fixes-v11';
+    style.id = 'dumanlar-runtime-fixes-v12';
     style.textContent = `
       .site-header,
       .main-nav { overflow: visible !important; }
@@ -85,35 +86,27 @@
         overflow: hidden !important;
       }
 
-      .footer-premium-overlay {
-        position: absolute !important;
-        inset: 0 !important;
-        z-index: 2 !important;
-        pointer-events: none !important;
-      }
-
+      .footer-premium-overlay { position: absolute !important; inset: 0 !important; z-index: 2 !important; pointer-events: none !important; }
       .footer-premium-col,
       .footer-premium-contact,
-      .footer-premium-bottom {
-        pointer-events: auto !important;
-      }
+      .footer-premium-bottom { pointer-events: auto !important; }
 
       .footer-premium-col,
       .footer-premium-contact {
         position: absolute !important;
-        top: 20.4% !important;
+        top: 18.2% !important;
         min-width: 0 !important;
       }
 
       .footer-premium-pages { left: 40.3% !important; width: 13.8% !important; }
       .footer-premium-products { left: 57.4% !important; width: 15.7% !important; }
-      .footer-premium-contact { left: 76.7% !important; width: 18.2% !important; }
+      .footer-premium-contact { left: 76.5% !important; width: 18.6% !important; }
 
       .footer-premium h3 {
-        margin: 0 0 clamp(18px, 1.5vw, 30px) !important;
+        margin: 0 0 clamp(15px, 1.15vw, 23px) !important;
         color: #f0c66e !important;
         font-family: Georgia, 'Times New Roman', serif !important;
-        font-size: clamp(14px, 1.15vw, 25px) !important;
+        font-size: clamp(14px, 1.1vw, 24px) !important;
         line-height: 1.05 !important;
         letter-spacing: .16em !important;
         text-transform: uppercase !important;
@@ -125,26 +118,26 @@
         display: block !important;
         width: clamp(38px, 3vw, 68px) !important;
         height: 2px !important;
-        margin-top: clamp(8px, .85vw, 14px) !important;
+        margin-top: clamp(8px, .78vw, 13px) !important;
         background: linear-gradient(90deg, #f0c66e, rgba(240,198,110,.08)) !important;
         box-shadow: 0 0 12px rgba(240,198,110,.45) !important;
       }
 
-      .footer-premium nav,
+      .footer-premium-col nav,
       .footer-premium-contact ul {
         display: grid !important;
-        gap: clamp(7px, .76vw, 15px) !important;
+        gap: clamp(6px, .63vw, 12px) !important;
         margin: 0 !important;
         padding: 0 !important;
       }
 
-      .footer-premium nav a {
+      .footer-premium-col nav a {
         position: relative !important;
         display: block !important;
-        padding-left: clamp(14px, 1.15vw, 22px) !important;
+        padding-left: clamp(14px, 1.05vw, 20px) !important;
         color: #f2f5fa !important;
         font-family: Georgia, 'Times New Roman', serif !important;
-        font-size: clamp(12px, .95vw, 20px) !important;
+        font-size: clamp(11px, .88vw, 18px) !important;
         line-height: 1.22 !important;
         font-weight: 500 !important;
         text-decoration: none !important;
@@ -152,7 +145,7 @@
         transition: color .18s ease, transform .18s ease !important;
       }
 
-      .footer-premium nav a::before {
+      .footer-premium-col nav a::before {
         content: '›' !important;
         position: absolute !important;
         left: 0 !important;
@@ -164,36 +157,28 @@
         font-weight: 900 !important;
       }
 
-      .footer-premium nav a:hover,
+      .footer-premium-col nav a:hover,
       .footer-premium-contact a:hover,
-      .footer-premium-bottom a:hover {
-        color: #f7d78b !important;
-        transform: translateX(3px) !important;
-      }
+      .footer-premium-bottom a:hover { color: #f7d78b !important; transform: translateX(3px) !important; }
 
-      .footer-premium-contact ul {
-        list-style: none !important;
-        gap: 0 !important;
-      }
+      .footer-premium-contact ul { list-style: none !important; gap: 0 !important; }
 
       .footer-premium-contact li {
         display: grid !important;
-        grid-template-columns: clamp(34px, 3vw, 56px) minmax(0, 1fr) !important;
-        gap: clamp(9px, .88vw, 16px) !important;
+        grid-template-columns: clamp(30px, 2.45vw, 44px) minmax(0, 1fr) !important;
+        gap: clamp(7px, .64vw, 12px) !important;
         align-items: center !important;
-        padding: 0 0 clamp(10px, .98vw, 19px) !important;
-        margin: 0 0 clamp(10px, .98vw, 19px) !important;
-        border-bottom: 1px solid rgba(218,166,70,.22) !important;
+        padding: 0 0 clamp(5px, .46vw, 9px) !important;
+        margin: 0 0 clamp(5px, .46vw, 9px) !important;
+        border-bottom: 1px solid rgba(218,166,70,.20) !important;
       }
 
-      .footer-premium-contact li:last-child {
-        margin-bottom: 0 !important;
-      }
+      .footer-premium-contact li:last-child { margin-bottom: 0 !important; border-bottom: 0 !important; }
 
       .footer-premium-contact .contact-icon {
-        width: clamp(33px, 2.9vw, 54px) !important;
-        height: clamp(33px, 2.9vw, 54px) !important;
-        min-width: clamp(33px, 2.9vw, 54px) !important;
+        width: clamp(30px, 2.35vw, 42px) !important;
+        height: clamp(30px, 2.35vw, 42px) !important;
+        min-width: clamp(30px, 2.35vw, 42px) !important;
         display: grid !important;
         place-items: center !important;
         border: 1.5px solid rgba(231,171,72,.95) !important;
@@ -203,21 +188,13 @@
         box-shadow: 0 0 20px rgba(201,154,63,.10) !important;
       }
 
-      .footer-premium-contact .contact-icon svg {
-        width: 47% !important;
-        height: 47% !important;
-        fill: none !important;
-        stroke: currentColor !important;
-        stroke-width: 1.85 !important;
-        stroke-linecap: round !important;
-        stroke-linejoin: round !important;
-      }
+      .footer-premium-contact .contact-icon svg { width: 47% !important; height: 47% !important; fill: none !important; stroke: currentColor !important; stroke-width: 1.85 !important; stroke-linecap: round !important; stroke-linejoin: round !important; }
 
       .footer-premium-contact b {
         display: block !important;
-        margin: 0 0 5px !important;
+        margin: 0 0 4px !important;
         color: #f0c66e !important;
-        font-size: clamp(8px, .68vw, 13px) !important;
+        font-size: clamp(7px, .56vw, 11px) !important;
         line-height: 1 !important;
         font-weight: 900 !important;
         letter-spacing: .08em !important;
@@ -229,8 +206,8 @@
         display: block !important;
         color: #f3f7fb !important;
         font-family: Georgia, 'Times New Roman', serif !important;
-        font-size: clamp(10px, .9vw, 18px) !important;
-        line-height: 1.24 !important;
+        font-size: clamp(9px, .72vw, 14px) !important;
+        line-height: 1.18 !important;
         font-weight: 500 !important;
         text-decoration: none !important;
         overflow-wrap: anywhere !important;
@@ -238,20 +215,20 @@
 
       .footer-premium-social {
         display: flex !important;
-        gap: clamp(9px, 1vw, 18px) !important;
-        margin-top: clamp(12px, 1.15vw, 22px) !important;
+        gap: clamp(8px, .76vw, 14px) !important;
+        margin-top: clamp(7px, .72vw, 14px) !important;
       }
 
       .footer-premium-social a {
-        width: clamp(34px, 2.95vw, 56px) !important;
-        height: clamp(34px, 2.95vw, 56px) !important;
+        width: clamp(31px, 2.45vw, 44px) !important;
+        height: clamp(31px, 2.45vw, 44px) !important;
         display: grid !important;
         place-items: center !important;
         border-radius: 999px !important;
         border: 1.5px solid rgba(231,171,72,.9) !important;
         color: #e8ad4d !important;
         background: rgba(255,255,255,.016) !important;
-        font-size: clamp(12px, 1vw, 18px) !important;
+        font-size: clamp(11px, .82vw, 16px) !important;
         font-weight: 900 !important;
         text-decoration: none !important;
       }
@@ -267,45 +244,14 @@
         gap: 18px !important;
       }
 
-      .footer-premium-bottom p {
-        margin: 0 !important;
-        color: #e6edf7 !important;
-        font-size: clamp(11px, .92vw, 17px) !important;
-        line-height: 1.35 !important;
-        text-shadow: 0 2px 12px rgba(0,0,0,.35) !important;
-      }
+      .footer-premium-bottom p { margin: 0 !important; color: #e6edf7 !important; font-size: clamp(11px, .92vw, 17px) !important; line-height: 1.35 !important; text-shadow: 0 2px 12px rgba(0,0,0,.35) !important; }
+      .footer-premium-bottom nav { display: flex !important; flex-wrap: wrap !important; justify-content: flex-end !important; gap: 10px clamp(14px, 1.9vw, 34px) !important; margin: 0 !important; padding: 0 !important; }
+      .footer-premium-bottom a { color: #e6edf7 !important; font-size: clamp(10px, .82vw, 16px) !important; text-decoration: none !important; transition: color .18s ease !important; padding-left: 0 !important; }
+      .footer-premium-bottom a::before { display: none !important; content: none !important; }
 
-      .footer-premium-bottom nav {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        justify-content: flex-end !important;
-        gap: 10px clamp(14px, 1.9vw, 34px) !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-
-      .footer-premium-bottom a {
-        color: #e6edf7 !important;
-        font-size: clamp(10px, .82vw, 16px) !important;
-        text-decoration: none !important;
-        transition: color .18s ease !important;
-      }
-
-      .whatsapp-float {
-        width: 66px !important;
-        height: 66px !important;
-        min-width: 66px !important;
-        min-height: 66px !important;
-        right: 22px !important;
-        bottom: 22px !important;
-        z-index: 90 !important;
-      }
-
+      .whatsapp-float { width: 66px !important; height: 66px !important; min-width: 66px !important; min-height: 66px !important; right: 22px !important; bottom: 22px !important; z-index: 90 !important; }
       .whatsapp-float-icon,
-      .whatsapp-float-icon svg {
-        width: 38px !important;
-        height: 38px !important;
-      }
+      .whatsapp-float-icon svg { width: 38px !important; height: 38px !important; }
 
       @media (min-width: 901px) {
         .nav-dropdown-corporate:hover .nav-dropdown-panel,
@@ -313,41 +259,17 @@
       }
 
       @media (max-width: 1100px) {
-        .footer-premium-stage {
-          min-height: 0 !important;
-          background: radial-gradient(circle at 0% 0%, rgba(225,189,104,.14), transparent 38%), linear-gradient(145deg, #04101d 0%, #020813 58%, #03070e 100%) !important;
-          padding: 36px 22px 96px !important;
-        }
-        .footer-premium-overlay {
-          position: relative !important;
-          display: grid !important;
-          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          gap: 30px 28px !important;
-        }
+        .footer-premium-stage { min-height: 0 !important; background: radial-gradient(circle at 0% 0%, rgba(225,189,104,.14), transparent 38%), linear-gradient(145deg, #04101d 0%, #020813 58%, #03070e 100%) !important; padding: 36px 22px 96px !important; }
+        .footer-premium-overlay { position: relative !important; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 30px 28px !important; }
         .footer-premium-col,
         .footer-premium-contact,
-        .footer-premium-bottom {
-          position: static !important;
-          left: auto !important;
-          right: auto !important;
-          top: auto !important;
-          bottom: auto !important;
-          width: auto !important;
-        }
+        .footer-premium-bottom { position: static !important; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; width: auto !important; }
         .footer-premium-contact { grid-column: 1 / -1 !important; }
         .footer-premium h3 { font-size: 16px !important; margin-bottom: 14px !important; }
-        .footer-premium nav a { font-size: 14.5px !important; }
+        .footer-premium-col nav a { font-size: 14.5px !important; }
         .footer-premium-contact a,
         .footer-premium-contact strong { font-size: 14px !important; font-family: Inter, Arial, sans-serif !important; }
-        .footer-premium-bottom {
-          grid-column: 1 / -1 !important;
-          display: grid !important;
-          justify-content: start !important;
-          gap: 12px !important;
-          margin-top: 8px !important;
-          padding-top: 18px !important;
-          border-top: 1px solid rgba(225,189,104,.28) !important;
-        }
+        .footer-premium-bottom { grid-column: 1 / -1 !important; display: grid !important; justify-content: start !important; gap: 12px !important; margin-top: 8px !important; padding-top: 18px !important; border-top: 1px solid rgba(225,189,104,.28) !important; }
         .footer-premium-bottom nav { justify-content: flex-start !important; }
       }
 
