@@ -2,6 +2,11 @@ DirectoryIndex index.html index.php index.html.bak
 AddType text/html .bak
 Options -Indexes
 
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^assets/img/hero-production-v11\.webp$ assets/img/hero-production-v11.png [L,R=302]
+</IfModule>
+
 <IfModule mod_headers.c>
   <FilesMatch "\.(html|htm|js|css)$">
     Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
