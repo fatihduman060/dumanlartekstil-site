@@ -497,3 +497,70 @@
     width: 100%;
   }
 }
+
+/* Kurumsal marka kartları: gerçek şeffaf PNG logo düzeni */
+.corporate-page .brand-card-grid article,
+.corporate-page .brand-card-grid article:nth-child(2),
+.corporate-page .brand-card-grid article:nth-child(3) {
+  min-height: 300px;
+  padding: 30px;
+  background:
+    radial-gradient(circle at 14% 4%, rgba(225,189,104,.18), transparent 30%),
+    linear-gradient(145deg, #071523 0%, #102641 58%, #06111d 100%) !important;
+  border: 1px solid rgba(225,189,104,.22);
+  box-shadow: 0 24px 56px rgba(7,21,35,.14);
+}
+
+.corporate-page .brand-card-grid strong {
+  width: min(100%, 300px);
+  min-height: 124px;
+  margin-bottom: 24px;
+  border-radius: 22px;
+  color: transparent;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(255,255,255,.92), transparent 36%),
+    linear-gradient(145deg, #fffaf0 0%, #f4ead9 56%, #e7d4b5 100%) !important;
+  border: 1px solid rgba(201,154,63,.34);
+  box-shadow:
+    0 18px 38px rgba(0,0,0,.18),
+    inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+.corporate-page .brand-card-grid strong::before,
+.corporate-page .brand-card-grid strong::after {
+  display: none !important;
+  content: none !important;
+}
+
+.corporate-page .brand-card-grid article:nth-child(1) strong {
+  background:
+    url("../img/markalarlogo/bitke.png") center / 72% auto no-repeat,
+    radial-gradient(circle at 18% 10%, rgba(255,255,255,.92), transparent 36%),
+    linear-gradient(145deg, #fffaf0 0%, #f4ead9 56%, #e7d4b5 100%) !important;
+}
+
+.corporate-page .brand-card-grid article:nth-child(2) strong {
+  background:
+    url("../img/markalarlogo/mofiy.png") center / 78% auto no-repeat,
+    radial-gradient(circle at 18% 10%, rgba(255,255,255,.92), transparent 36%),
+    linear-gradient(145deg, #fffaf0 0%, #f4ead9 56%, #e7d4b5 100%) !important;
+}
+
+.corporate-page .brand-card-grid article:nth-child(3) strong {
+  background:
+    url("../img/markalarlogo/bafiy.png") center / 72% auto no-repeat,
+    radial-gradient(circle at 18% 10%, rgba(255,255,255,.92), transparent 36%),
+    linear-gradient(145deg, #fffaf0 0%, #f4ead9 56%, #e7d4b5 100%) !important;
+}
+
+.corporate-page .brand-card-grid p {
+  color: rgba(255,255,255,.94);
+  text-shadow: 0 2px 12px rgba(0,0,0,.18);
+}
+
+@media (max-width: 900px) {
+  .corporate-page .brand-card-grid strong {
+    width: 100%;
+    max-width: 330px;
+  }
+}
