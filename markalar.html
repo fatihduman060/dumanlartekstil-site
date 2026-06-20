@@ -14,8 +14,84 @@
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="assets/css/style.css" />
   <link rel="stylesheet" href="assets/css/pages-premium.css" />
+  <style>
+    .brands-page .brand-logo-panel {
+      position: relative;
+      min-height: 178px;
+      padding: 26px;
+      isolation: isolate;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 16% 10%, rgba(225,189,104,.22), transparent 28%),
+        linear-gradient(145deg, #061524 0%, #0b2036 52%, #040b14 100%);
+      border: 1px solid rgba(225,189,104,.30);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.08),
+        0 24px 54px rgba(7,21,35,.14);
+    }
+
+    .brands-page .brand-logo-panel::before {
+      content: "";
+      position: absolute;
+      inset: 14px;
+      border: 1px solid rgba(225,189,104,.18);
+      border-radius: 19px;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .brands-page .brand-logo-panel::after {
+      content: "";
+      position: absolute;
+      right: -70px;
+      top: -70px;
+      width: 180px;
+      height: 180px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(225,189,104,.20), transparent 66%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .brands-page .brand-logo-panel img {
+      width: min(86%, 330px);
+      max-height: 118px;
+      object-fit: contain;
+      filter: drop-shadow(0 16px 28px rgba(0,0,0,.28));
+    }
+
+    .brands-page .brand-logo-panel-bitke {
+      background:
+        radial-gradient(circle at 12% 8%, rgba(225,189,104,.18), transparent 28%),
+        linear-gradient(145deg, #071523 0%, #102641 56%, #06111d 100%);
+    }
+
+    .brands-page .brand-logo-panel-mofiy {
+      background:
+        radial-gradient(circle at 88% 12%, rgba(242,139,24,.18), transparent 30%),
+        radial-gradient(circle at 18% 82%, rgba(21,145,168,.17), transparent 32%),
+        linear-gradient(145deg, #071523 0%, #10253a 54%, #050b13 100%);
+    }
+
+    .brands-page .brand-logo-panel-bafiy {
+      background:
+        radial-gradient(circle at 50% 8%, rgba(225,189,104,.20), transparent 30%),
+        linear-gradient(145deg, #071523 0%, #182238 58%, #050b13 100%);
+    }
+
+    @media (max-width: 640px) {
+      .brands-page .brand-logo-panel {
+        min-height: 150px;
+        padding: 22px;
+      }
+
+      .brands-page .brand-logo-panel img {
+        max-height: 96px;
+      }
+    }
+  </style>
 </head>
-<body class="content-page">
+<body class="content-page brands-page">
   <a class="skip-link" href="#main">İçeriğe geç</a>
 
   <header class="site-header" id="top">
@@ -66,7 +142,7 @@
       </div>
       <div class="premium-grid">
         <article class="premium-card">
-          <div class="brand-logo-panel"><div><span class="brand-wordmark bitke">bitke</span><span class="sock-label">SOCKS</span></div></div>
+          <div class="brand-logo-panel brand-logo-panel-bitke"><img src="assets/img/markalarlogo/bitketransparent.png" alt="Bitke Socks logo" loading="lazy" /></div>
           <h3>Bitke Socks</h3>
           <p>Günlük kullanıma uygun, konforlu, dayanıklı ve mağaza rafında kolay konumlandırılabilen çorap grupları için güçlü ana marka yaklaşımıdır.</p>
           <ul>
@@ -76,7 +152,7 @@
           </ul>
         </article>
         <article class="premium-card">
-          <div class="brand-logo-panel"><div><span class="brand-wordmark mofiy">Mofiy</span><span class="sock-label">SOCKS</span></div></div>
+          <div class="brand-logo-panel brand-logo-panel-mofiy"><img src="assets/img/markalarlogo/mofiy_socks_transparent_clean.png" alt="Mofiy Socks logo" loading="lazy" /></div>
           <h3>Mofiy Socks</h3>
           <p>Daha dinamik, renkli ve modern koleksiyon çizgisiyle genç, spor ve aktif kullanım ihtiyaçlarına cevap verebilen marka yapısını temsil eder.</p>
           <ul>
@@ -86,7 +162,7 @@
           </ul>
         </article>
         <article class="premium-card">
-          <div class="brand-logo-panel"><img src="assets/img/bitkekurumsal/bafiy-socks-logo.svg" alt="Bafiy Socks logo" loading="lazy" /></div>
+          <div class="brand-logo-panel brand-logo-panel-bafiy"><img src="assets/img/markalarlogo/bafiytransparent.png" alt="Bafiy Socks logo" loading="lazy" /></div>
           <h3>Bafiy Socks</h3>
           <p>Marka ailesine yeni ve özgün bir çizgi kazandıran Bafiy; tekstil ürünlerinde çeşitliliği artıran tamamlayıcı bir marka alanı olarak konumlandırılır.</p>
           <ul>
