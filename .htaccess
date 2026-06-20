@@ -4,6 +4,7 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  RewriteRule ^assets/img/brand-section-banner\.png$ assets/img/brand-section-banner-animated.svg [L]
   RewriteRule ^assets/img/hero-production-v11\.webp$ assets/img/hero-production-v11.png [L,R=302]
 </IfModule>
 
@@ -24,12 +25,4 @@ Options -Indexes
   ExpiresByType text/css "access plus 0 seconds"
   ExpiresByType application/javascript "access plus 0 seconds"
   ExpiresByType text/javascript "access plus 0 seconds"
-</IfModule>
-
-<IfModule mod_substitute.c>
-  AddOutputFilterByType SUBSTITUTE text/html
-  Substitute "s|<div class=\"bitke\">bitke <small>socks</small></div>|<a class='brand-png brand-png-bitke' href='markalar.html#bitke' aria-label='Bitke markasını incele'><img src='assets/img/markalarlogo/bitke.png' alt='Bitke'></a>|ni"
-  Substitute "s|<div class=\"mofiy\">Mofiy <small>socks</small></div>|<a class='brand-png brand-png-mofiy' href='markalar.html#mofiy' aria-label='Mofiy markasını incele'><img src='assets/img/markalarlogo/mofiy.png' alt='Mofiy'></a>|ni"
-  Substitute "s|<script src=\"assets/js/main.js\" defer></script>|<script src=\"assets/js/main.js?v=navfix5\" defer></script><script src=\"assets/js/nav-hotfix-v3.js?v=navfix5\" defer></script>|ni"
-  Substitute "s|</head>|<link rel=\"stylesheet\" href=\"assets/css/mobile-footer-fix-v1.css?v=navfix5\" /><link rel=\"stylesheet\" href=\"assets/css/home-brand-motion-v1.css?v=brandmotion4\" /><style>.brand-names .brand-png{position:relative;display:inline-flex!important;align-items:center;justify-content:center;width:248px;height:116px;font-size:0!important;line-height:0!important;color:transparent!important;filter:drop-shadow(0 14px 22px rgba(7,21,35,.10));animation:brandFloatBitke 7.2s ease-in-out infinite;will-change:transform,filter}.brand-names .brand-png-mofiy{width:258px;animation-name:brandFloatMofiy;animation-delay:-2.1s}.brand-names .brand-png img{display:block!important;width:100%!important;height:100%!important;object-fit:contain!important}.brand-names .brand-png:after{content:'';position:absolute;inset:18px 22px;z-index:-1;border-radius:999px;background:radial-gradient(circle,rgba(201,154,63,.18),transparent 64%);opacity:.45;filter:blur(18px);animation:brandGlow 7.2s ease-in-out infinite}.brand-names .brand-png-mofiy:after{animation-delay:-2.1s}.brand-names .separator{height:94px!important;opacity:.72;box-shadow:0 0 18px rgba(201,154,63,.20)}@keyframes brandFloatBitke{0%,100%{transform:translate3d(0,0,0)}34%{transform:translate3d(7px,-5px,0)}68%{transform:translate3d(-4px,5px,0)}}@keyframes brandFloatMofiy{0%,100%{transform:translate3d(0,0,0)}34%{transform:translate3d(-7px,5px,0)}68%{transform:translate3d(4px,-5px,0)}}@keyframes brandGlow{0%,100%{opacity:.32;transform:scale(.92)}50%{opacity:.62;transform:scale(1.06)}}@media(max-width:760px){.brand-names .brand-png,.brand-names .brand-png-mofiy{width:min(42vw,190px);height:88px}.brand-names .separator{height:72px!important}}</style></head>|ni"
 </IfModule>
