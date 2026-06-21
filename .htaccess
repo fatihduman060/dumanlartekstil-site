@@ -24,8 +24,3 @@ Options -Indexes
   ExpiresByType application/javascript "access plus 0 seconds"
   ExpiresByType text/javascript "access plus 0 seconds"
 </IfModule>
-
-<IfModule mod_substitute.c>
-  AddOutputFilterByType SUBSTITUTE text/html
-  Substitute "s|<script src=\"assets/js/main.js\" defer></script>|<script src=\"assets/js/main.js?v=brandclean1\" defer></script><script src=\"assets/js/home-brand-clean-v1.js?v=brandclean1\" defer></script>|ni"
-</IfModule>
