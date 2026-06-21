@@ -1,0 +1,251 @@
+/* Site runtime styles
+   Moved out of assets/js/main.js so JavaScript only handles behavior. */
+
+.site-header,
+.main-nav { overflow: visible !important; }
+
+.main-nav .nav-dropdown { position: relative; display: flex; align-items: center; }
+.main-nav .nav-dropdown > a { display: inline-flex; align-items: center; gap: 6px; }
+.main-nav .nav-dropdown > a::after { content: '▾'; font-size: 10px; margin-left: 2px; color: #c99a3f; transition: transform .2s ease; }
+.nav-dropdown-corporate { position: relative !important; padding-bottom: 18px !important; margin-bottom: -18px !important; }
+.nav-dropdown-corporate::before { content: ''; position: absolute; left: -34px; right: -34px; top: 100%; height: 24px; pointer-events: auto; }
+.nav-dropdown-corporate .nav-dropdown-panel { position: absolute !important; left: 50% !important; top: calc(100% + 2px) !important; width: min(520px, calc(100vw - 32px)) !important; padding: 18px !important; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; background: radial-gradient(circle at 12% 0%, rgba(225,189,104,.22), transparent 36%), linear-gradient(145deg, rgba(6,18,31,.98), rgba(9,31,52,.98)) !important; border: 1px solid rgba(225,189,104,.42) !important; border-radius: 24px !important; box-shadow: 0 34px 90px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.08) !important; transform: translateX(-50%) translateY(12px) scale(.985) !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; overflow: hidden !important; transition: opacity .18s ease, transform .18s ease, visibility .18s ease, max-height .25s ease !important; z-index: 9999 !important; }
+.nav-dropdown-corporate .nav-dropdown-panel::before { content: 'Kurumsal İçerikler'; grid-column: 1 / -1; display: block; padding: 4px 4px 12px; color: #e1bd68; font-size: 11px; font-weight: 900; letter-spacing: .22em; text-transform: uppercase; border-bottom: 1px solid rgba(225,189,104,.18); }
+.nav-dropdown-corporate .nav-dropdown-panel::after { content: ''; position: absolute; top: -7px; left: 50%; width: 14px; height: 14px; background: #091f34; border-left: 1px solid rgba(225,189,104,.42); border-top: 1px solid rgba(225,189,104,.42); transform: translateX(-50%) rotate(45deg); }
+.nav-dropdown-corporate .nav-dropdown-panel a { position: relative !important; min-height: 78px !important; display: grid !important; grid-template-columns: 38px minmax(0, 1fr) !important; align-items: center !important; gap: 12px !important; padding: 14px 14px 14px 12px !important; border: 1px solid rgba(255,255,255,.08) !important; border-radius: 16px !important; background: rgba(255,255,255,.045) !important; color: #fff !important; font-size: 14px !important; font-weight: 900 !important; line-height: 1.15 !important; letter-spacing: -.01em !important; text-transform: none !important; white-space: normal !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+.nav-dropdown-corporate .nav-dropdown-panel a::before { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 14px; background: linear-gradient(145deg, rgba(225,189,104,.22), rgba(201,154,63,.08)); border: 1px solid rgba(225,189,104,.34); color: #e1bd68; font-size: 18px; line-height: 1; }
+.nav-dropdown-corporate .nav-dropdown-panel a::after { grid-column: 2; display: block; margin-top: -18px; color: #aebccc; font-size: 11px; font-weight: 600; line-height: 1.35; letter-spacing: 0; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(2)::before { content: '🏢'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(2)::after { content: "1975'ten bugüne firma yolculuğu"; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(3)::before { content: '🕰'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(3)::after { content: 'Ticaret ve imalat geçmişi'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(4)::before { content: '⚙'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(4)::after { content: 'Makine parkı ve üretim kapasitesi'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(5)::before { content: '🎯'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(5)::after { content: 'Müşteri odaklı üretim anlayışı'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(6)::before { content: '🚀'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(6)::after { content: 'Ulusal ve uluslararası hedefler'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(7)::before { content: '◆'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(7)::after { content: 'Kalite, güven ve sürekli gelişim'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(8)::before { content: '✓'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:nth-child(8)::after { content: 'Kalite her şeyden önce gelir'; }
+.nav-dropdown-corporate .nav-dropdown-panel a:hover,
+.nav-dropdown-corporate .nav-dropdown-panel a:focus { transform: translateY(-2px) !important; border-color: rgba(225,189,104,.55) !important; background: rgba(225,189,104,.11) !important; color: #e1bd68 !important; }
+
+body .site-footer.footer-premium,
+body footer.site-footer.footer-premium {
+  display: block !important;
+  position: relative !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #fff !important;
+  background: #020a12 !important;
+  border-top: 1px solid rgba(201,154,63,.42) !important;
+  overflow: hidden !important;
+  font-family: Inter, Arial, sans-serif !important;
+}
+
+.footer-premium-stage {
+  position: relative !important;
+  width: min(1920px, 100%) !important;
+  min-height: clamp(420px, 37.5vw, 720px) !important;
+  margin: 0 auto !important;
+  background: url('../img/footer-premium-desktop.png') center top / 100% 100% no-repeat !important;
+  overflow: hidden !important;
+}
+
+.footer-premium-overlay { position: absolute !important; inset: 0 !important; z-index: 2 !important; pointer-events: none !important; }
+.footer-premium-col,
+.footer-premium-contact,
+.footer-premium-bottom { pointer-events: auto !important; }
+
+.footer-premium-col,
+.footer-premium-contact {
+  position: absolute !important;
+  top: 18.2% !important;
+  min-width: 0 !important;
+}
+
+.footer-premium-pages { left: 40.3% !important; width: 13.8% !important; }
+.footer-premium-products { left: 57.4% !important; width: 15.7% !important; }
+.footer-premium-contact { left: 76.5% !important; width: 18.6% !important; }
+
+.footer-premium h3 {
+  margin: 0 0 clamp(15px, 1.15vw, 23px) !important;
+  color: #f0c66e !important;
+  font-family: Georgia, 'Times New Roman', serif !important;
+  font-size: clamp(14px, 1.1vw, 24px) !important;
+  line-height: 1.05 !important;
+  letter-spacing: .16em !important;
+  text-transform: uppercase !important;
+  font-weight: 800 !important;
+}
+
+.footer-premium h3::after {
+  content: '' !important;
+  display: block !important;
+  width: clamp(38px, 3vw, 68px) !important;
+  height: 2px !important;
+  margin-top: clamp(8px, .78vw, 13px) !important;
+  background: linear-gradient(90deg, #f0c66e, rgba(240,198,110,.08)) !important;
+  box-shadow: 0 0 12px rgba(240,198,110,.45) !important;
+}
+
+.footer-premium-col nav,
+.footer-premium-contact ul {
+  display: grid !important;
+  gap: clamp(6px, .63vw, 12px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.footer-premium-col nav a {
+  position: relative !important;
+  display: block !important;
+  padding-left: clamp(14px, 1.05vw, 20px) !important;
+  color: #f2f5fa !important;
+  font-family: Georgia, 'Times New Roman', serif !important;
+  font-size: clamp(11px, .88vw, 18px) !important;
+  line-height: 1.22 !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+  text-shadow: 0 2px 12px rgba(0,0,0,.35) !important;
+  transition: color .18s ease, transform .18s ease !important;
+}
+
+.footer-premium-col nav a::before {
+  content: '›' !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 50% !important;
+  transform: translateY(-52%) !important;
+  color: #f0b84e !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 1.15em !important;
+  font-weight: 900 !important;
+}
+
+.footer-premium-col nav a:hover,
+.footer-premium-contact a:hover,
+.footer-premium-bottom a:hover { color: #f7d78b !important; transform: translateX(3px) !important; }
+
+.footer-premium-contact ul { list-style: none !important; gap: 0 !important; }
+
+.footer-premium-contact li {
+  display: grid !important;
+  grid-template-columns: clamp(30px, 2.45vw, 44px) minmax(0, 1fr) !important;
+  gap: clamp(7px, .64vw, 12px) !important;
+  align-items: center !important;
+  padding: 0 0 clamp(5px, .46vw, 9px) !important;
+  margin: 0 0 clamp(5px, .46vw, 9px) !important;
+  border-bottom: 1px solid rgba(218,166,70,.20) !important;
+}
+
+.footer-premium-contact li:last-child { margin-bottom: 0 !important; border-bottom: 0 !important; }
+
+.footer-premium-contact .contact-icon {
+  width: clamp(30px, 2.35vw, 42px) !important;
+  height: clamp(30px, 2.35vw, 42px) !important;
+  min-width: clamp(30px, 2.35vw, 42px) !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1.5px solid rgba(231,171,72,.95) !important;
+  border-radius: 999px !important;
+  color: #e8ad4d !important;
+  background: rgba(255,255,255,.016) !important;
+  box-shadow: 0 0 20px rgba(201,154,63,.10) !important;
+}
+
+.footer-premium-contact .contact-icon svg { width: 47% !important; height: 47% !important; fill: none !important; stroke: currentColor !important; stroke-width: 1.85 !important; stroke-linecap: round !important; stroke-linejoin: round !important; }
+
+.footer-premium-contact b {
+  display: block !important;
+  margin: 0 0 4px !important;
+  color: #f0c66e !important;
+  font-size: clamp(7px, .56vw, 11px) !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+}
+
+.footer-premium-contact a,
+.footer-premium-contact strong {
+  display: block !important;
+  color: #f3f7fb !important;
+  font-family: Georgia, 'Times New Roman', serif !important;
+  font-size: clamp(9px, .72vw, 14px) !important;
+  line-height: 1.18 !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+  overflow-wrap: anywhere !important;
+}
+
+.footer-premium-social {
+  display: flex !important;
+  gap: clamp(8px, .76vw, 14px) !important;
+  margin-top: clamp(7px, .72vw, 14px) !important;
+}
+
+.footer-premium-social a {
+  width: clamp(31px, 2.45vw, 44px) !important;
+  height: clamp(31px, 2.45vw, 44px) !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 999px !important;
+  border: 1.5px solid rgba(231,171,72,.9) !important;
+  color: #e8ad4d !important;
+  background: rgba(255,255,255,.016) !important;
+  font-size: clamp(11px, .82vw, 16px) !important;
+  font-weight: 900 !important;
+  text-decoration: none !important;
+}
+
+.footer-premium-bottom {
+  position: absolute !important;
+  left: 4.2% !important;
+  right: 4.2% !important;
+  bottom: 14.5% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+}
+
+.footer-premium-bottom p { margin: 0 !important; color: #e6edf7 !important; font-size: clamp(11px, .92vw, 17px) !important; line-height: 1.35 !important; text-shadow: 0 2px 12px rgba(0,0,0,.35) !important; }
+.footer-premium-bottom nav { display: flex !important; flex-wrap: wrap !important; justify-content: flex-end !important; gap: 10px clamp(14px, 1.9vw, 34px) !important; margin: 0 !important; padding: 0 !important; }
+.footer-premium-bottom a { color: #e6edf7 !important; font-size: clamp(10px, .82vw, 16px) !important; text-decoration: none !important; transition: color .18s ease !important; padding-left: 0 !important; }
+.footer-premium-bottom a::before { display: none !important; content: none !important; }
+
+.whatsapp-float { width: 66px !important; height: 66px !important; min-width: 66px !important; min-height: 66px !important; right: 22px !important; bottom: 22px !important; z-index: 90 !important; }
+.whatsapp-float-icon,
+.whatsapp-float-icon svg { width: 38px !important; height: 38px !important; }
+
+@media (min-width: 901px) {
+  .nav-dropdown-corporate:hover .nav-dropdown-panel,
+  .nav-dropdown-corporate:focus-within .nav-dropdown-panel { opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; transform: translateX(-50%) translateY(0) scale(1) !important; }
+}
+
+@media (max-width: 1100px) {
+  .footer-premium-stage { min-height: 0 !important; background: radial-gradient(circle at 0% 0%, rgba(225,189,104,.14), transparent 38%), linear-gradient(145deg, #04101d 0%, #020813 58%, #03070e 100%) !important; padding: 36px 22px 96px !important; }
+  .footer-premium-overlay { position: relative !important; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 30px 28px !important; }
+  .footer-premium-col,
+  .footer-premium-contact,
+  .footer-premium-bottom { position: static !important; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; width: auto !important; }
+  .footer-premium-contact { grid-column: 1 / -1 !important; }
+  .footer-premium h3 { font-size: 16px !important; margin-bottom: 14px !important; }
+  .footer-premium-col nav a { font-size: 14.5px !important; }
+  .footer-premium-contact a,
+  .footer-premium-contact strong { font-size: 14px !important; font-family: Inter, Arial, sans-serif !important; }
+  .footer-premium-bottom { grid-column: 1 / -1 !important; display: grid !important; justify-content: start !important; gap: 12px !important; margin-top: 8px !important; padding-top: 18px !important; border-top: 1px solid rgba(225,189,104,.28) !important; }
+  .footer-premium-bottom nav { justify-content: flex-start !important; }
+}
+
+@media (max-width: 720px) {
+  .footer-premium-stage { padding: 32px 20px 98px !important; }
+  .footer-premium-overlay { grid-template-columns: 1fr !important; gap: 26px !important; }
+  .footer-premium-contact { grid-column: auto !important; }
+  .footer-premium-contact li { grid-template-columns: 42px minmax(0, 1fr) !important; gap: 12px !important; }
+  .footer-premium-contact .contact-icon { width: 38px !important; height: 38px !important; min-width: 38px !important; }
+  .whatsapp-float { width: 58px !important; height: 58px !important; min-width: 58px !important; min-height: 58px !important; right: 16px !important; bottom: max(16px, env(safe-area-inset-bottom)) !important; }
+}
