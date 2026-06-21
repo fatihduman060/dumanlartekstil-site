@@ -99,9 +99,9 @@
         height: clamp(205px, 15.8vw, 292px);
         overflow: hidden;
         background: #f8f3eb;
-        border-bottom: 1px solid rgba(201,154,63,.22);
+        border-bottom: 1px solid rgba(201,154,63,.16);
         margin-top: -1px;
-        box-shadow: inset 0 10px 18px rgba(248,243,235,.40), inset 0 -1px 0 rgba(7,21,35,.06);
+        box-shadow: inset 0 10px 18px rgba(248,243,235,.40), inset 0 -1px 0 rgba(7,21,35,.04);
       }
 
       body.home-page .brand-portal-section::before {
@@ -255,6 +255,10 @@
         pointer-events: none;
       }
 
+      body.home-page .products-section {
+        margin-top: 0 !important;
+      }
+
       @keyframes brandPortalMove {
         from { transform: translateY(-50%) translateX(0); }
         to { transform: translateY(-50%) translateX(52%); }
@@ -331,62 +335,32 @@
     if (featureBand) featureBand.insertAdjacentElement('afterend', factorySection);
     else hero.insertAdjacentElement('afterend', factorySection);
 
-    if (document.querySelector('.brand-portal-section')) return;
+    let portalSection = document.querySelector('.brand-portal-section');
+    if (!portalSection) {
+      const trackLogos = [brands[2], brands[0], brands[1], brands[2], brands[0], brands[1], brands[2], brands[0], brands[1]];
+      const logoTrack = trackLogos.map((brand) => `<img src="${brand.logo}" alt="" decoding="async">`).join('');
+      portalSection = document.createElement('section');
+      portalSection.className = 'brand-portal-section';
+      portalSection.setAttribute('aria-label', 'Dumanlar marka geçiş animasyonu');
+      portalSection.innerHTML = `
+        <div class="portal-flow" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="brand-portal-track-wrap" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
+        <span class="brand-portal-tunnel-mask" aria-hidden="true"></span>
+        <span class="brand-portal-mouth-cover" aria-hidden="true"></span>
+        <span class="brand-portal-glow" aria-hidden="true"></span>
+        <span class="brand-portal-mouth-glow" aria-hidden="true"></span>
+        <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
+      `;
+      factorySection.insertAdjacentElement('afterend', portalSection);
+    }
 
-    const trackLogos = [brands[2], brands[0], brands[1], brands[2], brands[0], brands[1], brands[2], brands[0], brands[1]];
-    const logoTrack = trackLogos.map((brand) => `<img src="${brand.logo}" alt="" decoding="async">`).join('');
-    const section = document.createElement('section');
-    section.className = 'brand-portal-section';
-    section.setAttribute('aria-label', 'Dumanlar marka geçiş animasyonu');
-    section.innerHTML = `
-      <div class="portal-flow" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div class="brand-portal-track-wrap" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
-      <span class="brand-portal-tunnel-mask" aria-hidden="true"></span>
-      <span class="brand-portal-mouth-cover" aria-hidden="true"></span>
-      <span class="brand-portal-glow" aria-hidden="true"></span>
-      <span class="brand-portal-mouth-glow" aria-hidden="true"></span>
-      <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
-    `;
-
-    factorySection.insertAdjacentElement('afterend', section);
-  };
-
-  const render = () => {
-    const section = document.querySelector('body.home-page #markalar.brands-section');
-    if (!section || section.dataset.brandCleanReady === '1') return;
-
-    section.dataset.brandCleanReady = '1';
-    section.className = 'brands-section section-light reveal brand-clean-section is-visible';
-    section.removeAttribute('style');
-    section.innerHTML = `
-      <div class="brand-clean-inner">
-        <div class="brand-clean-top">
-          <div>
-            <span class="brand-clean-kicker">Markalarımız</span>
-            <h2 class="brand-clean-title">Satış kanalına göre ayrışan marka ailemiz</h2>
-          </div>
-          <p class="brand-clean-text">Bitke, Mofiy ve Bafiy; aynı üretim tecrübesinden beslenen, farklı koleksiyon ve hedef kitle ihtiyaçlarına cevap veren marka yapılarıdır.</p>
-        </div>
-        <div class="brand-clean-grid" aria-label="Dumanlar A.Ş. markaları">
-          ${brands.map((brand) => `
-            <a class="brand-clean-card brand-clean-card--${brand.key}" href="${brand.href}" aria-label="${brand.name} markasını incele">
-              <span class="brand-clean-logo-wrap"><img src="${brand.logo}" alt="${brand.name}" loading="eager" decoding="async"></span>
-              <strong class="brand-clean-name">${brand.name}</strong>
-              <span class="brand-clean-desc">${brand.text}</span>
-            </a>
-          `).join('')}
-        </div>
-        <div class="brand-clean-actions">
-          <a class="btn btn-dark" href="markalar.html">Tüm Markalarımızı Keşfet</a>
-          <a class="btn btn-outline-light" href="iletisim.html">Üretim Talebi Oluştur</a>
-        </div>
-      </div>
-    `;
+    const oldBrandsSection = document.querySelector('body.home-page #markalar.brands-section');
+    if (oldBrandsSection) oldBrandsSection.remove();
+    portalSection.id = 'markalar';
   };
 
   const init = () => {
     setupBrandPortal();
-    render();
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
