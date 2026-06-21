@@ -20,10 +20,12 @@
         border-top: 0 !important;
         border-bottom: 0 !important;
         outline: 0 !important;
+        padding-bottom: clamp(30px, 2.8vw, 56px) !important;
+        align-items: flex-start !important;
         background:
-          linear-gradient(180deg, #061523 0%, #071827 56%, #13283a 78%, rgba(248,243,235,.62) 125%) !important;
+          linear-gradient(180deg, #061523 0%, #071827 50%, #0e2132 68%, #26394a 86%, rgba(248,243,235,.60) 132%) !important;
         box-shadow:
-          inset 0 -30px 42px rgba(248,243,235,.08),
+          inset 0 -42px 56px rgba(248,243,235,.10),
           0 18px 32px rgba(3,14,26,.10);
       }
 
@@ -37,10 +39,10 @@
         left: 0;
         right: 0;
         bottom: 0;
-        height: clamp(26px, 3.2vw, 58px);
+        height: clamp(44px, 4.8vw, 86px);
         pointer-events: none;
         z-index: 0;
-        background: linear-gradient(0deg, rgba(248,243,235,.22), rgba(248,243,235,.07) 54%, rgba(248,243,235,0));
+        background: linear-gradient(0deg, rgba(248,243,235,.34), rgba(248,243,235,.12) 58%, rgba(248,243,235,0));
       }
 
       body.home-page .feature-band > * {
@@ -270,8 +272,9 @@
         body.home-page .feature-band {
           border-top: 0 !important;
           border-bottom: 0 !important;
+          padding-bottom: 34px !important;
           background:
-            linear-gradient(180deg, #061523 0%, #071827 66%, #13283a 88%, rgba(248,243,235,.38) 132%) !important;
+            linear-gradient(180deg, #061523 0%, #071827 60%, #13283a 82%, rgba(248,243,235,.38) 132%) !important;
         }
         body.home-page .brand-portal-section {
           height: 198px;
