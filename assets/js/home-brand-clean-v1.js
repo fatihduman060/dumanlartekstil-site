@@ -109,10 +109,7 @@
         position: absolute;
         inset: 0;
         z-index: 0;
-        background:
-          linear-gradient(90deg, rgba(255,255,255,.97) 0%, rgba(255,255,255,.86) 47%, rgba(255,255,255,.64) 74%, rgba(255,255,255,.46) 100%),
-          url('${ASSET_BASE}brand-portal-bg.webp') center / cover no-repeat;
-        transform: scale(1.018);
+        background: linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.92) 47%, rgba(255,255,255,.78) 74%, rgba(255,255,255,.60) 100%);
       }
 
       body.home-page .brand-portal-section::after {
