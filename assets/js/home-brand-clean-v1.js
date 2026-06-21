@@ -19,12 +19,11 @@
         overflow: hidden;
         background: #f8f3eb;
         border-bottom: 0;
-        margin-top: -10px;
-        padding-top: 10px;
+        margin-top: 0;
+        padding-top: 0;
         box-shadow:
-          0 -12px 22px rgba(3,14,26,.10),
-          inset 0 14px 26px rgba(3,14,26,.08),
-          inset 0 -26px 42px rgba(248,243,235,.72);
+          inset 0 8px 16px rgba(3,14,26,.045),
+          inset 0 -8px 16px rgba(248,243,235,.30);
       }
 
       body.home-page .factory-showcase-section::before,
@@ -38,15 +37,13 @@
       }
 
       body.home-page .factory-showcase-section::before {
-        top: 0;
-        height: clamp(42px, 4.6vw, 82px);
-        background: linear-gradient(180deg, rgba(3,14,26,.28), rgba(3,14,26,.10) 48%, rgba(3,14,26,0));
+        display: none;
       }
 
       body.home-page .factory-showcase-section::after {
         bottom: 0;
-        height: clamp(56px, 5.8vw, 104px);
-        background: linear-gradient(0deg, rgba(248,243,235,.92), rgba(248,243,235,.48) 48%, rgba(248,243,235,0));
+        height: clamp(18px, 2vw, 36px);
+        background: linear-gradient(0deg, rgba(248,243,235,.34), rgba(248,243,235,.14) 54%, rgba(248,243,235,0));
       }
 
       body.home-page .factory-showcase-section img {
@@ -66,7 +63,7 @@
         background: #f8f3eb;
         border-bottom: 1px solid rgba(201,154,63,.22);
         margin-top: -1px;
-        box-shadow: inset 0 18px 28px rgba(248,243,235,.72), inset 0 -1px 0 rgba(7,21,35,.06);
+        box-shadow: inset 0 8px 16px rgba(248,243,235,.30), inset 0 -1px 0 rgba(7,21,35,.06);
       }
 
       body.home-page .brand-portal-section::before {
@@ -234,10 +231,6 @@
       }
 
       @media (max-width: 900px) {
-        body.home-page .factory-showcase-section {
-          margin-top: -6px;
-          padding-top: 6px;
-        }
         body.home-page .brand-portal-section {
           height: 198px;
           --portal-mouth-x: 79%;
