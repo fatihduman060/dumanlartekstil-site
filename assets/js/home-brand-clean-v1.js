@@ -14,11 +14,10 @@
     style.id = 'brand-portal-styles';
     style.textContent = `
       body.home-page .brand-portal-section {
-        --portal-mouth-x: 67%;
-        --portal-nose-x: 95.2%;
+        --portal-mouth-x: 73%;
         position: relative;
         isolation: isolate;
-        height: clamp(210px, 16.4vw, 305px);
+        height: clamp(205px, 15.8vw, 292px);
         overflow: hidden;
         background: #f8f3eb;
         border-bottom: 1px solid rgba(201,154,63,.22);
@@ -31,7 +30,7 @@
         inset: 0;
         z-index: 0;
         background:
-          linear-gradient(90deg, rgba(255,255,255,.96) 0%, rgba(255,255,255,.84) 45%, rgba(255,255,255,.62) 72%, rgba(255,255,255,.42) 100%),
+          linear-gradient(90deg, rgba(255,255,255,.97) 0%, rgba(255,255,255,.86) 47%, rgba(255,255,255,.64) 74%, rgba(255,255,255,.46) 100%),
           url('${ASSET_BASE}brand-portal-bg.webp') center / cover no-repeat;
         transform: scale(1.018);
       }
@@ -43,9 +42,8 @@
         z-index: 1;
         pointer-events: none;
         background:
-          radial-gradient(circle at var(--portal-mouth-x) 52%, rgba(255,225,158,.36), transparent 12%),
-          radial-gradient(circle at var(--portal-nose-x) 52%, rgba(255,224,154,.32), transparent 10%),
-          linear-gradient(180deg, rgba(255,255,255,.25), transparent 48%, rgba(7,21,35,.035));
+          radial-gradient(circle at var(--portal-mouth-x) 57%, rgba(255,225,158,.38), transparent 12%),
+          linear-gradient(180deg, rgba(255,255,255,.24), transparent 48%, rgba(7,21,35,.032));
       }
 
       body.home-page .portal-flow {
@@ -62,16 +60,16 @@
         right: -16%;
         height: 9px;
         border-radius: 999px;
-        opacity: .58;
+        opacity: .56;
         filter: blur(1.6px);
-        background: linear-gradient(90deg, transparent 0%, rgba(255,238,198,0) 9%, rgba(255,241,206,.38) 24%, rgba(255,255,245,.94) 52%, rgba(255,226,163,.34) 78%, transparent 100%);
+        background: linear-gradient(90deg, transparent 0%, rgba(255,238,198,0) 9%, rgba(255,241,206,.36) 24%, rgba(255,255,245,.92) 52%, rgba(255,226,163,.30) 78%, transparent 100%);
         background-size: 520px 100%;
         animation: portalFlowMove 6.4s linear infinite;
       }
 
-      body.home-page .portal-flow span:nth-child(1) { top: 45%; transform: rotate(-1.3deg); }
-      body.home-page .portal-flow span:nth-child(2) { top: 52%; height: 6px; opacity: .40; animation-duration: 8s; transform: rotate(.9deg); }
-      body.home-page .portal-flow span:nth-child(3) { top: 59%; height: 4px; opacity: .28; animation-duration: 9.6s; transform: rotate(-.6deg); }
+      body.home-page .portal-flow span:nth-child(1) { top: 49%; transform: rotate(-1.1deg); }
+      body.home-page .portal-flow span:nth-child(2) { top: 56%; height: 6px; opacity: .38; animation-duration: 8s; transform: rotate(.7deg); }
+      body.home-page .portal-flow span:nth-child(3) { top: 63%; height: 4px; opacity: .26; animation-duration: 9.6s; transform: rotate(-.5deg); }
 
       body.home-page .brand-portal-track-wrap {
         position: absolute;
@@ -79,23 +77,16 @@
         z-index: 3;
         overflow: hidden;
         pointer-events: none;
-      }
-
-      body.home-page .brand-portal-track-wrap--entry {
         clip-path: polygon(0 0, var(--portal-mouth-x) 0, var(--portal-mouth-x) 100%, 0 100%);
-      }
-
-      body.home-page .brand-portal-track-wrap--exit {
-        clip-path: polygon(var(--portal-nose-x) 0, 100% 0, 100% 100%, var(--portal-nose-x) 100%);
       }
 
       body.home-page .brand-portal-track {
         position: absolute;
-        top: 51%;
-        left: -52%;
+        top: 57%;
+        left: -58%;
         display: flex;
         align-items: center;
-        gap: clamp(68px, 6.8vw, 136px);
+        gap: clamp(78px, 7.2vw, 148px);
         width: max-content;
         transform: translateY(-50%);
         animation: brandPortalMove 20s linear infinite;
@@ -105,90 +96,81 @@
       body.home-page .brand-portal-track img {
         display: block;
         width: auto;
-        height: clamp(50px, 5vw, 96px);
+        height: clamp(48px, 4.8vw, 90px);
         object-fit: contain;
         filter: drop-shadow(0 14px 18px rgba(7,21,35,.08));
         flex: 0 0 auto;
       }
 
       body.home-page .brand-portal-tunnel-mask,
-      body.home-page .brand-portal-mouth-cover,
-      body.home-page .brand-portal-nose-cover {
+      body.home-page .brand-portal-mouth-cover {
         position: absolute;
         z-index: 4;
         pointer-events: none;
       }
 
       body.home-page .brand-portal-tunnel-mask {
-        left: calc(var(--portal-mouth-x) - .8vw);
-        right: calc(100% - var(--portal-nose-x) - .4vw);
+        left: calc(var(--portal-mouth-x) - 1.6vw);
+        right: -2vw;
         top: 0;
         bottom: 0;
         background:
-          linear-gradient(90deg, rgba(248,243,235,.04), rgba(248,243,235,.76) 12%, rgba(248,243,235,.84) 84%, rgba(248,243,235,.12)),
-          radial-gradient(ellipse at 50% 52%, rgba(255,235,190,.24), transparent 62%);
-        filter: blur(.2px);
-        opacity: .92;
+          linear-gradient(90deg, rgba(248,243,235,.04), rgba(248,243,235,.84) 12%, rgba(248,243,235,.90) 78%, rgba(248,243,235,.32)),
+          radial-gradient(ellipse at 14% 57%, rgba(255,235,190,.32), transparent 58%);
+        opacity: .96;
       }
 
-      body.home-page .brand-portal-mouth-cover,
-      body.home-page .brand-portal-nose-cover {
-        top: 52%;
-        width: clamp(96px, 8vw, 156px);
-        height: clamp(80px, 6.4vw, 124px);
+      body.home-page .brand-portal-mouth-cover {
+        left: var(--portal-mouth-x);
+        top: 57%;
+        width: clamp(112px, 9.2vw, 176px);
+        height: clamp(92px, 7.2vw, 138px);
         border-radius: 999px;
         transform: translate(-50%, -50%);
         background:
-          radial-gradient(ellipse at 50% 50%, rgba(248,243,235,.92) 0%, rgba(248,243,235,.68) 38%, rgba(248,243,235,0) 74%);
-        filter: blur(7px);
-        opacity: .92;
+          radial-gradient(ellipse at 50% 50%, rgba(248,243,235,.90) 0%, rgba(248,243,235,.64) 36%, rgba(248,243,235,0) 74%);
+        filter: blur(8px);
+        opacity: .94;
       }
 
-      body.home-page .brand-portal-mouth-cover { left: var(--portal-mouth-x); }
-      body.home-page .brand-portal-nose-cover { left: var(--portal-nose-x); }
-
       body.home-page .brand-portal-glow,
-      body.home-page .brand-portal-mouth-glow,
-      body.home-page .brand-portal-nose-glow {
+      body.home-page .brand-portal-mouth-glow {
         position: absolute;
         z-index: 6;
         pointer-events: none;
       }
 
       body.home-page .brand-portal-glow {
-        right: clamp(-76px, 2.5vw, 46px);
-        top: 52%;
-        width: min(40vw, 660px);
-        height: 88px;
+        right: -12vw;
+        top: 57%;
+        width: min(40vw, 620px);
+        height: 86px;
         transform: translateY(-50%);
-        background: radial-gradient(ellipse at 58% 50%, rgba(255,227,158,.38), transparent 66%);
+        background: radial-gradient(ellipse at 38% 50%, rgba(255,227,158,.38), transparent 66%);
         filter: blur(12px);
-        opacity: .84;
+        opacity: .82;
       }
 
-      body.home-page .brand-portal-mouth-glow,
-      body.home-page .brand-portal-nose-glow {
-        top: 52%;
-        width: clamp(72px, 6.6vw, 132px);
-        height: clamp(52px, 4.8vw, 90px);
+      body.home-page .brand-portal-mouth-glow {
+        left: var(--portal-mouth-x);
+        top: 57%;
+        width: clamp(78px, 7vw, 138px);
+        height: clamp(58px, 5.2vw, 96px);
         border-radius: 999px;
         transform: translate(-50%, -50%);
         background:
           radial-gradient(circle, rgba(255,245,214,.98) 0%, rgba(255,221,150,.48) 34%, rgba(255,221,150,0) 72%);
         filter: blur(4px);
-        opacity: .82;
+        opacity: .86;
         mix-blend-mode: screen;
       }
-
-      body.home-page .brand-portal-mouth-glow { left: var(--portal-mouth-x); }
-      body.home-page .brand-portal-nose-glow { left: var(--portal-nose-x); }
 
       body.home-page .brand-portal-sock {
         position: absolute;
         z-index: 5;
-        right: clamp(-72px, -2.4vw, -28px);
-        top: 52%;
-        width: min(34vw, 580px);
+        right: clamp(-210px, -12vw, -116px);
+        top: 57%;
+        width: min(34vw, 560px);
         max-width: none;
         height: auto;
         transform: translateY(-50%);
@@ -198,7 +180,7 @@
 
       @keyframes brandPortalMove {
         from { transform: translateY(-50%) translateX(0); }
-        to { transform: translateY(-50%) translateX(50%); }
+        to { transform: translateY(-50%) translateX(52%); }
       }
 
       @keyframes portalFlowMove {
@@ -208,29 +190,29 @@
 
       @media (max-width: 900px) {
         body.home-page .brand-portal-section {
-          --portal-mouth-x: 65%;
-          --portal-nose-x: 96%;
-          height: 205px;
+          --portal-mouth-x: 71%;
+          height: 198px;
         }
         body.home-page .brand-portal-track {
-          left: -120%;
-          gap: 48px;
+          top: 58%;
+          left: -122%;
+          gap: 52px;
           animation-duration: 16s;
         }
         body.home-page .brand-portal-track img {
-          height: 50px;
+          height: 48px;
         }
         body.home-page .brand-portal-sock {
-          right: -110px;
-          width: 68vw;
+          right: -182px;
+          top: 58%;
+          width: 70vw;
         }
         body.home-page .brand-portal-glow {
-          right: -112px;
-          width: 68vw;
+          right: -150px;
+          width: 70vw;
         }
         body.home-page .brand-portal-tunnel-mask {
-          left: calc(var(--portal-mouth-x) - 3vw);
-          right: calc(100% - var(--portal-nose-x) - 2vw);
+          left: calc(var(--portal-mouth-x) - 4vw);
         }
       }
 
@@ -260,14 +242,11 @@
     section.setAttribute('aria-label', 'Dumanlar marka geçiş animasyonu');
     section.innerHTML = `
       <div class="portal-flow" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div class="brand-portal-track-wrap brand-portal-track-wrap--entry" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
-      <div class="brand-portal-track-wrap brand-portal-track-wrap--exit" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
+      <div class="brand-portal-track-wrap" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
       <span class="brand-portal-tunnel-mask" aria-hidden="true"></span>
       <span class="brand-portal-mouth-cover" aria-hidden="true"></span>
-      <span class="brand-portal-nose-cover" aria-hidden="true"></span>
       <span class="brand-portal-glow" aria-hidden="true"></span>
       <span class="brand-portal-mouth-glow" aria-hidden="true"></span>
-      <span class="brand-portal-nose-glow" aria-hidden="true"></span>
       <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
     `;
 
