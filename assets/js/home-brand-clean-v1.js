@@ -275,14 +275,18 @@
 
     injectPortalStyles();
 
+    const featureBand = document.querySelector('body.home-page .feature-band');
+
     let factorySection = document.querySelector('.factory-showcase-section');
     if (!factorySection) {
       factorySection = document.createElement('section');
       factorySection.className = 'factory-showcase-section';
       factorySection.setAttribute('aria-label', 'Dumanlar fabrika tanıtım görseli');
       factorySection.innerHTML = `<img src="${FACTORY_BANNER}" alt="Dumanlar çorap ve tekstil üretimi" decoding="async">`;
-      hero.insertAdjacentElement('afterend', factorySection);
     }
+
+    if (featureBand) featureBand.insertAdjacentElement('afterend', factorySection);
+    else hero.insertAdjacentElement('afterend', factorySection);
 
     if (document.querySelector('.brand-portal-section')) return;
 
@@ -301,9 +305,7 @@
       <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
     `;
 
-    const featureBand = document.querySelector('body.home-page .feature-band');
-    if (featureBand) featureBand.insertAdjacentElement('afterend', section);
-    else factorySection.insertAdjacentElement('afterend', section);
+    factorySection.insertAdjacentElement('afterend', section);
   };
 
   const render = () => {
