@@ -17,12 +17,18 @@
       body.home-page .feature-band {
         position: relative;
         overflow: hidden;
+        border-top: 0 !important;
+        border-bottom: 0 !important;
+        outline: 0 !important;
         background:
           linear-gradient(180deg, #061523 0%, #071827 56%, #13283a 78%, rgba(248,243,235,.62) 125%) !important;
         box-shadow:
-          inset 0 1px 0 rgba(201,154,63,.20),
           inset 0 -30px 42px rgba(248,243,235,.08),
           0 18px 32px rgba(3,14,26,.10);
+      }
+
+      body.home-page .feature-band::before {
+        display: none !important;
       }
 
       body.home-page .feature-band::after {
@@ -34,7 +40,7 @@
         height: clamp(26px, 3.2vw, 58px);
         pointer-events: none;
         z-index: 0;
-        background: linear-gradient(0deg, rgba(248,243,235,.24), rgba(248,243,235,.08) 54%, rgba(248,243,235,0));
+        background: linear-gradient(0deg, rgba(248,243,235,.22), rgba(248,243,235,.07) 54%, rgba(248,243,235,0));
       }
 
       body.home-page .feature-band > * {
@@ -262,6 +268,8 @@
 
       @media (max-width: 900px) {
         body.home-page .feature-band {
+          border-top: 0 !important;
+          border-bottom: 0 !important;
           background:
             linear-gradient(180deg, #061523 0%, #071827 66%, #13283a 88%, rgba(248,243,235,.38) 132%) !important;
         }
