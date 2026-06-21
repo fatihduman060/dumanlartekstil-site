@@ -74,7 +74,7 @@
       body.home-page .brand-portal-track-wrap {
         position: absolute;
         inset: 0;
-        z-index: 3;
+        z-index: 4;
         overflow: hidden;
         pointer-events: none;
         clip-path: polygon(0 0, var(--portal-mouth-x) 0, var(--portal-mouth-x) 100%, 0 100%);
@@ -105,7 +105,7 @@
       body.home-page .brand-portal-tunnel-mask,
       body.home-page .brand-portal-mouth-cover {
         position: absolute;
-        z-index: 4;
+        z-index: 5;
         pointer-events: none;
       }
 
@@ -130,13 +130,13 @@
         background:
           radial-gradient(ellipse at 50% 50%, rgba(248,243,235,.80) 0%, rgba(248,243,235,.52) 34%, rgba(248,243,235,0) 72%);
         filter: blur(5px);
-        opacity: .78;
+        opacity: .70;
       }
 
       body.home-page .brand-portal-glow,
       body.home-page .brand-portal-mouth-glow {
         position: absolute;
-        z-index: 6;
+        z-index: 8;
         pointer-events: none;
       }
 
@@ -165,17 +165,26 @@
         mix-blend-mode: screen;
       }
 
-      body.home-page .brand-portal-sock {
+      body.home-page .brand-portal-sock,
+      body.home-page .brand-portal-mouth-lip {
         position: absolute;
-        z-index: 5;
         right: clamp(-210px, -12vw, -116px);
         top: 57%;
         width: min(34vw, 560px);
         max-width: none;
         height: auto;
         transform: translateY(-50%);
-        filter: drop-shadow(0 20px 26px rgba(7,21,35,.17));
         pointer-events: none;
+      }
+
+      body.home-page .brand-portal-sock {
+        z-index: 3;
+        filter: drop-shadow(0 20px 26px rgba(7,21,35,.17));
+      }
+
+      body.home-page .brand-portal-mouth-lip {
+        z-index: 7;
+        filter: none;
       }
 
       @keyframes brandPortalMove {
@@ -202,7 +211,8 @@
         body.home-page .brand-portal-track img {
           height: 48px;
         }
-        body.home-page .brand-portal-sock {
+        body.home-page .brand-portal-sock,
+        body.home-page .brand-portal-mouth-lip {
           right: -182px;
           top: 58%;
           width: 70vw;
@@ -242,12 +252,13 @@
     section.setAttribute('aria-label', 'Dumanlar marka geçiş animasyonu');
     section.innerHTML = `
       <div class="portal-flow" aria-hidden="true"><span></span><span></span><span></span></div>
+      <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
       <div class="brand-portal-track-wrap" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
       <span class="brand-portal-tunnel-mask" aria-hidden="true"></span>
       <span class="brand-portal-mouth-cover" aria-hidden="true"></span>
       <span class="brand-portal-glow" aria-hidden="true"></span>
       <span class="brand-portal-mouth-glow" aria-hidden="true"></span>
-      <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
+      <img class="brand-portal-mouth-lip" src="${ASSET_BASE}sock-mouth-lip.png" alt="" decoding="async" onerror="this.remove()">
     `;
 
     hero.insertAdjacentElement('afterend', section);
