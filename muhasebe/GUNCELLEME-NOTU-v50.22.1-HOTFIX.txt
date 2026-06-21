@@ -1,9 +1,0 @@
-v50.22.1 PHP 7 uyumluluk düzeltmesi
-
-Önceki v50.22 paketinde PHP 8 ile gelen str_contains() fonksiyonu kullanıldığı için PHP 7.4 çalışan hostinglerde muhasebe ekranı açılmayabilir.
-Bu hotfix aynı çek-hareket entegrasyonunu korur, sadece PHP 7 uyumlu strpos() kontrolüne çevirir.
-
-Yükleme:
-1) Mevcut storage klasörüne dokunmayın.
-2) Bu paketteki dosyaları muhasebe klasörüne yükleyip mevcut PHP dosyalarının üstüne yazın.
-3) storage/bitke_muhasebe.sqlite yedeğini mutlaka alın.
