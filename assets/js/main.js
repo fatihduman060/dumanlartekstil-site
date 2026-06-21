@@ -19,13 +19,20 @@
     if (!open) closeCorporateDropdown();
   };
 
-  const ensureRuntimeStylesheet = () => {
-    const href = 'assets/css/site-runtime.css';
+  const ensureStylesheet = (href) => {
     if (document.querySelector(`link[href="${href}"]`)) return;
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = href;
     document.head.appendChild(link);
+  };
+
+  const ensureScript = (src) => {
+    if (document.querySelector(`script[src="${src}"]`)) return;
+    const script = document.createElement('script');
+    script.src = src;
+    script.defer = true;
+    document.body.appendChild(script);
   };
 
   const setupPremiumFooter = () => {
@@ -242,6 +249,26 @@
     });
   };
 
+  const setupHomePage = () => {
+    if (!document.body.classList.contains('home-page')) return;
+
+    ensureStylesheet('assets/css/bitke-refresh.css');
+    ensureStylesheet('assets/css/home-brand-clean-v1.css');
+    ensureScript('assets/js/home-brand-clean-v1.js');
+
+    const heroTitle = document.querySelector('.hero h1');
+    if (heroTitle) heroTitle.innerHTML = 'Çorap Üretiminde <strong>Markalara Özel Güçlü Çözüm</strong>';
+
+    const heroText = document.querySelector('.hero-text');
+    if (heroText) heroText.textContent = 'BİTKE ve MOFİY markalarımızla toptan satış kanallarına, mağazalara ve özel marka projelerine uygun; planlı, kaliteli ve sürdürülebilir çorap üretimi sunuyoruz.';
+
+    const primaryCta = document.querySelector('.hero-actions .btn-gold');
+    if (primaryCta) primaryCta.textContent = 'Ürün Gruplarını İncele';
+
+    const outlineCta = document.querySelector('.hero-actions .btn-outline');
+    if (outlineCta) outlineCta.textContent = 'Toptan Üretim Talebi';
+  };
+
 
   const setupFooterIcons = () => {
     const icons = {
@@ -267,7 +294,7 @@
     if (window.location.hash) setTimeout(() => document.querySelector(window.location.hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
   };
 
-  ensureRuntimeStylesheet();
+  ensureStylesheet('assets/css/site-runtime.css');
   setupPremiumFooter();
   setupCorporateDropdown();
   setupMenu();
@@ -276,6 +303,7 @@
   setupCookieBanner();
   setupProductHotspots();
   setupGallery();
+  setupHomePage();
   setupFooterIcons();
   setupCorporatePage();
 })();
