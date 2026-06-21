@@ -71,6 +71,14 @@ jobs:
           raw_json = raw[first:last + 1]
 
           payload = json.loads(raw_json)
+          if isinstance(payload.get("gzip_b64_files"), list):
+              chunks = []
+              for chunk_path in payload["gzip_b64_files"]:
+                  chunk_path = str(chunk_path).strip()
+                  if not chunk_path.startswith("assets/bitke-apply-payload-") or not chunk_path.endswith(".txt"):
+                      raise SystemExit(f"Geçersiz payload chunk yolu: {chunk_path!r}")
+                  chunks.append(Path(chunk_path).read_text(encoding="utf-8").strip())
+              payload["gzip_b64"] = "".join(chunks)
           if isinstance(payload.get("gzip_b64"), str):
               compressed = base64.b64decode(payload["gzip_b64"])
               payload = json.loads(gzip.decompress(compressed).decode("utf-8"))
