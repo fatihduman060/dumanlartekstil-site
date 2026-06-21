@@ -15,8 +15,6 @@
     style.textContent = `
       body.home-page .brand-portal-section {
         --portal-mouth-x: 81.5%;
-        --portal-mouth-window-start: 75.5%;
-        --portal-mouth-window-end: 82.8%;
         position: relative;
         isolation: isolate;
         height: clamp(205px, 15.8vw, 292px);
@@ -73,22 +71,13 @@
       body.home-page .portal-flow span:nth-child(2) { top: 56%; height: 6px; opacity: .38; animation-duration: 8s; transform: rotate(.7deg); }
       body.home-page .portal-flow span:nth-child(3) { top: 63%; height: 4px; opacity: .26; animation-duration: 9.6s; transform: rotate(-.5deg); }
 
-      body.home-page .brand-portal-track-wrap,
-      body.home-page .brand-portal-mouth-track-wrap {
+      body.home-page .brand-portal-track-wrap {
         position: absolute;
         inset: 0;
+        z-index: 3;
         overflow: hidden;
         pointer-events: none;
-      }
-
-      body.home-page .brand-portal-track-wrap {
-        z-index: 3;
         clip-path: polygon(0 0, var(--portal-mouth-x) 0, var(--portal-mouth-x) 100%, 0 100%);
-      }
-
-      body.home-page .brand-portal-mouth-track-wrap {
-        z-index: 6;
-        clip-path: polygon(var(--portal-mouth-window-start) 0, var(--portal-mouth-window-end) 0, var(--portal-mouth-window-end) 100%, var(--portal-mouth-window-start) 100%);
       }
 
       body.home-page .brand-portal-track {
@@ -211,8 +200,6 @@
       @media (max-width: 900px) {
         body.home-page .brand-portal-section {
           --portal-mouth-x: 79%;
-          --portal-mouth-window-start: 72.5%;
-          --portal-mouth-window-end: 80.5%;
           height: 198px;
         }
         body.home-page .brand-portal-track {
@@ -268,10 +255,9 @@
       <div class="brand-portal-track-wrap" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
       <span class="brand-portal-tunnel-mask" aria-hidden="true"></span>
       <span class="brand-portal-mouth-cover" aria-hidden="true"></span>
-      <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
-      <div class="brand-portal-mouth-track-wrap" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
       <span class="brand-portal-glow" aria-hidden="true"></span>
       <span class="brand-portal-mouth-glow" aria-hidden="true"></span>
+      <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
       <img class="brand-portal-mouth-lip" src="${ASSET_BASE}sock-mouth-lip.png" alt="" decoding="async" onerror="this.remove()">
     `;
 
