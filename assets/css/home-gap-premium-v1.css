@@ -51,11 +51,37 @@ body.home-page .products-section .section-head h2 {
 }
 
 @media (max-width: 900px) {
+  body.home-page .factory-showcase-section {
+    height: clamp(220px, 54vw, 310px) !important;
+    background: #f8f3eb !important;
+    overflow: hidden !important;
+  }
+
+  body.home-page .factory-showcase-section img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: 58% center !important;
+    transform: scale(1.08) !important;
+    transform-origin: center center !important;
+  }
+
   body.home-page .products-section {
     padding-top: 34px !important;
   }
 
   body.home-page .products-section::before {
     height: 92px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  body.home-page .factory-showcase-section {
+    height: clamp(235px, 62vw, 300px) !important;
+  }
+
+  body.home-page .factory-showcase-section img {
+    object-position: 62% center !important;
+    transform: scale(1.14) !important;
   }
 }
