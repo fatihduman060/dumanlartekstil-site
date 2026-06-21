@@ -14,11 +14,11 @@
     style.id = 'brand-portal-styles';
     style.textContent = `
       body.home-page .brand-portal-section {
-        --portal-mouth-x: 57%;
-        --portal-nose-x: 88%;
+        --portal-mouth-x: 67%;
+        --portal-nose-x: 95.2%;
         position: relative;
         isolation: isolate;
-        height: clamp(220px, 17.2vw, 326px);
+        height: clamp(210px, 16.4vw, 305px);
         overflow: hidden;
         background: #f8f3eb;
         border-bottom: 1px solid rgba(201,154,63,.22);
@@ -31,7 +31,7 @@
         inset: 0;
         z-index: 0;
         background:
-          linear-gradient(90deg, rgba(255,255,255,.96) 0%, rgba(255,255,255,.82) 43%, rgba(255,255,255,.58) 72%, rgba(255,255,255,.40) 100%),
+          linear-gradient(90deg, rgba(255,255,255,.96) 0%, rgba(255,255,255,.84) 45%, rgba(255,255,255,.62) 72%, rgba(255,255,255,.42) 100%),
           url('${ASSET_BASE}brand-portal-bg.webp') center / cover no-repeat;
         transform: scale(1.018);
       }
@@ -43,8 +43,8 @@
         z-index: 1;
         pointer-events: none;
         background:
-          radial-gradient(circle at var(--portal-mouth-x) 52%, rgba(255,225,158,.32), transparent 14%),
-          radial-gradient(circle at var(--portal-nose-x) 52%, rgba(255,224,154,.30), transparent 13%),
+          radial-gradient(circle at var(--portal-mouth-x) 52%, rgba(255,225,158,.36), transparent 12%),
+          radial-gradient(circle at var(--portal-nose-x) 52%, rgba(255,224,154,.32), transparent 10%),
           linear-gradient(180deg, rgba(255,255,255,.25), transparent 48%, rgba(7,21,35,.035));
       }
 
@@ -92,10 +92,10 @@
       body.home-page .brand-portal-track {
         position: absolute;
         top: 51%;
-        left: -48%;
+        left: -52%;
         display: flex;
         align-items: center;
-        gap: clamp(66px, 6.8vw, 136px);
+        gap: clamp(68px, 6.8vw, 136px);
         width: max-content;
         transform: translateY(-50%);
         animation: brandPortalMove 20s linear infinite;
@@ -105,26 +105,47 @@
       body.home-page .brand-portal-track img {
         display: block;
         width: auto;
-        height: clamp(52px, 5.4vw, 104px);
+        height: clamp(50px, 5vw, 96px);
         object-fit: contain;
         filter: drop-shadow(0 14px 18px rgba(7,21,35,.08));
         flex: 0 0 auto;
       }
 
-      body.home-page .brand-portal-tunnel-mask {
+      body.home-page .brand-portal-tunnel-mask,
+      body.home-page .brand-portal-mouth-cover,
+      body.home-page .brand-portal-nose-cover {
         position: absolute;
         z-index: 4;
-        left: calc(var(--portal-mouth-x) - 1.8vw);
-        right: calc(100% - var(--portal-nose-x) - 1.2vw);
+        pointer-events: none;
+      }
+
+      body.home-page .brand-portal-tunnel-mask {
+        left: calc(var(--portal-mouth-x) - .8vw);
+        right: calc(100% - var(--portal-nose-x) - .4vw);
         top: 0;
         bottom: 0;
-        pointer-events: none;
         background:
-          linear-gradient(90deg, rgba(248,243,235,.18), rgba(248,243,235,.56) 18%, rgba(248,243,235,.62) 76%, rgba(248,243,235,.18)),
-          radial-gradient(ellipse at 50% 52%, rgba(255,235,190,.25), transparent 66%);
-        backdrop-filter: blur(1px);
-        opacity: .72;
+          linear-gradient(90deg, rgba(248,243,235,.04), rgba(248,243,235,.76) 12%, rgba(248,243,235,.84) 84%, rgba(248,243,235,.12)),
+          radial-gradient(ellipse at 50% 52%, rgba(255,235,190,.24), transparent 62%);
+        filter: blur(.2px);
+        opacity: .92;
       }
+
+      body.home-page .brand-portal-mouth-cover,
+      body.home-page .brand-portal-nose-cover {
+        top: 52%;
+        width: clamp(96px, 8vw, 156px);
+        height: clamp(80px, 6.4vw, 124px);
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        background:
+          radial-gradient(ellipse at 50% 50%, rgba(248,243,235,.92) 0%, rgba(248,243,235,.68) 38%, rgba(248,243,235,0) 74%);
+        filter: blur(7px);
+        opacity: .92;
+      }
+
+      body.home-page .brand-portal-mouth-cover { left: var(--portal-mouth-x); }
+      body.home-page .brand-portal-nose-cover { left: var(--portal-nose-x); }
 
       body.home-page .brand-portal-glow,
       body.home-page .brand-portal-mouth-glow,
@@ -135,27 +156,27 @@
       }
 
       body.home-page .brand-portal-glow {
-        right: clamp(-80px, 3.5vw, 56px);
+        right: clamp(-76px, 2.5vw, 46px);
         top: 52%;
-        width: min(44vw, 740px);
-        height: 96px;
+        width: min(40vw, 660px);
+        height: 88px;
         transform: translateY(-50%);
-        background: radial-gradient(ellipse at 58% 50%, rgba(255,227,158,.40), transparent 66%);
+        background: radial-gradient(ellipse at 58% 50%, rgba(255,227,158,.38), transparent 66%);
         filter: blur(12px);
-        opacity: .88;
+        opacity: .84;
       }
 
       body.home-page .brand-portal-mouth-glow,
       body.home-page .brand-portal-nose-glow {
         top: 52%;
-        width: clamp(74px, 7vw, 138px);
-        height: clamp(54px, 5vw, 94px);
+        width: clamp(72px, 6.6vw, 132px);
+        height: clamp(52px, 4.8vw, 90px);
         border-radius: 999px;
         transform: translate(-50%, -50%);
         background:
           radial-gradient(circle, rgba(255,245,214,.98) 0%, rgba(255,221,150,.48) 34%, rgba(255,221,150,0) 72%);
         filter: blur(4px);
-        opacity: .78;
+        opacity: .82;
         mix-blend-mode: screen;
       }
 
@@ -165,13 +186,13 @@
       body.home-page .brand-portal-sock {
         position: absolute;
         z-index: 5;
-        right: clamp(-92px, -3vw, -34px);
+        right: clamp(-72px, -2.4vw, -28px);
         top: 52%;
-        width: min(41vw, 720px);
+        width: min(34vw, 580px);
         max-width: none;
         height: auto;
         transform: translateY(-50%);
-        filter: drop-shadow(0 22px 28px rgba(7,21,35,.18));
+        filter: drop-shadow(0 20px 26px rgba(7,21,35,.17));
         pointer-events: none;
       }
 
@@ -187,12 +208,12 @@
 
       @media (max-width: 900px) {
         body.home-page .brand-portal-section {
-          --portal-mouth-x: 53%;
-          --portal-nose-x: 87%;
+          --portal-mouth-x: 65%;
+          --portal-nose-x: 96%;
           height: 205px;
         }
         body.home-page .brand-portal-track {
-          left: -116%;
+          left: -120%;
           gap: 48px;
           animation-duration: 16s;
         }
@@ -200,16 +221,16 @@
           height: 50px;
         }
         body.home-page .brand-portal-sock {
-          right: -112px;
-          width: 78vw;
+          right: -110px;
+          width: 68vw;
         }
         body.home-page .brand-portal-glow {
           right: -112px;
-          width: 72vw;
+          width: 68vw;
         }
         body.home-page .brand-portal-tunnel-mask {
-          left: calc(var(--portal-mouth-x) - 4vw);
-          right: calc(100% - var(--portal-nose-x) - 3vw);
+          left: calc(var(--portal-mouth-x) - 3vw);
+          right: calc(100% - var(--portal-nose-x) - 2vw);
         }
       }
 
@@ -242,6 +263,8 @@
       <div class="brand-portal-track-wrap brand-portal-track-wrap--entry" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
       <div class="brand-portal-track-wrap brand-portal-track-wrap--exit" aria-hidden="true"><div class="brand-portal-track">${logoTrack}</div></div>
       <span class="brand-portal-tunnel-mask" aria-hidden="true"></span>
+      <span class="brand-portal-mouth-cover" aria-hidden="true"></span>
+      <span class="brand-portal-nose-cover" aria-hidden="true"></span>
       <span class="brand-portal-glow" aria-hidden="true"></span>
       <span class="brand-portal-mouth-glow" aria-hidden="true"></span>
       <span class="brand-portal-nose-glow" aria-hidden="true"></span>
