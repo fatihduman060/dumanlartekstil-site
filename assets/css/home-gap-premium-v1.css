@@ -1,0 +1,61 @@
+/* Premium bridge between brand portal and product groups */
+
+body.home-page .brand-portal-section {
+  border-bottom: 0 !important;
+  box-shadow:
+    inset 0 10px 18px rgba(248,243,235,.38),
+    inset 0 -26px 42px rgba(255,255,255,.72) !important;
+}
+
+body.home-page .products-section {
+  margin-top: -1px !important;
+  padding-top: clamp(40px, 3.8vw, 64px) !important;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f9fbfd 18%, #ffffff 54%, #f8fafc 100%) !important;
+  border-top: 0 !important;
+}
+
+body.home-page .products-section::before {
+  content: '' !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  width: auto !important;
+  height: clamp(92px, 8.2vw, 148px) !important;
+  transform: none !important;
+  pointer-events: none !important;
+  background:
+    radial-gradient(ellipse at 50% -8%, rgba(201,154,63,.18), transparent 58%),
+    linear-gradient(180deg, rgba(248,243,235,.92) 0%, rgba(255,255,255,.96) 46%, rgba(255,255,255,0) 100%) !important;
+}
+
+body.home-page .products-section::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 50% !important;
+  top: 22px !important;
+  width: min(620px, 62vw) !important;
+  height: 1px !important;
+  transform: translateX(-50%) !important;
+  pointer-events: none !important;
+  background: linear-gradient(90deg, transparent, rgba(201,154,63,.44), transparent) !important;
+}
+
+body.home-page .products-section .section-head {
+  margin-bottom: clamp(30px, 3vw, 44px) !important;
+}
+
+body.home-page .products-section .section-head h2 {
+  margin-top: 14px !important;
+}
+
+@media (max-width: 900px) {
+  body.home-page .products-section {
+    padding-top: 34px !important;
+  }
+
+  body.home-page .products-section::before {
+    height: 92px !important;
+  }
+}
