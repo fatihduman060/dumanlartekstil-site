@@ -1,5 +1,7 @@
 # Bitke Muhasebe - canlı veri asla repoya girmesin
 storage/
+muhasebe/storage/
+muhasebe/storage/**
 *.sqlite
 *.sqlite-*
 *.db
@@ -14,6 +16,9 @@ storage/
 .env
 .env.*
 !.env.example
+
+# FTP deploy state dosyaları repoda tutulmasın
+.ftp-deploy-sync-state*.json
 
 # Sistem dosyaları
 .DS_Store
