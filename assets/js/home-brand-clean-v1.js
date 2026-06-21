@@ -16,17 +16,38 @@
     style.textContent = `
       body.home-page .factory-showcase-section {
         position: relative;
-        height: clamp(205px, 15.8vw, 292px);
         overflow: hidden;
         background: #f8f3eb;
-        border-bottom: 1px solid rgba(201,154,63,.20);
+        border-bottom: 0;
+        box-shadow: inset 0 18px 34px rgba(3,14,26,.18), inset 0 -18px 34px rgba(3,14,26,.18);
+      }
+
+      body.home-page .factory-showcase-section::before,
+      body.home-page .factory-showcase-section::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: clamp(34px, 4vw, 76px);
+        z-index: 2;
+        pointer-events: none;
+      }
+
+      body.home-page .factory-showcase-section::before {
+        top: 0;
+        background: linear-gradient(180deg, rgba(3,14,26,.46), rgba(3,14,26,.16) 42%, rgba(3,14,26,0));
+      }
+
+      body.home-page .factory-showcase-section::after {
+        bottom: 0;
+        background: linear-gradient(0deg, rgba(3,14,26,.50), rgba(3,14,26,.16) 44%, rgba(3,14,26,0));
       }
 
       body.home-page .factory-showcase-section img {
         display: block;
         width: 100%;
-        height: 100%;
-        object-fit: cover;
+        height: auto;
+        object-fit: contain;
         object-position: center;
       }
 
@@ -38,7 +59,7 @@
         overflow: hidden;
         background: #f8f3eb;
         border-bottom: 1px solid rgba(201,154,63,.22);
-        box-shadow: inset 0 -1px 0 rgba(7,21,35,.06);
+        box-shadow: inset 0 1px 18px rgba(3,14,26,.08), inset 0 -1px 0 rgba(7,21,35,.06);
       }
 
       body.home-page .brand-portal-section::before {
@@ -206,11 +227,8 @@
       }
 
       @media (max-width: 900px) {
-        body.home-page .factory-showcase-section,
         body.home-page .brand-portal-section {
           height: 198px;
-        }
-        body.home-page .brand-portal-section {
           --portal-mouth-x: 79%;
         }
         body.home-page .brand-portal-track {
