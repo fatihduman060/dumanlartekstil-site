@@ -1,5 +1,6 @@
 (() => {
   const ASSET_BASE = 'assets/img/markalarlogo/';
+  const FACTORY_BANNER = 'assets/img/dumanlarheroanasayfafabrika.png';
 
   const brands = [
     { name: 'Bitke Socks', key: 'bitke', logo: `${ASSET_BASE}bitke.png`, href: 'markalar.html#bitke', text: 'Günlük, klasik ve sezonluk koleksiyonlar için güçlü ana marka.' },
@@ -13,6 +14,22 @@
     const style = document.createElement('style');
     style.id = 'brand-portal-styles';
     style.textContent = `
+      body.home-page .factory-showcase-section {
+        position: relative;
+        height: clamp(205px, 15.8vw, 292px);
+        overflow: hidden;
+        background: #f8f3eb;
+        border-bottom: 1px solid rgba(201,154,63,.20);
+      }
+
+      body.home-page .factory-showcase-section img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+      }
+
       body.home-page .brand-portal-section {
         --portal-mouth-x: 81.5%;
         position: relative;
@@ -189,9 +206,12 @@
       }
 
       @media (max-width: 900px) {
+        body.home-page .factory-showcase-section,
+        body.home-page .brand-portal-section {
+          height: 198px;
+        }
         body.home-page .brand-portal-section {
           --portal-mouth-x: 79%;
-          height: 198px;
         }
         body.home-page .brand-portal-track {
           top: 41%;
@@ -228,12 +248,22 @@
 
   const setupBrandPortal = () => {
     if (!document.body.classList.contains('home-page')) return;
-    if (document.querySelector('.brand-portal-section')) return;
 
     const hero = document.querySelector('body.home-page #home.hero');
     if (!hero) return;
 
     injectPortalStyles();
+
+    let factorySection = document.querySelector('.factory-showcase-section');
+    if (!factorySection) {
+      factorySection = document.createElement('section');
+      factorySection.className = 'factory-showcase-section';
+      factorySection.setAttribute('aria-label', 'Dumanlar fabrika tanıtım görseli');
+      factorySection.innerHTML = `<img src="${FACTORY_BANNER}" alt="Dumanlar çorap ve tekstil üretimi" decoding="async">`;
+      hero.insertAdjacentElement('afterend', factorySection);
+    }
+
+    if (document.querySelector('.brand-portal-section')) return;
 
     const trackLogos = [brands[2], brands[0], brands[1], brands[2], brands[0], brands[1], brands[2], brands[0], brands[1]];
     const logoTrack = trackLogos.map((brand) => `<img src="${brand.logo}" alt="" decoding="async">`).join('');
@@ -250,7 +280,9 @@
       <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
     `;
 
-    hero.insertAdjacentElement('afterend', section);
+    const featureBand = document.querySelector('body.home-page .feature-band');
+    if (featureBand) featureBand.insertAdjacentElement('afterend', section);
+    else factorySection.insertAdjacentElement('afterend', section);
   };
 
   const render = () => {
