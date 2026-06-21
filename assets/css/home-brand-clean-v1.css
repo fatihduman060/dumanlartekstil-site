@@ -1,5 +1,6 @@
 /* Homepage brand clean cards.
    Moved out of assets/js/home-brand-clean-v1.js. */
+@import url('./home-lower-polish-v1.css');
 
 body.home-page #markalar.brands-section.brand-clean-section {
   position: relative !important;
