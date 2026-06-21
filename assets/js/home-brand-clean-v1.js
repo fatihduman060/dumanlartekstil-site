@@ -22,8 +22,8 @@
         margin-top: 0;
         padding-top: 0;
         box-shadow:
-          inset 0 8px 16px rgba(3,14,26,.045),
-          inset 0 -8px 16px rgba(248,243,235,.30);
+          inset 0 10px 18px rgba(3,14,26,.06),
+          inset 0 -14px 26px rgba(248,243,235,.42);
       }
 
       body.home-page .factory-showcase-section::before,
@@ -37,13 +37,15 @@
       }
 
       body.home-page .factory-showcase-section::before {
-        display: none;
+        top: 0;
+        height: clamp(18px, 2vw, 36px);
+        background: linear-gradient(180deg, rgba(3,14,26,.12), rgba(3,14,26,.04) 56%, rgba(3,14,26,0));
       }
 
       body.home-page .factory-showcase-section::after {
         bottom: 0;
-        height: clamp(18px, 2vw, 36px);
-        background: linear-gradient(0deg, rgba(248,243,235,.34), rgba(248,243,235,.14) 54%, rgba(248,243,235,0));
+        height: clamp(26px, 2.8vw, 52px);
+        background: linear-gradient(0deg, rgba(248,243,235,.50), rgba(248,243,235,.22) 54%, rgba(248,243,235,0));
       }
 
       body.home-page .factory-showcase-section img {
@@ -63,7 +65,7 @@
         background: #f8f3eb;
         border-bottom: 1px solid rgba(201,154,63,.22);
         margin-top: -1px;
-        box-shadow: inset 0 8px 16px rgba(248,243,235,.30), inset 0 -1px 0 rgba(7,21,35,.06);
+        box-shadow: inset 0 10px 18px rgba(248,243,235,.40), inset 0 -1px 0 rgba(7,21,35,.06);
       }
 
       body.home-page .brand-portal-section::before {
