@@ -1,5 +1,4 @@
-DirectoryIndex index.html index.php index.html.bak
-AddType text/html .bak
+DirectoryIndex index.html index.php
 Options -Indexes
 
 <IfModule mod_rewrite.c>
