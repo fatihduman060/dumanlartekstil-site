@@ -1,6 +1,6 @@
 {
-  "name": "Dumanlar A.Ş. | Çorap & Tekstil Üretimi",
-  "short_name": "Dumanlar",
+  "name": "Bitke | Dumanlar A.Ş. Çorap ve Tekstil Üretimi",
+  "short_name": "Bitke",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#071523",
@@ -11,6 +11,12 @@
       "src": "assets/img/og-image.png",
       "sizes": "1200x630",
       "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/img/favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
       "purpose": "any"
     }
   ]
