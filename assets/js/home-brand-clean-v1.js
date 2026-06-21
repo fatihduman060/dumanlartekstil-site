@@ -14,7 +14,7 @@
     style.id = 'brand-portal-styles';
     style.textContent = `
       body.home-page .brand-portal-section {
-        --portal-mouth-x: 73%;
+        --portal-mouth-x: 81.5%;
         position: relative;
         isolation: isolate;
         height: clamp(205px, 15.8vw, 292px);
@@ -42,7 +42,7 @@
         z-index: 1;
         pointer-events: none;
         background:
-          radial-gradient(circle at var(--portal-mouth-x) 57%, rgba(255,225,158,.38), transparent 12%),
+          radial-gradient(circle at var(--portal-mouth-x) 57%, rgba(255,225,158,.38), transparent 10%),
           linear-gradient(180deg, rgba(255,255,255,.24), transparent 48%, rgba(7,21,35,.032));
       }
 
@@ -110,27 +110,27 @@
       }
 
       body.home-page .brand-portal-tunnel-mask {
-        left: calc(var(--portal-mouth-x) - 1.6vw);
+        left: calc(var(--portal-mouth-x) - .25vw);
         right: -2vw;
         top: 0;
         bottom: 0;
         background:
-          linear-gradient(90deg, rgba(248,243,235,.04), rgba(248,243,235,.84) 12%, rgba(248,243,235,.90) 78%, rgba(248,243,235,.32)),
-          radial-gradient(ellipse at 14% 57%, rgba(255,235,190,.32), transparent 58%);
-        opacity: .96;
+          linear-gradient(90deg, rgba(248,243,235,.02), rgba(248,243,235,.80) 8%, rgba(248,243,235,.90) 78%, rgba(248,243,235,.32)),
+          radial-gradient(ellipse at 8% 57%, rgba(255,235,190,.32), transparent 54%);
+        opacity: .95;
       }
 
       body.home-page .brand-portal-mouth-cover {
         left: var(--portal-mouth-x);
         top: 57%;
-        width: clamp(112px, 9.2vw, 176px);
-        height: clamp(92px, 7.2vw, 138px);
+        width: clamp(76px, 5.6vw, 120px);
+        height: clamp(70px, 5.6vw, 106px);
         border-radius: 999px;
         transform: translate(-50%, -50%);
         background:
-          radial-gradient(ellipse at 50% 50%, rgba(248,243,235,.90) 0%, rgba(248,243,235,.64) 36%, rgba(248,243,235,0) 74%);
-        filter: blur(8px);
-        opacity: .94;
+          radial-gradient(ellipse at 50% 50%, rgba(248,243,235,.80) 0%, rgba(248,243,235,.52) 34%, rgba(248,243,235,0) 72%);
+        filter: blur(5px);
+        opacity: .78;
       }
 
       body.home-page .brand-portal-glow,
@@ -154,14 +154,14 @@
       body.home-page .brand-portal-mouth-glow {
         left: var(--portal-mouth-x);
         top: 57%;
-        width: clamp(78px, 7vw, 138px);
-        height: clamp(58px, 5.2vw, 96px);
+        width: clamp(82px, 6.8vw, 132px);
+        height: clamp(60px, 5.4vw, 98px);
         border-radius: 999px;
         transform: translate(-50%, -50%);
         background:
-          radial-gradient(circle, rgba(255,245,214,.98) 0%, rgba(255,221,150,.48) 34%, rgba(255,221,150,0) 72%);
+          radial-gradient(circle, rgba(255,245,214,.98) 0%, rgba(255,221,150,.50) 34%, rgba(255,221,150,0) 72%);
         filter: blur(4px);
-        opacity: .86;
+        opacity: .90;
         mix-blend-mode: screen;
       }
 
@@ -190,7 +190,7 @@
 
       @media (max-width: 900px) {
         body.home-page .brand-portal-section {
-          --portal-mouth-x: 71%;
+          --portal-mouth-x: 79%;
           height: 198px;
         }
         body.home-page .brand-portal-track {
@@ -212,7 +212,7 @@
           width: 70vw;
         }
         body.home-page .brand-portal-tunnel-mask {
-          left: calc(var(--portal-mouth-x) - 4vw);
+          left: calc(var(--portal-mouth-x) - .5vw);
         }
       }
 
