@@ -41,6 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 <<'PY'
+          import base64
+          import gzip
           import json
           import os
           import re
@@ -69,6 +71,9 @@ jobs:
           raw_json = raw[first:last + 1]
 
           payload = json.loads(raw_json)
+          if isinstance(payload.get("gzip_b64"), str):
+              compressed = base64.b64decode(payload["gzip_b64"])
+              payload = json.loads(gzip.decompress(compressed).decode("utf-8"))
           message = str(payload.get("message") or "Bitke Apply Bridge update").strip()
           files = payload.get("files")
           if not isinstance(files, list) or not files:
