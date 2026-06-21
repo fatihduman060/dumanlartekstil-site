@@ -4,6 +4,10 @@ Options -Indexes
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^assets/img/hero-production-v11\.webp$ assets/img/hero-production-v11.png [L,R=302]
+  RewriteRule ^assets/img/footer-background-clean\.png$ assets/img/footer-premium-desktop.png [L,R=302]
+  RewriteRule ^assets/img/factory-section-smooth\.png$ assets/img/bitkekurumsal/fabrikad%C4%B1%C5%9F.png [L,R=302,B]
+  RewriteRule ^assets/img/brand-section-exact\.png$ assets/img/brand-section-banner.png [L,R=302]
+  RewriteRule ^assets/img/bitkekurumsal/corporate-private-label\.png$ assets/img/marka-stratejisi-etiket-ambalaj.png [L,R=302]
 </IfModule>
 
 <IfModule mod_headers.c>
