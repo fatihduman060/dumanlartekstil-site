@@ -4,12 +4,11 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteRule ^assets/img/brand-section-banner\.png$ assets/img/brand-section-banner-animated.svg [L]
   RewriteRule ^assets/img/hero-production-v11\.webp$ assets/img/hero-production-v11.png [L,R=302]
 </IfModule>
 
 <IfModule mod_headers.c>
-  <FilesMatch "\.(html|htm|js|css|svg)$">
+  <FilesMatch "\.(html|htm|js|css)$">
     Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header set Pragma "no-cache"
     Header set Expires "0"
@@ -23,12 +22,11 @@ Options -Indexes
   ExpiresActive On
   ExpiresByType text/html "access plus 0 seconds"
   ExpiresByType text/css "access plus 0 seconds"
-  ExpiresByType image/svg+xml "access plus 0 seconds"
   ExpiresByType application/javascript "access plus 0 seconds"
   ExpiresByType text/javascript "access plus 0 seconds"
 </IfModule>
 
 <IfModule mod_substitute.c>
   AddOutputFilterByType SUBSTITUTE text/html
-  Substitute "s|</head>|<style>body.home-page .brands-section{position:relative!important;overflow:hidden!important}body.home-page .brands-section::after{content:''!important;position:absolute!important;left:50.4%!important;top:18%!important;width:26.5%!important;height:66%!important;z-index:15!important;pointer-events:none!important;background:radial-gradient(circle at 50% 52%,rgba(201,154,63,.14),transparent 66%),linear-gradient(90deg,rgba(255,253,248,.98),rgba(255,255,255,.98) 68%,rgba(255,255,255,0)),url('assets/img/markalarlogo/bafiy.png') center/contain no-repeat!important;filter:drop-shadow(0 14px 22px rgba(7,21,35,.10));animation:bafiyExactFloat 7.2s ease-in-out infinite}@keyframes bafiyExactFloat{0%,100%{transform:translate3d(0,0,0)}34%{transform:translate3d(7px,-5px,0)}68%{transform:translate3d(-7px,5px,0)}}@media(max-width:760px){body.home-page .brands-section::after{left:52%!important;top:24%!important;width:38%!important;height:48%!important}}</style></head>|ni"
+  Substitute "s|<script src=\"assets/js/main.js\" defer></script>|<script src=\"assets/js/main.js?v=brandclean1\" defer></script><script src=\"assets/js/home-brand-clean-v1.js?v=brandclean1\" defer></script>|ni"
 </IfModule>
