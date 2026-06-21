@@ -14,6 +14,34 @@
     const style = document.createElement('style');
     style.id = 'brand-portal-styles';
     style.textContent = `
+      body.home-page .feature-band {
+        position: relative;
+        overflow: hidden;
+        background:
+          linear-gradient(180deg, #061523 0%, #071827 56%, #13283a 78%, rgba(248,243,235,.62) 125%) !important;
+        box-shadow:
+          inset 0 1px 0 rgba(201,154,63,.20),
+          inset 0 -30px 42px rgba(248,243,235,.08),
+          0 18px 32px rgba(3,14,26,.10);
+      }
+
+      body.home-page .feature-band::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: clamp(26px, 3.2vw, 58px);
+        pointer-events: none;
+        z-index: 0;
+        background: linear-gradient(0deg, rgba(248,243,235,.24), rgba(248,243,235,.08) 54%, rgba(248,243,235,0));
+      }
+
+      body.home-page .feature-band > * {
+        position: relative;
+        z-index: 1;
+      }
+
       body.home-page .factory-showcase-section {
         position: relative;
         overflow: hidden;
@@ -233,6 +261,10 @@
       }
 
       @media (max-width: 900px) {
+        body.home-page .feature-band {
+          background:
+            linear-gradient(180deg, #061523 0%, #071827 66%, #13283a 88%, rgba(248,243,235,.38) 132%) !important;
+        }
         body.home-page .brand-portal-section {
           height: 198px;
           --portal-mouth-x: 79%;
