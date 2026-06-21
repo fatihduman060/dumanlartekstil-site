@@ -136,7 +136,7 @@
       body.home-page .brand-portal-glow,
       body.home-page .brand-portal-mouth-glow {
         position: absolute;
-        z-index: 8;
+        z-index: 6;
         pointer-events: none;
       }
 
@@ -165,26 +165,17 @@
         mix-blend-mode: screen;
       }
 
-      body.home-page .brand-portal-sock,
-      body.home-page .brand-portal-mouth-lip {
+      body.home-page .brand-portal-sock {
         position: absolute;
+        z-index: 5;
         right: clamp(-210px, -12vw, -116px);
         top: 57%;
         width: min(34vw, 560px);
         max-width: none;
         height: auto;
         transform: translateY(-50%);
-        pointer-events: none;
-      }
-
-      body.home-page .brand-portal-sock {
-        z-index: 5;
         filter: drop-shadow(0 20px 26px rgba(7,21,35,.17));
-      }
-
-      body.home-page .brand-portal-mouth-lip {
-        z-index: 7;
-        filter: none;
+        pointer-events: none;
       }
 
       @keyframes brandPortalMove {
@@ -211,8 +202,7 @@
         body.home-page .brand-portal-track img {
           height: 48px;
         }
-        body.home-page .brand-portal-sock,
-        body.home-page .brand-portal-mouth-lip {
+        body.home-page .brand-portal-sock {
           right: -182px;
           top: 58%;
           width: 70vw;
@@ -258,7 +248,6 @@
       <span class="brand-portal-glow" aria-hidden="true"></span>
       <span class="brand-portal-mouth-glow" aria-hidden="true"></span>
       <img class="brand-portal-sock" src="${ASSET_BASE}sock-portal.png" alt="" decoding="async">
-      <img class="brand-portal-mouth-lip" src="${ASSET_BASE}sock-mouth-lip.png" alt="" decoding="async" onerror="this.remove()">
     `;
 
     hero.insertAdjacentElement('afterend', section);
