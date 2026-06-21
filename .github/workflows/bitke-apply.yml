@@ -81,6 +81,22 @@ jobs:
               "composer.lock",
               "deploy-version.txt",
               "index.php",
+              "404.html",
+              "bambu-corap.html",
+              "cerez-politikasi.html",
+              "erkek-corap.html",
+              "gizlilik-politikasi.html",
+              "iletisim.html",
+              "index.html",
+              "katalog.html",
+              "kurumsal.html",
+              "kvkk-aydinlatma-metni.html",
+              "markalar.html",
+              "modal-corap.html",
+              "ozel-marka-uretimi.html",
+              "sss.html",
+              "uretim.html",
+              "urunler.html",
           }
 
           allowed_dirs = (
