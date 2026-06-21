@@ -19,9 +19,9 @@
         overflow: hidden;
         background: #f8f3eb;
         border-bottom: 0;
-        margin-top: -34px;
-        padding-top: 34px;
-        box-shadow: inset 0 30px 54px rgba(3,14,26,.26), inset 0 -34px 56px rgba(3,14,26,.24);
+        margin-top: 0;
+        padding-top: 0;
+        box-shadow: inset 0 10px 22px rgba(3,14,26,.08), inset 0 -14px 26px rgba(3,14,26,.10);
       }
 
       body.home-page .factory-showcase-section::before,
@@ -36,14 +36,14 @@
 
       body.home-page .factory-showcase-section::before {
         top: 0;
-        height: clamp(72px, 7.2vw, 132px);
-        background: linear-gradient(180deg, rgba(3,14,26,.76), rgba(3,14,26,.34) 42%, rgba(3,14,26,.08) 76%, rgba(3,14,26,0));
+        height: clamp(22px, 2.4vw, 42px);
+        background: linear-gradient(180deg, rgba(3,14,26,.16), rgba(3,14,26,.05) 55%, rgba(3,14,26,0));
       }
 
       body.home-page .factory-showcase-section::after {
         bottom: 0;
-        height: clamp(78px, 7.6vw, 142px);
-        background: linear-gradient(0deg, rgba(3,14,26,.86), rgba(3,14,26,.42) 43%, rgba(3,14,26,.10) 78%, rgba(3,14,26,0));
+        height: clamp(34px, 3.4vw, 62px);
+        background: linear-gradient(0deg, rgba(3,14,26,.34), rgba(3,14,26,.10) 56%, rgba(3,14,26,0));
       }
 
       body.home-page .factory-showcase-section img {
@@ -230,10 +230,6 @@
       }
 
       @media (max-width: 900px) {
-        body.home-page .factory-showcase-section {
-          margin-top: -24px;
-          padding-top: 24px;
-        }
         body.home-page .brand-portal-section {
           height: 198px;
           --portal-mouth-x: 79%;
