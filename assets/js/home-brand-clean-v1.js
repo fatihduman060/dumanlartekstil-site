@@ -82,7 +82,7 @@
 
       body.home-page .brand-portal-track {
         position: absolute;
-        top: 57%;
+        top: 54%;
         left: -58%;
         display: flex;
         align-items: center;
@@ -194,7 +194,7 @@
           height: 198px;
         }
         body.home-page .brand-portal-track {
-          top: 58%;
+          top: 55%;
           left: -122%;
           gap: 52px;
           animation-duration: 16s;
