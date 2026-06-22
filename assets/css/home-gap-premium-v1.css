@@ -60,7 +60,7 @@ body.home-page .products-section .section-head h2 {
 
   body.home-page .factory-showcase-section img {
     position: absolute !important;
-    left: 22% !important;
+    left: 18% !important;
     top: 50% !important;
     width: 190% !important;
     max-width: none !important;
@@ -86,7 +86,7 @@ body.home-page .products-section .section-head h2 {
   }
 
   body.home-page .factory-showcase-section img {
-    left: 20% !important;
+    left: 16% !important;
     width: 205% !important;
   }
 }
