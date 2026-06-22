@@ -1,0 +1,88 @@
+/* Mobile corporate dropdown fix */
+
+@media (max-width: 900px) {
+  .main-nav .nav-dropdown,
+  .main-nav .nav-dropdown-corporate {
+    width: 100% !important;
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .main-nav .nav-dropdown > a {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .nav-dropdown-corporate::before,
+  .nav-dropdown-corporate .nav-dropdown-panel::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  .nav-dropdown-corporate .nav-dropdown-panel {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 10px !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+    transform: none !important;
+  }
+
+  .nav-dropdown-corporate.is-open > a::after {
+    transform: rotate(180deg) !important;
+  }
+
+  .nav-dropdown-corporate.is-open .nav-dropdown-panel {
+    max-height: 720px !important;
+    padding: 10px 10px 14px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .nav-dropdown-corporate .nav-dropdown-panel::before {
+    display: block !important;
+    padding: 8px 6px 10px !important;
+    color: #e1bd68 !important;
+    font-size: 10px !important;
+    letter-spacing: .18em !important;
+    border-bottom: 1px solid rgba(225,189,104,.14) !important;
+  }
+
+  .nav-dropdown-corporate .nav-dropdown-panel a {
+    min-height: auto !important;
+    grid-template-columns: 34px minmax(0, 1fr) !important;
+    gap: 10px !important;
+    padding: 12px 12px !important;
+    border-radius: 14px !important;
+    background: rgba(255,255,255,.055) !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    font-size: 13px !important;
+  }
+
+  .nav-dropdown-corporate .nav-dropdown-panel a::before {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 12px !important;
+    font-size: 15px !important;
+  }
+
+  .nav-dropdown-corporate .nav-dropdown-panel a::after {
+    margin-top: -14px !important;
+    font-size: 10.5px !important;
+  }
+}
