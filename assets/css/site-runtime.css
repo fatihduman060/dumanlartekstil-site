@@ -1,5 +1,6 @@
 /* Site runtime styles
    Moved out of assets/js/main.js so JavaScript only handles behavior. */
+@import url('./mobile-nav-fix-v1.css');
 
 .site-header,
 .main-nav { overflow: visible !important; }
