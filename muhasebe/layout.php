@@ -1,6 +1,50 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
 
+function super_admin_user_ids(): array
+{
+    $raw = setting_get('super_admin_user_ids', '[]') ?: '[]';
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) return [];
+    $ids = [];
+    foreach ($decoded as $id) {
+        $id = (int)$id;
+        if ($id > 0) $ids[] = $id;
+    }
+    return array_values(array_unique($ids));
+}
+
+function is_super_admin(?int $userId = null): bool
+{
+    if ($userId === null) {
+        $u = current_user();
+        $userId = (int)($u['id'] ?? 0);
+    }
+    return $userId > 0 && in_array($userId, super_admin_user_ids(), true);
+}
+
+function set_user_super_admin(int $userId, bool $enabled): void
+{
+    if ($userId <= 0) return;
+    $ids = super_admin_user_ids();
+    if ($enabled) {
+        $ids[] = $userId;
+    } else {
+        $ids = array_values(array_filter($ids, fn($id) => (int)$id !== $userId));
+    }
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    setting_set('super_admin_user_ids', json_encode($ids, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+}
+
+function require_super_admin(): void
+{
+    require_login();
+    if (!is_super_admin()) {
+        flash('error', 'Bu alan yalnızca süper yöneticiye açıktır.');
+        redirect('dashboard.php');
+    }
+}
+
 function page_header(string $title, string $active = ''): void
 {
     $u = current_user();
@@ -17,6 +61,9 @@ function page_header(string $title, string $active = ''): void
         ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
         ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
     ];
+    if (is_super_admin()) {
+        $nav[] = ['super_yonetim', 'super-yonetim.php', 'Süper Yönetim', '★'];
+    }
     if (is_admin()) {
         $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
         $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
@@ -53,7 +100,7 @@ function page_header(string $title, string $active = ''): void
         <?php endforeach; ?>
       </nav>
       <div class="side-footer">
-        <span><?php echo e(role_label($u['role'] ?? 'viewer')); ?></span>
+        <span><?php echo is_super_admin() ? 'Süper Yönetici' : e(role_label($u['role'] ?? 'viewer')); ?></span>
         <strong><?php echo e($u['display_name'] ?? 'Kullanıcı'); ?></strong>
       </div>
     </aside>
