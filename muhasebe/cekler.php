@@ -29,11 +29,24 @@ function cek_status_label2(string $status): string { return cek_status_meta2($st
 function cek_status_tone2(string $status): string { return cek_status_meta2($status)['tone']; }
 function cek_status_options_for_direction(string $direction): array
 {
-    $common = ['bekliyor'=>'Bekliyor','bankaya_verildi'=>'Bankaya verildi'];
     if ($direction === 'verilecek') {
-        return $common + ['odendi'=>'Ödendi','karsiliksiz'=>'Karşılıksız','iade'=>'İade','protestolu'=>'Protestolu'];
+        return [
+            'bekliyor' => 'Bekliyor',
+            'odendi' => 'Ödendi',
+            'iade' => 'İade alındı',
+            'karsiliksiz' => 'Karşılıksız',
+            'protestolu' => 'Protestolu',
+        ];
     }
-    return $common + ['tahsil_edildi'=>'Tahsil edildi','ciro_edildi'=>'Ciro edildi','karsiliksiz'=>'Karşılıksız','iade'=>'İade','protestolu'=>'Protestolu'];
+    return [
+        'bekliyor' => 'Bekliyor',
+        'bankaya_verildi' => 'Bankaya verildi',
+        'tahsil_edildi' => 'Tahsil edildi',
+        'ciro_edildi' => 'Ciro edildi',
+        'iade' => 'İade',
+        'karsiliksiz' => 'Karşılıksız',
+        'protestolu' => 'Protestolu',
+    ];
 }
 function cek_is_open_status(string $status): bool { return in_array($status, ['bekliyor','bankaya_verildi'], true); }
 function cek_due_text(array $ch, string $today): string
@@ -160,12 +173,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'status') {
         $id = (int)($_POST['id'] ?? 0);
         $newStatus = $_POST['status'] ?? 'bekliyor';
-        $allowed = ['bekliyor'=>1,'bankaya_verildi'=>1,'tahsil_edildi'=>1,'odendi'=>1,'ciro_edildi'=>1,'iade'=>1,'karsiliksiz'=>1,'protestolu'=>1];
-        if (!isset($allowed[$newStatus])) redirect('cekler.php');
         $stmt = db()->prepare('SELECT * FROM checks WHERE id=?');
         $stmt->execute([$id]);
         $old = $stmt->fetch();
         if ($old && (int)($old['is_cancelled'] ?? 0) === 0) {
+            $allowed = cek_status_options_for_direction((string)$old['direction']);
+            if (!isset($allowed[$newStatus])) {
+                flash('error', check_direction_label((string)$old['direction']) . ' için bu durum seçilemez.');
+                redirect('cekler.php');
+            }
             $closedAt = cek_is_open_status($newStatus) ? null : date('Y-m-d');
             db()->prepare('UPDATE checks SET status=?, closed_at=?, updated_at=? WHERE id=?')->execute([$newStatus, $closedAt, now(), $id]);
             sync_check_to_movement($id);
