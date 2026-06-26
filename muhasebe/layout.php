@@ -123,12 +123,13 @@ function page_header(string $title, string $active = ''): void
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/muhasebe.css?v=515" />
   <link rel="stylesheet" href="assets/cek-renkleri.css?v=1" />
+  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}</style>
 </head>
 <body class="app-page">
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="dashboard.php" aria-label="Bitke Muhasebe">
-        <img src="../assets/img/header-logo-only.png" alt="Bitke" />
+      <a class="brand" href="dashboard.php" aria-label="Dumanlar Muhasebe">
+        <img src="assets/dumanlar-logo-arkaplansiz.png?v=1" alt="Dumanlar" />
         <span>Muhasebe <small><?php echo e(APP_VERSION); ?></small></span>
       </a>
       <nav class="side-nav" aria-label="Panel menüsü">
