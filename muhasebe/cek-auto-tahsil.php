@@ -11,45 +11,21 @@ if (!is_logged_in() || !current_user()) {
 
 enforce_session_timeout();
 
-function normalize_bank_key_for_auto(?string $value): string
+function find_auto_check_collection_account(array $check): ?array
 {
-    $value = trim((string)$value);
-    $map = ['Ç'=>'c','Ğ'=>'g','İ'=>'i','I'=>'i','Ö'=>'o','Ş'=>'s','Ü'=>'u','ç'=>'c','ğ'=>'g','ı'=>'i','i'=>'i','ö'=>'o','ş'=>'s','ü'=>'u'];
-    $value = strtr($value, $map);
-    $value = strtolower($value);
-    $value = preg_replace('/[^a-z0-9]+/', '', $value) ?: '';
-    return $value;
-}
-
-function find_auto_check_bank_account(array $check): ?array
-{
-    $pdo = db();
-    if (!empty($check['account_id'])) {
-        $stmt = $pdo->prepare("SELECT * FROM accounts WHERE id=? AND account_type='banka' AND is_active=1 LIMIT 1");
-        $stmt->execute([(int)$check['account_id']]);
-        $account = $stmt->fetch();
-        if ($account) return $account;
-    }
-
-    $bank = trim((string)($check['bank_name'] ?? ''));
-    if ($bank === '') return null;
-    $target = normalize_bank_key_for_auto($bank);
-    foreach (accounts_for_select(true) as $account) {
-        if (($account['account_type'] ?? '') !== 'banka') continue;
-        $bankKey = normalize_bank_key_for_auto($account['bank_name'] ?? '');
-        $nameKey = normalize_bank_key_for_auto($account['name'] ?? '');
-        if ($bankKey === $target || $nameKey === $target || ($target !== '' && (strpos($nameKey, $target) !== false || strpos($target, $nameKey) !== false))) {
-            return $account;
-        }
-    }
-    return null;
+    if (empty($check['account_id'])) return null;
+    $stmt = db()->prepare("SELECT * FROM accounts WHERE id=? AND account_type='banka' AND is_active=1 LIMIT 1");
+    $stmt->execute([(int)$check['account_id']]);
+    $account = $stmt->fetch();
+    return $account ?: null;
 }
 
 function auto_check_description(array $check, array $account): string
 {
     $parts = ['Otomatik çek tahsilatı'];
     if (!empty($check['cari_name'])) $parts[] = $check['cari_name'];
-    if (!empty($check['bank_name'])) $parts[] = $check['bank_name'];
+    if (!empty($check['bank_name'])) $parts[] = 'Çek bankası: ' . $check['bank_name'];
+    if (!empty($account['name'])) $parts[] = 'Tahsil hesabı: ' . $account['name'];
     if (!empty($check['check_no'])) $parts[] = 'No: ' . $check['check_no'];
     if (!empty($check['due_date'])) $parts[] = 'Vade: ' . tr_date($check['due_date']);
     return implode(' / ', $parts);
@@ -60,7 +36,7 @@ $today = date('Y-m-d');
 $processed = 0;
 $skipped = [];
 
-// Artık uygun olmayan çeklerden eski otomatik banka hareketini kaldır.
+// Uygun olmayan veya artık açık olmayan çeklerden eski otomatik banka hareketini kaldır.
 $pdo->prepare("DELETE FROM account_transactions
     WHERE source_type='check'
       AND source_id IN (
@@ -83,15 +59,15 @@ $stmt->execute([$today]);
 
 foreach ($stmt->fetchAll() as $check) {
     $checkId = (int)$check['id'];
-    $account = find_auto_check_bank_account($check);
+    $account = find_auto_check_collection_account($check);
 
     $pdo->prepare("DELETE FROM account_transactions WHERE source_type='check' AND source_id=?")->execute([$checkId]);
 
     if (!$account) {
         $skipped[] = [
             'check_id' => $checkId,
-            'reason' => 'Banka hesabı bulunamadı',
-            'bank_name' => $check['bank_name'] ?? '',
+            'reason' => 'Tahsil hesabı seçilmedi',
+            'check_bank' => $check['bank_name'] ?? '',
         ];
         continue;
     }
