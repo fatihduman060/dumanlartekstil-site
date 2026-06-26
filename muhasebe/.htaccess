@@ -17,3 +17,8 @@ Options -Indexes
     Deny from all
   </IfModule>
 </FilesMatch>
+
+<IfModule mod_substitute.c>
+  AddOutputFilterByType SUBSTITUTE text/html
+  Substitute "s#assets/muhasebe.js?v=516"></script>#assets/muhasebe.js?v=516"></script><script src=\"assets/super-admin-role.js?v=1\"></script>#ni"
+</IfModule>
