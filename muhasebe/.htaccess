@@ -20,5 +20,6 @@ Options -Indexes
 
 <IfModule mod_substitute.c>
   AddOutputFilterByType SUBSTITUTE text/html
-  Substitute "s#assets/muhasebe.js?v=516"></script>#assets/muhasebe.js?v=516"></script><script src=\"assets/super-admin-role.js?v=1\"></script>#ni"
+  Substitute "s|</head>|<link rel=\"stylesheet\" href=\"assets/muhasebe-polish.css?v=1\" /></head>|ni"
+  Substitute "s|</body>|<script src=\"assets/super-admin-role.js?v=1\"></script><script src=\"assets/muhasebe-polish.js?v=1\"></script></body>|ni"
 </IfModule>
