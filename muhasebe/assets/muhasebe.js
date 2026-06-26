@@ -169,3 +169,33 @@ document.addEventListener('change', function (event) {
     hidden.value = visualCheckbox.checked ? '1' : '0';
   }, true);
 })();
+
+// Kesin yüklenen ana JS içinden ek muhasebe menü/bağlantı iyileştirmeleri.
+(function addExtraAccountingLinks() {
+  const title = document.querySelector('.topbar h1')?.textContent.trim() || '';
+  const nav = document.querySelector('.side-nav');
+
+  if (nav && !nav.querySelector('a[href="sirket-evraklari.php"]')) {
+    const docsLink = nav.querySelector('a[href="belgeler.php"]');
+    const link = document.createElement('a');
+    link.href = 'sirket-evraklari.php';
+    if (title === 'Şirket Evrakları') link.className = 'active';
+    link.innerHTML = '<span class="nav-ico">▧</span><span>Şirket Evrakları</span>';
+    if (docsLink) docsLink.insertAdjacentElement('afterend', link);
+    else nav.appendChild(link);
+  }
+
+  if (title === 'Çekler') {
+    document.querySelectorAll('.row-actions a[href^="cekler.php?edit="]').forEach((editLink) => {
+      const match = editLink.getAttribute('href')?.match(/edit=([0-9]+)/);
+      if (!match) return;
+      const actions = editLink.closest('.row-actions');
+      if (!actions || actions.querySelector('.check-extra-doc-link')) return;
+      const docLink = document.createElement('a');
+      docLink.href = 'cek-ek-belge.php?id=' + match[1];
+      docLink.className = 'check-extra-doc-link';
+      docLink.textContent = 'Ek belge';
+      editLink.insertAdjacentElement('afterend', docLink);
+    });
+  }
+})();
