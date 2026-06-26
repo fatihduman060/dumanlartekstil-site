@@ -119,3 +119,33 @@ document.addEventListener('change', function (event) {
     amountCell.appendChild(note);
   });
 })();
+
+// Kullanıcılar ekranına süper yönetici kutusunu ekle.
+(function enhanceSuperAdminUserControls() {
+  const title = document.querySelector('.topbar h1');
+  if (!title || title.textContent.trim() !== 'Kullanıcılar') return;
+
+  const superIds = Array.isArray(window.BITKE_SUPER_ADMIN_IDS) ? window.BITKE_SUPER_ADMIN_IDS.map(Number) : [];
+  document.querySelectorAll('form').forEach((form) => {
+    const action = form.querySelector('input[name="action"][value="update"]');
+    const idInput = form.querySelector('input[name="id"]');
+    const roleSelect = form.querySelector('select[name="role"]');
+    if (!action || !idInput || !roleSelect || form.querySelector('.super-admin-control')) return;
+
+    const userId = Number(idInput.value || 0);
+    if (!userId) return;
+
+    const label = document.createElement('label');
+    label.className = 'check tiny super-admin-control';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.name = 'is_super_admin';
+    checkbox.value = '1';
+    checkbox.checked = superIds.includes(userId);
+
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(' ⭐ Süper yönetici'));
+    roleSelect.insertAdjacentElement('afterend', label);
+  });
+})();
