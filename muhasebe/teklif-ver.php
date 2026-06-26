@@ -57,6 +57,7 @@ $productJson = json_encode(array_map(function ($p) {
 $editId = (int)($_GET['edit'] ?? 0);
 $edit = $editId > 0 ? teklif_load($editId) : null;
 $list = teklifler_list(120);
+$titleOptions = ['SİPARİŞ FİŞİ', 'TEKLİF FORMU', 'PROFORMA', 'PROFORMA FATURA', 'SİPARİŞ FORMU'];
 
 function offer_field($offer, string $key, string $default = ''): string
 {
@@ -69,6 +70,8 @@ function offer_item_value(array $items, int $i, string $key, string $default = '
 
 $items = $edit['items'] ?? [];
 $minRows = max(8, count($items) + 2);
+$pageTitleValue = (string)($edit['document_title'] ?? 'SİPARİŞ FİŞİ');
+if ($pageTitleValue === '') $pageTitleValue = 'SİPARİŞ FİŞİ';
 page_header('Teklif Ver', 'teklif_ver');
 ?>
 <style>
@@ -80,7 +83,7 @@ page_header('Teklif Ver', 'teklif_ver');
     <div>
       <span>DUMANLAR / BİTKE TEKLİF MODÜLÜ</span>
       <h2><?php echo $edit ? 'Teklifi düzenle.' : 'Teklif fişini kaydet, sonra PDF al.'; ?></h2>
-      <p>Teklifler kayıtlı kalır; alttaki listeden düzenleyebilir, silebilir veya sonradan PDF çıktısı alabilirsin. KDV %10 varsayılan gelir, uygulanıp uygulanmayacağını sen seçersin.</p>
+      <p>Teklifler kayıtlı kalır; alttaki listeden düzenleyebilir, silebilir veya sonradan PDF çıktısı alabilirsin. Belge başlığını Sipariş Fişi / Teklif / Proforma olarak seçebilirsin.</p>
     </div>
     <div class="offer-actions"><a class="secondary" href="teklif-ver.php">Yeni teklif</a></div>
   </section>
@@ -94,7 +97,7 @@ page_header('Teklif Ver', 'teklif_ver');
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="id" value="<?php echo e($edit['id'] ?? 0); ?>">
         <div class="offer-grid">
-          <label><span>Belge başlığı</span><input name="document_title" value="<?php echo offer_field($edit, 'document_title', 'TEKLİF FORMU'); ?>" required></label>
+          <label><span>Belge başlığı</span><select name="document_title" required><?php foreach($titleOptions as $titleOption): ?><option value="<?php echo e($titleOption); ?>" <?php echo $pageTitleValue===$titleOption?'selected':''; ?>><?php echo e($titleOption); ?></option><?php endforeach; ?><?php if(!in_array($pageTitleValue,$titleOptions,true)): ?><option value="<?php echo e($pageTitleValue); ?>" selected><?php echo e($pageTitleValue); ?></option><?php endif; ?></select></label>
           <label><span>Teklif / Sipariş no</span><input name="offer_no" value="<?php echo offer_field($edit, 'offer_no', $defaultNo); ?>" required></label>
           <label><span>Tarih</span><input type="date" name="offer_date" value="<?php echo offer_field($edit, 'offer_date', $today); ?>" required></label>
           <label><span>Para birimi</span><select name="currency"><?php foreach(['TL','USD','EUR'] as $cur): ?><option value="<?php echo e($cur); ?>" <?php echo (($edit['currency'] ?? 'TL')===$cur)?'selected':''; ?>><?php echo e($cur); ?></option><?php endforeach; ?></select></label>
