@@ -97,6 +97,7 @@ function page_header(string $title, string $active = ''): void
         ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'],
         ['cekler', 'cekler.php', 'Çekler', '◈'],
         ['belgeler', 'belgeler.php', 'Belgeler', '▤'],
+        ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'],
         ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'],
         ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
         ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
