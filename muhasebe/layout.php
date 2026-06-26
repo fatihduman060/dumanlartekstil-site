@@ -45,6 +45,19 @@ function require_super_admin(): void
     }
 }
 
+if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'kullanicilar.php'
+    && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+    && ($_POST['action'] ?? '') === 'update'
+    && verify_csrf($_POST['csrf_token'] ?? null)
+    && is_logged_in()
+    && current_user()
+    && is_admin()) {
+    $targetUserId = (int)($_POST['id'] ?? 0);
+    if ($targetUserId > 0) {
+        set_user_super_admin($targetUserId, isset($_POST['is_super_admin']) && (string)$_POST['is_super_admin'] === '1');
+    }
+}
+
 function page_header(string $title, string $active = ''): void
 {
     $u = current_user();
@@ -61,9 +74,6 @@ function page_header(string $title, string $active = ''): void
         ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
         ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
     ];
-    if (is_super_admin()) {
-        $nav[] = ['super_yonetim', 'super-yonetim.php', 'Süper Yönetim', '★'];
-    }
     if (is_admin()) {
         $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
         $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
@@ -126,7 +136,8 @@ function page_footer(): void
     ?>
     </main>
   </div>
-  <script src="assets/muhasebe.js?v=513"></script>
+  <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
+  <script src="assets/muhasebe.js?v=514"></script>
 </body>
 </html>
 <?php }
