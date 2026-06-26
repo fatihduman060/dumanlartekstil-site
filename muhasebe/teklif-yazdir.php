@@ -27,8 +27,8 @@ $grandTotal = (float)($offer['grand_total'] ?? ($subtotal + $vatAmount));
 $rows = $offer['items'] ?? [];
 while (count($rows) < 10) $rows[] = ['product_name'=>'', 'product_type'=>'', 'quantity'=>0, 'unit_price'=>0, 'line_total'=>0];
 $docTypeLabel = (mb_stripos($title, 'SİPARİŞ') !== false || mb_stripos($title, 'SIPARIS') !== false) ? 'SİPARİŞ' : 'TEKLİF';
-$logoSrc = 'assets/dumanlar-logo-arkaplansiz.png?v=4';
-$machineSrc = 'assets/07DA19C3-9C50-4D7F-A2FB-922CC15BC158.PNG?v=4';
+$logoSrc = 'assets/dumanlar-logo-arkaplansiz.png?v=5';
+$machineSrc = 'assets/07DA19C3-9C50-4D7F-A2FB-922CC15BC158.PNG?v=5';
 ?>
 <!doctype html>
 <html lang="tr">
@@ -68,10 +68,35 @@ $machineSrc = 'assets/07DA19C3-9C50-4D7F-A2FB-922CC15BC158.PNG?v=4';
 
   @page{size:A4;margin:0}
   @media print{
-    html,body{width:210mm;height:297mm;background:#fff;overflow:hidden;margin:0!important;padding:0!important}
+    html,body{width:210mm!important;height:auto!important;min-height:0!important;background:#fff!important;overflow:hidden!important;margin:0!important;padding:0!important}
     .toolbar{display:none!important}
-    .page{margin:0!important;border:0!important;box-shadow:none!important;width:210mm!important;height:296mm!important;overflow:hidden!important;page-break-before:avoid!important;page-break-after:avoid!important;page-break-inside:avoid!important;break-before:avoid!important;break-after:avoid!important;break-inside:avoid!important;zoom:.965}
-    .bottom,.features{page-break-inside:avoid!important;break-inside:avoid!important}
+    .page{margin:0 auto!important;border:0!important;box-shadow:none!important;width:202mm!important;height:276mm!important;overflow:hidden!important;page-break-before:avoid!important;page-break-after:auto!important;page-break-inside:avoid!important;break-before:avoid!important;break-after:auto!important;break-inside:avoid!important;zoom:1!important}
+    .hero{height:58mm!important;border-top-width:2.5mm!important}
+    .hero-left{padding:10mm 6mm 7mm 8mm!important}
+    .hero-left:after{height:61mm!important;top:-2.5mm!important}
+    .real-logo{width:101mm!important;height:32mm!important}
+    .contact{height:9mm!important;font-size:2.2mm!important}
+    .contact div:last-child{font-size:1.95mm!important}
+    .content{padding:6.5mm 9mm 35mm!important}
+    .doc-head{margin-bottom:4mm!important}
+    .title-wrap h1{font-size:14.2mm!important}
+    .title-rule{margin:3.5mm 0 3.2mm!important}
+    .customer-name{margin-bottom:4.6mm!important}
+    .date-box{padding:2.8mm 3.5mm!important}
+    .date-row{padding:1.5mm 0!important}
+    .items th{padding:1.75mm 1.4mm!important}
+    .items thead tr.sub th{padding:1.35mm 1.4mm!important}
+    .items td{height:4.75mm!important;padding:1mm 1.6mm!important}
+    .total-line td{height:5.7mm!important}
+    .note{margin-top:3.5mm!important;font-size:2.9mm!important}
+    .bottom{height:35mm!important;background:linear-gradient(to bottom,var(--navy) 0,var(--navy) 28.2mm,#f0c777 28.2mm,#f9e4a8 31.5mm,#f0c777 35mm)!important;page-break-inside:avoid!important;break-inside:avoid!important}
+    .bottom:after{height:6.8mm!important;font-size:3mm!important}
+    .features{height:28.2mm!important;padding:3.5mm 8.5mm!important;page-break-inside:avoid!important;break-inside:avoid!important}
+    .feature{grid-template-columns:8.5mm 1fr!important;gap:2mm!important}
+    .ficon{width:8.2mm!important;height:8.2mm!important;font-size:4.4mm!important}
+    .feature b{font-size:2.35mm!important}
+    .feature span{font-size:2mm!important}
+    .thanks{font-size:3.4mm!important;padding:3.5mm!important}
     .hero,.hero-right,.bottom,.features,.items th,.total-line .label{print-color-adjust:exact;-webkit-print-color-adjust:exact}
   }
 </style>
