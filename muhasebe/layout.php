@@ -23,6 +23,14 @@ function is_super_admin(?int $userId = null): bool
     return $userId > 0 && in_array($userId, super_admin_user_ids(), true);
 }
 
+function can_manage_users(): bool
+{
+    // İlk kurulumda sistem kilitlenmesin diye hiç süper yönetici yoksa mevcut yöneticiler kullanıcı atayabilir.
+    // En az bir süper yönetici tanımlandıktan sonra kullanıcı yönetimi yalnızca süper yöneticiye geçer.
+    $ids = super_admin_user_ids();
+    return empty($ids) ? is_admin() : is_super_admin();
+}
+
 function set_user_super_admin(int $userId, bool $enabled): void
 {
     if ($userId <= 0) return;
@@ -45,16 +53,30 @@ function require_super_admin(): void
     }
 }
 
-if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'kullanicilar.php'
-    && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
-    && ($_POST['action'] ?? '') === 'update'
-    && verify_csrf($_POST['csrf_token'] ?? null)
-    && is_logged_in()
-    && current_user()
-    && is_admin()) {
-    $targetUserId = (int)($_POST['id'] ?? 0);
-    if ($targetUserId > 0) {
-        set_user_super_admin($targetUserId, isset($_POST['is_super_admin']) && (string)$_POST['is_super_admin'] === '1');
+function require_user_manager(): void
+{
+    require_login();
+    if (!can_manage_users()) {
+        flash('error', 'Kullanıcı tanımları yalnızca süper yönetici tarafından değiştirilebilir.');
+        redirect('dashboard.php');
+    }
+}
+
+if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'kullanicilar.php') {
+    if (is_logged_in() && current_user() && !can_manage_users()) {
+        flash('error', 'Kullanıcı tanımları yalnızca süper yönetici tarafından yönetilebilir.');
+        redirect('dashboard.php');
+    }
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+        && ($_POST['action'] ?? '') === 'update'
+        && verify_csrf($_POST['csrf_token'] ?? null)
+        && is_logged_in()
+        && current_user()
+        && can_manage_users()) {
+        $targetUserId = (int)($_POST['id'] ?? 0);
+        if ($targetUserId > 0) {
+            set_user_super_admin($targetUserId, isset($_POST['is_super_admin']) && (string)$_POST['is_super_admin'] === '1');
+        }
     }
 }
 
@@ -76,8 +98,10 @@ function page_header(string $title, string $active = ''): void
     ];
     if (is_admin()) {
         $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
-        $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
         $nav[] = ['loglar', 'loglar.php', 'Loglar', '☰'];
+    }
+    if (can_manage_users()) {
+        $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
     }
     ?>
 <!doctype html>
