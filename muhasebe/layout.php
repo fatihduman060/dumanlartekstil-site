@@ -167,6 +167,9 @@ function page_footer(): void
   </div>
   <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
   <script src="assets/muhasebe.js?v=516"></script>
+  <script src="assets/super-admin-role.js?v=1"></script>
+  <script src="assets/muhasebe-polish.js?v=1"></script>
+  <script src="assets/cek-vade-uyari.js?v=2"></script>
 </body>
 </html>
 <?php }
