@@ -134,6 +134,56 @@ if (!empty($_GET['edit'])) {
     }
 }
 
+function hareket_search_normalize($value): string
+{
+    $value = (string)$value;
+    $map = [
+        'Ç'=>'c','Ğ'=>'g','İ'=>'i','I'=>'i','Ö'=>'o','Ş'=>'s','Ü'=>'u',
+        'Â'=>'a','Î'=>'i','Û'=>'u','Ä'=>'a','Ë'=>'e','Ï'=>'i','Ô'=>'o','È'=>'e','É'=>'e','Ê'=>'e',
+        'ç'=>'c','ğ'=>'g','ı'=>'i','i'=>'i','ö'=>'o','ş'=>'s','ü'=>'u',
+        'â'=>'a','î'=>'i','û'=>'u','ä'=>'a','ë'=>'e','ï'=>'i','ô'=>'o','è'=>'e','é'=>'e','ê'=>'e',
+    ];
+    $value = strtr($value, $map);
+    $value = strtolower($value);
+    $value = preg_replace('/[^a-z0-9]+/', ' ', $value) ?? $value;
+    return trim(preg_replace('/\s+/', ' ', $value) ?? $value);
+}
+
+function hareket_search_matches(array $movement, string $query): bool
+{
+    $query = hareket_search_normalize($query);
+    if ($query === '') return true;
+
+    $fields = [
+        $movement['id'] ?? '',
+        $movement['description'] ?? '',
+        $movement['cari_name'] ?? '',
+        $movement['category_name'] ?? '',
+        $movement['account_name'] ?? '',
+        $movement['document_name'] ?? '',
+        $movement['linked_check_no'] ?? '',
+        $movement['linked_check_bank'] ?? '',
+        $movement['payment_method'] ?? '',
+        movement_label((string)($movement['movement_type'] ?? '')),
+        document_type_label($movement['document_type'] ?? null),
+        money((float)($movement['amount'] ?? 0)),
+        tr_date($movement['movement_date'] ?? null),
+        tr_date($movement['due_date'] ?? null),
+    ];
+
+    $haystack = hareket_search_normalize(implode(' ', $fields));
+    $compactHaystack = str_replace(' ', '', $haystack);
+    $compactQuery = str_replace(' ', '', $query);
+    if ($query !== '' && strpos($haystack, $query) !== false) return true;
+    if ($compactQuery !== '' && strpos($compactHaystack, $compactQuery) !== false) return true;
+
+    $tokens = preg_split('/\s+/', $query, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    foreach ($tokens as $token) {
+        if ($token !== '' && strpos($haystack, $token) === false && strpos($compactHaystack, $token) === false) return false;
+    }
+    return !empty($tokens);
+}
+
 $q = trim($_GET['q'] ?? '');
 $cariId = trim($_GET['cari_id'] ?? '');
 $type = trim($_GET['movement_type'] ?? '');
@@ -144,7 +194,6 @@ $end = trim($_GET['end'] ?? '');
 $includeCancelled = isset($_GET['include_cancelled']);
 $where=[]; $params=[];
 if (!$includeCancelled) { $where[]='COALESCE(m.is_cancelled,0)=0'; }
-if ($q !== '') { $where[]='(CAST(m.id AS TEXT) LIKE ? OR m.description LIKE ? OR c.name LIKE ? OR cat.name LIKE ? OR a.name LIKE ? OR m.document_name LIKE ? OR ch.check_no LIKE ? OR ch.bank_name LIKE ?)'; array_push($params,"%$q%","%$q%","%$q%","%$q%","%$q%","%$q%","%$q%","%$q%"); }
 if ($cariId !== '') { $where[]='m.cari_id=?'; $params[]=(int)$cariId; }
 if ($type !== '') { $where[]='m.movement_type=?'; $params[]=$type; }
 if ($accountId !== '') { $where[]='m.account_id=?'; $params[]=(int)$accountId; }
@@ -153,10 +202,15 @@ if ($start !== '') { $where[]='m.movement_date>=?'; $params[]=$start; }
 if ($end !== '') { $where[]='m.movement_date<=?'; $params[]=$end; }
 $sql="SELECT m.*, c.name AS cari_name, cat.name AS category_name, a.name AS account_name, ch.id AS linked_check_id, ch.check_no AS linked_check_no, ch.bank_name AS linked_check_bank FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id LEFT JOIN categories cat ON cat.id=m.category_id LEFT JOIN accounts a ON a.id=m.account_id LEFT JOIN checks ch ON ch.id=m.check_id";
 if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
-$sql .= ' ORDER BY m.movement_date DESC, m.id DESC LIMIT 500';
+$sql .= ' ORDER BY m.movement_date DESC, m.id DESC';
+if ($q === '') $sql .= ' LIMIT 500';
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $movements=$stmt->fetchAll();
+if ($q !== '') {
+    $movements = array_values(array_filter($movements, fn($movement) => hareket_search_matches($movement, $q)));
+    $movements = array_slice($movements, 0, 500);
+}
 page_header('Hareketler', 'hareketler');
 ?>
 <section class="form-grid">
