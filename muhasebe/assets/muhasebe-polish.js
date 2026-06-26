@@ -46,6 +46,20 @@
     });
   }
 
+  if (slug === 'cekler') {
+    document.querySelectorAll('.row-actions a[href^="cekler.php?edit="]').forEach(function (editLink) {
+      var match = editLink.getAttribute('href').match(/edit=([0-9]+)/);
+      if (!match) return;
+      var actions = editLink.closest('.row-actions');
+      if (!actions || actions.querySelector('.check-extra-doc-link')) return;
+      var docLink = document.createElement('a');
+      docLink.href = 'cek-ek-belge.php?id=' + match[1];
+      docLink.className = 'check-extra-doc-link';
+      docLink.textContent = 'Ek belge';
+      editLink.insertAdjacentElement('afterend', docLink);
+    });
+  }
+
   document.querySelectorAll('form.filterbar').forEach(function (form) {
     if (form.querySelector('.filter-reset-link')) return;
     var hasQuery = new URLSearchParams(window.location.search).toString().length > 0;
