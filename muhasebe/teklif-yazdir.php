@@ -27,8 +27,8 @@ $grandTotal = (float)($offer['grand_total'] ?? ($subtotal + $vatAmount));
 $rows = $offer['items'] ?? [];
 while (count($rows) < 10) $rows[] = ['product_name'=>'', 'product_type'=>'', 'quantity'=>0, 'unit_price'=>0, 'line_total'=>0];
 $docTypeLabel = (mb_stripos($title, 'SİPARİŞ') !== false || mb_stripos($title, 'SIPARIS') !== false) ? 'SİPARİŞ' : 'TEKLİF';
-$logoSrc = 'assets/dumanlar-logo-arkaplansiz.png?v=3';
-$machineSrc = 'assets/07DA19C3-9C50-4D7F-A2FB-922CC15BC158.PNG?v=3';
+$logoSrc = 'assets/dumanlar-logo-arkaplansiz.png?v=4';
+$machineSrc = 'assets/07DA19C3-9C50-4D7F-A2FB-922CC15BC158.PNG?v=4';
 ?>
 <!doctype html>
 <html lang="tr">
@@ -67,7 +67,13 @@ $machineSrc = 'assets/07DA19C3-9C50-4D7F-A2FB-922CC15BC158.PNG?v=3';
   .feature{display:grid;grid-template-columns:10mm 1fr;gap:2.3mm;align-items:center}.ficon{width:9.5mm;height:9.5mm;border:1.2px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gold);font-size:5mm}.feature b{display:block;color:var(--gold2);font-size:2.65mm;margin-bottom:.7mm}.feature span{display:block;font-size:2.25mm;line-height:1.18;color:#e7edf5}.thanks{border:1.1px solid var(--gold);border-radius:2mm;padding:4.5mm;text-align:center;color:var(--gold2);font-family:Georgia,serif;font-size:4mm;line-height:1.2;font-style:italic}
 
   @page{size:A4;margin:0}
-  @media print{html,body{width:210mm;height:296mm;background:#fff;overflow:hidden}.toolbar{display:none}.page{margin:0;border:0;box-shadow:none;width:210mm;height:296mm;page-break-after:avoid;page-break-inside:avoid;break-after:avoid;break-inside:avoid;overflow:hidden}.bottom,.features{page-break-inside:avoid;break-inside:avoid}.hero,.hero-right,.bottom,.features,.items th,.total-line .label{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+  @media print{
+    html,body{width:210mm;height:297mm;background:#fff;overflow:hidden;margin:0!important;padding:0!important}
+    .toolbar{display:none!important}
+    .page{margin:0!important;border:0!important;box-shadow:none!important;width:210mm!important;height:296mm!important;overflow:hidden!important;page-break-before:avoid!important;page-break-after:avoid!important;page-break-inside:avoid!important;break-before:avoid!important;break-after:avoid!important;break-inside:avoid!important;zoom:.965}
+    .bottom,.features{page-break-inside:avoid!important;break-inside:avoid!important}
+    .hero,.hero-right,.bottom,.features,.items th,.total-line .label{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  }
 </style>
 </head>
 <body>
