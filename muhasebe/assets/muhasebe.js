@@ -227,7 +227,7 @@ document.addEventListener('change', function (event) {
   }
 
   const style = document.createElement('style');
-  style.textContent = '.check-direction-tabs{display:flex;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #e5dccf;border-radius:18px;padding:8px;box-shadow:0 10px 26px rgba(7,27,63,.05)}.check-direction-tabs a{flex:1 1 220px;text-align:center;text-decoration:none;border-radius:14px;padding:13px 16px;font-weight:950;color:#16482e;background:#fbf6ed;border:1px solid transparent}.check-direction-tabs a.active{background:#16482e;color:#fff;box-shadow:0 8px 20px rgba(22,72,46,.18)}.check-direction-tabs small{display:block;margin-top:3px;font-weight:700;opacity:.72}';
+  style.textContent = '.check-direction-tabs{display:flex;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #e5dccf;border-radius:18px;padding:8px;box-shadow:0 10px 26px rgba(7,27,63,.05)}.check-direction-tabs a{flex:1 1 220px;text-align:center;text-decoration:none;border-radius:14px;padding:13px 16px;font-weight:950;color:#16482e;background:#fbf6ed;border:1px solid transparent}.check-direction-tabs a.active{background:#16482e;color:#fff;box-shadow:0 8px 20px rgba(22,72,46,.18)}.check-direction-tabs small{display:block;margin-top:3px;font-weight:700;opacity:.72}.bank-location-note{display:block!important;margin-top:6px!important;color:#16482e!important;font-weight:900!important}.auto-check-note{margin-top:8px;padding:8px 10px;border-radius:12px;background:#e9f8ef;color:#16482e;font-weight:800;font-size:12px}';
   document.head.appendChild(style);
 
   const tabs = document.createElement('nav');
@@ -243,4 +243,42 @@ document.addEventListener('change', function (event) {
 
   const headline = document.querySelector('.checks-hero h2');
   if (headline) headline.textContent = current === 'alinacak' ? 'Alınan çekleri takip et.' : 'Verilen çekleri takip et.';
+})();
+
+// Bankaya verilen alınan çeklerin nerede olduğunu göster ve vadesi gelenleri otomatik tahsil ettir.
+(function autoCollectBankChecks() {
+  const title = document.querySelector('.topbar h1')?.textContent.trim() || '';
+  if (title !== 'Çekler' && title !== 'Kasa / Banka') return;
+
+  if (title === 'Çekler') {
+    document.querySelectorAll('.check-table tbody tr').forEach((row) => {
+      const cells = row.querySelectorAll('td');
+      if (cells.length < 5 || row.querySelector('.bank-location-note')) return;
+      const directionText = cells[0].textContent || '';
+      const bankName = cells[1].querySelector('b')?.textContent.trim() || '';
+      const statusText = cells[4].textContent || '';
+      if (!directionText.includes('Alınan') || !bankName || bankName === '-') return;
+      if (!statusText.includes('Bankaya verildi')) return;
+      const note = document.createElement('small');
+      note.className = 'bank-location-note';
+      note.textContent = bankName + ' bankasında';
+      cells[4].appendChild(note);
+    });
+  }
+
+  fetch('cek-auto-tahsil.php', { credentials: 'same-origin', cache: 'no-store' })
+    .then((res) => res.ok ? res.json() : null)
+    .then((data) => {
+      if (!data || !data.ok || !data.processed) return;
+      if (title === 'Çekler') {
+        const card = document.querySelector('.check-list-card');
+        if (card && !document.querySelector('.auto-check-note')) {
+          const note = document.createElement('div');
+          note.className = 'auto-check-note';
+          note.textContent = data.processed + ' adet vadesi gelen banka çeki otomatik tahsil edildi. Sayfayı yenileyince kasa/banka bakiyesinde görünür.';
+          card.insertAdjacentElement('beforebegin', note);
+        }
+      }
+    })
+    .catch(() => {});
 })();
