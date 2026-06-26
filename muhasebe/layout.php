@@ -75,7 +75,12 @@ if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'kullanicilar.php') {
         && can_manage_users()) {
         $targetUserId = (int)($_POST['id'] ?? 0);
         if ($targetUserId > 0) {
-            set_user_super_admin($targetUserId, isset($_POST['is_super_admin']) && (string)$_POST['is_super_admin'] === '1');
+            $postedRole = (string)($_POST['role'] ?? '');
+            $makeSuper = $postedRole === 'super_admin' || (isset($_POST['is_super_admin']) && (string)$_POST['is_super_admin'] === '1');
+            set_user_super_admin($targetUserId, $makeSuper);
+            if ($postedRole === 'super_admin') {
+                $_POST['role'] = 'admin';
+            }
         }
     }
 }
@@ -161,7 +166,7 @@ function page_footer(): void
     </main>
   </div>
   <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
-  <script src="assets/muhasebe.js?v=515"></script>
+  <script src="assets/muhasebe.js?v=516"></script>
 </body>
 </html>
 <?php }
