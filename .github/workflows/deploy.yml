@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   deploy-site:
-    name: Deploy public website files to hosting
+    name: Deploy website and muhasebe code to hosting
     runs-on: ubuntu-latest
 
     steps:
@@ -30,7 +30,7 @@ jobs:
           fi
           echo "Hassas dosya yok. Devam."
 
-      - name: Deploy website files to hosting
+      - name: Deploy website and muhasebe code to hosting
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -46,8 +46,8 @@ jobs:
             **/.git*/**
             .github/**
             .github/**/*
-            muhasebe/**
-            muhasebe/**/*
+            muhasebe/storage/**
+            muhasebe/storage/**/*
             storage/**
             storage/**/*
             **/*.sqlite
