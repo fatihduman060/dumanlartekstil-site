@@ -126,14 +126,14 @@ document.addEventListener('change', function (event) {
   if (!title || title.textContent.trim() !== 'Kullanıcılar') return;
 
   const superIds = Array.isArray(window.BITKE_SUPER_ADMIN_IDS) ? window.BITKE_SUPER_ADMIN_IDS.map(Number) : [];
-  document.querySelectorAll('form').forEach((form) => {
-    const action = form.querySelector('input[name="action"][value="update"]');
-    const idInput = form.querySelector('input[name="id"]');
-    const roleSelect = form.querySelector('select[name="role"]');
-    if (!action || !idInput || !roleSelect || form.querySelector('.super-admin-control')) return;
 
-    const userId = Number(idInput.value || 0);
-    if (!userId) return;
+  document.querySelectorAll('select[name="role"]').forEach((roleSelect) => {
+    if (roleSelect.parentElement && roleSelect.parentElement.querySelector('.super-admin-control')) return;
+
+    const row = roleSelect.closest('tr');
+    const form = roleSelect.closest('form') || (row ? row.querySelector('form') : null);
+    const idInput = (row ? row.querySelector('input[name="id"]') : null) || (form ? form.querySelector('input[name="id"]') : null);
+    const userId = Number(idInput ? idInput.value : 0);
 
     const label = document.createElement('label');
     label.className = 'check tiny super-admin-control';
@@ -142,10 +142,30 @@ document.addEventListener('change', function (event) {
     checkbox.type = 'checkbox';
     checkbox.name = 'is_super_admin';
     checkbox.value = '1';
-    checkbox.checked = superIds.includes(userId);
+    checkbox.checked = userId > 0 && superIds.includes(userId);
 
     label.appendChild(checkbox);
     label.appendChild(document.createTextNode(' ⭐ Süper yönetici'));
     roleSelect.insertAdjacentElement('afterend', label);
   });
+
+  document.addEventListener('submit', function (event) {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const action = form.querySelector('input[name="action"][value="update"]');
+    if (!action) return;
+    const row = form.closest('tr') || form.parentElement?.closest('tr');
+    const visualCheckbox = row ? row.querySelector('.super-admin-control input[type="checkbox"]') : form.querySelector('.super-admin-control input[type="checkbox"]');
+    if (!visualCheckbox) return;
+
+    let hidden = form.querySelector('input[data-super-admin-hidden="1"]');
+    if (!hidden) {
+      hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'is_super_admin';
+      hidden.dataset.superAdminHidden = '1';
+      form.appendChild(hidden);
+    }
+    hidden.value = visualCheckbox.checked ? '1' : '0';
+  }, true);
 })();
