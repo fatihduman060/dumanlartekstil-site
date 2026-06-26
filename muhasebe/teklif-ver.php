@@ -4,10 +4,27 @@ require_login();
 
 $today = date('Y-m-d');
 $defaultNo = 'TV-' . date('Ymd-His');
+$cariler = [];
+try {
+    $cariler = db()->query('SELECT id, name, city, address, tax_no, tax_office, authorized_person FROM cariler ORDER BY name ASC')->fetchAll();
+} catch (Throwable $e) {
+    $cariler = [];
+}
+$cariJson = json_encode(array_map(function ($cari) {
+    return [
+        'id' => (int)($cari['id'] ?? 0),
+        'name' => (string)($cari['name'] ?? ''),
+        'city' => (string)($cari['city'] ?? ''),
+        'address' => (string)($cari['address'] ?? ''),
+        'tax_no' => (string)($cari['tax_no'] ?? ''),
+        'tax_office' => (string)($cari['tax_office'] ?? ''),
+        'authorized_person' => (string)($cari['authorized_person'] ?? ''),
+    ];
+}, $cariler), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 page_header('Teklif Ver', 'teklif_ver');
 ?>
 <style>
-.offer-builder{display:grid;gap:16px;max-width:1500px;margin:0 auto}.offer-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.offer-hero h2{margin:5px 0 6px;color:#fff;font-size:clamp(24px,3vw,38px);line-height:1}.offer-hero p{margin:0;color:#e9f5ed;max-width:760px}.offer-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.offer-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.offer-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.offer-card h3{margin:0;color:#102818}.offer-body{padding:18px}.offer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.offer-grid label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.offer-grid input,.offer-grid select,.offer-grid textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.offer-grid .wide{grid-column:span 2}.offer-grid .full{grid-column:1/-1}.offer-table-wrap{overflow:auto;border:1px solid #e5dccf;border-radius:18px}.offer-table{width:100%;min-width:920px;border-collapse:collapse}.offer-table th{background:#16482e;color:#fff;text-align:left;padding:10px 9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.offer-table td{border-bottom:1px solid #efe7dc;padding:8px}.offer-table input{width:100%;min-height:38px;border:1px solid #e5dccf;border-radius:11px;padding:7px 9px}.offer-table .right{text-align:right}.offer-total{display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-top:12px;font-size:18px;color:#102818}.offer-total strong{font-size:24px}.offer-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.offer-actions button,.offer-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:999px;padding:9px 16px;font-weight:900;text-decoration:none}.offer-actions .primary{background:#16482e;color:#fff}.offer-actions .secondary{background:#efe6d9;color:#102818}.mini-help{margin-top:12px;padding:12px;border-radius:14px;background:#fbf6ed;color:#776b5c;font-weight:700}.row-remove{border:0!important;background:#fff1ed!important;color:#b64242!important;font-weight:900!important;cursor:pointer}@media(max-width:1000px){.offer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.offer-grid .wide{grid-column:span 2}}@media(max-width:640px){.offer-hero{display:block}.offer-grid{grid-template-columns:1fr}.offer-grid .wide{grid-column:1}.offer-card header{display:block}.offer-actions button,.offer-actions a{width:100%}}
+.offer-builder{display:grid;gap:16px;max-width:1500px;margin:0 auto}.offer-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.offer-hero h2{margin:5px 0 6px;color:#fff;font-size:clamp(24px,3vw,38px);line-height:1}.offer-hero p{margin:0;color:#e9f5ed;max-width:760px}.offer-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.offer-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.offer-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.offer-card h3{margin:0;color:#102818}.offer-body{padding:18px}.offer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.offer-grid label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.offer-grid input,.offer-grid select,.offer-grid textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.offer-grid small{color:#7b6c5a;font-weight:700}.offer-grid .wide{grid-column:span 2}.offer-grid .full{grid-column:1/-1}.offer-table-wrap{overflow:auto;border:1px solid #e5dccf;border-radius:18px}.offer-table{width:100%;min-width:920px;border-collapse:collapse}.offer-table th{background:#16482e;color:#fff;text-align:left;padding:10px 9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.offer-table td{border-bottom:1px solid #efe7dc;padding:8px}.offer-table input{width:100%;min-height:38px;border:1px solid #e5dccf;border-radius:11px;padding:7px 9px}.offer-table .right{text-align:right}.offer-total{display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-top:12px;font-size:18px;color:#102818}.offer-total strong{font-size:24px}.offer-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.offer-actions button,.offer-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:999px;padding:9px 16px;font-weight:900;text-decoration:none}.offer-actions .primary{background:#16482e;color:#fff}.offer-actions .secondary{background:#efe6d9;color:#102818}.mini-help{margin-top:12px;padding:12px;border-radius:14px;background:#fbf6ed;color:#776b5c;font-weight:700}.row-remove{border:0!important;background:#fff1ed!important;color:#b64242!important;font-weight:900!important;cursor:pointer}.cari-selected-note{display:none;margin-top:4px;padding:8px 10px;border-radius:12px;background:#eef8f1;color:#16482e;font-size:12px;font-weight:850}.cari-selected-note.active{display:block}@media(max-width:1000px){.offer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.offer-grid .wide{grid-column:span 2}}@media(max-width:640px){.offer-hero{display:block}.offer-grid{grid-template-columns:1fr}.offer-grid .wide{grid-column:1}.offer-card header{display:block}.offer-actions button,.offer-actions a{width:100%}}
 </style>
 
 <div class="offer-builder">
@@ -15,7 +32,7 @@ page_header('Teklif Ver', 'teklif_ver');
     <div>
       <span>DUMANLAR / BİTKE TEKLİF MODÜLÜ</span>
       <h2>Teklif fişini panelden hazırla.</h2>
-      <p>Firma, tarih, ürün satırları ve notu gir; tek tıkla A4 proforma/teklif çıktısı açılır. Logo ve üst şablonu sen atınca aynı alana birebir yerleştiririz.</p>
+      <p>Firma, tarih, ürün satırları ve notu gir; tek tıkla A4 proforma/teklif çıktısı açılır. Müşteriyi carilerden seçebilir veya elle yazabilirsin.</p>
     </div>
     <div class="offer-actions"><a class="secondary" href="belgeler.php">Belgeler</a></div>
   </section>
@@ -31,9 +48,12 @@ page_header('Teklif Ver', 'teklif_ver');
           <label><span>Teklif / Sipariş no</span><input name="offer_no" value="<?php echo e($defaultNo); ?>" required></label>
           <label><span>Tarih</span><input type="date" name="offer_date" value="<?php echo e($today); ?>" required></label>
           <label><span>Para birimi</span><select name="currency"><option value="TL">TL</option><option value="USD">USD</option><option value="EUR">EUR</option></select></label>
-          <label class="wide"><span>Firma / Müşteri</span><input name="customer_name" placeholder="EFEOĞLU TEKSTİL" required></label>
-          <label><span>Şehir</span><input name="customer_city" placeholder="BURSA"></label>
+
+          <label class="wide"><span>Carilerden firma seç</span><select id="cariSelect" name="cari_id"><option value="">Cari seçmeden elle yazacağım</option><?php foreach ($cariler as $cari): ?><option value="<?php echo e($cari['id']); ?>"><?php echo e($cari['name']); ?><?php echo !empty($cari['city']) ? ' — ' . e($cari['city']) : ''; ?></option><?php endforeach; ?></select><small>Seçince alttaki firma ve şehir alanları otomatik dolar.</small></label>
+          <label class="wide"><span>Firma / Müşteri</span><input id="customerName" name="customer_name" placeholder="EFEOĞLU TEKSTİL" required><small>İstersen cariden geldikten sonra elle değiştirebilirsin.</small></label>
+          <label><span>Şehir</span><input id="customerCity" name="customer_city" placeholder="BURSA"></label>
           <label><span>Miktar başlığı</span><input name="quantity_label" value="DZ"></label>
+          <div class="full cari-selected-note" id="cariSelectedNote"></div>
           <label class="full"><span>Açıklama / alt not</span><textarea name="note" rows="2" placeholder="MODAL çorap kutusu 6080 kutusu gibi olacak."></textarea></label>
           <label class="wide"><span>Alt slogan</span><input name="footer_text" value="MALIMIZDAN HAYIR GÖRÜN."></label>
           <label class="wide"><span>Teklif notu</span><input name="term_text" placeholder="Fiyatlara KDV dahil değildir / Teslim süresi ..."></label>
@@ -73,6 +93,31 @@ page_header('Teklif Ver', 'teklif_ver');
 
 <script>
 (function(){
+  const cariler = <?php echo $cariJson ?: '[]'; ?>;
+  const cariSelect = document.getElementById('cariSelect');
+  const customerName = document.getElementById('customerName');
+  const customerCity = document.getElementById('customerCity');
+  const note = document.getElementById('cariSelectedNote');
+
+  cariSelect?.addEventListener('change', () => {
+    const id = Number(cariSelect.value || 0);
+    const cari = cariler.find(item => Number(item.id) === id);
+    if (!cari) {
+      if (note) { note.classList.remove('active'); note.textContent = ''; }
+      return;
+    }
+    if (customerName) customerName.value = cari.name || '';
+    if (customerCity) customerCity.value = cari.city || '';
+    if (note) {
+      const details = [];
+      if (cari.authorized_person) details.push('Yetkili: ' + cari.authorized_person);
+      if (cari.tax_office || cari.tax_no) details.push('Vergi: ' + [cari.tax_office, cari.tax_no].filter(Boolean).join(' / '));
+      if (cari.address) details.push('Adres kayıtlı');
+      note.textContent = details.length ? details.join(' · ') : 'Cari bilgisi forma aktarıldı.';
+      note.classList.add('active');
+    }
+  });
+
   const table = document.getElementById('offerRows');
   if (!table) return;
   const tbody = table.querySelector('tbody');
