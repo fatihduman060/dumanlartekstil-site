@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $cariler = [];
 try {
-    $cariler = db()->query('SELECT id, name, city, address, tax_no, tax_office, authorized_person FROM cariler ORDER BY name ASC')->fetchAll();
+    $cariler = db()->query('SELECT id, name, city, address, tax_no, tax_office, phone, authorized_person FROM cariler ORDER BY name ASC')->fetchAll();
 } catch (Throwable $e) { $cariler = []; }
 $cariJson = json_encode(array_map(function ($cari) {
     return [
@@ -58,6 +58,7 @@ $cariJson = json_encode(array_map(function ($cari) {
         'address' => (string)($cari['address'] ?? ''),
         'tax_no' => (string)($cari['tax_no'] ?? ''),
         'tax_office' => (string)($cari['tax_office'] ?? ''),
+        'phone' => (string)($cari['phone'] ?? ''),
         'authorized_person' => (string)($cari['authorized_person'] ?? ''),
     ];
 }, $cariler), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -100,7 +101,7 @@ page_header('Teklif Ver', 'teklif_ver');
     <div>
       <span>DUMANLAR / BİTKE TEKLİF MODÜLÜ</span>
       <h2><?php echo $edit ? 'Teklifi düzenle.' : 'Teklif fişini kaydet, sonra PDF al.'; ?></h2>
-      <p>Teklifler kayıtlı kalır; alttaki listeden düzenleyebilir, silebilir veya sonradan PDF çıktısı alabilirsin. Belge başlığını Sipariş Fişi / Teklif / Proforma olarak seçebilirsin.</p>
+      <p>Cari seçtiğinde firma adı, şehir, adres, vergi ve telefon bilgileri otomatik gelir; teklif çıktısında profesyonel müşteri bilgi alanı olarak görünür.</p>
     </div>
     <div class="offer-actions"><a class="secondary" href="teklif-ver.php">Yeni teklif</a></div>
   </section>
@@ -119,12 +120,16 @@ page_header('Teklif Ver', 'teklif_ver');
           <label><span>Tarih</span><input type="date" name="offer_date" value="<?php echo offer_field($edit, 'offer_date', $today); ?>" required></label>
           <label><span>Para birimi</span><select name="currency"><?php foreach(['TL','USD','EUR'] as $cur): ?><option value="<?php echo e($cur); ?>" <?php echo (($edit['currency'] ?? 'TL')===$cur)?'selected':''; ?>><?php echo e($cur); ?></option><?php endforeach; ?></select></label>
 
-          <label class="wide"><span>Carilerden firma seç</span><select id="cariSelect" name="cari_id"><option value="">Cari seçmeden elle yazacağım</option><?php foreach ($cariler as $cari): ?><option value="<?php echo e($cari['id']); ?>" <?php echo ((string)($edit['cari_id'] ?? '')===(string)$cari['id'])?'selected':''; ?>><?php echo e($cari['name']); ?><?php echo !empty($cari['city']) ? ' — ' . e($cari['city']) : ''; ?></option><?php endforeach; ?></select><small>Seçince alttaki firma ve şehir alanları otomatik dolar.</small></label>
+          <label class="wide"><span>Carilerden firma seç</span><select id="cariSelect" name="cari_id"><option value="">Cari seçmeden elle yazacağım</option><?php foreach ($cariler as $cari): ?><option value="<?php echo e($cari['id']); ?>" <?php echo ((string)($edit['cari_id'] ?? '')===(string)$cari['id'])?'selected':''; ?>><?php echo e($cari['name']); ?><?php echo !empty($cari['city']) ? ' — ' . e($cari['city']) : ''; ?></option><?php endforeach; ?></select><small>Seçince müşteri bilgileri otomatik dolar.</small></label>
           <label class="wide"><span>Firma / Müşteri</span><input id="customerName" name="customer_name" value="<?php echo offer_field($edit, 'customer_name'); ?>" placeholder="EFEOĞLU TEKSTİL" required><small>İstersen cariden geldikten sonra elle değiştirebilirsin.</small></label>
           <label><span>Şehir</span><input id="customerCity" name="customer_city" value="<?php echo offer_field($edit, 'customer_city'); ?>" placeholder="BURSA"></label>
-          <label><span>Miktar başlığı</span><input name="quantity_label" value="<?php echo offer_field($edit, 'quantity_label', 'DZ'); ?>"></label>
+          <label><span>Telefon</span><input id="customerPhone" name="customer_phone" value="<?php echo offer_field($edit, 'customer_phone'); ?>" placeholder="0 (___) ___ __ __"></label>
+          <label><span>Vergi dairesi</span><input id="customerTaxOffice" name="customer_tax_office" value="<?php echo offer_field($edit, 'customer_tax_office'); ?>" placeholder="Vergi dairesi"></label>
+          <label><span>Vergi no / T.C.</span><input id="customerTaxNo" name="customer_tax_no" value="<?php echo offer_field($edit, 'customer_tax_no'); ?>" placeholder="Vergi numarası"></label>
+          <label class="wide"><span>Miktar başlığı</span><input name="quantity_label" value="<?php echo offer_field($edit, 'quantity_label', 'DZ'); ?>"></label>
           <label><span>KDV uygulansın mı?</span><div class="vat-box"><input type="checkbox" id="vatEnabled" name="vat_enabled" value="1" <?php echo ((int)($edit['vat_enabled'] ?? 0)===1)?'checked':''; ?>> <strong>Evet, KDV ekle</strong></div></label>
           <label><span>KDV oranı</span><input id="vatRate" name="vat_rate" value="<?php echo e((string)($edit['vat_rate'] ?? '10')); ?>" inputmode="decimal"><small>Varsayılan %10</small></label>
+          <label class="full"><span>Adres</span><textarea id="customerAddress" name="customer_address" rows="2" placeholder="Müşteri adresi"><?php echo e($edit['customer_address'] ?? ''); ?></textarea></label>
           <div class="full cari-selected-note" id="cariSelectedNote"></div>
           <label class="full"><span>Açıklama / alt not</span><textarea name="note" rows="2" placeholder="MODAL çorap kutusu 6080 kutusu gibi olacak."><?php echo e($edit['note'] ?? ''); ?></textarea></label>
           <label class="wide"><span>Alt slogan</span><input name="footer_text" value="<?php echo offer_field($edit, 'footer_text', 'MALIMIZDAN HAYIR GÖRÜN.'); ?>"></label>
@@ -162,7 +167,7 @@ page_header('Teklif Ver', 'teklif_ver');
           <button class="primary" type="submit"><?php echo $edit ? 'Teklifi Güncelle' : 'Teklifi Kaydet'; ?></button>
           <?php if($edit): ?><a class="secondary" target="_blank" href="teklif-yazdir.php?id=<?php echo e($edit['id']); ?>">PDF / Yazdır</a><?php endif; ?>
         </div>
-        <p class="mini-help">Ürün adı alanında listedeki ürünlerden seçebilir veya elle yeni ürün yazabilirsin. Elle yazılan ürünler kayıttan sonra ürün listesine öneri olarak eklenir.</p>
+        <p class="mini-help">Cari seçildiğinde adres, vergi ve telefon otomatik aktarılır. Bu bilgiler teklif kaydının içinde saklanır.</p>
       </form>
       <?php else: ?>
         <p class="muted">Görüntüleme yetkisindesiniz. Teklif oluşturma kapalı.</p>
@@ -181,7 +186,7 @@ page_header('Teklif Ver', 'teklif_ver');
             <?php foreach($list as $offer): ?>
             <tr>
               <td><strong><?php echo e(tr_date($offer['offer_date'])); ?></strong><small><?php echo e($offer['offer_no']); ?></small></td>
-              <td><strong><?php echo e($offer['customer_name']); ?></strong><small><?php echo e($offer['customer_city'] ?: '-'); ?></small></td>
+              <td><strong><?php echo e($offer['customer_name']); ?></strong><small><?php echo e($offer['customer_city'] ?: '-'); ?><?php echo !empty($offer['customer_phone']) ? ' · Tel: ' . e($offer['customer_phone']) : ''; ?></small></td>
               <td><strong><?php echo e(teklif_money((float)$offer['grand_total']) . ' ' . $offer['currency']); ?></strong><small>Ara toplam: <?php echo e(teklif_money((float)$offer['subtotal'])); ?></small></td>
               <td><?php echo ((int)$offer['vat_enabled']===1) ? '<span class="pill">%'.e((string)$offer['vat_rate']).' KDV</span><small>'.e(teklif_money((float)$offer['vat_amount'])).'</small>' : '<span class="pill off">KDV yok</span>'; ?></td>
               <td><div class="saved-actions"><a href="teklif-ver.php?edit=<?php echo e($offer['id']); ?>">Düzenle</a><a target="_blank" href="teklif-yazdir.php?id=<?php echo e($offer['id']); ?>">PDF</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
@@ -201,6 +206,10 @@ page_header('Teklif Ver', 'teklif_ver');
   const cariSelect = document.getElementById('cariSelect');
   const customerName = document.getElementById('customerName');
   const customerCity = document.getElementById('customerCity');
+  const customerAddress = document.getElementById('customerAddress');
+  const customerTaxOffice = document.getElementById('customerTaxOffice');
+  const customerTaxNo = document.getElementById('customerTaxNo');
+  const customerPhone = document.getElementById('customerPhone');
   const note = document.getElementById('cariSelectedNote');
 
   cariSelect?.addEventListener('change', () => {
@@ -209,11 +218,16 @@ page_header('Teklif Ver', 'teklif_ver');
     if (!cari) { if (note) { note.classList.remove('active'); note.textContent = ''; } return; }
     if (customerName) customerName.value = cari.name || '';
     if (customerCity) customerCity.value = cari.city || '';
+    if (customerAddress) customerAddress.value = cari.address || '';
+    if (customerTaxOffice) customerTaxOffice.value = cari.tax_office || '';
+    if (customerTaxNo) customerTaxNo.value = cari.tax_no || '';
+    if (customerPhone) customerPhone.value = cari.phone || '';
     if (note) {
       const details = [];
       if (cari.authorized_person) details.push('Yetkili: ' + cari.authorized_person);
+      if (cari.phone) details.push('Telefon: ' + cari.phone);
       if (cari.tax_office || cari.tax_no) details.push('Vergi: ' + [cari.tax_office, cari.tax_no].filter(Boolean).join(' / '));
-      if (cari.address) details.push('Adres kayıtlı');
+      if (cari.address) details.push('Adres aktarıldı');
       note.textContent = details.length ? details.join(' · ') : 'Cari bilgisi forma aktarıldı.';
       note.classList.add('active');
     }
