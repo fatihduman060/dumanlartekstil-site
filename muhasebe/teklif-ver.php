@@ -5,7 +5,7 @@ require_login();
 teklif_db_ensure();
 
 $today = date('Y-m-d');
-$defaultNo = 'TV-' . date('Ymd-His');
+$defaultNo = teklif_next_offer_no();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_write();
