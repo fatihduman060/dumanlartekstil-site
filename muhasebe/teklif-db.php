@@ -12,6 +12,10 @@ function teklif_db_ensure(): void
         cari_id INTEGER,
         customer_name TEXT NOT NULL,
         customer_city TEXT,
+        customer_address TEXT,
+        customer_tax_office TEXT,
+        customer_tax_no TEXT,
+        customer_phone TEXT,
         currency TEXT NOT NULL DEFAULT 'TL',
         quantity_label TEXT NOT NULL DEFAULT 'DZ',
         note TEXT,
@@ -29,6 +33,21 @@ function teklif_db_ensure(): void
         FOREIGN KEY(cari_id) REFERENCES cariler(id) ON DELETE SET NULL,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
+    try {
+        $cols = $pdo->query("PRAGMA table_info(offers)")->fetchAll();
+        $existing = [];
+        foreach ($cols as $col) $existing[(string)$col['name']] = true;
+        $add = [
+            'customer_address' => 'TEXT',
+            'customer_tax_office' => 'TEXT',
+            'customer_tax_no' => 'TEXT',
+            'customer_phone' => 'TEXT',
+        ];
+        foreach ($add as $name => $type) {
+            if (empty($existing[$name])) $pdo->exec("ALTER TABLE offers ADD COLUMN {$name} {$type}");
+        }
+    } catch (Throwable $e) {}
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS offer_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         offer_id INTEGER NOT NULL,
@@ -73,14 +92,42 @@ function teklif_money(float $value): string
     return number_format($value, 2, ',', '.');
 }
 
+function teklif_next_offer_no(): string
+{
+    teklif_db_ensure();
+    $max = 0;
+    try {
+        $rows = db()->query('SELECT offer_no FROM offers')->fetchAll();
+        foreach ($rows as $row) {
+            $raw = trim((string)($row['offer_no'] ?? ''));
+            if ($raw !== '' && ctype_digit($raw)) {
+                $max = max($max, (int)$raw);
+            }
+        }
+    } catch (Throwable $e) {}
+    return str_pad((string)($max + 1), 5, '0', STR_PAD_LEFT);
+}
+
 function teklif_load(int $id): ?array
 {
     teklif_db_ensure();
     if ($id <= 0) return null;
-    $stmt = db()->prepare('SELECT o.*, c.name AS cari_name FROM offers o LEFT JOIN cariler c ON c.id=o.cari_id WHERE o.id=? AND COALESCE(o.is_deleted,0)=0');
+    $stmt = db()->prepare('SELECT o.*, c.name AS cari_name, c.address AS cari_address, c.tax_no AS cari_tax_no, c.tax_office AS cari_tax_office, c.phone AS cari_phone FROM offers o LEFT JOIN cariler c ON c.id=o.cari_id WHERE o.id=? AND COALESCE(o.is_deleted,0)=0');
     $stmt->execute([$id]);
     $offer = $stmt->fetch();
     if (!$offer) return null;
+
+    foreach ([
+        'customer_address' => 'cari_address',
+        'customer_tax_no' => 'cari_tax_no',
+        'customer_tax_office' => 'cari_tax_office',
+        'customer_phone' => 'cari_phone',
+    ] as $offerKey => $cariKey) {
+        if (trim((string)($offer[$offerKey] ?? '')) === '' && trim((string)($offer[$cariKey] ?? '')) !== '') {
+            $offer[$offerKey] = $offer[$cariKey];
+        }
+    }
+
     $stmt = db()->prepare('SELECT * FROM offer_items WHERE offer_id=? ORDER BY sort_order ASC, id ASC');
     $stmt->execute([$id]);
     $offer['items'] = $stmt->fetchAll();
@@ -131,12 +178,16 @@ function teklif_save_from_post(int $id = 0): int
     $grandTotal = $subtotal + $vatAmount;
 
     $payload = [
-        'offer_no' => trim((string)($_POST['offer_no'] ?? '')) ?: ('TV-' . date('Ymd-His')),
+        'offer_no' => trim((string)($_POST['offer_no'] ?? '')) ?: teklif_next_offer_no(),
         'offer_date' => trim((string)($_POST['offer_date'] ?? date('Y-m-d'))) ?: date('Y-m-d'),
         'document_title' => trim((string)($_POST['document_title'] ?? 'TEKLİF FORMU')) ?: 'TEKLİF FORMU',
         'cari_id' => ($_POST['cari_id'] ?? '') !== '' ? (int)$_POST['cari_id'] : null,
         'customer_name' => trim((string)($_POST['customer_name'] ?? '')),
         'customer_city' => trim((string)($_POST['customer_city'] ?? '')),
+        'customer_address' => trim((string)($_POST['customer_address'] ?? '')),
+        'customer_tax_office' => trim((string)($_POST['customer_tax_office'] ?? '')),
+        'customer_tax_no' => trim((string)($_POST['customer_tax_no'] ?? '')),
+        'customer_phone' => trim((string)($_POST['customer_phone'] ?? '')),
         'currency' => trim((string)($_POST['currency'] ?? 'TL')) ?: 'TL',
         'quantity_label' => trim((string)($_POST['quantity_label'] ?? 'DZ')) ?: 'DZ',
         'note' => trim((string)($_POST['note'] ?? '')),
@@ -155,7 +206,7 @@ function teklif_save_from_post(int $id = 0): int
     if ($id > 0) {
         $old = teklif_load($id);
         if (!$old) throw new RuntimeException('Düzenlenecek teklif bulunamadı.');
-        $stmt = $pdo->prepare('UPDATE offers SET offer_no=:offer_no, offer_date=:offer_date, document_title=:document_title, cari_id=:cari_id, customer_name=:customer_name, customer_city=:customer_city, currency=:currency, quantity_label=:quantity_label, note=:note, footer_text=:footer_text, term_text=:term_text, vat_enabled=:vat_enabled, vat_rate=:vat_rate, subtotal=:subtotal, vat_amount=:vat_amount, grand_total=:grand_total, updated_at=:updated_at WHERE id=:id');
+        $stmt = $pdo->prepare('UPDATE offers SET offer_no=:offer_no, offer_date=:offer_date, document_title=:document_title, cari_id=:cari_id, customer_name=:customer_name, customer_city=:customer_city, customer_address=:customer_address, customer_tax_office=:customer_tax_office, customer_tax_no=:customer_tax_no, customer_phone=:customer_phone, currency=:currency, quantity_label=:quantity_label, note=:note, footer_text=:footer_text, term_text=:term_text, vat_enabled=:vat_enabled, vat_rate=:vat_rate, subtotal=:subtotal, vat_amount=:vat_amount, grand_total=:grand_total, updated_at=:updated_at WHERE id=:id');
         $payload['updated_at'] = now();
         $payload['id'] = $id;
         $stmt->execute($payload);
@@ -164,7 +215,7 @@ function teklif_save_from_post(int $id = 0): int
         log_action('Teklif güncellendi', $payload['offer_no'] . ' ' . $payload['customer_name']);
         audit_action('teklif', $offerId, 'guncellendi', $old, $payload, $payload['offer_no']);
     } else {
-        $stmt = $pdo->prepare('INSERT INTO offers (offer_no, offer_date, document_title, cari_id, customer_name, customer_city, currency, quantity_label, note, footer_text, term_text, vat_enabled, vat_rate, subtotal, vat_amount, grand_total, created_by, created_at, updated_at) VALUES (:offer_no, :offer_date, :document_title, :cari_id, :customer_name, :customer_city, :currency, :quantity_label, :note, :footer_text, :term_text, :vat_enabled, :vat_rate, :subtotal, :vat_amount, :grand_total, :created_by, :created_at, :updated_at)');
+        $stmt = $pdo->prepare('INSERT INTO offers (offer_no, offer_date, document_title, cari_id, customer_name, customer_city, customer_address, customer_tax_office, customer_tax_no, customer_phone, currency, quantity_label, note, footer_text, term_text, vat_enabled, vat_rate, subtotal, vat_amount, grand_total, created_by, created_at, updated_at) VALUES (:offer_no, :offer_date, :document_title, :cari_id, :customer_name, :customer_city, :customer_address, :customer_tax_office, :customer_tax_no, :customer_phone, :currency, :quantity_label, :note, :footer_text, :term_text, :vat_enabled, :vat_rate, :subtotal, :vat_amount, :grand_total, :created_by, :created_at, :updated_at)');
         $payload['created_by'] = current_user()['id'] ?? null;
         $payload['created_at'] = now();
         $payload['updated_at'] = now();
