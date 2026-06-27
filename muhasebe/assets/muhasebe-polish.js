@@ -61,6 +61,116 @@
     });
   }
 
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[src="' + src + '"]');
+      if (existing) {
+        existing.addEventListener('load', resolve, { once: true });
+        if (window.html2canvas) resolve();
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function safeFileName(text) {
+    return String(text || 'siparis-fisi')
+      .toLowerCase()
+      .replace(/[ç]/g, 'c').replace(/[ğ]/g, 'g').replace(/[ı]/g, 'i').replace(/[ö]/g, 'o').replace(/[ş]/g, 's').replace(/[ü]/g, 'u')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'siparis-fisi';
+  }
+
+  function canvasToBlob(canvas) {
+    return new Promise(function (resolve) {
+      canvas.toBlob(function (blob) { resolve(blob); }, 'image/png', 0.95);
+    });
+  }
+
+  function downloadBlob(blob, fileName) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  }
+
+  async function shareOfferImage(pdfUrl, offerNo, customer, button) {
+    var oldText = button.textContent;
+    var iframe;
+    try {
+      button.disabled = true;
+      button.textContent = 'Görüntü hazırlanıyor...';
+      if (!window.html2canvas) {
+        await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+      }
+      if (!window.html2canvas) throw new Error('Görüntü oluşturma kütüphanesi yüklenemedi.');
+
+      iframe = document.createElement('iframe');
+      iframe.src = pdfUrl;
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-1200px';
+      iframe.style.top = '0';
+      iframe.style.width = '900px';
+      iframe.style.height = '1300px';
+      iframe.style.opacity = '0.01';
+      iframe.style.pointerEvents = 'none';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      await new Promise(function (resolve, reject) {
+        iframe.onload = resolve;
+        iframe.onerror = reject;
+        setTimeout(resolve, 4000);
+      });
+
+      var doc = iframe.contentDocument || iframe.contentWindow.document;
+      if (doc.fonts && doc.fonts.ready) {
+        try { await doc.fonts.ready; } catch (e) {}
+      }
+      await new Promise(function (resolve) { setTimeout(resolve, 600); });
+      var page = doc.querySelector('.page');
+      if (!page) throw new Error('Belge görüntüsü bulunamadı.');
+
+      button.textContent = 'Paylaşım hazırlanıyor...';
+      var canvas = await window.html2canvas(page, {
+        backgroundColor: '#ffffff',
+        scale: Math.min(2, window.devicePixelRatio || 2),
+        useCORS: true,
+        logging: false
+      });
+      var blob = await canvasToBlob(canvas);
+      if (!blob) throw new Error('Görüntü dosyası oluşturulamadı.');
+
+      var baseName = safeFileName((offerNo ? offerNo + '-' : '') + (customer || 'siparis-fisi'));
+      var fileName = baseName + '.png';
+      var file = new File([blob], fileName, { type: 'image/png' });
+      var shareText = 'Merhaba, ' + (customer ? customer + ' için ' : '') + (offerNo ? offerNo + ' numaralı ' : '') + 'sipariş/teklif belgesini iletiyorum.';
+
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        button.textContent = 'WhatsApp açılıyor...';
+        await navigator.share({ files: [file], title: fileName, text: shareText });
+      } else {
+        downloadBlob(blob, fileName);
+        alert('Cihaz bu ekrandan dosyayı doğrudan WhatsApp’a aktarmayı desteklemedi. Belge görüntüsü indirildi; WhatsApp’ta dosya/resim olarak ekleyebilirsin.');
+      }
+    } catch (err) {
+      alert('PDF görüntüsü hazırlanamadı. PDF butonundan belgeyi açıp paylaşmayı deneyebilirsin. Hata: ' + (err && err.message ? err.message : err));
+    } finally {
+      if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      button.disabled = false;
+      button.textContent = oldText;
+    }
+  }
+
   if (slug === 'teklif-ver') {
     document.querySelectorAll('.saved-actions a[href^="teklif-yazdir.php?id="]').forEach(function (pdfLink) {
       var actions = pdfLink.closest('.saved-actions');
@@ -74,13 +184,11 @@
       var offerNo = offerNoEl ? offerNoEl.textContent.trim() : '';
       var customer = customerEl ? customerEl.textContent.trim() : '';
       var pdfUrl = new URL(pdfLink.getAttribute('href'), window.location.href).href;
-      var message = 'Merhaba, ' + (customer ? customer + ' için ' : '') + (offerNo ? offerNo + ' numaralı ' : '') + 'teklif/sipariş belgesini iletiyorum: ' + pdfUrl;
-      var wa = document.createElement('a');
-      wa.href = 'https://wa.me/?text=' + encodeURIComponent(message);
-      wa.target = '_blank';
-      wa.rel = 'noopener';
+      var wa = document.createElement('button');
+      wa.type = 'button';
       wa.className = 'whatsapp-offer-link';
       wa.textContent = 'WhatsApp ile ilet';
+      wa.addEventListener('click', function () { shareOfferImage(pdfUrl, offerNo, customer, wa); });
       pdfLink.insertAdjacentElement('afterend', wa);
     });
   }
