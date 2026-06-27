@@ -55,7 +55,7 @@ function tahsilat_field($row, string $key, string $default = ''): string
 page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
 ?>
 <style>
-.receipt-wrap{display:grid;gap:16px;max-width:1500px;margin:0 auto}.receipt-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#061a33,#16482e);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.receipt-hero h2{margin:5px 0 6px;color:#fff;font-size:clamp(24px,3vw,38px);line-height:1}.receipt-hero p{margin:0;color:#e9f5ed;max-width:760px}.receipt-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.receipt-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.receipt-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.receipt-card h3{margin:0;color:#102818}.receipt-body{padding:18px}.receipt-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.receipt-grid label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.receipt-grid input,.receipt-grid select,.receipt-grid textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.receipt-grid .wide{grid-column:span 2}.receipt-grid .full{grid-column:1/-1}.receipt-grid small{color:#7b6c5a;font-weight:700}.payment-extra{display:none}.payment-extra.active{display:grid}.receipt-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.receipt-actions button,.receipt-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:999px;padding:9px 16px;font-weight:900;text-decoration:none;cursor:pointer}.receipt-actions .primary{background:#16482e;color:#fff}.receipt-actions .secondary{background:#efe6d9;color:#102818}.receipt-actions .danger{background:#fff1ed;color:#b64242}.mini-help{margin-top:12px;padding:12px;border-radius:14px;background:#fbf6ed;color:#776b5c;font-weight:700}.cari-note{display:none;margin-top:4px;padding:8px 10px;border-radius:12px;background:#eef8f1;color:#16482e;font-size:12px;font-weight:850}.cari-note.active{display:block}.receipt-table-wrap{overflow:auto;border:1px solid #e5dccf;border-radius:18px}.receipt-table{width:100%;border-collapse:collapse;min-width:960px}.receipt-table th{background:#16482e;color:#fff;text-align:left;padding:10px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.receipt-table td{border-bottom:1px solid #efe7dc;padding:10px;vertical-align:top}.receipt-table small{display:block;color:#776b5c;margin-top:3px}.saved-actions{display:flex;gap:6px;flex-wrap:wrap}.saved-actions a,.saved-actions button{border:1px solid #e5dccf;background:#fff;border-radius:999px;padding:7px 10px;color:#102818;font-weight:850;text-decoration:none;cursor:pointer}.saved-actions button{color:#b64242}.pill{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900;background:#eef8f1;color:#16482e}@media(max-width:1000px){.receipt-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.receipt-grid .wide{grid-column:span 2}}@media(max-width:640px){.receipt-hero{display:block}.receipt-grid{grid-template-columns:1fr}.receipt-grid .wide{grid-column:1}.receipt-actions button,.receipt-actions a{width:100%}.receipt-table{min-width:760px}}
+.receipt-wrap{display:grid;gap:16px;max-width:1500px;margin:0 auto}.receipt-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#061a33,#16482e);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.receipt-hero h2{margin:5px 0 6px;color:#fff;font-size:clamp(24px,3vw,38px);line-height:1}.receipt-hero p{margin:0;color:#e9f5ed;max-width:760px}.receipt-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.receipt-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.receipt-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.receipt-card h3{margin:0;color:#102818}.receipt-body{padding:18px}.receipt-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.receipt-grid label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.receipt-grid input,.receipt-grid select,.receipt-grid textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.receipt-grid .wide{grid-column:span 2}.receipt-grid .full{grid-column:1/-1}.receipt-grid small{color:#7b6c5a;font-weight:700}.payment-extra{display:none}.payment-extra.active{display:grid}.receipt-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.receipt-actions button,.receipt-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:999px;padding:9px 16px;font-weight:900;text-decoration:none;cursor:pointer}.receipt-actions .primary{background:#16482e;color:#fff}.receipt-actions .secondary{background:#efe6d9;color:#102818}.receipt-actions .danger{background:#fff1ed;color:#b64242}.mini-help{margin-top:12px;padding:12px;border-radius:14px;background:#fbf6ed;color:#776b5c;font-weight:700}.cari-note{display:none;margin-top:4px;padding:8px 10px;border-radius:12px;background:#eef8f1;color:#16482e;font-size:12px;font-weight:850}.cari-note.active{display:block}.receipt-table-wrap{overflow:auto;border:1px solid #e5dccf;border-radius:18px}.receipt-table{width:100%;border-collapse:collapse;min-width:960px}.receipt-table th{background:#16482e;color:#fff;text-align:left;padding:10px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.receipt-table td{border-bottom:1px solid #efe7dc;padding:10px;vertical-align:top}.receipt-table small{display:block;color:#776b5c;margin-top:3px}.saved-actions{display:flex;gap:6px;flex-wrap:wrap}.saved-actions a,.saved-actions button{border:1px solid #e5dccf;background:#fff;border-radius:999px;padding:7px 10px;color:#102818;font-weight:850;text-decoration:none;cursor:pointer}.saved-actions button{color:#b64242}.saved-actions .whatsapp-receipt-link{color:#061a33;background:#dcfce7;border-color:#25d366}.saved-actions button:disabled{opacity:.65;cursor:wait}.pill{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900;background:#eef8f1;color:#16482e}@media(max-width:1000px){.receipt-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.receipt-grid .wide{grid-column:span 2}}@media(max-width:640px){.receipt-hero{display:block}.receipt-grid{grid-template-columns:1fr}.receipt-grid .wide{grid-column:1}.receipt-actions button,.receipt-actions a{width:100%}.receipt-table{min-width:760px}}
 </style>
 
 <div class="receipt-wrap">
@@ -128,7 +128,7 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
                 <td><strong><?php echo e($r['customer_name']); ?></strong><small><?php echo e($r['customer_city'] ?: '-'); ?></small></td>
                 <td><strong><?php echo e(tahsilat_money((float)$r['amount']) . ' ' . $r['currency']); ?></strong><small><span class="pill"><?php echo e(tahsilat_payment_label((string)$r['payment_type'])); ?></span></small></td>
                 <td><?php echo e($r['description'] ?: '-'); ?><?php if(!empty($r['due_date'])): ?><small>Vade: <?php echo e(tahsilat_tr_date($r['due_date'])); ?></small><?php endif; ?></td>
-                <td><div class="saved-actions"><a href="tahsilat-makbuzu.php?edit=<?php echo e($r['id']); ?>">Düzenle</a><a target="_blank" href="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>">PDF</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu makbuz silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
+                <td><div class="saved-actions"><a href="tahsilat-makbuzu.php?edit=<?php echo e($r['id']); ?>">Düzenle</a><a target="_blank" href="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>">PDF</a><button type="button" class="whatsapp-receipt-link" data-url="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>" data-no="<?php echo e($r['receipt_no']); ?>">WhatsApp</button><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu makbuz silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -175,6 +175,80 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
   }
   paymentType?.addEventListener('change', syncPayment);
   syncPayment();
+
+  function loadHtml2Canvas(){
+    return new Promise((resolve, reject) => {
+      if (window.html2canvas) return resolve(window.html2canvas);
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      s.onload = () => resolve(window.html2canvas);
+      s.onerror = () => reject(new Error('html2canvas yüklenemedi'));
+      document.head.appendChild(s);
+    });
+  }
+  function slug(text){
+    return String(text || 'belge').toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,60) || 'belge';
+  }
+  async function renderReceiptFromUrl(url, receiptNo){
+    const html2canvas = await loadHtml2Canvas();
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.left = '-9999px';
+    iframe.style.top = '0';
+    iframe.style.width = '220mm';
+    iframe.style.height = '310mm';
+    iframe.style.opacity = '0';
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    await new Promise((resolve, reject) => {
+      iframe.onload = resolve;
+      iframe.onerror = reject;
+      setTimeout(resolve, 3500);
+    });
+    const page = iframe.contentDocument?.querySelector('.page');
+    if (!page) {
+      iframe.remove();
+      throw new Error('Makbuz sayfası bulunamadı');
+    }
+    const canvas = await html2canvas(page, {scale:2.2, backgroundColor:'#ffffff', useCORS:true, allowTaint:true, logging:false});
+    iframe.remove();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.96));
+    if (!blob) throw new Error('JPEG oluşturulamadı');
+    const fileName = 'tahsilat-makbuzu-' + slug(receiptNo) + '.jpg';
+    return {file:new File([blob], fileName, {type:'image/jpeg'}), blob, fileName};
+  }
+  async function shareReceipt(button){
+    const oldText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Hazırlanıyor...';
+    try {
+      const {file, blob, fileName} = await renderReceiptFromUrl(button.dataset.url, button.dataset.no || 'makbuz');
+      const text = 'Tahsilat makbuzu ektedir.';
+      if (navigator.canShare && navigator.canShare({files:[file]}) && navigator.share) {
+        await navigator.share({files:[file], title:'Tahsilat Makbuzu', text});
+      } else {
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 3000);
+        window.open('https://wa.me/?text=' + encodeURIComponent('Tahsilat makbuzu JPEG olarak indirildi. İndirilen görseli WhatsApp üzerinden ekleyebilirsin.'), '_blank');
+      }
+    } catch (err) {
+      alert('Makbuz JPEG formatına çevrilemedi. Lütfen PDF ekranından tekrar deneyin.');
+    } finally {
+      button.disabled = false;
+      button.textContent = oldText;
+    }
+  }
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.whatsapp-receipt-link');
+    if (!btn) return;
+    shareReceipt(btn);
+  });
 })();
 </script>
 <?php page_footer(); ?>
