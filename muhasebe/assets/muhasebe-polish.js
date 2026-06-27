@@ -11,6 +11,7 @@
     'Çekler': 'cekler',
     'Belgeler': 'belgeler',
     'Şirket Evrakları': 'sirket-evraklari',
+    'Teklif Ver': 'teklif-ver',
     'Kategoriler': 'kategoriler',
     'Raporlar': 'raporlar',
     'Hesabım': 'hesabim',
@@ -57,6 +58,30 @@
       docLink.className = 'check-extra-doc-link';
       docLink.textContent = 'Ek belge';
       editLink.insertAdjacentElement('afterend', docLink);
+    });
+  }
+
+  if (slug === 'teklif-ver') {
+    document.querySelectorAll('.saved-actions a[href^="teklif-yazdir.php?id="]').forEach(function (pdfLink) {
+      var actions = pdfLink.closest('.saved-actions');
+      if (!actions || actions.querySelector('.whatsapp-offer-link')) return;
+      var row = pdfLink.closest('tr');
+      var cells = row ? row.children : [];
+      var dateNoCell = cells && cells[0] ? cells[0] : null;
+      var customerCell = cells && cells[1] ? cells[1] : null;
+      var offerNoEl = dateNoCell ? dateNoCell.querySelector('small') : null;
+      var customerEl = customerCell ? customerCell.querySelector('strong') : null;
+      var offerNo = offerNoEl ? offerNoEl.textContent.trim() : '';
+      var customer = customerEl ? customerEl.textContent.trim() : '';
+      var pdfUrl = new URL(pdfLink.getAttribute('href'), window.location.href).href;
+      var message = 'Merhaba, ' + (customer ? customer + ' için ' : '') + (offerNo ? offerNo + ' numaralı ' : '') + 'teklif/sipariş belgesini iletiyorum: ' + pdfUrl;
+      var wa = document.createElement('a');
+      wa.href = 'https://wa.me/?text=' + encodeURIComponent(message);
+      wa.target = '_blank';
+      wa.rel = 'noopener';
+      wa.className = 'whatsapp-offer-link';
+      wa.textContent = 'WhatsApp ile ilet';
+      pdfLink.insertAdjacentElement('afterend', wa);
     });
   }
 
