@@ -4,6 +4,23 @@ require_once __DIR__ . '/teklif-db.php';
 require_login();
 teklif_db_ensure();
 
+if (!function_exists('teklif_next_offer_no')) {
+    function teklif_next_offer_no(): string
+    {
+        $max = 0;
+        try {
+            $rows = db()->query('SELECT offer_no FROM offers')->fetchAll();
+            foreach ($rows as $row) {
+                $raw = trim((string)($row['offer_no'] ?? ''));
+                if ($raw !== '' && ctype_digit($raw)) {
+                    $max = max($max, (int)$raw);
+                }
+            }
+        } catch (Throwable $e) {}
+        return str_pad((string)($max + 1), 5, '0', STR_PAD_LEFT);
+    }
+}
+
 $today = date('Y-m-d');
 $defaultNo = teklif_next_offer_no();
 
