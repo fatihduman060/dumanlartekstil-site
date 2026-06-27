@@ -33,6 +33,39 @@
 }
 .iban-copy-btn:hover{background:#edf8f0}
 
+/* Teklif/Sipariş çıktı ekranı: belge başlığı küçük, firma adı önde */
+body .page .title-wrap h1{
+  font-size:7.2mm!important;
+  line-height:1.02!important;
+  letter-spacing:.15mm!important;
+  font-weight:800!important;
+  max-width:72mm!important;
+}
+body .page .title-rule{
+  width:44mm!important;
+  margin:2mm 0 3mm!important;
+}
+body .page .customer-name{
+  font-size:7.8mm!important;
+  line-height:1.12!important;
+  font-weight:950!important;
+  color:#061a33!important;
+  letter-spacing:.08mm!important;
+  margin-bottom:4mm!important;
+  max-width:132mm!important;
+}
+body .page .city{
+  font-size:5mm!important;
+  font-weight:950!important;
+}
+body .page .doc-head{
+  margin-bottom:5mm!important;
+}
+@media print{
+  body .page .title-wrap h1{font-size:6.8mm!important}
+  body .page .customer-name{font-size:7.2mm!important}
+}
+
 @media(max-width:980px){
   body:not(.panel-genel-bakis) .main{padding:10px 10px 86px!important}
   body:not(.panel-genel-bakis) .topbar{
