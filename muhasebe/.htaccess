@@ -24,6 +24,6 @@ Options -Indexes
   Substitute "s|0(356)715 82 83|0 (356) 715 82 83|ni"
   Substitute "s|height:286mm!important|height:297mm!important|ni"
   Substitute "s|width:209mm!important|width:210mm!important|ni"
-  Substitute "s|</head>|<style>@page{size:A4;margin:0!important}@media print{html,body{margin:0!important;padding:0!important;width:210mm!important;height:297mm!important}.page{width:210mm!important;height:297mm!important;margin:0!important;box-shadow:none!important;border:0!important}}</style><link rel=\"stylesheet\" href=\"assets/muhasebe-polish.css?v=2\" /></head>|ni"
-  Substitute "s|</body>|<script src=\"assets/super-admin-role.js?v=1\"></script><script src=\"assets/muhasebe-polish.js?v=2\"></script><script src=\"assets/cek-vade-uyari.js?v=1\"></script></body>|ni"
+  Substitute "s|</head>|<style>@page{size:A4;margin:0!important}@media print{html,body{margin:0!important;padding:0!important;width:210mm!important;height:297mm!important}.page{width:210mm!important;height:297mm!important;margin:0!important;box-shadow:none!important;border:0!important}}</style><link rel=\"stylesheet\" href=\"assets/muhasebe-polish.css?v=3\" /></head>|ni"
+  Substitute "s|</body>|<script src=\"assets/super-admin-role.js?v=1\"></script><script src=\"assets/muhasebe-polish.js?v=3\"></script><script src=\"assets/cek-vade-uyari.js?v=1\"></script></body>|ni"
 </IfModule>
