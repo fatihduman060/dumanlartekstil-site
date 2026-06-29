@@ -33,12 +33,41 @@ function ci_active_movement(int $id): bool
     return (bool)$s->fetchColumn();
 }
 
-function ci_make_movement(int $cariId, string $type, float $amount, string $date, string $method, string $desc, ?int $categoryId, ?string $docType): int
+function ci_find_account_id_for_receipt(array $receipt): ?int
 {
-    $s = db()->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)');
+    $bankName = trim((string)($receipt['bank_name'] ?? ''));
+    if ($bankName === '') return null;
+    $stmt = db()->prepare("SELECT id FROM accounts WHERE COALESCE(is_active,1)=1 AND account_type='banka' AND (bank_name=? OR name=?) ORDER BY CASE WHEN bank_name=? THEN 0 ELSE 1 END, id ASC LIMIT 1");
+    $stmt->execute([$bankName, $bankName, $bankName]);
+    $id = (int)($stmt->fetchColumn() ?: 0);
+    return $id > 0 ? $id : null;
+}
+
+function ci_sync_receipt_existing_movement(array $receipt): ?int
+{
+    $movementId = (int)($receipt['cari_movement_id'] ?? 0);
+    if (!ci_active_movement($movementId)) return null;
+    $accountId = ci_find_account_id_for_receipt($receipt);
+    if (!$accountId) return $movementId;
+
+    $stmt = db()->prepare('SELECT account_id FROM movements WHERE id=?');
+    $stmt->execute([$movementId]);
+    $currentAccountId = (int)($stmt->fetchColumn() ?: 0);
+    if ($currentAccountId !== $accountId) {
+        db()->prepare('UPDATE movements SET account_id=?, updated_at=? WHERE id=?')->execute([$accountId, now(), $movementId]);
+    }
+    sync_movement_account_transaction($movementId);
+    return $movementId;
+}
+
+function ci_make_movement(int $cariId, string $type, float $amount, string $date, string $method, string $desc, ?int $categoryId, ?string $docType, ?int $accountId = null): int
+{
+    $s = db()->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)');
     $now = now();
-    $s->execute([$cariId, $categoryId, $type, $amount, $date, $method, $desc, $docType, current_user()['id'] ?? null, $now, $now]);
-    return (int)db()->lastInsertId();
+    $s->execute([$cariId, $categoryId, $accountId, $type, $amount, $date, $method, $desc, $docType, current_user()['id'] ?? null, $now, $now]);
+    $movementId = (int)db()->lastInsertId();
+    sync_movement_account_transaction($movementId);
+    return $movementId;
 }
 
 function ci_post_offer(int $id): int
@@ -75,7 +104,11 @@ function ci_post_receipt(int $id): int
     $s->execute([$id]);
     $r = $s->fetch();
     if (!$r) throw new RuntimeException('Tahsilat makbuzu bulunamadı.');
-    if (ci_active_movement((int)($r['cari_movement_id'] ?? 0))) throw new RuntimeException('Bu tahsilat makbuzu zaten cariye işlenmiş.');
+    if (ci_active_movement((int)($r['cari_movement_id'] ?? 0))) {
+        $mid = ci_sync_receipt_existing_movement($r);
+        if ($mid) return $mid;
+        throw new RuntimeException('Bu tahsilat makbuzu zaten cariye işlenmiş. Banka hesabı bulunamadığı için kasa/banka eşlemesi yapılamadı.');
+    }
     $cariId = (int)($r['cari_id'] ?? 0);
     if ($cariId <= 0) throw new RuntimeException('Cariye işlemek için makbuzda cari seçilmiş olmalı.');
     $amount = (float)($r['amount'] ?? 0);
@@ -85,10 +118,14 @@ function ci_post_receipt(int $id): int
     $label = ci_receipt_label((string)($r['payment_type'] ?? 'nakit'));
     $desc = 'Tahsilat makbuzu no: ' . $no . ' / ' . $label . ' tahsilat';
     if (trim((string)($r['description'] ?? '')) !== '') $desc .= ' - ' . trim((string)$r['description']);
-    $mid = ci_make_movement($cariId, 'tahsilat', $amount, $r['receipt_date'] ?: date('Y-m-d'), $label, $desc, ci_category('Tahsilat'), 'tahsilat_makbuzu');
+    $accountId = ci_find_account_id_for_receipt($r);
+    if (in_array((string)($r['payment_type'] ?? ''), ['havale_eft','kredi_karti'], true) && !$accountId) {
+        throw new RuntimeException('Banka bakiyesine işlemek için makbuzda Kasa/Banka bölümünden kayıtlı bir banka seçilmeli.');
+    }
+    $mid = ci_make_movement($cariId, 'tahsilat', $amount, $r['receipt_date'] ?: date('Y-m-d'), $label, $desc, ci_category('Tahsilat'), 'tahsilat_makbuzu', $accountId);
     db()->prepare('UPDATE collection_receipts SET posted_to_cari=1, cari_movement_id=?, posted_at=?, posted_by=?, updated_at=? WHERE id=?')->execute([$mid, now(), current_user()['id'] ?? null, now(), $id]);
     log_action('Tahsilat makbuzu cariye işlendi', $no . ' - ' . money($amount));
-    audit_action('tahsilat_makbuzu', $id, 'cariye_islendi', $r, ['movement_id'=>$mid,'amount'=>$amount], $no);
+    audit_action('tahsilat_makbuzu', $id, 'cariye_islendi', $r, ['movement_id'=>$mid,'amount'=>$amount,'account_id'=>$accountId], $no);
     return $mid;
 }
 
@@ -101,7 +138,7 @@ try {
         flash('success', 'Sipariş fişi cariye alacak olarak işlendi. Cari hareket no: #' . $mid);
     } elseif ($source === 'tahsilat') {
         $mid = ci_post_receipt($id);
-        flash('success', 'Tahsilat makbuzu cariden düşüldü. Cari hareket no: #' . $mid);
+        flash('success', 'Tahsilat makbuzu cariden düşüldü ve seçilen banka hesabına giriş işlendi. Cari hareket no: #' . $mid);
     } else {
         throw new RuntimeException('Belge türü bulunamadı.');
     }
