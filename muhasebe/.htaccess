@@ -24,6 +24,8 @@ Options -Indexes
   Substitute "s|0(356)715 82 83|0 (356) 715 82 83|ni"
   Substitute "s|height:286mm!important|height:297mm!important|ni"
   Substitute "s|width:209mm!important|width:210mm!important|ni"
+  Substitute "s|<form method=\"post\" id=\"receiptForm\">|<form method=\"post\" id=\"receiptForm\" enctype=\"multipart/form-data\">|ni"
+  Substitute "s|<label class=\"payment-extra extra-cek extra-senet\"><span>Keşideci / Borçlu</span><input name=\"debtor_name\" value=\"<?php echo tahsilat_field($edit, 'debtor_name'); ?>\"></label>|<label class=\"payment-extra extra-cek extra-senet\"><span>Keşideci / Borçlu</span><input name=\"debtor_name\" value=\"<?php echo tahsilat_field($edit, 'debtor_name'); ?>\"></label><label class=\"payment-extra extra-cek extra-senet wide\"><span>Çek/Senet görseli</span><input name=\"check_document\" type=\"file\" accept=\"image/*,application/pdf\"><small>Çek veya senet görselini buradan ekleyebilirsin.</small></label>|ni"
   Substitute "s|<div class=\"brand-line\">ÇORAP & TEKSTİL ÜRETİMİ</div>|<div class=\"brand-line\">SİPARİŞ FİŞİ</div>|ni"
   Substitute "s|<h1>SİPARİŞ FİŞİ</h1><div class=\"title-rule\"><span></span></div>| |ni"
   Substitute "s|Kelkit Osb Mah. Beyllikbükü Cad. No:8 ERBAA/TOKAT|<span class=\"company-address-main\">Kelkit Osb Mah. Beyllikbükü Cad. No:8</span><span class=\"company-address-city\">ERBAA/TOKAT</span>|ni"
