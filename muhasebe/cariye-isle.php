@@ -12,6 +12,12 @@ function ci_add_cols(string $table): void
     ensure_column($pdo, $table, 'cari_movement_id', 'INTEGER');
     ensure_column($pdo, $table, 'posted_at', 'TEXT');
     ensure_column($pdo, $table, 'posted_by', 'INTEGER');
+    if ($table === 'collection_receipts') {
+        ensure_column($pdo, $table, 'check_record_id', 'INTEGER');
+        ensure_column($pdo, $table, 'check_document_path', 'TEXT');
+        ensure_column($pdo, $table, 'check_document_name', 'TEXT');
+        ensure_column($pdo, $table, 'check_document_mime', 'TEXT');
+    }
 }
 
 function ci_category(?string $name): ?int
@@ -33,6 +39,19 @@ function ci_active_movement(int $id): bool
     return (bool)$s->fetchColumn();
 }
 
+function ci_active_check(int $id): bool
+{
+    if ($id <= 0) return false;
+    $s = db()->prepare('SELECT id FROM checks WHERE id=? AND COALESCE(is_cancelled,0)=0');
+    $s->execute([$id]);
+    return (bool)$s->fetchColumn();
+}
+
+function ci_is_check_receipt(array $receipt): bool
+{
+    return in_array((string)($receipt['payment_type'] ?? ''), ['cek','senet'], true);
+}
+
 function ci_find_account_id_for_receipt(array $receipt): ?int
 {
     $bankName = trim((string)($receipt['bank_name'] ?? ''));
@@ -43,13 +62,64 @@ function ci_find_account_id_for_receipt(array $receipt): ?int
     return $id > 0 ? $id : null;
 }
 
+function ci_check_description_from_receipt(array $receipt): string
+{
+    $type = (string)($receipt['payment_type'] ?? 'cek');
+    $label = $type === 'senet' ? 'Senet' : 'Çek';
+    $parts = [$label, 'Tahsilat makbuzu no: ' . trim((string)($receipt['receipt_no'] ?? ''))];
+    if (trim((string)($receipt['description'] ?? '')) !== '') $parts[] = trim((string)$receipt['description']);
+    return implode(' / ', array_filter($parts));
+}
+
+function ci_create_or_update_receipt_check(array $receipt, int $movementId): ?int
+{
+    if (!ci_is_check_receipt($receipt)) return null;
+    $paymentType = (string)($receipt['payment_type'] ?? 'cek');
+    $isSenet = $paymentType === 'senet';
+    $due = trim((string)($receipt['due_date'] ?? ''));
+    if ($due === '') throw new RuntimeException(($isSenet ? 'Senet' : 'Çek') . ' için vade tarihi girilmeli.');
+
+    $existingId = (int)($receipt['check_record_id'] ?? 0);
+    if ($existingId > 0 && !ci_active_check($existingId)) $existingId = 0;
+
+    $docPath = $receipt['check_document_path'] ?? null;
+    $docName = $receipt['check_document_name'] ?? null;
+    $docMime = $receipt['check_document_mime'] ?? null;
+    $bankName = $isSenet ? 'Senet' : trim((string)($receipt['bank_name'] ?? ''));
+    $checkNo = trim((string)($receipt['document_no'] ?? ''));
+    $drawer = trim((string)($receipt['debtor_name'] ?? '')) ?: trim((string)($receipt['customer_name'] ?? ''));
+    $description = ci_check_description_from_receipt($receipt);
+    $now = now();
+
+    if ($existingId > 0) {
+        db()->prepare('UPDATE checks SET cari_id=?, movement_id=?, direction=?, status=?, amount=?, issue_date=?, due_date=?, bank_name=?, check_no=?, drawer=?, description=?, document_path=COALESCE(?, document_path), document_name=COALESCE(?, document_name), document_mime=COALESCE(?, document_mime), updated_at=? WHERE id=?')
+            ->execute([(int)$receipt['cari_id'] ?: null, $movementId, 'alinacak', 'bekliyor', (float)$receipt['amount'], $receipt['receipt_date'] ?: date('Y-m-d'), $due, $bankName, $checkNo, $drawer, $description, $docPath, $docName, $docMime, $now, $existingId]);
+        $checkId = $existingId;
+    } else {
+        db()->prepare('INSERT INTO checks (cari_id, movement_id, direction, status, amount, issue_date, due_date, bank_name, branch_name, check_no, drawer, description, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            ->execute([(int)$receipt['cari_id'] ?: null, $movementId, 'alinacak', 'bekliyor', (float)$receipt['amount'], $receipt['receipt_date'] ?: date('Y-m-d'), $due, $bankName, $checkNo, $drawer, $description, $docPath, $docName, $docMime, current_user()['id'] ?? null, $now, $now]);
+        $checkId = (int)db()->lastInsertId();
+    }
+
+    db()->prepare('UPDATE movements SET check_id=?, account_id=NULL, due_date=?, payment_method=?, document_type=?, document_path=COALESCE(?, document_path), document_name=COALESCE(?, document_name), document_mime=COALESCE(?, document_mime), updated_at=? WHERE id=?')
+        ->execute([$checkId, $due, $isSenet ? 'Senet' : 'ÇEK', 'cek_gorseli', $docPath, $docName, $docMime, $now, $movementId]);
+    db()->prepare('UPDATE collection_receipts SET check_record_id=?, updated_at=? WHERE id=?')->execute([$checkId, $now, (int)$receipt['id']]);
+    sync_movement_account_transaction($movementId);
+    return $checkId;
+}
+
 function ci_sync_receipt_existing_movement(array $receipt): ?int
 {
     $movementId = (int)($receipt['cari_movement_id'] ?? 0);
     if (!ci_active_movement($movementId)) return null;
+
+    if (ci_is_check_receipt($receipt)) {
+        ci_create_or_update_receipt_check($receipt, $movementId);
+        return $movementId;
+    }
+
     $accountId = ci_find_account_id_for_receipt($receipt);
     if (!$accountId) return $movementId;
-
     $stmt = db()->prepare('SELECT account_id FROM movements WHERE id=?');
     $stmt->execute([$movementId]);
     $currentAccountId = (int)($stmt->fetchColumn() ?: 0);
@@ -107,7 +177,7 @@ function ci_post_receipt(int $id): int
     if (ci_active_movement((int)($r['cari_movement_id'] ?? 0))) {
         $mid = ci_sync_receipt_existing_movement($r);
         if ($mid) return $mid;
-        throw new RuntimeException('Bu tahsilat makbuzu zaten cariye işlenmiş. Banka hesabı bulunamadığı için kasa/banka eşlemesi yapılamadı.');
+        throw new RuntimeException('Bu tahsilat makbuzu zaten cariye işlenmiş.');
     }
     $cariId = (int)($r['cari_id'] ?? 0);
     if ($cariId <= 0) throw new RuntimeException('Cariye işlemek için makbuzda cari seçilmiş olmalı.');
@@ -115,17 +185,24 @@ function ci_post_receipt(int $id): int
     if ($amount <= 0) throw new RuntimeException('Cariye işlenecek tahsilat tutarı bulunamadı.');
     if ((string)($r['currency'] ?? 'TL') !== 'TL') throw new RuntimeException('Cari hareketler TL çalışıyor. Cariye işlemek için para birimi TL olmalı.');
     $no = trim((string)($r['receipt_no'] ?? ''));
-    $label = ci_receipt_label((string)($r['payment_type'] ?? 'nakit'));
+    $paymentType = (string)($r['payment_type'] ?? 'nakit');
+    $label = ci_receipt_label($paymentType);
     $desc = 'Tahsilat makbuzu no: ' . $no . ' / ' . $label . ' tahsilat';
     if (trim((string)($r['description'] ?? '')) !== '') $desc .= ' - ' . trim((string)$r['description']);
-    $accountId = ci_find_account_id_for_receipt($r);
-    if (in_array((string)($r['payment_type'] ?? ''), ['havale_eft','kredi_karti'], true) && !$accountId) {
-        throw new RuntimeException('Banka bakiyesine işlemek için makbuzda Kasa/Banka bölümünden kayıtlı bir banka seçilmeli.');
+
+    $accountId = null;
+    if (!ci_is_check_receipt($r)) {
+        $accountId = ci_find_account_id_for_receipt($r);
+        if (in_array($paymentType, ['havale_eft','kredi_karti'], true) && !$accountId) {
+            throw new RuntimeException('Banka bakiyesine işlemek için makbuzda Kasa/Banka bölümünden kayıtlı bir banka seçilmeli.');
+        }
     }
+
     $mid = ci_make_movement($cariId, 'tahsilat', $amount, $r['receipt_date'] ?: date('Y-m-d'), $label, $desc, ci_category('Tahsilat'), 'tahsilat_makbuzu', $accountId);
+    if (ci_is_check_receipt($r)) ci_create_or_update_receipt_check($r + ['id'=>$id], $mid);
     db()->prepare('UPDATE collection_receipts SET posted_to_cari=1, cari_movement_id=?, posted_at=?, posted_by=?, updated_at=? WHERE id=?')->execute([$mid, now(), current_user()['id'] ?? null, now(), $id]);
     log_action('Tahsilat makbuzu cariye işlendi', $no . ' - ' . money($amount));
-    audit_action('tahsilat_makbuzu', $id, 'cariye_islendi', $r, ['movement_id'=>$mid,'amount'=>$amount,'account_id'=>$accountId], $no);
+    audit_action('tahsilat_makbuzu', $id, 'cariye_islendi', $r, ['movement_id'=>$mid,'amount'=>$amount,'account_id'=>$accountId,'payment_type'=>$paymentType], $no);
     return $mid;
 }
 
@@ -138,7 +215,7 @@ try {
         flash('success', 'Sipariş fişi cariye alacak olarak işlendi. Cari hareket no: #' . $mid);
     } elseif ($source === 'tahsilat') {
         $mid = ci_post_receipt($id);
-        flash('success', 'Tahsilat makbuzu cariden düşüldü ve seçilen banka hesabına giriş işlendi. Cari hareket no: #' . $mid);
+        flash('success', 'Tahsilat makbuzu cariye işlendi. Çek/senet ise Çekler bölümüne de aktarıldı. Cari hareket no: #' . $mid);
     } else {
         throw new RuntimeException('Belge türü bulunamadı.');
     }
