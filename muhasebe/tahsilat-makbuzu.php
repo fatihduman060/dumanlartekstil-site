@@ -42,6 +42,28 @@ $cariJson = json_encode(array_map(function ($c) {
     ];
 }, $cariler), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
+$bankAccounts = [];
+try {
+    $stmt = db()->query("SELECT id, account_type, name, bank_name, iban FROM accounts WHERE COALESCE(is_active,1)=1 ORDER BY account_type DESC, name ASC");
+    $seenBanks = [];
+    foreach ($stmt->fetchAll() as $acc) {
+        $type = (string)($acc['account_type'] ?? '');
+        $name = trim((string)($acc['name'] ?? ''));
+        $bank = trim((string)($acc['bank_name'] ?? ''));
+        $iban = trim((string)($acc['iban'] ?? ''));
+        if ($type !== 'banka' && $bank === '') continue;
+        $value = $bank !== '' ? $bank : $name;
+        if ($value === '') continue;
+        $key = mb_strtolower($value);
+        if (isset($seenBanks[$key])) continue;
+        $seenBanks[$key] = true;
+        $detail = $name;
+        if ($bank !== '' && $name !== '' && strcasecmp($bank, $name) !== 0) $detail = $bank . ' - ' . $name;
+        if ($iban !== '') $detail .= ' / ' . $iban;
+        $bankAccounts[] = ['name' => $value, 'detail' => trim($detail)];
+    }
+} catch (Throwable $e) {}
+
 $editId = (int)($_GET['edit'] ?? 0);
 $edit = $editId > 0 ? tahsilat_load($editId) : null;
 $list = tahsilatlar_list(150);
@@ -93,7 +115,7 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
           <label class="full"><span>Adres</span><textarea id="customerAddress" name="customer_address" rows="2"><?php echo e($edit['customer_address'] ?? ''); ?></textarea></label>
           <div class="full cari-note" id="cariNote"></div>
 
-          <label class="payment-extra extra-cek extra-senet extra-havale_eft wide"><span>Banka adı</span><input name="bank_name" value="<?php echo tahsilat_field($edit, 'bank_name'); ?>" placeholder="Banka adı"></label>
+          <label class="payment-extra extra-cek extra-senet extra-havale_eft wide"><span>Banka adı</span><select name="bank_name"><option value="">Banka seçiniz</option><?php $currentBank = (string)($edit['bank_name'] ?? ''); $bankFound=false; foreach($bankAccounts as $bank): $selected = $currentBank !== '' && strcasecmp($currentBank, $bank['name']) === 0; if($selected) $bankFound=true; ?><option value="<?php echo e($bank['name']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($bank['name']); ?><?php echo !empty($bank['detail']) && $bank['detail'] !== $bank['name'] ? ' — ' . e($bank['detail']) : ''; ?></option><?php endforeach; ?><?php if($currentBank !== '' && !$bankFound): ?><option value="<?php echo e($currentBank); ?>" selected><?php echo e($currentBank); ?></option><?php endif; ?><?php if(!$bankAccounts): ?><option value="">Kasa/Banka bölümünde aktif banka yok</option><?php endif; ?></select><small>Liste Kasa/Banka bölümündeki aktif banka hesaplarından gelir.</small></label>
           <label class="payment-extra extra-cek extra-senet extra-havale_eft extra-kredi_karti"><span>Belge / İşlem no</span><input name="document_no" value="<?php echo tahsilat_field($edit, 'document_no'); ?>" placeholder="Çek no / Senet no / Dekont no"></label>
           <label class="payment-extra extra-cek extra-senet"><span>Vade tarihi</span><input type="date" name="due_date" value="<?php echo tahsilat_field($edit, 'due_date'); ?>"></label>
           <label class="payment-extra extra-cek extra-senet"><span>Keşideci / Borçlu</span><input name="debtor_name" value="<?php echo tahsilat_field($edit, 'debtor_name'); ?>"></label>
