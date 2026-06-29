@@ -33,7 +33,12 @@ function tahsilat_db_ensure(): void
         FOREIGN KEY(cari_id) REFERENCES cariler(id) ON DELETE SET NULL,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
+    ensure_column($pdo, 'collection_receipts', 'check_document_path', 'TEXT');
+    ensure_column($pdo, 'collection_receipts', 'check_document_name', 'TEXT');
+    ensure_column($pdo, 'collection_receipts', 'check_document_mime', 'TEXT');
+    ensure_column($pdo, 'collection_receipts', 'check_record_id', 'INTEGER');
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_collection_receipts_date ON collection_receipts(receipt_date, id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_collection_receipts_check_record ON collection_receipts(check_record_id)");
 }
 
 function tahsilat_decimal($value): float
@@ -143,6 +148,16 @@ function tahsilat_save_from_post(int $id = 0): int
     $amountText = trim((string)($_POST['amount_text'] ?? ''));
     if ($amountText === '') $amountText = tahsilat_amount_text($amount, $currency);
 
+    $oldDoc = null;
+    if ($id > 0) {
+        $oldForDoc = tahsilat_load($id);
+        if ($oldForDoc) {
+            $oldDoc = ['path'=>$oldForDoc['check_document_path'] ?? null, 'name'=>$oldForDoc['check_document_name'] ?? null, 'mime'=>$oldForDoc['check_document_mime'] ?? null];
+        }
+    }
+    try { $checkDoc = handle_upload('check_document', $oldDoc); }
+    catch (Throwable $e) { throw new RuntimeException('Çek/senet görseli yüklenemedi: ' . $e->getMessage()); }
+
     $payload = [
         'receipt_no' => trim((string)($_POST['receipt_no'] ?? '')) ?: tahsilat_next_no(),
         'receipt_date' => trim((string)($_POST['receipt_date'] ?? date('Y-m-d'))) ?: date('Y-m-d'),
@@ -164,6 +179,9 @@ function tahsilat_save_from_post(int $id = 0): int
         'debtor_name' => trim((string)($_POST['debtor_name'] ?? '')),
         'collected_by' => trim((string)($_POST['collected_by'] ?? '')),
         'paid_by' => trim((string)($_POST['paid_by'] ?? '')),
+        'check_document_path' => $checkDoc['path'] ?? null,
+        'check_document_name' => $checkDoc['name'] ?? null,
+        'check_document_mime' => $checkDoc['mime'] ?? null,
     ];
     if ($payload['customer_name'] === '') throw new RuntimeException('Firma / müşteri adı boş olamaz.');
 
@@ -173,8 +191,9 @@ function tahsilat_save_from_post(int $id = 0): int
         if (!$old) throw new RuntimeException('Düzenlenecek makbuz bulunamadı.');
         $payload['updated_at'] = now();
         $payload['id'] = $id;
-        $stmt = $pdo->prepare('UPDATE collection_receipts SET receipt_no=:receipt_no, receipt_date=:receipt_date, cari_id=:cari_id, customer_name=:customer_name, customer_city=:customer_city, customer_address=:customer_address, customer_tax_office=:customer_tax_office, customer_tax_no=:customer_tax_no, customer_phone=:customer_phone, payment_type=:payment_type, currency=:currency, amount=:amount, amount_text=:amount_text, description=:description, bank_name=:bank_name, document_no=:document_no, due_date=:due_date, debtor_name=:debtor_name, collected_by=:collected_by, paid_by=:paid_by, updated_at=:updated_at WHERE id=:id');
+        $stmt = $pdo->prepare('UPDATE collection_receipts SET receipt_no=:receipt_no, receipt_date=:receipt_date, cari_id=:cari_id, customer_name=:customer_name, customer_city=:customer_city, customer_address=:customer_address, customer_tax_office=:customer_tax_office, customer_tax_no=:customer_tax_no, customer_phone=:customer_phone, payment_type=:payment_type, currency=:currency, amount=:amount, amount_text=:amount_text, description=:description, bank_name=:bank_name, document_no=:document_no, due_date=:due_date, debtor_name=:debtor_name, collected_by=:collected_by, paid_by=:paid_by, check_document_path=:check_document_path, check_document_name=:check_document_name, check_document_mime=:check_document_mime, updated_at=:updated_at WHERE id=:id');
         $stmt->execute($payload);
+        delete_replaced_upload($oldDoc, $checkDoc);
         log_action('Tahsilat makbuzu güncellendi', $payload['receipt_no'] . ' ' . $payload['customer_name']);
         audit_action('tahsilat_makbuzu', $id, 'guncellendi', $old, $payload, $payload['receipt_no']);
         return $id;
@@ -183,7 +202,7 @@ function tahsilat_save_from_post(int $id = 0): int
     $payload['created_by'] = current_user()['id'] ?? null;
     $payload['created_at'] = now();
     $payload['updated_at'] = now();
-    $stmt = $pdo->prepare('INSERT INTO collection_receipts (receipt_no, receipt_date, cari_id, customer_name, customer_city, customer_address, customer_tax_office, customer_tax_no, customer_phone, payment_type, currency, amount, amount_text, description, bank_name, document_no, due_date, debtor_name, collected_by, paid_by, created_by, created_at, updated_at) VALUES (:receipt_no, :receipt_date, :cari_id, :customer_name, :customer_city, :customer_address, :customer_tax_office, :customer_tax_no, :customer_phone, :payment_type, :currency, :amount, :amount_text, :description, :bank_name, :document_no, :due_date, :debtor_name, :collected_by, :paid_by, :created_by, :created_at, :updated_at)');
+    $stmt = $pdo->prepare('INSERT INTO collection_receipts (receipt_no, receipt_date, cari_id, customer_name, customer_city, customer_address, customer_tax_office, customer_tax_no, customer_phone, payment_type, currency, amount, amount_text, description, bank_name, document_no, due_date, debtor_name, collected_by, paid_by, check_document_path, check_document_name, check_document_mime, created_by, created_at, updated_at) VALUES (:receipt_no, :receipt_date, :cari_id, :customer_name, :customer_city, :customer_address, :customer_tax_office, :customer_tax_no, :customer_phone, :payment_type, :currency, :amount, :amount_text, :description, :bank_name, :document_no, :due_date, :debtor_name, :collected_by, :paid_by, :check_document_path, :check_document_name, :check_document_mime, :created_by, :created_at, :updated_at)');
     $stmt->execute($payload);
     $receiptId = (int)$pdo->lastInsertId();
     log_action('Tahsilat makbuzu eklendi', $payload['receipt_no'] . ' ' . $payload['customer_name']);
