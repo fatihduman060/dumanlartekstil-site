@@ -12,6 +12,7 @@
     'Belgeler': 'belgeler',
     'Şirket Evrakları': 'sirket-evraklari',
     'Teklif Ver': 'teklif-ver',
+    'Tahsilat Makbuzu': 'tahsilat-makbuzu',
     'Kategoriler': 'kategoriler',
     'Raporlar': 'raporlar',
     'Hesabım': 'hesabim',
@@ -192,6 +193,68 @@
       pdfLink.insertAdjacentElement('afterend', wa);
     });
   }
+
+  function ciCsrfToken(){ return document.querySelector('input[name="csrf_token"]')?.value || ''; }
+  function ciBack(){ return location.pathname.split('/').pop() + location.search; }
+  function ciSubmit(sourceType, id){
+    var token = ciCsrfToken();
+    if (!id || !token) return;
+    if (!confirm('Bu belge cariye işlenecek. Emin misin?')) return;
+    var form = document.createElement('form');
+    form.method = 'post';
+    form.action = 'cariye-isle.php';
+    form.style.display = 'none';
+    var data = {csrf_token: token, source_type: sourceType, id: id, back: ciBack()};
+    Object.keys(data).forEach(function(key){
+      var input = document.createElement('input');
+      input.type = 'hidden'; input.name = key; input.value = data[key]; form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  }
+  function ciIdFromHref(href){
+    try { var u = new URL(href, location.href); return u.searchParams.get('id') || u.searchParams.get('edit') || ''; }
+    catch(e){ return ''; }
+  }
+  function ciButton(sourceType, id){
+    if (!id || !ciCsrfToken()) return null;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cariye-isle-btn';
+    btn.textContent = 'Cariye İşle';
+    btn.addEventListener('click', function(){ ciSubmit(sourceType, id); });
+    return btn;
+  }
+  function ciAddStyles(){
+    if (document.getElementById('cariye-isle-style')) return;
+    var st = document.createElement('style');
+    st.id = 'cariye-isle-style';
+    st.textContent = '.cariye-isle-btn{border:1px solid #c49a4f!important;background:#fff8e8!important;color:#7a541d!important;border-radius:999px!important;padding:7px 10px!important;font-weight:900!important;cursor:pointer!important}.offer-actions .cariye-isle-btn,.receipt-actions .cariye-isle-btn{min-height:42px!important;padding:9px 16px!important}.cariye-isle-btn:hover{background:#ffe8ae!important}';
+    document.head.appendChild(st);
+  }
+  function ciEnhance(){
+    if (slug !== 'teklif-ver' && slug !== 'tahsilat-makbuzu') return;
+    ciAddStyles();
+    document.querySelectorAll('.saved-actions').forEach(function(actions){
+      if (actions.querySelector('.cariye-isle-btn')) return;
+      var offerPdf = actions.querySelector('a[href*="teklif-yazdir.php?id="]');
+      var receiptPdf = actions.querySelector('a[href*="tahsilat-yazdir.php?id="]');
+      var source = offerPdf ? 'offer' : (receiptPdf ? 'tahsilat' : '');
+      var id = offerPdf ? ciIdFromHref(offerPdf.href) : (receiptPdf ? ciIdFromHref(receiptPdf.href) : '');
+      var btn = ciButton(source, id);
+      if (btn) actions.appendChild(btn);
+    });
+    var editId = new URLSearchParams(location.search).get('edit');
+    if (editId) {
+      var isOffer = slug === 'teklif-ver';
+      var actions = document.querySelector(isOffer ? '.offer-actions' : '.receipt-actions');
+      if (actions && !actions.querySelector('.cariye-isle-btn')) {
+        var btn = ciButton(isOffer ? 'offer' : 'tahsilat', editId);
+        if (btn) actions.appendChild(btn);
+      }
+    }
+  }
+  ciEnhance();
 
   document.querySelectorAll('form.filterbar').forEach(function (form) {
     if (form.querySelector('.filter-reset-link')) return;
