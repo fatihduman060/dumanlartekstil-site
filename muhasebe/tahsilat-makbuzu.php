@@ -94,7 +94,7 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
     <header><div><h3><?php echo $edit ? 'Makbuz düzenle' : 'Yeni tahsilat makbuzu'; ?></h3><small><?php echo $edit ? 'Kayıt no #' . e($edit['id']) : 'Kaydedince alttaki listede görünür.'; ?></small></div><strong><?php echo $edit ? e($edit['receipt_no']) : 'Yeni kayıt'; ?></strong></header>
     <div class="receipt-body">
       <?php if (can_write()): ?>
-      <form method="post" id="receiptForm">
+      <form method="post" id="receiptForm" enctype="multipart/form-data">
         <?php echo csrf_field(); ?>
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="id" value="<?php echo e($edit['id'] ?? 0); ?>">
@@ -115,10 +115,11 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
           <label class="full"><span>Adres</span><textarea id="customerAddress" name="customer_address" rows="2"><?php echo e($edit['customer_address'] ?? ''); ?></textarea></label>
           <div class="full cari-note" id="cariNote"></div>
 
-          <label class="payment-extra extra-cek extra-senet extra-havale_eft wide"><span>Banka adı</span><select name="bank_name"><option value="">Banka seçiniz</option><?php $currentBank = (string)($edit['bank_name'] ?? ''); $bankFound=false; foreach($bankAccounts as $bank): $selected = $currentBank !== '' && strcasecmp($currentBank, $bank['name']) === 0; if($selected) $bankFound=true; ?><option value="<?php echo e($bank['name']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($bank['name']); ?><?php echo !empty($bank['detail']) && $bank['detail'] !== $bank['name'] ? ' — ' . e($bank['detail']) : ''; ?></option><?php endforeach; ?><?php if($currentBank !== '' && !$bankFound): ?><option value="<?php echo e($currentBank); ?>" selected><?php echo e($currentBank); ?></option><?php endif; ?><?php if(!$bankAccounts): ?><option value="">Kasa/Banka bölümünde aktif banka yok</option><?php endif; ?></select><small>Liste Kasa/Banka bölümündeki aktif banka hesaplarından gelir.</small></label>
+          <label class="payment-extra extra-cek extra-senet extra-havale_eft wide"><span>Banka adı</span><select name="bank_name"><option value="">Banka seçiniz</option><?php $currentBank = (string)($edit['bank_name'] ?? ''); $bankFound=false; foreach($bankAccounts as $bank): $selected = $currentBank !== '' && strcasecmp($currentBank, $bank['name']) === 0; if($selected) $bankFound=true; ?><option value="<?php echo e($bank['name']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($bank['name']); ?><?php echo !empty($bank['detail']) && $bank['detail'] !== $bank['name'] ? ' — ' . e($bank['detail']) : ''; ?></option><?php endforeach; ?><?php if($currentBank !== '' && !$bankFound): ?><option value="<?php echo e($currentBank); ?>" selected><?php echo e($currentBank); ?></option><?php endif; ?><?php if(!$bankAccounts): ?><option value="">Kasa/Banka bölümünde aktif banka yok</option><?php endif; ?></select><small>Havale/EFT için bizim banka hesabımızı, çek için çek bankasını seç.</small></label>
           <label class="payment-extra extra-cek extra-senet extra-havale_eft extra-kredi_karti"><span>Belge / İşlem no</span><input name="document_no" value="<?php echo tahsilat_field($edit, 'document_no'); ?>" placeholder="Çek no / Senet no / Dekont no"></label>
           <label class="payment-extra extra-cek extra-senet"><span>Vade tarihi</span><input type="date" name="due_date" value="<?php echo tahsilat_field($edit, 'due_date'); ?>"></label>
           <label class="payment-extra extra-cek extra-senet"><span>Keşideci / Borçlu</span><input name="debtor_name" value="<?php echo tahsilat_field($edit, 'debtor_name'); ?>"></label>
+          <label class="payment-extra extra-cek extra-senet wide"><span>Çek/Senet görseli</span><input name="check_document" type="file" accept="image/*,application/pdf"><?php if(!empty($edit['check_document_name'])): ?><small>Mevcut görsel: <?php echo e($edit['check_document_name']); ?>. Yeni dosya seçersen değişir.</small><?php else: ?><small>Çek veya senet görselini buradan ekleyebilirsin.</small><?php endif; ?></label>
 
           <label class="full"><span>Açıklama</span><textarea name="description" rows="2" placeholder="Cari hesabına mahsuben tahsil edilmiştir."><?php echo e($edit['description'] ?? 'Cari hesabına mahsuben tahsil edilmiştir.'); ?></textarea></label>
           <label class="wide"><span>Tahsil eden</span><input name="collected_by" value="<?php echo tahsilat_field($edit, 'collected_by', 'Dumanlar A.Ş.'); ?>"></label>
@@ -128,7 +129,7 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
           <button class="primary" type="submit"><?php echo $edit ? 'Makbuzu Güncelle' : 'Makbuzu Kaydet'; ?></button>
           <?php if($edit): ?><a class="secondary" target="_blank" href="tahsilat-yazdir.php?id=<?php echo e($edit['id']); ?>">PDF / Yazdır</a><?php endif; ?>
         </div>
-        <p class="mini-help">Nakit, çek, senet, havale/EFT ve kredi kartı seçenekleri hazır. Çek/senet seçince vade ve belge alanları görünür.</p>
+        <p class="mini-help">Nakit, çek, senet, havale/EFT ve kredi kartı seçenekleri hazır. Çek/senet seçince vade ve görsel alanları görünür.</p>
       </form>
       <?php else: ?>
         <p class="muted">Görüntüleme yetkisindesiniz. Makbuz oluşturma kapalı.</p>
@@ -149,7 +150,7 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
                 <td><strong><?php echo e(tahsilat_tr_date($r['receipt_date'])); ?></strong><small><?php echo e($r['receipt_no']); ?></small></td>
                 <td><strong><?php echo e($r['customer_name']); ?></strong><small><?php echo e($r['customer_city'] ?: '-'); ?></small></td>
                 <td><strong><?php echo e(tahsilat_money((float)$r['amount']) . ' ' . $r['currency']); ?></strong><small><span class="pill"><?php echo e(tahsilat_payment_label((string)$r['payment_type'])); ?></span></small></td>
-                <td><?php echo e($r['description'] ?: '-'); ?><?php if(!empty($r['due_date'])): ?><small>Vade: <?php echo e(tahsilat_tr_date($r['due_date'])); ?></small><?php endif; ?></td>
+                <td><?php echo e($r['description'] ?: '-'); ?><?php if(!empty($r['due_date'])): ?><small>Vade: <?php echo e(tahsilat_tr_date($r['due_date'])); ?></small><?php endif; ?><?php if(!empty($r['check_record_id'])): ?><small>Çek/Senet kaydı: #<?php echo e($r['check_record_id']); ?></small><?php endif; ?></td>
                 <td><div class="saved-actions"><a href="tahsilat-makbuzu.php?edit=<?php echo e($r['id']); ?>">Düzenle</a><a target="_blank" href="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>">PDF</a><button type="button" class="whatsapp-receipt-link" data-url="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>" data-no="<?php echo e($r['receipt_no']); ?>">WhatsApp</button><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu makbuz silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
               </tr>
             <?php endforeach; ?>
