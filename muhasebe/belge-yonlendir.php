@@ -52,4 +52,6 @@ try {
     }
 } catch (Throwable $e) {}
 
-redirect('hareketler.php?edit=' . $movementId . ($cariId > 0 ? '&cari_id=' . $cariId : ''));
+// Kaynak belge bulunamazsa manuel hareket düzenleme ekranına dön.
+// manual=1 işareti .htaccess yönlendirme döngüsünü engeller.
+redirect('hareketler.php?edit=' . $movementId . ($cariId > 0 ? '&cari_id=' . $cariId : '') . '&manual=1');
