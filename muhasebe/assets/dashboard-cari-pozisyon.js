@@ -15,7 +15,7 @@
   }
   function show(type,rows){
     var p=panel(), b=document.getElementById('cariPozisyonIcerik');
-    p.querySelector('h3').textContent=type==='alacak'?'Kimden ne kadar alacağımız var?':'Kime ne kadar borcumuz var?';
+    p.querySelector('h3').textContent=type==='alacak'?'Kimden net ne kadar alacağımız var?':'Kime net ne kadar borcumuz var?';
     if(!rows.length){b.innerHTML='<p class="muted">Açık kayıt yok.</p>';}else{
       b.innerHTML=rows.map(function(r){return '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px;border:1px solid #eee;border-radius:12px;margin:7px 0;background:#fff"><a href="cari-detay.php?id='+r.id+'"><strong>'+esc(r.name)+'</strong><small style="display:block">'+esc(r.city||'-')+'</small></a><strong>'+fmt(r.amount,r.currency)+'</strong></div>';}).join('');
     }
@@ -23,7 +23,7 @@
   }
   function load(type){
     var p=panel();p.style.display='block';document.getElementById('cariPozisyonIcerik').innerHTML='<p class="muted">Yükleniyor...</p>';
-    fetch('dashboard-cari-pozisyon.php?type='+type,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){show(type,(d&&d.rows)||[]);}).catch(function(){document.getElementById('cariPozisyonIcerik').innerHTML='<p class="text-danger">Liste yüklenemedi.</p>';});
+    fetch('dashboard-cari-pozisyon.php?type='+type+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){show(type,(d&&d.rows)||[]);}).catch(function(){document.getElementById('cariPozisyonIcerik').innerHTML='<p class="text-danger">Liste yüklenemedi.</p>';});
   }
   function init(){
     if(!/dashboard\.php|\/muhasebe\/?$/i.test(location.pathname))return;
