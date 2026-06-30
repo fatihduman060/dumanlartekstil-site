@@ -1,7 +1,8 @@
 (function(){
   function fmt(v,c){var n=Number(v||0);try{return new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)+' '+c;}catch(e){return n.toFixed(2).replace('.',',')+' '+c;}}
   function esc(s){return String(s||'').replace(/[&<>]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[ch];});}
-  function card(key){return Array.from(document.querySelectorAll('.stat-card')).find(function(el){return (el.textContent||'').toLowerCase().indexOf(key)>-1;});}
+  function norm(s){return String(s||'').toLowerCase().replace(/ı/g,'i').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ö/g,'o').replace(/ş/g,'s').replace(/ü/g,'u');}
+  function cardAny(words, exclude){return Array.from(document.querySelectorAll('.stat-card')).find(function(el){var t=norm(el.textContent||'');if(exclude&&exclude.some(function(x){return t.indexOf(norm(x))>-1;}))return false;return words.some(function(w){return t.indexOf(norm(w))>-1;});});}
   function panel(){
     var p=document.getElementById('cariPozisyonPanel');
     if(p) return p;
@@ -26,7 +27,8 @@
   }
   function init(){
     if(!/dashboard\.php|\/muhasebe\/?$/i.test(location.pathname))return;
-    var a=card('alacak'), v=card('verecek');
+    var a=cardAny(['net alacak','durum alacak','alacak'],['verecek','borc','borç','alis','alış','genel durum']);
+    var v=cardAny(['net verecek','durum alis','durum alış','borc','borç','verecek'],['alacak','genel durum']);
     [a,v].forEach(function(x){if(x){x.style.cursor='pointer';x.title='Cari listesini aç';}});
     if(a)a.onclick=function(){load('alacak');};
     if(v)v.onclick=function(){load('verecek');};
