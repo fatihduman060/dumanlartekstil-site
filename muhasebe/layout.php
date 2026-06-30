@@ -174,6 +174,7 @@ function page_footer(): void
   <script src="assets/muhasebe-polish.js?v=1"></script>
   <script src="assets/teklif-hesap-fix.js?v=2"></script>
   <script src="assets/cek-vade-uyari.js?v=2"></script>
+  <script src="assets/cari-doviz-bakiye.js?v=1"></script>
 </body>
 </html>
 <?php }
