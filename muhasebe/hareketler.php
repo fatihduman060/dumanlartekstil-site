@@ -1,6 +1,19 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_login();
+ensure_column(db(), 'movements', 'currency', "TEXT NOT NULL DEFAULT 'TL'");
+
+function hareket_currency_options(): array { return ['TL'=>'TL', 'USD'=>'USD', 'EUR'=>'EUR']; }
+function hareket_currency_value($value): string
+{
+    $value = strtoupper(trim((string)$value));
+    return array_key_exists($value, hareket_currency_options()) ? $value : 'TL';
+}
+function hareket_money($amount, ?string $currency = 'TL'): string
+{
+    $currency = hareket_currency_value($currency ?: 'TL');
+    return number_format((float)$amount, 2, ',', '.') . ' ' . $currency;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_write();
@@ -11,12 +24,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['id'] ?? 0);
         $type = $_POST['movement_type'] ?? '';
         $amount = decimal_from_input($_POST['amount'] ?? '0');
+        $currency = hareket_currency_value($_POST['currency'] ?? 'TL');
         $date = $_POST['movement_date'] ?: date('Y-m-d');
         if (!isset(movement_entry_types()[$type]) || $amount <= 0) {
             flash('error', 'Hareket tipi ve tutar kontrol edilmeli.');
             redirect('hareketler.php');
         }
         if (is_private_receivable_movement($type)) {
+            if ($currency !== 'TL') {
+                flash('error', 'Özel alacak şimdilik yalnızca TL kaydedilir. Dövizli borç/alacak için normal Alacak/Verecek hareketi kullan.');
+                redirect('hareketler.php');
+            }
             if ($id > 0) {
                 flash('error', 'Özel alacak normal hareket düzenleme içinden dönüştürülemez. Yeni kayıt olarak ekleyin.');
                 redirect('hareketler.php');
@@ -69,13 +87,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $paymentMethodInput = trim($_POST['payment_method'] ?? '');
         $dueDateInput = $_POST['due_date'] ?: null;
         $checkLikeInput = ['movement_type' => $type, 'due_date' => $dueDateInput, 'payment_method' => $paymentMethodInput, 'document_type' => $docTypeInput];
-        if (!movement_cash_direction($type) || movement_is_check_like($checkLikeInput)) $accountId = null;
+        if (!movement_cash_direction($type) || movement_is_check_like($checkLikeInput) || $currency !== 'TL') $accountId = null;
         $payload = [
             ($_POST['cari_id'] ?? '') !== '' ? (int)$_POST['cari_id'] : null,
             ($_POST['category_id'] ?? '') !== '' ? (int)$_POST['category_id'] : null,
             $accountId,
             $type,
             $amount,
+            $currency,
             $date,
             $dueDateInput,
             $paymentMethodInput,
@@ -84,20 +103,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $doc['path'], $doc['name'], $doc['mime']
         ];
         if ($id > 0) {
-            $stmt = db()->prepare('UPDATE movements SET cari_id=?, category_id=?, account_id=?, movement_type=?, amount=?, movement_date=?, due_date=?, payment_method=?, description=?, document_type=?, document_path=?, document_name=?, document_mime=?, updated_at=? WHERE id=?');
+            $stmt = db()->prepare('UPDATE movements SET cari_id=?, category_id=?, account_id=?, movement_type=?, amount=?, currency=?, movement_date=?, due_date=?, payment_method=?, description=?, document_type=?, document_path=?, document_name=?, document_mime=?, updated_at=? WHERE id=?');
             $stmt->execute(array_merge($payload, [now(), $id]));
             delete_replaced_upload($oldDoc, $doc);
             sync_movement_account_transaction($id);
-            sync_movement_to_check($id);
-            log_action('Hareket güncellendi', '#' . $id . ' ' . movement_label($type) . ' ' . money($amount)); audit_action('hareket', $id, 'guncellendi', $oldMovement, ['type'=>$type,'amount'=>$amount,'date'=>$date,'cari_id'=>$payload[0],'account_id'=>$accountId], movement_label($type));
+            if ($currency === 'TL') sync_movement_to_check($id);
+            log_action('Hareket güncellendi', '#' . $id . ' ' . movement_label($type) . ' ' . hareket_money($amount, $currency)); audit_action('hareket', $id, 'guncellendi', $oldMovement, ['type'=>$type,'amount'=>$amount,'currency'=>$currency,'date'=>$date,'cari_id'=>$payload[0],'account_id'=>$accountId], movement_label($type));
             flash('success', 'Hareket güncellendi.');
         } else {
-            $stmt = db()->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt = db()->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, currency, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute(array_merge($payload, [current_user()['id'], now(), now()]));
             $newId = (int)db()->lastInsertId();
             sync_movement_account_transaction($newId);
-            sync_movement_to_check($newId);
-            log_action('Hareket eklendi', movement_label($type) . ' ' . money($amount)); audit_action('hareket', $newId, 'eklendi', null, ['type'=>$type,'amount'=>$amount,'date'=>$date,'cari_id'=>$payload[0],'account_id'=>$accountId], movement_label($type));
+            if ($currency === 'TL') sync_movement_to_check($newId);
+            log_action('Hareket eklendi', movement_label($type) . ' ' . hareket_money($amount, $currency)); audit_action('hareket', $newId, 'eklendi', null, ['type'=>$type,'amount'=>$amount,'currency'=>$currency,'date'=>$date,'cari_id'=>$payload[0],'account_id'=>$accountId], movement_label($type));
             flash('success', 'Hareket eklendi.');
         }
         redirect('hareketler.php');
@@ -113,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([now(), current_user()['id'], trim($_POST['cancel_reason'] ?? 'İptal edildi'), now(), $id]);
             sync_movement_account_transaction($id);
             sync_movement_to_check($id, false);
-            log_action('Hareket iptal edildi', '#' . $id . ' ' . movement_label($m['movement_type']) . ' ' . money($m['amount'])); audit_action('hareket', $id, 'iptal', $m, ['is_cancelled'=>1,'cancel_reason'=>trim($_POST['cancel_reason'] ?? 'İptal edildi')], movement_label($m['movement_type']));
+            log_action('Hareket iptal edildi', '#' . $id . ' ' . movement_label($m['movement_type']) . ' ' . hareket_money($m['amount'], $m['currency'] ?? 'TL')); audit_action('hareket', $id, 'iptal', $m, ['is_cancelled'=>1,'cancel_reason'=>trim($_POST['cancel_reason'] ?? 'İptal edildi')], movement_label($m['movement_type']));
             flash('success', 'Hareket iptal edildi. Kayıt silinmedi; işlem geçmişinde korunuyor.');
         }
         redirect('hareketler.php');
@@ -166,7 +185,7 @@ function hareket_search_matches(array $movement, string $query): bool
         $movement['payment_method'] ?? '',
         movement_label((string)($movement['movement_type'] ?? '')),
         document_type_label($movement['document_type'] ?? null),
-        money((float)($movement['amount'] ?? 0)),
+        hareket_money((float)($movement['amount'] ?? 0), $movement['currency'] ?? 'TL'),
         tr_date($movement['movement_date'] ?? null),
         tr_date($movement['due_date'] ?? null),
     ];
@@ -189,6 +208,8 @@ $cariId = trim($_GET['cari_id'] ?? '');
 $type = trim($_GET['movement_type'] ?? '');
 $accountId = trim($_GET['account_id'] ?? '');
 $docType = trim($_GET['document_type'] ?? '');
+$currencyFilter = hareket_currency_value($_GET['currency'] ?? '');
+$currencyFilter = isset($_GET['currency']) && $_GET['currency'] !== '' ? $currencyFilter : '';
 $start = trim($_GET['start'] ?? '');
 $end = trim($_GET['end'] ?? '');
 $includeCancelled = isset($_GET['include_cancelled']);
@@ -198,6 +219,7 @@ if ($cariId !== '') { $where[]='m.cari_id=?'; $params[]=(int)$cariId; }
 if ($type !== '') { $where[]='m.movement_type=?'; $params[]=$type; }
 if ($accountId !== '') { $where[]='m.account_id=?'; $params[]=(int)$accountId; }
 if ($docType !== '') { $where[]='m.document_type=?'; $params[]=$docType; }
+if ($currencyFilter !== '') { $where[]='COALESCE(m.currency,\'TL\')=?'; $params[]=$currencyFilter; }
 if ($start !== '') { $where[]='m.movement_date>=?'; $params[]=$start; }
 if ($end !== '') { $where[]='m.movement_date<=?'; $params[]=$end; }
 $sql="SELECT m.*, c.name AS cari_name, cat.name AS category_name, a.name AS account_name, ch.id AS linked_check_id, ch.check_no AS linked_check_no, ch.bank_name AS linked_check_bank FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id LEFT JOIN categories cat ON cat.id=m.category_id LEFT JOIN accounts a ON a.id=m.account_id LEFT JOIN checks ch ON ch.id=m.check_id";
@@ -225,13 +247,16 @@ page_header('Hareketler', 'hareketler');
         <label>Tutar<input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>"></label>
       </div>
       <div class="two-col">
+        <label>Para birimi<select name="currency"><?php $currentCurrency = hareket_currency_value($edit['currency'] ?? 'TL'); foreach(hareket_currency_options() as $cur=>$label): ?><option value="<?php echo e($cur); ?>" <?php echo $currentCurrency===$cur?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><small>TL dışı hareketler kasa/banka bakiyesine otomatik yazılmaz; cari borç/alacak kendi döviziyle takip edilir.</small></label>
         <label>İşlem tarihi<input name="movement_date" type="date" required value="<?php echo e($edit['movement_date'] ?? date('Y-m-d')); ?>"></label>
-        <label>Vade tarihi<input name="due_date" type="date" value="<?php echo e($edit['due_date'] ?? ''); ?>"></label>
       </div>
-      <label>Cari<select name="cari_id"><option value="">Cari seçilmedi</option><?php foreach($cariler as $c): $selected=(string)($edit['cari_id'] ?? ($_GET['cari_id'] ?? ''))===(string)$c['id']; ?><option value="<?php echo e($c['id']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($c['name']); ?> — <?php echo e($c['cari_type']); ?></option><?php endforeach; ?></select></label>
+      <div class="two-col">
+        <label>Vade tarihi<input name="due_date" type="date" value="<?php echo e($edit['due_date'] ?? ''); ?>"></label>
+        <label>Cari<select name="cari_id"><option value="">Cari seçilmedi</option><?php foreach($cariler as $c): $selected=(string)($edit['cari_id'] ?? ($_GET['cari_id'] ?? ''))===(string)$c['id']; ?><option value="<?php echo e($c['id']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($c['name']); ?> — <?php echo e($c['cari_type']); ?></option><?php endforeach; ?></select></label>
+      </div>
       <div class="two-col">
         <label>Kategori<select name="category_id"><option value="">Kategori yok</option><?php foreach($categories as $cat): ?><option value="<?php echo e($cat['id']); ?>" <?php echo ((string)($edit['category_id'] ?? '')===(string)$cat['id'])?'selected':''; ?>><?php echo e($cat['name']); ?></option><?php endforeach; ?></select></label>
-        <label>Ödeme/Kasa hesabı<select name="account_id"><option value="">Kasa/banka seçilmedi</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo ((string)($edit['account_id'] ?? '')===(string)$a['id'])?'selected':''; ?>><?php echo e($a['name']); ?> — <?php echo e(account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select><small>Çek için ödeme yöntemi ÇEK + vade tarihi girilirse cari çek kaydı da otomatik oluşur; kasa/banka etkisi olmaz.</small></label>
+        <label>Ödeme/Kasa hesabı<select name="account_id"><option value="">Kasa/banka seçilmedi</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo ((string)($edit['account_id'] ?? '')===(string)$a['id'])?'selected':''; ?>><?php echo e($a['name']); ?> — <?php echo e(account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select><small>TL dışı hareketlerde kasa/banka hesabı otomatik boş bırakılır.</small></label>
       </div>
       <div class="two-col">
         <label>Ödeme yöntemi<input name="payment_method" placeholder="Nakit, EFT, kart..." value="<?php echo e($edit['payment_method'] ?? ''); ?>"></label>
@@ -251,6 +276,7 @@ page_header('Hareketler', 'hareketler');
       <input name="q" placeholder="Açıklama/cari/hesap/belge ara" value="<?php echo e($q); ?>">
       <select name="cari_id"><option value="">Tüm cariler</option><?php foreach($cariler as $c): ?><option value="<?php echo e($c['id']); ?>" <?php echo $cariId!=='' && (int)$cariId===(int)$c['id']?'selected':''; ?>><?php echo e($c['name']); ?></option><?php endforeach; ?></select>
       <select name="movement_type"><option value="">Tüm tipler</option><?php foreach(movement_types() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo $type===$key?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select>
+      <select name="currency"><option value="">Tüm para birimleri</option><?php foreach(hareket_currency_options() as $cur=>$label): ?><option value="<?php echo e($cur); ?>" <?php echo $currencyFilter===$cur?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select>
       <select name="account_id"><option value="">Tüm hesaplar</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo $accountId!=='' && (int)$accountId===(int)$a['id']?'selected':''; ?>><?php echo e($a['name']); ?></option><?php endforeach; ?></select>
       <select name="document_type"><option value="">Tüm belgeler</option><?php foreach(document_types() as $key=>$label): ?><option value="<?php echo e($key); ?>" <?php echo $docType===$key?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select>
       <input type="date" name="start" value="<?php echo e($start); ?>"><input type="date" name="end" value="<?php echo e($end); ?>">
@@ -270,7 +296,7 @@ page_header('Hareketler', 'hareketler');
             <td><?php echo e($m['category_name'] ?: '-'); ?><small><?php echo e($m['account_name'] ?: ''); ?></small></td>
             <td><?php echo e($m['description'] ?: '-'); ?><small><?php echo e($m['payment_method'] ?: ''); ?><?php echo !empty($m['linked_check_id']) ? ' · <a href="cekler.php?q=' . e($m['linked_check_no'] ?: $m['linked_check_id']) . '">Çek #' . e($m['linked_check_id']) . '</a>' : ''; ?> <?php echo $cancelled ? ' · İptal: '.e($m['cancel_reason'] ?: '') : ''; ?></small></td>
             <td><?php echo $m['document_path'] ? '<a href="belge-indir.php?id='.e($m['id']).'" target="_blank">'.e(document_type_label($m['document_type'])).'</a>' : '-'; ?></td>
-            <td class="right"><strong><?php echo e(money($m['amount'])); ?></strong></td>
+            <td class="right"><strong><?php echo e(hareket_money($m['amount'], $m['currency'] ?? 'TL')); ?></strong></td>
             <td class="row-actions"><?php if(!$cancelled): ?><a href="hareketler.php?edit=<?php echo e($m['id']); ?>">Düzenle</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Hareket silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button></form><?php endif; ?><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?></td>
           </tr>
           <?php endforeach; ?>
