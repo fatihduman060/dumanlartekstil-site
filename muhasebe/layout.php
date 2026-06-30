@@ -93,8 +93,12 @@ function page_header(string $title, string $active = ''): void
         ['cariler', 'cariler.php', 'Cariler', '◎'],
         ['ozel_alacaklar', 'ozel-alacaklar.php', 'Özel Alacak', '◆'],
         ['hareketler', 'hareketler.php', 'Hareketler', '↕'],
-        ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'],
-        ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'],
+    ];
+    if (is_admin()) {
+        $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
+        $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
+    }
+    $nav = array_merge($nav, [
         ['cekler', 'cekler.php', 'Çekler', '◈'],
         ['belgeler', 'belgeler.php', 'Belgeler', '▤'],
         ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'],
@@ -102,7 +106,7 @@ function page_header(string $title, string $active = ''): void
         ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'],
         ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
         ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
-    ];
+    ]);
     if (is_admin()) {
         $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
         $nav[] = ['loglar', 'loglar.php', 'Loglar', '☰'];
