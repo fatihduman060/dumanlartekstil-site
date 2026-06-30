@@ -21,17 +21,27 @@ try {
     foreach ($stmt->fetchAll() as $row) {
         $currency = strtoupper(trim((string)($row['currency'] ?? 'TL')));
         if (!in_array($currency, ['TL','USD','EUR'], true)) $currency = 'TL';
-        $amount = $type === 'alacak'
-            ? ((float)$row['alacak'] - (float)$row['tahsilat'])
-            : ((float)$row['verecek'] - (float)$row['odeme']);
-        if (abs(round($amount, 2)) < 0.005) continue;
-        if ($amount <= 0) continue;
+
+        $netAlacak = (float)$row['alacak'] - (float)$row['tahsilat'];
+        $netVerecek = (float)$row['verecek'] - (float)$row['odeme'];
+        $net = $netAlacak - $netVerecek;
+
+        if ($type === 'alacak') {
+            if ($net <= 0 || abs(round($net, 2)) < 0.005) continue;
+            $amount = $net;
+        } else {
+            if ($net >= 0 || abs(round($net, 2)) < 0.005) continue;
+            $amount = abs($net);
+        }
+
         $rows[] = [
             'id' => (int)$row['id'],
             'name' => (string)$row['name'],
             'city' => (string)($row['city'] ?? ''),
             'currency' => $currency,
             'amount' => round($amount, 2),
+            'net_alacak' => round($netAlacak, 2),
+            'net_verecek' => round($netVerecek, 2),
         ];
     }
     usort($rows, function($a, $b) {
