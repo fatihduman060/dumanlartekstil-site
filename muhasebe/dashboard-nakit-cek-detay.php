@@ -3,6 +3,11 @@ require_once __DIR__ . '/bootstrap.php';
 require_login();
 header('Content-Type: application/json; charset=utf-8');
 
+if (!is_admin()) {
+    echo json_encode(['ok'=>false, 'error'=>'Bu detay yalnızca yöneticilere açıktır.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $kind = (string)($_GET['kind'] ?? '');
 $allowed = ['cash_in','cash_out','cash_net','account_total','kasa_total','banka_total','check_in','check_out','check_7','check_overdue'];
 if (!in_array($kind, $allowed, true)) $kind = 'cash_in';
