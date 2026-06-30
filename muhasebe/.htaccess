@@ -20,6 +20,8 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  RewriteRule ^hesaplar\.php$ kasa-banka-guard.php?target=hesaplar [QSA,L]
+  RewriteRule ^hesap-dokumleri\.php$ kasa-banka-guard.php?target=hesap-dokumleri [QSA,L]
   RewriteCond %{QUERY_STRING} !(^|&)manual=1(&|$)
   RewriteCond %{QUERY_STRING} (^|&)edit=([0-9]+)&cari_id=([0-9]+)(&|$)
   RewriteRule ^hareketler\.php$ belge-yonlendir.php?movement_id=%2&cari_id=%3 [R=302,L]
