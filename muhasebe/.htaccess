@@ -18,6 +18,13 @@ Options -Indexes
   </IfModule>
 </FilesMatch>
 
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{QUERY_STRING} !(^|&)manual=1(&|$)
+  RewriteCond %{QUERY_STRING} (^|&)edit=([0-9]+)&cari_id=([0-9]+)(&|$)
+  RewriteRule ^hareketler\.php$ belge-yonlendir.php?movement_id=%2&cari_id=%3 [R=302,L]
+</IfModule>
+
 <IfModule mod_substitute.c>
   AddOutputFilterByType SUBSTITUTE text/html
   Substitute "s|+90 356 715 82 83|0 (356) 715 82 83|ni"
