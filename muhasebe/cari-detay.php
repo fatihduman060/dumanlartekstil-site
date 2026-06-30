@@ -1,14 +1,21 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_login();
+
 $id = (int)($_GET['id'] ?? 0);
-$stmt = db()->prepare('SELECT * FROM cariler WHERE id=?'); $stmt->execute([$id]); $cari = $stmt->fetch();
-if (!$cari) { flash('error','Cari bulunamadı.'); redirect('cariler.php'); }
+$stmt = db()->prepare('SELECT * FROM cariler WHERE id=?');
+$stmt->execute([$id]);
+$cari = $stmt->fetch();
+if (!$cari) {
+    flash('error', 'Cari bulunamadı.');
+    redirect('cariler.php');
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_write();
     require_csrf();
     $action = $_POST['action'] ?? '';
+
     if ($action === 'add_private_receivable') {
         $amount = decimal_from_input($_POST['amount'] ?? '0');
         $date = $_POST['receivable_date'] ?: date('Y-m-d');
@@ -19,15 +26,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Özel alacak için tutar girilmeli.');
             redirect('cari-detay.php?id=' . $id);
         }
-        try { $doc = handle_upload('private_document'); } catch (Throwable $e) { flash('error', $e->getMessage()); redirect('cari-detay.php?id=' . $id); }
-        $prPayload = [$id, $status, $amount, $date, $description, $_POST['private_document_type'] ?: null, $doc['path'], $doc['name'], $doc['mime'], current_user()['id'] ?? null, now(), now()];
-        db()->prepare('INSERT INTO private_receivables (cari_id, status, amount, receivable_date, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            ->execute($prPayload);
+        try { $doc = handle_upload('private_document'); }
+        catch (Throwable $e) { flash('error', $e->getMessage()); redirect('cari-detay.php?id=' . $id); }
+        $payload = [$id, $status, $amount, $date, $description, $_POST['private_document_type'] ?: null, $doc['path'], $doc['name'], $doc['mime'], current_user()['id'] ?? null, now(), now()];
+        db()->prepare('INSERT INTO private_receivables (cari_id, status, amount, receivable_date, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute($payload);
         $newPrivateId = (int)db()->lastInsertId();
-        log_action('Özel alacak eklendi', $cari['name'] . ' - ' . money($amount)); audit_action('ozel_alacak', $newPrivateId, 'eklendi', null, ['cari_id'=>$id,'status'=>$status,'amount'=>$amount,'date'=>$date,'description'=>$description], $cari['name']);
+        log_action('Özel alacak eklendi', $cari['name'] . ' - ' . money($amount));
+        audit_action('ozel_alacak', $newPrivateId, 'eklendi', null, ['cari_id'=>$id,'status'=>$status,'amount'=>$amount,'date'=>$date,'description'=>$description], $cari['name']);
         flash('success', 'Özel alacak eklendi. Bu kayıt genel cari bakiyeyi etkilemez.');
         redirect('cari-detay.php?id=' . $id);
     }
+
     if ($action === 'update_private_receivable_status') {
         $privateId = (int)($_POST['private_receivable_id'] ?? 0);
         $status = $_POST['status'] ?? 'acik';
@@ -42,12 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Özel alacak kaydı bulunamadı.');
             redirect('cari-detay.php?id=' . $id);
         }
-        db()->prepare('UPDATE private_receivables SET status=?, updated_at=? WHERE id=? AND cari_id=?')
-            ->execute([$status, now(), $privateId, $id]);
-        log_action('Özel alacak durumu güncellendi', $cari['name'] . ' - ' . private_receivable_status_label($status) . ' - ' . money($row['amount'])); audit_action('ozel_alacak', $privateId, 'durum_guncellendi', $row, ['status'=>$status], $cari['name']);
+        db()->prepare('UPDATE private_receivables SET status=?, updated_at=? WHERE id=? AND cari_id=?')->execute([$status, now(), $privateId, $id]);
+        log_action('Özel alacak durumu güncellendi', $cari['name'] . ' - ' . private_receivable_status_label($status) . ' - ' . money($row['amount']));
+        audit_action('ozel_alacak', $privateId, 'durum_guncellendi', $row, ['status'=>$status], $cari['name']);
         flash('success', 'Özel alacak durumu güncellendi. Genel cari bakiye etkilenmedi.');
         redirect('cari-detay.php?id=' . $id);
     }
+
     if ($action === 'quick_movement') {
         $type = $_POST['movement_type'] ?? '';
         $amount = decimal_from_input($_POST['amount'] ?? '0');
@@ -57,12 +67,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('cari-detay.php?id=' . $id);
         }
         if (is_private_receivable_movement($type)) {
-            try { $doc = handle_upload('document'); } catch (Throwable $e) { flash('error', $e->getMessage()); redirect('cari-detay.php?id=' . $id); }
-            $quickPrPayload = [$id, 'acik', $amount, $date, trim($_POST['description'] ?? ''), $_POST['document_type'] ?: null, $doc['path'], $doc['name'], $doc['mime'], current_user()['id'] ?? null, now(), now()];
-            db()->prepare('INSERT INTO private_receivables (cari_id, status, amount, receivable_date, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                ->execute($quickPrPayload);
+            try { $doc = handle_upload('document'); }
+            catch (Throwable $e) { flash('error', $e->getMessage()); redirect('cari-detay.php?id=' . $id); }
+            $payload = [$id, 'acik', $amount, $date, trim($_POST['description'] ?? ''), $_POST['document_type'] ?: null, $doc['path'], $doc['name'], $doc['mime'], current_user()['id'] ?? null, now(), now()];
+            db()->prepare('INSERT INTO private_receivables (cari_id, status, amount, receivable_date, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute($payload);
             $newPrivateId = (int)db()->lastInsertId();
-            log_action('Hızlı özel alacak eklendi', $cari['name'] . ' - ' . money($amount)); audit_action('ozel_alacak', $newPrivateId, 'eklendi', null, ['cari_id'=>$id,'status'=>'acik','amount'=>$amount,'date'=>$date,'description'=>trim($_POST['description'] ?? '')], $cari['name']);
+            log_action('Hızlı özel alacak eklendi', $cari['name'] . ' - ' . money($amount));
+            audit_action('ozel_alacak', $newPrivateId, 'eklendi', null, ['cari_id'=>$id,'status'=>'acik','amount'=>$amount,'date'=>$date,'description'=>trim($_POST['description'] ?? '')], $cari['name']);
             flash('success', 'Özel alacak eklendi. Genel cari bakiye etkilenmedi.');
             redirect('cari-detay.php?id=' . $id);
         }
@@ -70,15 +81,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $docTypeInput = $_POST['document_type'] ?: null;
         $paymentMethodInput = trim($_POST['payment_method'] ?? '');
         $dueDateInput = $_POST['due_date'] ?: null;
-        $checkLikeInput = ['movement_type' => $type, 'due_date' => $dueDateInput, 'payment_method' => $paymentMethodInput, 'document_type' => $docTypeInput];
+        $checkLikeInput = ['movement_type'=>$type, 'due_date'=>$dueDateInput, 'payment_method'=>$paymentMethodInput, 'document_type'=>$docTypeInput];
         if (!movement_cash_direction($type) || movement_is_check_like($checkLikeInput)) $accountId = null;
-        try { $doc = handle_upload('document'); } catch (Throwable $e) { flash('error', $e->getMessage()); redirect('cari-detay.php?id=' . $id); }
+        try { $doc = handle_upload('document'); }
+        catch (Throwable $e) { flash('error', $e->getMessage()); redirect('cari-detay.php?id=' . $id); }
         $stmt = db()->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $stmt->execute([$id, $accountId, $type, $amount, $date, $dueDateInput, $paymentMethodInput, trim($_POST['description'] ?? ''), $docTypeInput, $doc['path'], $doc['name'], $doc['mime'], current_user()['id'], now(), now()]);
         $newId = (int)db()->lastInsertId();
         sync_movement_account_transaction($newId);
         sync_movement_to_check($newId);
-        log_action('Hızlı cari hareketi eklendi', $cari['name'] . ' - ' . movement_label($type) . ' ' . money($amount)); audit_action('hareket', $newId, 'eklendi', null, ['cari_id'=>$id,'type'=>$type,'amount'=>$amount,'date'=>$date,'account_id'=>$accountId], $cari['name']);
+        log_action('Hızlı cari hareketi eklendi', $cari['name'] . ' - ' . movement_label($type) . ' ' . money($amount));
+        audit_action('hareket', $newId, 'eklendi', null, ['cari_id'=>$id,'type'=>$type,'amount'=>$amount,'date'=>$date,'account_id'=>$accountId], $cari['name']);
         flash('success', 'Hızlı hareket eklendi.');
         redirect('cari-detay.php?id=' . $id);
     }
@@ -96,19 +109,23 @@ $mStart = trim($_GET['start'] ?? '');
 $mEnd = trim($_GET['end'] ?? '');
 $mQ = trim($_GET['q'] ?? '');
 $includeCancelled = isset($_GET['include_cancelled']);
-$where=['m.cari_id=?']; $params=[$id];
-if (!$includeCancelled) $where[]='COALESCE(m.is_cancelled,0)=0';
-if ($mType !== '') { $where[]='m.movement_type=?'; $params[]=$mType; }
-if ($mStart !== '') { $where[]='m.movement_date>=?'; $params[]=$mStart; }
-if ($mEnd !== '') { $where[]='m.movement_date<=?'; $params[]=$mEnd; }
-if ($mQ !== '') { $where[]='(m.description LIKE ? OR cat.name LIKE ? OR a.name LIKE ? OR m.document_name LIKE ?)'; array_push($params,"%$mQ%","%$mQ%","%$mQ%","%$mQ%"); }
-$stmt = db()->prepare("SELECT m.*, cat.name AS category_name, u.display_name AS user_name, a.name AS account_name FROM movements m LEFT JOIN categories cat ON cat.id=m.category_id LEFT JOIN users u ON u.id=m.created_by LEFT JOIN accounts a ON a.id=m.account_id WHERE " . implode(' AND ', $where) . " ORDER BY m.movement_date DESC, m.id DESC");
-$stmt->execute($params); $movements = $stmt->fetchAll();
+$where = ['m.cari_id=?'];
+$params = [$id];
+if (!$includeCancelled) $where[] = 'COALESCE(m.is_cancelled,0)=0';
+if ($mType !== '') { $where[] = 'm.movement_type=?'; $params[] = $mType; }
+if ($mStart !== '') { $where[] = 'm.movement_date>=?'; $params[] = $mStart; }
+if ($mEnd !== '') { $where[] = 'm.movement_date<=?'; $params[] = $mEnd; }
+if ($mQ !== '') { $where[] = '(m.description LIKE ? OR cat.name LIKE ? OR a.name LIKE ? OR m.document_name LIKE ? OR ch.check_no LIKE ? OR ch.bank_name LIKE ?)'; array_push($params, "%$mQ%", "%$mQ%", "%$mQ%", "%$mQ%", "%$mQ%", "%$mQ%"); }
+$stmt = db()->prepare("SELECT m.*, cat.name AS category_name, u.display_name AS user_name, a.name AS account_name, ch.id AS linked_check_id, ch.check_no AS linked_check_no, ch.bank_name AS linked_check_bank FROM movements m LEFT JOIN categories cat ON cat.id=m.category_id LEFT JOIN users u ON u.id=m.created_by LEFT JOIN accounts a ON a.id=m.account_id LEFT JOIN checks ch ON ch.id=m.check_id WHERE " . implode(' AND ', $where) . " ORDER BY m.movement_date DESC, m.id DESC");
+$stmt->execute($params);
+$movements = $stmt->fetchAll();
 
-$chWhere=['cari_id=?', 'COALESCE(is_cancelled,0)=0']; $chParams=[$id];
+$chWhere = ['cari_id=?', 'COALESCE(is_cancelled,0)=0'];
+$chParams = [$id];
 $stmt = db()->prepare("SELECT * FROM checks WHERE " . implode(' AND ', $chWhere) . " ORDER BY due_date ASC, id DESC");
-$stmt->execute($chParams); $checks = $stmt->fetchAll();
-$checkTotals = ['alinacak'=>0,'verilecek'=>0];
+$stmt->execute($chParams);
+$checks = $stmt->fetchAll();
+$checkTotals = ['alinacak'=>0, 'verilecek'=>0];
 foreach ($checks as $ch) $checkTotals[$ch['direction']] += (float)$ch['amount'];
 $pendingCheckTotal = $checkTotals['alinacak'] + $checkTotals['verilecek'];
 
@@ -128,6 +145,7 @@ if ($balance['net_alacak'] > 0 && ($daysSinceTahsilat === null || $daysSinceTahs
     $cariAlertText = 'Çek hareketi var; vade takibini kontrol et.';
     $cariAlertTone = 'warning';
 }
+
 page_header($cari['name'], 'cariler');
 ?>
 <section class="hero-card detail-hero">
@@ -209,10 +227,7 @@ page_header($cari['name'], 'cariler');
 <?php endif; ?>
 
 <section id="ozel-alacak" class="panel-card special-receivable-card detail-section">
-  <div class="card-head">
-    <h3>Özel Alacak</h3>
-    <span>Bu alan genel cari bakiyeyi, kasa/bankayı ve dashboard toplamlarını etkilemez.</span>
-  </div>
+  <div class="card-head"><h3>Özel Alacak</h3><span>Bu alan genel cari bakiyeyi, kasa/bankayı ve dashboard toplamlarını etkilemez.</span></div>
   <section class="stats-grid three flush">
     <article class="stat-card soft"><span>Açık özel alacak</span><strong><?php echo e(money($privateSummary['acik'])); ?></strong><small>Takip edilecek özel tutar</small></article>
     <article class="stat-card soft"><span>Kapanan özel alacak</span><strong><?php echo e(money($privateSummary['kapandi'])); ?></strong><small>Normal tahsilata karışmaz</small></article>
@@ -224,9 +239,7 @@ page_header($cari['name'], 'cariler');
     <input type="hidden" name="action" value="add_private_receivable">
     <input name="amount" type="text" inputmode="decimal" placeholder="Özel alacak tutarı" required>
     <input name="receivable_date" type="date" value="<?php echo e(date('Y-m-d')); ?>" required>
-    <select name="status">
-      <?php foreach(private_receivable_statuses() as $key=>$meta): ?><option value="<?php echo e($key); ?>"><?php echo e($meta['label']); ?></option><?php endforeach; ?>
-    </select>
+    <select name="status"><?php foreach(private_receivable_statuses() as $key=>$meta): ?><option value="<?php echo e($key); ?>"><?php echo e($meta['label']); ?></option><?php endforeach; ?></select>
     <select name="private_document_type"><option value="">Belge türü</option><?php foreach(document_types() as $key=>$label): ?><option value="<?php echo e($key); ?>"><?php echo e($label); ?></option><?php endforeach; ?></select>
     <input name="description" placeholder="Açıklama / not">
     <input name="private_document" type="file" accept="image/*,application/pdf">
@@ -294,11 +307,23 @@ page_header($cari['name'], 'cariler');
   </form>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Tarih</th><th>Vade</th><th>Tip</th><th>Kategori/Hesap</th><th>Açıklama</th><th>Belge</th><th class="right">Tutar</th></tr></thead>
+      <thead><tr><th>Tarih</th><th>Vade</th><th>Tip</th><th>Kategori/Hesap</th><th>Açıklama</th><th>Belge</th><th class="right">Tutar</th><th>İşlem</th></tr></thead>
       <tbody>
-        <?php if (!$movements): ?><tr><td colspan="7" class="empty">Bu cariye ait hareket yok.</td></tr><?php endif; ?>
+        <?php if (!$movements): ?><tr><td colspan="8" class="empty">Bu cariye ait hareket yok.</td></tr><?php endif; ?>
         <?php foreach ($movements as $m): $cancelled=(int)($m['is_cancelled'] ?? 0)===1; ?>
-          <tr class="<?php echo $cancelled?'row-cancelled':''; ?>"><td><?php echo e(tr_date($m['movement_date'])); ?></td><td><?php echo e(tr_date($m['due_date'])); ?></td><td><?php echo $cancelled ? badge('İptal','neutral') : badge(movement_label($m['movement_type']), movement_tone($m['movement_type'])); ?></td><td><?php echo e($m['category_name'] ?: '-'); ?><small><?php echo e($m['account_name'] ?: ''); ?></small></td><td><?php echo e($m['description'] ?: '-'); ?><small><?php echo e($m['payment_method'] ?: ''); ?></small></td><td><?php echo $m['document_path'] ? '<a href="belge-indir.php?id=' . e($m['id']) . '" target="_blank">'.e(document_type_label($m['document_type'])).'</a>' : '-'; ?></td><td class="right"><strong><?php echo e(money($m['amount'])); ?></strong></td></tr>
+          <tr class="<?php echo $cancelled?'row-cancelled':''; ?>">
+            <td><?php echo e(tr_date($m['movement_date'])); ?></td>
+            <td><?php echo e(tr_date($m['due_date'])); ?></td>
+            <td><?php echo $cancelled ? badge('İptal','neutral') : badge(movement_label($m['movement_type']), movement_tone($m['movement_type'])); ?></td>
+            <td><?php echo e($m['category_name'] ?: '-'); ?><small><?php echo e($m['account_name'] ?: ''); ?></small></td>
+            <td><?php echo e($m['description'] ?: '-'); ?><small><?php echo e($m['payment_method'] ?: ''); ?><?php echo !empty($m['linked_check_id']) ? ' · Çek #' . e($m['linked_check_id']) : ''; ?></small></td>
+            <td><?php echo $m['document_path'] ? '<a href="belge-indir.php?id=' . e($m['id']) . '" target="_blank">'.e(document_type_label($m['document_type'])).'</a>' : '-'; ?></td>
+            <td class="right"><strong><?php echo e(money($m['amount'])); ?></strong></td>
+            <td class="row-actions">
+              <?php if(!$cancelled): ?><a href="hareketler.php?edit=<?php echo e($m['id']); ?>&cari_id=<?php echo e($id); ?>">İncele / Düzelt</a><?php else: ?><a href="hareketler.php?include_cancelled=1&q=<?php echo e($m['id']); ?>">İncele</a><?php endif; ?>
+              <?php if(!empty($m['linked_check_id'])): ?><a href="cekler.php?direction=alinacak&edit=<?php echo e($m['linked_check_id']); ?>#cek-form">Çek kaydı</a><?php endif; ?>
+            </td>
+          </tr>
         <?php endforeach; ?>
       </tbody>
     </table>
@@ -309,11 +334,19 @@ page_header($cari['name'], 'cariler');
   <div class="card-head"><h3>Çek geçmişi</h3><a href="export.php?type=checks&cari_id=<?php echo e($id); ?>">Excel CSV indir</a></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Vade</th><th>Yön</th><th>Banka</th><th>Çek No</th><th>Açıklama</th><th class="right">Tutar</th></tr></thead>
+      <thead><tr><th>Vade</th><th>Yön</th><th>Banka</th><th>Çek No</th><th>Açıklama</th><th class="right">Tutar</th><th>İşlem</th></tr></thead>
       <tbody>
-        <?php if (!$checks): ?><tr><td colspan="6" class="empty">Bu cariye ait çek yok.</td></tr><?php endif; ?>
+        <?php if (!$checks): ?><tr><td colspan="7" class="empty">Bu cariye ait çek yok.</td></tr><?php endif; ?>
         <?php foreach ($checks as $ch): ?>
-          <tr><td><?php echo e(tr_date($ch['due_date'])); ?></td><td><?php echo badge(check_direction_label($ch['direction']), check_direction_tone($ch['direction'])); ?></td><td><?php echo e($ch['bank_name'] ?: '-'); ?><small><?php echo e($ch['branch_name'] ?: ''); ?></small></td><td><?php echo e($ch['check_no'] ?: '-'); ?></td><td><?php echo e($ch['description'] ?: '-'); ?></td><td class="right"><strong><?php echo e(money($ch['amount'])); ?></strong></td></tr>
+          <tr>
+            <td><?php echo e(tr_date($ch['due_date'])); ?></td>
+            <td><?php echo badge(check_direction_label($ch['direction']), check_direction_tone($ch['direction'])); ?></td>
+            <td><?php echo e($ch['bank_name'] ?: '-'); ?><small><?php echo e($ch['branch_name'] ?: ''); ?></small></td>
+            <td><?php echo e($ch['check_no'] ?: '-'); ?></td>
+            <td><?php echo e($ch['description'] ?: '-'); ?></td>
+            <td class="right"><strong><?php echo e(money($ch['amount'])); ?></strong></td>
+            <td class="row-actions"><a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($ch['id']); ?>#cek-form">İncele / Düzelt</a></td>
+          </tr>
         <?php endforeach; ?>
       </tbody>
     </table>
