@@ -24,8 +24,10 @@
     if (!table) return;
     var sum = 0;
     table.querySelectorAll('tbody tr').forEach(function(row){
-      var q = parseOfferNumber(row.querySelector('.qty') && row.querySelector('.qty').value);
-      var p = parseOfferNumber(row.querySelector('.price') && row.querySelector('.price').value);
+      var qtyEl = row.querySelector('.qty');
+      var priceEl = row.querySelector('.price');
+      var q = parseOfferNumber(qtyEl ? qtyEl.value : '');
+      var p = parseOfferNumber(priceEl ? priceEl.value : '');
       var total = q * p;
       sum += total;
       var out = row.querySelector('.line-total');
@@ -49,15 +51,14 @@
       if (e.target && (e.target.classList.contains('calc') || e.target.id === 'vatRate')) setTimeout(recalc, 0);
     });
     document.addEventListener('change', function(e){
-      if (e.target && (e.target.classList.contains('calc') || e.target.id === 'vatEnabled' || e.target.id === 'vatRate')) setTimeout(recalc, 0);
+      if (e.target && (e.target.classList.contains('calc') || e.target.id === 'vatEnabled' || e.target.id === 'vatRate' || e.target.classList.contains('product-name'))) setTimeout(recalc, 50);
     });
     document.addEventListener('click', function(e){
-      if (e.target && (e.target.id === 'addRow' || e.target.classList.contains('row-remove'))) setTimeout(recalc, 0);
+      if (e.target && (e.target.id === 'addRow' || e.target.classList.contains('row-remove'))) setTimeout(recalc, 100);
     });
-    var table = document.getElementById('offerRows');
-    if (table && window.MutationObserver) new MutationObserver(function(){ recalc(); }).observe(table.querySelector('tbody') || table, {childList:true, subtree:true});
     setTimeout(recalc, 100);
     setTimeout(recalc, 500);
+    setTimeout(recalc, 1200);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
