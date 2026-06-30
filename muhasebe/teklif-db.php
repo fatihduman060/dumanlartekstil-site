@@ -80,11 +80,21 @@ function teklif_products_for_select(): array
 
 function teklif_decimal($value): float
 {
-    if (function_exists('decimal_from_input')) return decimal_from_input($value);
     $v = trim(str_replace(' ', '', (string)$value));
-    $v = str_replace('.', '', $v);
-    $v = str_replace(',', '.', $v);
-    return (float)$v;
+    if ($v === '') return 0.0;
+    $hasComma = strpos($v, ',') !== false;
+    $hasDot = strpos($v, '.') !== false;
+    if ($hasComma) {
+        $v = str_replace('.', '', $v);
+        $v = str_replace(',', '.', $v);
+    } elseif ($hasDot) {
+        $parts = explode('.', $v);
+        $last = end($parts);
+        if (count($parts) > 2 || strlen((string)$last) === 3) {
+            $v = str_replace('.', '', $v);
+        }
+    }
+    return is_numeric($v) ? (float)$v : 0.0;
 }
 
 function teklif_money(float $value): string
