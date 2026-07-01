@@ -31,6 +31,7 @@ Options -Indexes
   AddOutputFilterByType SUBSTITUTE text/html
   Substitute "s|+90 356 715 82 83|0 (356) 715 82 83|ni"
   Substitute "s|0(356)715 82 83|0 (356) 715 82 83|ni"
+  Substitute "s|dumanlartekstİl.com.tr|dumanlartekstil.com.tr|ni"
   Substitute "s|height:286mm!important|height:295mm!important|ni"
   Substitute "s|html,body{width:210mm!important;height:297mm!important;background:#fff!important;overflow:hidden!important;margin:0!important;padding:0!important}|html,body{width:210mm!important;height:295mm!important;max-height:295mm!important;background:#fff!important;overflow:hidden!important;margin:0!important;padding:0!important}|ni"
   Substitute "s|.page{margin:0 auto!important;border:0!important;box-shadow:none!important;width:210mm!important;height:297mm!important;overflow:hidden!important}|.page{margin:0 auto!important;border:0!important;box-shadow:none!important;width:210mm!important;height:295mm!important;max-height:295mm!important;overflow:hidden!important;break-after:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;page-break-inside:avoid!important}|ni"
