@@ -20,6 +20,7 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  RewriteRule ^teklif-yazdir\.php$ teklif-yazdir-final.php [QSA,L]
   RewriteRule ^hesaplar\.php$ kasa-banka-guard.php?target=hesaplar [QSA,L]
   RewriteRule ^hesap-dokumleri\.php$ kasa-banka-guard.php?target=hesap-dokumleri [QSA,L]
   RewriteCond %{QUERY_STRING} !(^|&)manual=1(&|$)
