@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
-require_admin();
+require_user_manager();
 if ($_SERVER['REQUEST_METHOD']==='POST') {
     require_csrf();
     $action=$_POST['action']??'';
@@ -23,6 +23,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         $oldStmt = db()->prepare('SELECT id, username, display_name, role, is_active FROM users WHERE id=?');
         $oldStmt->execute([$id]);
         $oldUser = $oldStmt->fetch();
+        if (!$oldUser) { flash('error','Kullanıcı bulunamadı.'); redirect('kullanicilar.php'); }
+        if (($oldUser['role'] ?? '') === 'admin' && $role !== 'admin') {
+            $stmt = db()->prepare("SELECT COUNT(*) FROM users WHERE role='admin' AND is_active=1 AND id<>?");
+            $stmt->execute([$id]);
+            if ((int)$stmt->fetchColumn() <= 0) {
+                flash('error','Son aktif yöneticinin yetkisi düşürülemez.');
+                redirect('kullanicilar.php');
+            }
+        }
         db()->prepare('UPDATE users SET display_name=?, role=?, is_active=?, updated_at=? WHERE id=?')->execute([$display,$role,$active,now(),$id]);
         $passwordChanged = false;
         if(!empty($_POST['password'])){ if(strlen($_POST['password'])<8){ flash('error','Şifre en az 8 karakter olmalı.'); redirect('kullanicilar.php'); } db()->prepare('UPDATE users SET password_hash=?, updated_at=? WHERE id=?')->execute([password_hash($_POST['password'],PASSWORD_DEFAULT),now(),$id]); $passwordChanged = true; }
@@ -31,6 +40,31 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
             audit_action('kullanici', $id, 'guncellendi', $oldUser, ['display_name'=>$display,'role'=>$role,'is_active'=>$active,'password_changed'=>$passwordChanged ? 'evet' : 'hayır'], $oldUser['username'] ?? ('#'.$id));
         }
         flash('success','Kullanıcı güncellendi.');
+    }
+    if($action==='delete'){
+        $id=(int)($_POST['id']??0);
+        if ($id <= 0) { flash('error','Silinecek kullanıcı bulunamadı.'); redirect('kullanicilar.php'); }
+        if($id===(int)(current_user()['id'] ?? 0)){ flash('error','Kendi kullanıcınızı silemezsiniz.'); redirect('kullanicilar.php'); }
+        $stmt = db()->prepare('SELECT id, username, display_name, role, is_active FROM users WHERE id=?');
+        $stmt->execute([$id]);
+        $oldUser = $stmt->fetch();
+        if (!$oldUser) { flash('error','Kullanıcı bulunamadı.'); redirect('kullanicilar.php'); }
+        if (($oldUser['role'] ?? '') === 'admin' && (int)($oldUser['is_active'] ?? 0) === 1) {
+            $stmt = db()->prepare("SELECT COUNT(*) FROM users WHERE role='admin' AND is_active=1 AND id<>?");
+            $stmt->execute([$id]);
+            if ((int)$stmt->fetchColumn() <= 0) {
+                flash('error','Son aktif yönetici silinemez.');
+                redirect('kullanicilar.php');
+            }
+        }
+        try {
+            db()->prepare('DELETE FROM users WHERE id=?')->execute([$id]);
+            log_action('Kullanıcı silindi', (string)($oldUser['username'] ?? ('#'.$id)));
+            audit_action('kullanici', $id, 'silindi', $oldUser, null, $oldUser['username'] ?? ('#'.$id));
+            flash('success','Kullanıcı silindi. Eski işlem kayıtları korunur.');
+        } catch (Throwable $e) {
+            flash('error','Kullanıcı silinemedi. Önce pasif hale getirmeyi deneyin.');
+        }
     }
     redirect('kullanicilar.php');
 }
@@ -61,7 +95,7 @@ page_header('Kullanıcılar', 'kullanicilar');
     <div class="card-head"><h3>Kullanıcı listesi</h3><span><?php echo count($users); ?> kullanıcı</span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Kullanıcı</th><th>Yetki</th><th>Son giriş</th><th>Durum</th><th>Güncelle</th></tr></thead>
+        <thead><tr><th>Kullanıcı</th><th>Yetki</th><th>Son giriş</th><th>Durum</th><th>Güncelle</th><th>Sil</th></tr></thead>
         <tbody>
           <?php foreach($users as $u): ?>
           <tr>
@@ -84,6 +118,18 @@ page_header('Kullanıcılar', 'kullanicilar');
               <td><label class="check"><input type="checkbox" name="is_active" <?php echo $u['is_active']?'checked':''; ?>> Aktif</label></td>
               <td><button class="btn btn-secondary">Kaydet</button></td>
             </form>
+            <td>
+              <?php if ((int)$u['id'] !== (int)(current_user()['id'] ?? 0)): ?>
+              <form method="post" onsubmit="return confirm('<?php echo e($u['username']); ?> kullanıcısı silinsin mi? Bu işlem geri alınamaz. Eski işlem kayıtları korunur.');">
+                <?php echo csrf_field(); ?>
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" value="<?php echo e($u['id']); ?>">
+                <button class="btn btn-danger" type="submit">Sil</button>
+              </form>
+              <?php else: ?>
+                <span class="muted">Kendin</span>
+              <?php endif; ?>
+            </td>
           </tr>
           <?php endforeach; ?>
         </tbody>
