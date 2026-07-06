@@ -184,6 +184,7 @@ function page_footer(): void
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/cari-hareket-kaynak.js?v=1"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
+  <script src="assets/maas-excel-aktar.js?v=1"></script>
 </body>
 </html>
 <?php }
