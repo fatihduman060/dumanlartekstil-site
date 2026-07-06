@@ -73,6 +73,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('hesaplar.php');
     }
 
+    if ($action === 'zero_accounts') {
+        require_admin();
+        $date = $_POST['transaction_date'] ?: date('Y-m-d');
+        $desc = trim($_POST['description'] ?? '');
+        if ($desc === '') $desc = 'Maaş ve çek ödemeleri sonrası kasa/banka sıfırlama';
+        $done = 0;
+        $totalOut = 0.0;
+        $totalIn = 0.0;
+        db()->beginTransaction();
+        try {
+            foreach (accounts_for_select(true) as $account) {
+                $accountId = (int)$account['id'];
+                $balance = account_balance($accountId);
+                if (abs($balance) < 0.005) continue;
+                $direction = $balance > 0 ? 'out' : 'in';
+                $amount = abs($balance);
+                $lineDesc = $desc . ' / Sıfırlama öncesi bakiye: ' . money($balance);
+                db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)')
+                    ->execute([$accountId, $direction, $amount, $date, 'zero', $lineDesc, current_user()['id'], now()]);
+                $done++;
+                if ($direction === 'out') $totalOut += $amount; else $totalIn += $amount;
+            }
+            db()->commit();
+            log_action('Kasa/Banka sıfırlama', 'Hesap: ' . $done . ' / Çıkış: ' . money($totalOut) . ' / Giriş: ' . money($totalIn));
+            audit_action('hesap_hareketi', null, 'sifirlama', null, ['accounts'=>$done,'out'=>$totalOut,'in'=>$totalIn,'date'=>$date,'description'=>$desc], 'kasa banka sıfırlama');
+            flash('success', $done > 0 ? 'Kasa/banka hesapları sıfırlandı. İşlenen hesap: ' . $done . '.' : 'Sıfırlanacak bakiye yok; hesaplar zaten 0 görünüyor.');
+        } catch (Throwable $e) {
+            db()->rollBack();
+            flash('error', 'Kasa/banka sıfırlama yapılamadı: ' . $e->getMessage());
+        }
+        redirect('hesaplar.php');
+    }
+
     if ($action === 'save_account') {
         $id = (int)($_POST['id'] ?? 0);
         $type = $_POST['account_type'] ?? 'kasa';
@@ -150,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'delete_transaction') {
         $id = (int)($_POST['id'] ?? 0);
-        $stmt = db()->prepare("SELECT * FROM account_transactions WHERE id=? AND source_type IN ('manual','transfer')");
+        $stmt = db()->prepare("SELECT * FROM account_transactions WHERE id=? AND source_type IN ('manual','transfer','zero')");
         $stmt->execute([$id]);
         $tr = $stmt->fetch();
         if ($tr) {
@@ -232,6 +265,22 @@ page_header('Kasa / Banka', 'hesaplar');
       <?php echo csrf_field(); ?>
       <input type="hidden" name="action" value="repair_sync">
       <button class="btn btn-secondary" type="submit">Senkron kontrol et</button>
+    </form>
+  </div>
+</section>
+
+<section class="panel-card soft-alert" style="border-color:#f0c36d;background:#fff8e8">
+  <div class="card-head" style="align-items:flex-start">
+    <div>
+      <h3>Kasa/Banka bakiyelerini sıfırla</h3>
+      <span>Aktif kasa ve banka hesaplarının mevcut bakiyesini 0,00 TL yapar. Açılış bakiyesine dokunmaz; her hesaba düzeltme hareketi atar.</span>
+    </div>
+    <form method="post" class="inline-form" onsubmit="return confirm('Tüm aktif kasa/banka hesaplarının bakiyesi 0,00 TL yapılacak. Bu işlem düzeltme hareketi oluşturur. Onaylıyor musunuz?');">
+      <?php echo csrf_field(); ?>
+      <input type="hidden" name="action" value="zero_accounts">
+      <input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required>
+      <input type="text" name="description" value="Maaş ve çek ödemeleri sonrası kasa/banka sıfırlama" style="min-width:300px">
+      <button class="btn btn-danger" type="submit">Tüm hesapları sıfırla</button>
     </form>
   </div>
 </section>
@@ -328,7 +377,7 @@ page_header('Kasa / Banka', 'hesaplar');
           <td><?php echo e($tr['description'] ?: '-'); ?><small><?php echo e($tr['user_name'] ?: ''); ?></small></td>
           <td class="right"><?php echo $tr['direction']==='in' ? '<strong class="text-success">'.e(money($tr['amount'])).'</strong>' : '-'; ?></td>
           <td class="right"><?php echo $tr['direction']==='out' ? '<strong class="text-danger">'.e(money($tr['amount'])).'</strong>' : '-'; ?></td>
-          <td class="row-actions"><?php if(can_write() && in_array($tr['source_type'], ['manual','transfer'], true)): ?><form method="post" onsubmit="return confirm('Bu manuel/virman hareketi silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete_transaction"><input type="hidden" name="id" value="<?php echo e($tr['id']); ?>"><button>Sil</button></form><?php endif; ?></td>
+          <td class="row-actions"><?php if(can_write() && in_array($tr['source_type'], ['manual','transfer','zero'], true)): ?><form method="post" onsubmit="return confirm('Bu manuel/virman/sıfırlama hareketi silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete_transaction"><input type="hidden" name="id" value="<?php echo e($tr['id']); ?>"><button>Sil</button></form><?php endif; ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
