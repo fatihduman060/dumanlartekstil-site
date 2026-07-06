@@ -97,6 +97,7 @@ function page_header(string $title, string $active = ''): void
     if (is_admin()) {
         $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
         $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
+        $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
     }
     $nav = array_merge($nav, [
         ['cekler', 'cekler.php', 'Çekler', '◈'],
