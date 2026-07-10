@@ -159,6 +159,73 @@ function teklif_normalize_barcode(string $barcode = '', string $productName = ''
     return $raw;
 }
 
+function teklif_active_movement_id(int $movementId): int
+{
+    if ($movementId <= 0) return 0;
+    try {
+        $stmt = db()->prepare('SELECT id FROM movements WHERE id=? AND COALESCE(is_cancelled,0)=0 LIMIT 1');
+        $stmt->execute([$movementId]);
+        return (int)($stmt->fetchColumn() ?: 0);
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+function teklif_category_id(?string $name): ?int
+{
+    $name = trim((string)$name);
+    if ($name === '') return null;
+    try {
+        $stmt = db()->prepare('SELECT id FROM categories WHERE name=? LIMIT 1');
+        $stmt->execute([$name]);
+        $id = (int)($stmt->fetchColumn() ?: 0);
+        return $id > 0 ? $id : null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function teklif_validate_posted_payload(array $payload): void
+{
+    if ((int)($payload['cari_id'] ?? 0) <= 0) {
+        throw new RuntimeException('Bu sipariş fişi cariye işlenmiş. Düzeltme yaparken cari seçimi boş bırakılamaz.');
+    }
+    if ((float)($payload['grand_total'] ?? 0) <= 0) {
+        throw new RuntimeException('Bu sipariş fişi cariye işlenmiş. Cariye aktarılmış tutar sıfır veya eksi olamaz.');
+    }
+    if ((string)($payload['currency'] ?? 'TL') !== 'TL') {
+        throw new RuntimeException('Bu sipariş fişi cariye TL olarak işlenmiş. Para birimi değiştirilirse cari hareket otomatik güncellenemez.');
+    }
+}
+
+function teklif_sync_posted_cari_movement(int $movementId, array $payload): void
+{
+    $movementId = teklif_active_movement_id($movementId);
+    if ($movementId <= 0) return;
+    teklif_validate_posted_payload($payload);
+
+    $cariId = (int)$payload['cari_id'];
+    $amount = (float)$payload['grand_total'];
+    $date = trim((string)($payload['offer_date'] ?? '')) ?: date('Y-m-d');
+    $no = trim((string)($payload['offer_no'] ?? ''));
+    $title = trim((string)($payload['document_title'] ?? 'SİPARİŞ FİŞİ')) ?: 'SİPARİŞ FİŞİ';
+    $description = $title . ' no: ' . $no . ' / Ürün satışı';
+    $categoryId = teklif_category_id('Satış');
+    $now = now();
+
+    if ($categoryId) {
+        db()->prepare('UPDATE movements SET cari_id=?, category_id=?, account_id=NULL, movement_type=?, amount=?, movement_date=?, due_date=NULL, payment_method=?, description=?, document_type=?, updated_at=? WHERE id=?')
+            ->execute([$cariId, $categoryId, 'alacak', $amount, $date, 'Sipariş fişi', $description, 'siparis_fisi', $now, $movementId]);
+    } else {
+        db()->prepare('UPDATE movements SET cari_id=?, account_id=NULL, movement_type=?, amount=?, movement_date=?, due_date=NULL, payment_method=?, description=?, document_type=?, updated_at=? WHERE id=?')
+            ->execute([$cariId, 'alacak', $amount, $date, 'Sipariş fişi', $description, 'siparis_fisi', $now, $movementId]);
+    }
+
+    if (function_exists('sync_movement_account_transaction')) {
+        sync_movement_account_transaction($movementId);
+    }
+}
+
 function teklif_next_offer_no(): string
 {
     teklif_db_ensure();
@@ -284,9 +351,13 @@ function teklif_save_from_post(int $id = 0): int
     if (!$items) throw new RuntimeException('En az bir ürün satırı girmelisin.');
 
     $pdo = db();
+    $syncMovementId = 0;
     if ($id > 0) {
         $old = teklif_load($id);
         if (!$old) throw new RuntimeException('Düzenlenecek teklif bulunamadı.');
+        $syncMovementId = teklif_active_movement_id((int)($old['cari_movement_id'] ?? 0));
+        if ($syncMovementId > 0) teklif_validate_posted_payload($payload);
+
         $stmt = $pdo->prepare('UPDATE offers SET offer_no=:offer_no, offer_date=:offer_date, document_title=:document_title, cari_id=:cari_id, customer_name=:customer_name, customer_city=:customer_city, customer_address=:customer_address, customer_tax_office=:customer_tax_office, customer_tax_no=:customer_tax_no, customer_phone=:customer_phone, currency=:currency, quantity_label=:quantity_label, note=:note, footer_text=:footer_text, term_text=:term_text, discount_enabled=:discount_enabled, discount_rate=:discount_rate, discount_amount=:discount_amount, vat_enabled=:vat_enabled, vat_rate=:vat_rate, subtotal=:subtotal, vat_amount=:vat_amount, grand_total=:grand_total, updated_at=:updated_at WHERE id=:id');
         $payload['updated_at'] = now();
         $payload['id'] = $id;
@@ -310,6 +381,11 @@ function teklif_save_from_post(int $id = 0): int
     foreach ($items as $idx => $item) {
         $stmtItem->execute([$offerId, $idx + 1, $item['product_barcode'], $item['product_name'], $item['product_type'], $item['quantity'], $item['unit_price'], $item['line_total']]);
         teklif_save_product_suggestion($item['product_name'], $item['product_type'], (float)$item['unit_price'], $item['product_barcode']);
+    }
+    if ($syncMovementId > 0) {
+        teklif_sync_posted_cari_movement($syncMovementId, $payload);
+        audit_action('teklif', $offerId, 'cari_hareketi_guncellendi', null, ['movement_id'=>$syncMovementId,'amount'=>$payload['grand_total']], $payload['offer_no']);
+        log_action('Teklife bağlı cari hareket güncellendi', $payload['offer_no'] . ' - ' . teklif_money((float)$payload['grand_total']) . ' TL');
     }
     return $offerId;
 }
