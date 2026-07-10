@@ -118,6 +118,47 @@ function teklif_money(float $value): string
     return number_format($value, 2, ',', '.');
 }
 
+function teklif_ean13_check_digit(string $first12): string
+{
+    $digits = preg_replace('/\D+/', '', $first12);
+    if (strlen($digits) !== 12) return '';
+    $sum = 0;
+    for ($i = 0; $i < 12; $i++) {
+        $sum += (int)$digits[$i] * ($i % 2 === 0 ? 1 : 3);
+    }
+    return (string)((10 - ($sum % 10)) % 10);
+}
+
+function teklif_barcode_from_article(string $article): string
+{
+    $digits = preg_replace('/\D+/', '', $article);
+    if (strlen($digits) !== 4) return '';
+    $first12 = '86992348' . $digits;
+    return $first12 . teklif_ean13_check_digit($first12);
+}
+
+function teklif_article_from_text(string $text): string
+{
+    $text = trim($text);
+    if ($text === '') return '';
+    if (preg_match('/86992348\s*([0-9]{2})[\s\-\/.]*([0-9]{2})\s*[0-9]/u', $text, $m)) return $m[1] . $m[2];
+    if (preg_match('/(?:^|[^0-9])([0-9]{2})\s*[\-\/.]\s*([0-9]{2})(?:[^0-9]|$)/u', $text, $m)) return $m[1] . $m[2];
+    if (preg_match('/^\s*([0-9]{4})(?:[^0-9]|$)/u', $text, $m)) return $m[1];
+    return '';
+}
+
+function teklif_normalize_barcode(string $barcode = '', string $productName = '', string $productType = ''): string
+{
+    $raw = trim($barcode);
+    $digits = preg_replace('/\D+/', '', $raw);
+    if (strlen($digits) === 13) return $digits;
+    if (strlen($digits) === 12 && str_starts_with($digits, '86992348')) return $digits . teklif_ean13_check_digit($digits);
+    if (strlen($digits) === 4) return teklif_barcode_from_article($digits);
+    $article = teklif_article_from_text($raw) ?: teklif_article_from_text($productName) ?: teklif_article_from_text($productType);
+    if ($article !== '') return teklif_barcode_from_article($article);
+    return $raw;
+}
+
 function teklif_next_offer_no(): string
 {
     teklif_db_ensure();
@@ -170,9 +211,9 @@ function teklif_parse_items_from_post(): array
     $max = max(count($barcodes), count($names), count($types), count($qtys), count($prices));
     $items = [];
     for ($i = 0; $i < $max; $i++) {
-        $barcode = trim((string)($barcodes[$i] ?? ''));
         $name = trim((string)($names[$i] ?? ''));
         $type = trim((string)($types[$i] ?? ''));
+        $barcode = teklif_normalize_barcode((string)($barcodes[$i] ?? ''), $name, $type);
         $qty = teklif_decimal($qtys[$i] ?? '0');
         $price = teklif_decimal($prices[$i] ?? '0');
         if ($barcode === '' && $name === '' && $type === '' && $qty <= 0 && $price <= 0) continue;
@@ -185,7 +226,7 @@ function teklif_parse_items_from_post(): array
 function teklif_save_product_suggestion(string $name, string $type = '', float $price = 0, string $barcode = ''): void
 {
     $name = trim($name);
-    $barcode = trim($barcode);
+    $barcode = teklif_normalize_barcode($barcode, $name, $type);
     if ($name === '') return;
     try {
         db()->prepare("INSERT INTO offer_products (barcode, name, product_type, default_unit_price, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)
