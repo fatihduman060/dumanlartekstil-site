@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/teklif-db.php';
 require_login();
 require_write();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') redirect('dashboard.php');
@@ -147,7 +148,13 @@ function ci_post_offer(int $id): int
     $s->execute([$id]);
     $o = $s->fetch();
     if (!$o) throw new RuntimeException('Sipariş fişi bulunamadı.');
-    if (ci_active_movement((int)($o['cari_movement_id'] ?? 0))) throw new RuntimeException('Bu sipariş fişi zaten cariye işlenmiş.');
+    $existingMovementId = (int)($o['cari_movement_id'] ?? 0);
+    if (ci_active_movement($existingMovementId)) {
+        teklif_sync_posted_cari_movement($existingMovementId, $o);
+        log_action('Sipariş fişi cari hareketi güncellendi', trim((string)($o['offer_no'] ?? '')) . ' - ' . money((float)($o['grand_total'] ?? 0)));
+        audit_action('teklif', $id, 'cari_hareketi_guncellendi', $o, ['movement_id'=>$existingMovementId,'amount'=>(float)($o['grand_total'] ?? 0)], trim((string)($o['offer_no'] ?? '')));
+        return $existingMovementId;
+    }
     $cariId = (int)($o['cari_id'] ?? 0);
     if ($cariId <= 0) throw new RuntimeException('Cariye işlemek için sipariş fişinde cari seçilmiş olmalı.');
     $amount = (float)($o['grand_total'] ?? 0);
@@ -212,7 +219,7 @@ $back = safe_back_url($source === 'tahsilat' ? 'tahsilat-makbuzu.php' : 'teklif-
 try {
     if ($source === 'offer') {
         $mid = ci_post_offer($id);
-        flash('success', 'Sipariş fişi cariye alacak olarak işlendi. Cari hareket no: #' . $mid);
+        flash('success', 'Sipariş fişi cariye alacak olarak işlendi/güncellendi. Cari hareket no: #' . $mid);
     } elseif ($source === 'tahsilat') {
         $mid = ci_post_receipt($id);
         flash('success', 'Tahsilat makbuzu cariye işlendi. Çek/senet ise Çekler bölümüne de aktarıldı. Cari hareket no: #' . $mid);
