@@ -1,5 +1,5 @@
 (function(){
-  function esc(s){return String(s == null ? '' : s).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c];});}
+  function esc(s){return String(s == null ? '' : s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function moneyText(v,c){return esc(v || '0,00') + ' ' + esc(c || 'TL');}
   function findMovementId(row){
     var a = row.querySelector('a[href*="hareketler.php?edit="]');
@@ -33,12 +33,10 @@
     var qtyLabel = o.quantity_label || 'Miktar';
     p.querySelector('h3').textContent = (o.document_title || 'Satış fişi') + ' no: ' + (o.offer_no || '');
     var rows = (data.items || []).map(function(it){
-      var name = it.product_name || it.product_type || '-';
-      var sub = it.product_name && it.product_type ? '<small>' + esc(it.product_type) + '</small>' : '';
-      return '<tr><td><strong>'+esc(name)+'</strong>'+sub+'</td><td class="right">'+esc(it.quantity_text || '')+'</td><td class="right">'+moneyText(it.unit_price_text,currency)+'</td><td class="right"><strong>'+moneyText(it.line_total_text,currency)+'</strong></td></tr>';
+      return '<tr><td><strong>'+esc(it.product_barcode || '-')+'</strong></td><td><strong>'+esc(it.product_name || '-')+'</strong></td><td>'+esc(it.product_type || '-')+'</td><td class="right">'+esc(it.quantity_text || '')+'</td><td class="right">'+moneyText(it.unit_price_text,currency)+'</td><td class="right"><strong>'+moneyText(it.line_total_text,currency)+'</strong></td></tr>';
     }).join('');
-    if (!rows) rows = '<tr><td colspan="4" class="empty">Ürün satırı bulunamadı.</td></tr>';
-    b.innerHTML = '<div class="cari-kaynak-head"><div><strong>'+esc(o.customer_name || '')+'</strong><small>'+esc(o.offer_date || '')+'</small></div><div class="row-actions"><a href="'+esc(o.pdf_url || '#')+'" target="_blank">PDF Aç</a><a href="'+esc(o.edit_url || '#')+'">Düzenle</a></div></div><div class="table-wrap"><table><thead><tr><th>Ürün</th><th class="right">'+esc(qtyLabel)+'</th><th class="right">Birim fiyat</th><th class="right">Tutar</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr><td colspan="3" class="right">Ara toplam</td><td class="right"><strong>'+moneyText(o.subtotal_text,currency)+'</strong></td></tr>'+(o.vat_enabled ? '<tr><td colspan="3" class="right">KDV %'+esc(o.vat_rate)+'</td><td class="right"><strong>'+moneyText(o.vat_amount_text,currency)+'</strong></td></tr>' : '')+'<tr><td colspan="3" class="right">Genel toplam</td><td class="right"><strong>'+moneyText(o.grand_total_text,currency)+'</strong></td></tr></tfoot></table></div>'+(o.note ? '<p class="muted"><strong>Not:</strong> '+esc(o.note)+'</p>' : '');
+    if (!rows) rows = '<tr><td colspan="6" class="empty">Ürün satırı bulunamadı.</td></tr>';
+    b.innerHTML = '<div class="cari-kaynak-head"><div><strong>'+esc(o.customer_name || '')+'</strong><small>'+esc(o.offer_date || '')+'</small></div><div class="row-actions"><a href="'+esc(o.pdf_url || '#')+'" target="_blank">PDF Aç</a><a href="'+esc(o.edit_url || '#')+'">Düzenle</a></div></div><div class="table-wrap"><table><thead><tr><th>Barkod</th><th>Ürün adı</th><th>Ürün cinsi / açıklama</th><th class="right">'+esc(qtyLabel)+'</th><th class="right">Birim fiyat</th><th class="right">Tutar</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr><td colspan="5" class="right">Ara toplam</td><td class="right"><strong>'+moneyText(o.subtotal_text,currency)+'</strong></td></tr>'+(o.vat_enabled ? '<tr><td colspan="5" class="right">KDV %'+esc(o.vat_rate)+'</td><td class="right"><strong>'+moneyText(o.vat_amount_text,currency)+'</strong></td></tr>' : '')+'<tr><td colspan="5" class="right">Genel toplam</td><td class="right"><strong>'+moneyText(o.grand_total_text,currency)+'</strong></td></tr></tfoot></table></div>'+(o.note ? '<p class="muted"><strong>Not:</strong> '+esc(o.note)+'</p>' : '');
     p.style.display = 'block';
     p.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
