@@ -21,6 +21,9 @@ function teklif_db_ensure(): void
         note TEXT,
         footer_text TEXT,
         term_text TEXT,
+        discount_enabled INTEGER NOT NULL DEFAULT 0,
+        discount_rate REAL NOT NULL DEFAULT 0,
+        discount_amount REAL NOT NULL DEFAULT 0,
         vat_enabled INTEGER NOT NULL DEFAULT 0,
         vat_rate REAL NOT NULL DEFAULT 10,
         subtotal REAL NOT NULL DEFAULT 0,
@@ -42,6 +45,9 @@ function teklif_db_ensure(): void
             'customer_tax_office' => 'TEXT',
             'customer_tax_no' => 'TEXT',
             'customer_phone' => 'TEXT',
+            'discount_enabled' => 'INTEGER NOT NULL DEFAULT 0',
+            'discount_rate' => 'REAL NOT NULL DEFAULT 0',
+            'discount_amount' => 'REAL NOT NULL DEFAULT 0',
             'posted_to_cari' => 'INTEGER NOT NULL DEFAULT 0',
             'cari_movement_id' => 'INTEGER',
             'posted_at' => 'TEXT',
@@ -194,11 +200,19 @@ function teklif_save_from_post(int $id = 0): int
     $items = teklif_parse_items_from_post();
     $subtotal = 0.0;
     foreach ($items as $item) $subtotal += (float)$item['line_total'];
+
+    $discountEnabled = isset($_POST['discount_enabled']) && (string)$_POST['discount_enabled'] === '1' ? 1 : 0;
+    $discountRate = teklif_decimal($_POST['discount_rate'] ?? '0');
+    if ($discountRate < 0) $discountRate = 0;
+    if ($discountRate > 100) $discountRate = 100;
+    $discountAmount = $discountEnabled ? ($subtotal * $discountRate / 100) : 0.0;
+    $discountedSubtotal = max(0.0, $subtotal - $discountAmount);
+
     $vatEnabled = isset($_POST['vat_enabled']) && (string)$_POST['vat_enabled'] === '1' ? 1 : 0;
     $vatRate = teklif_decimal($_POST['vat_rate'] ?? '10');
     if ($vatRate < 0) $vatRate = 0;
-    $vatAmount = $vatEnabled ? ($subtotal * $vatRate / 100) : 0.0;
-    $grandTotal = $subtotal + $vatAmount;
+    $vatAmount = $vatEnabled ? ($discountedSubtotal * $vatRate / 100) : 0.0;
+    $grandTotal = $discountedSubtotal + $vatAmount;
 
     $payload = [
         'offer_no' => trim((string)($_POST['offer_no'] ?? '')) ?: teklif_next_offer_no(),
@@ -216,6 +230,9 @@ function teklif_save_from_post(int $id = 0): int
         'note' => trim((string)($_POST['note'] ?? '')),
         'footer_text' => trim((string)($_POST['footer_text'] ?? 'MALIMIZDAN HAYIR GÖRÜN.')),
         'term_text' => trim((string)($_POST['term_text'] ?? '')),
+        'discount_enabled' => $discountEnabled,
+        'discount_rate' => $discountRate,
+        'discount_amount' => $discountAmount,
         'vat_enabled' => $vatEnabled,
         'vat_rate' => $vatRate,
         'subtotal' => $subtotal,
@@ -229,7 +246,7 @@ function teklif_save_from_post(int $id = 0): int
     if ($id > 0) {
         $old = teklif_load($id);
         if (!$old) throw new RuntimeException('Düzenlenecek teklif bulunamadı.');
-        $stmt = $pdo->prepare('UPDATE offers SET offer_no=:offer_no, offer_date=:offer_date, document_title=:document_title, cari_id=:cari_id, customer_name=:customer_name, customer_city=:customer_city, customer_address=:customer_address, customer_tax_office=:customer_tax_office, customer_tax_no=:customer_tax_no, customer_phone=:customer_phone, currency=:currency, quantity_label=:quantity_label, note=:note, footer_text=:footer_text, term_text=:term_text, vat_enabled=:vat_enabled, vat_rate=:vat_rate, subtotal=:subtotal, vat_amount=:vat_amount, grand_total=:grand_total, updated_at=:updated_at WHERE id=:id');
+        $stmt = $pdo->prepare('UPDATE offers SET offer_no=:offer_no, offer_date=:offer_date, document_title=:document_title, cari_id=:cari_id, customer_name=:customer_name, customer_city=:customer_city, customer_address=:customer_address, customer_tax_office=:customer_tax_office, customer_tax_no=:customer_tax_no, customer_phone=:customer_phone, currency=:currency, quantity_label=:quantity_label, note=:note, footer_text=:footer_text, term_text=:term_text, discount_enabled=:discount_enabled, discount_rate=:discount_rate, discount_amount=:discount_amount, vat_enabled=:vat_enabled, vat_rate=:vat_rate, subtotal=:subtotal, vat_amount=:vat_amount, grand_total=:grand_total, updated_at=:updated_at WHERE id=:id');
         $payload['updated_at'] = now();
         $payload['id'] = $id;
         $stmt->execute($payload);
@@ -238,7 +255,7 @@ function teklif_save_from_post(int $id = 0): int
         log_action('Teklif güncellendi', $payload['offer_no'] . ' ' . $payload['customer_name']);
         audit_action('teklif', $offerId, 'guncellendi', $old, $payload, $payload['offer_no']);
     } else {
-        $stmt = $pdo->prepare('INSERT INTO offers (offer_no, offer_date, document_title, cari_id, customer_name, customer_city, customer_address, customer_tax_office, customer_tax_no, customer_phone, currency, quantity_label, note, footer_text, term_text, vat_enabled, vat_rate, subtotal, vat_amount, grand_total, created_by, created_at, updated_at) VALUES (:offer_no, :offer_date, :document_title, :cari_id, :customer_name, :customer_city, :customer_address, :customer_tax_office, :customer_tax_no, :customer_phone, :currency, :quantity_label, :note, :footer_text, :term_text, :vat_enabled, :vat_rate, :subtotal, :vat_amount, :grand_total, :created_by, :created_at, :updated_at)');
+        $stmt = $pdo->prepare('INSERT INTO offers (offer_no, offer_date, document_title, cari_id, customer_name, customer_city, customer_address, customer_tax_office, customer_tax_no, customer_phone, currency, quantity_label, note, footer_text, term_text, discount_enabled, discount_rate, discount_amount, vat_enabled, vat_rate, subtotal, vat_amount, grand_total, created_by, created_at, updated_at) VALUES (:offer_no, :offer_date, :document_title, :cari_id, :customer_name, :customer_city, :customer_address, :customer_tax_office, :customer_tax_no, :customer_phone, :currency, :quantity_label, :note, :footer_text, :term_text, :discount_enabled, :discount_rate, :discount_amount, :vat_enabled, :vat_rate, :subtotal, :vat_amount, :grand_total, :created_by, :created_at, :updated_at)');
         $payload['created_by'] = current_user()['id'] ?? null;
         $payload['created_at'] = now();
         $payload['updated_at'] = now();
