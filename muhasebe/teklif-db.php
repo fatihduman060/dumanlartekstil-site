@@ -42,6 +42,10 @@ function teklif_db_ensure(): void
             'customer_tax_office' => 'TEXT',
             'customer_tax_no' => 'TEXT',
             'customer_phone' => 'TEXT',
+            'posted_to_cari' => 'INTEGER NOT NULL DEFAULT 0',
+            'cari_movement_id' => 'INTEGER',
+            'posted_at' => 'TEXT',
+            'posted_by' => 'INTEGER',
         ];
         foreach ($add as $name => $type) {
             if (empty($existing[$name])) $pdo->exec("ALTER TABLE offers ADD COLUMN {$name} {$type}");
@@ -52,6 +56,7 @@ function teklif_db_ensure(): void
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         offer_id INTEGER NOT NULL,
         sort_order INTEGER NOT NULL DEFAULT 0,
+        product_barcode TEXT,
         product_name TEXT,
         product_type TEXT,
         quantity REAL NOT NULL DEFAULT 0,
@@ -59,8 +64,11 @@ function teklif_db_ensure(): void
         line_total REAL NOT NULL DEFAULT 0,
         FOREIGN KEY(offer_id) REFERENCES offers(id) ON DELETE CASCADE
     )");
+    try { ensure_column($pdo, 'offer_items', 'product_barcode', 'TEXT'); } catch (Throwable $e) {}
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS offer_products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barcode TEXT,
         name TEXT NOT NULL UNIQUE,
         product_type TEXT,
         default_unit_price REAL NOT NULL DEFAULT 0,
@@ -68,8 +76,10 @@ function teklif_db_ensure(): void
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )");
+    try { ensure_column($pdo, 'offer_products', 'barcode', 'TEXT'); } catch (Throwable $e) {}
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offers_date ON offers(offer_date, id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offer_items_offer ON offer_items(offer_id, sort_order)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offer_products_barcode ON offer_products(barcode)");
 }
 
 function teklif_products_for_select(): array
@@ -146,32 +156,35 @@ function teklif_load(int $id): ?array
 
 function teklif_parse_items_from_post(): array
 {
+    $barcodes = is_array($_POST['product_barcode'] ?? null) ? $_POST['product_barcode'] : [];
     $names = is_array($_POST['product_name'] ?? null) ? $_POST['product_name'] : [];
     $types = is_array($_POST['product_type'] ?? null) ? $_POST['product_type'] : [];
     $qtys = is_array($_POST['quantity'] ?? null) ? $_POST['quantity'] : [];
     $prices = is_array($_POST['unit_price'] ?? null) ? $_POST['unit_price'] : [];
-    $max = max(count($names), count($types), count($qtys), count($prices));
+    $max = max(count($barcodes), count($names), count($types), count($qtys), count($prices));
     $items = [];
     for ($i = 0; $i < $max; $i++) {
+        $barcode = trim((string)($barcodes[$i] ?? ''));
         $name = trim((string)($names[$i] ?? ''));
         $type = trim((string)($types[$i] ?? ''));
         $qty = teklif_decimal($qtys[$i] ?? '0');
         $price = teklif_decimal($prices[$i] ?? '0');
-        if ($name === '' && $type === '' && $qty <= 0 && $price <= 0) continue;
+        if ($barcode === '' && $name === '' && $type === '' && $qty <= 0 && $price <= 0) continue;
         $line = $qty * $price;
-        $items[] = ['product_name'=>$name, 'product_type'=>$type, 'quantity'=>$qty, 'unit_price'=>$price, 'line_total'=>$line];
+        $items[] = ['product_barcode'=>$barcode, 'product_name'=>$name, 'product_type'=>$type, 'quantity'=>$qty, 'unit_price'=>$price, 'line_total'=>$line];
     }
     return $items;
 }
 
-function teklif_save_product_suggestion(string $name, string $type = '', float $price = 0): void
+function teklif_save_product_suggestion(string $name, string $type = '', float $price = 0, string $barcode = ''): void
 {
     $name = trim($name);
+    $barcode = trim($barcode);
     if ($name === '') return;
     try {
-        db()->prepare("INSERT INTO offer_products (name, product_type, default_unit_price, is_active, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)
-            ON CONFLICT(name) DO UPDATE SET product_type=CASE WHEN excluded.product_type!='' THEN excluded.product_type ELSE offer_products.product_type END, default_unit_price=CASE WHEN excluded.default_unit_price>0 THEN excluded.default_unit_price ELSE offer_products.default_unit_price END, updated_at=excluded.updated_at")
-            ->execute([$name, $type, $price, now(), now()]);
+        db()->prepare("INSERT INTO offer_products (barcode, name, product_type, default_unit_price, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)
+            ON CONFLICT(name) DO UPDATE SET barcode=CASE WHEN excluded.barcode!='' THEN excluded.barcode ELSE offer_products.barcode END, product_type=CASE WHEN excluded.product_type!='' THEN excluded.product_type ELSE offer_products.product_type END, default_unit_price=CASE WHEN excluded.default_unit_price>0 THEN excluded.default_unit_price ELSE offer_products.default_unit_price END, updated_at=excluded.updated_at")
+            ->execute([$barcode, $name, $type, $price, now(), now()]);
     } catch (Throwable $e) {}
 }
 
@@ -235,10 +248,10 @@ function teklif_save_from_post(int $id = 0): int
         audit_action('teklif', $offerId, 'eklendi', null, $payload, $payload['offer_no']);
     }
 
-    $stmtItem = $pdo->prepare('INSERT INTO offer_items (offer_id, sort_order, product_name, product_type, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $stmtItem = $pdo->prepare('INSERT INTO offer_items (offer_id, sort_order, product_barcode, product_name, product_type, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     foreach ($items as $idx => $item) {
-        $stmtItem->execute([$offerId, $idx + 1, $item['product_name'], $item['product_type'], $item['quantity'], $item['unit_price'], $item['line_total']]);
-        teklif_save_product_suggestion($item['product_name'], $item['product_type'], (float)$item['unit_price']);
+        $stmtItem->execute([$offerId, $idx + 1, $item['product_barcode'], $item['product_name'], $item['product_type'], $item['quantity'], $item['unit_price'], $item['line_total']]);
+        teklif_save_product_suggestion($item['product_name'], $item['product_type'], (float)$item['unit_price'], $item['product_barcode']);
     }
     return $offerId;
 }
