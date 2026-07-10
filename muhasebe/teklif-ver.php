@@ -94,7 +94,7 @@ if ($pageTitleValue === '') $pageTitleValue = 'SİPARİŞ FİŞİ';
 page_header('Teklif Ver', 'teklif_ver');
 ?>
 <style>
-.offer-builder{display:grid;gap:16px;max-width:1500px;margin:0 auto}.offer-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.offer-hero h2{margin:5px 0 6px;color:#fff;font-size:clamp(24px,3vw,38px);line-height:1}.offer-hero p{margin:0;color:#e9f5ed;max-width:760px}.offer-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.offer-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.offer-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.offer-card h3{margin:0;color:#102818}.offer-body{padding:18px}.offer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.offer-grid label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.offer-grid input,.offer-grid select,.offer-grid textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.offer-grid small{color:#7b6c5a;font-weight:700}.offer-grid .wide{grid-column:span 2}.offer-grid .full{grid-column:1/-1}.offer-table-wrap{overflow:auto;border:1px solid #e5dccf;border-radius:18px}.offer-table{width:100%;min-width:1180px;border-collapse:collapse}.offer-table th{background:#16482e;color:#fff;text-align:left;padding:10px 9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.offer-table td{border-bottom:1px solid #efe7dc;padding:8px}.offer-table input{width:100%;min-height:38px;border:1px solid #e5dccf;border-radius:11px;padding:7px 9px}.offer-table .right{text-align:right}.offer-totals{display:grid;justify-content:end;gap:5px;margin-top:12px;color:#102818}.offer-total-line{display:grid;grid-template-columns:160px 150px;gap:10px;text-align:right;align-items:center}.offer-total-line strong{font-size:22px}.offer-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.offer-actions button,.offer-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:999px;padding:9px 16px;font-weight:900;text-decoration:none;cursor:pointer}.offer-actions .primary{background:#16482e;color:#fff}.offer-actions .secondary{background:#efe6d9;color:#102818}.offer-actions .danger{background:#fff1ed;color:#b64242}.mini-help{margin-top:12px;padding:12px;border-radius:14px;background:#fbf6ed;color:#776b5c;font-weight:700}.row-remove{border:0!important;background:#fff1ed!important;color:#b64242!important;font-weight:900!important;cursor:pointer}.cari-selected-note{display:none;margin-top:4px;padding:8px 10px;border-radius:12px;background:#eef8f1;color:#16482e;font-size:12px;font-weight:850}.cari-selected-note.active{display:block}.vat-box{display:flex;align-items:center;gap:9px;min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff}.vat-box input{width:auto!important;min-height:auto!important}.saved-offers{width:100%;border-collapse:collapse;min-width:900px}.saved-offers th{background:#16482e;color:#fff;text-align:left;padding:10px;font-size:11px}.saved-offers td{border-bottom:1px solid #efe7dc;padding:10px;vertical-align:top}.saved-offers small{display:block;color:#776b5c;margin-top:3px}.saved-actions{display:flex;gap:6px;flex-wrap:wrap}.saved-actions a,.saved-actions button{border:1px solid #e5dccf;background:#fff;border-radius:999px;padding:7px 10px;color:#102818;font-weight:850;text-decoration:none;cursor:pointer}.saved-actions button{color:#b64242}.pill{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900;background:#eef8f1;color:#16482e}.pill.off{background:#f1f3f5;color:#667085}@media(max-width:1000px){.offer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.offer-grid .wide{grid-column:span 2}}@media(max-width:640px){.offer-hero{display:block}.offer-grid{grid-template-columns:1fr}.offer-grid .wide{grid-column:1}.offer-card header{display:block}.offer-actions button,.offer-actions a{width:100%}.offer-total-line{grid-template-columns:1fr 1fr}.saved-offers{min-width:760px}}
+.offer-builder{display:grid;gap:16px;max-width:1500px;margin:0 auto}.offer-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.offer-hero h2{margin:5px 0 6px;color:#fff;font-size:clamp(24px,3vw,38px);line-height:1}.offer-hero p{margin:0;color:#e9f5ed;max-width:760px}.offer-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.offer-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.offer-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.offer-card h3{margin:0;color:#102818}.offer-body{padding:18px}.offer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.offer-grid label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.offer-grid input,.offer-grid select,.offer-grid textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.offer-grid small{color:#7b6c5a;font-weight:700}.offer-grid .wide{grid-column:span 2}.offer-grid .full{grid-column:1/-1}.offer-table-wrap{overflow:auto;border:1px solid #e5dccf;border-radius:18px}.offer-table{width:100%;min-width:1180px;border-collapse:collapse}.offer-table th{background:#16482e;color:#fff;text-align:left;padding:10px 9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.offer-table td{border-bottom:1px solid #efe7dc;padding:8px}.offer-table input{width:100%;min-height:38px;border:1px solid #e5dccf;border-radius:11px;padding:7px 9px}.offer-table .right{text-align:right}.offer-totals{display:grid;justify-content:end;gap:5px;margin-top:12px;color:#102818}.offer-total-line{display:grid;grid-template-columns:160px 150px;gap:10px;text-align:right;align-items:center}.offer-total-line strong{font-size:22px}.offer-total-line.discount strong{color:#b64242}.offer-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.offer-actions button,.offer-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:999px;padding:9px 16px;font-weight:900;text-decoration:none;cursor:pointer}.offer-actions .primary{background:#16482e;color:#fff}.offer-actions .secondary{background:#efe6d9;color:#102818}.offer-actions .danger{background:#fff1ed;color:#b64242}.mini-help{margin-top:12px;padding:12px;border-radius:14px;background:#fbf6ed;color:#776b5c;font-weight:700}.row-remove{border:0!important;background:#fff1ed!important;color:#b64242!important;font-weight:900!important;cursor:pointer}.cari-selected-note{display:none;margin-top:4px;padding:8px 10px;border-radius:12px;background:#eef8f1;color:#16482e;font-size:12px;font-weight:850}.cari-selected-note.active{display:block}.vat-box{display:flex;align-items:center;gap:9px;min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff}.vat-box input{width:auto!important;min-height:auto!important}.saved-offers{width:100%;border-collapse:collapse;min-width:900px}.saved-offers th{background:#16482e;color:#fff;text-align:left;padding:10px;font-size:11px}.saved-offers td{border-bottom:1px solid #efe7dc;padding:10px;vertical-align:top}.saved-offers small{display:block;color:#776b5c;margin-top:3px}.saved-actions{display:flex;gap:6px;flex-wrap:wrap}.saved-actions a,.saved-actions button{border:1px solid #e5dccf;background:#fff;border-radius:999px;padding:7px 10px;color:#102818;font-weight:850;text-decoration:none;cursor:pointer}.saved-actions button{color:#b64242}.pill{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900;background:#eef8f1;color:#16482e}.pill.off{background:#f1f3f5;color:#667085}.pill.discount{background:#fff1ed;color:#b64242}@media(max-width:1000px){.offer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.offer-grid .wide{grid-column:span 2}}@media(max-width:640px){.offer-hero{display:block}.offer-grid{grid-template-columns:1fr}.offer-grid .wide{grid-column:1}.offer-card header{display:block}.offer-actions button,.offer-actions a{width:100%}.offer-total-line{grid-template-columns:1fr 1fr}.saved-offers{min-width:760px}}
 </style>
 
 <div class="offer-builder">
@@ -102,7 +102,7 @@ page_header('Teklif Ver', 'teklif_ver');
     <div>
       <span>DUMANLAR / BİTKE TEKLİF MODÜLÜ</span>
       <h2><?php echo $edit ? 'Teklifi düzenle.' : 'Teklif fişini kaydet, sonra PDF al.'; ?></h2>
-      <p>Cari seçtiğinde firma adı, şehir, adres, vergi ve telefon bilgileri otomatik gelir; ürün satırlarında barkod, ürün adı ve ürün cinsi ayrı ayrı saklanır.</p>
+      <p>Cari seçtiğinde firma adı, şehir, adres, vergi ve telefon bilgileri otomatik gelir; iskonto uygulanırsa KDV iskontodan sonra kalan tutardan hesaplanır.</p>
     </div>
     <div class="offer-actions"><a class="secondary" href="teklif-ver.php">Yeni teklif</a></div>
   </section>
@@ -128,6 +128,8 @@ page_header('Teklif Ver', 'teklif_ver');
           <label><span>Vergi dairesi</span><input id="customerTaxOffice" name="customer_tax_office" value="<?php echo offer_field($edit, 'customer_tax_office'); ?>" placeholder="Vergi dairesi"></label>
           <label><span>Vergi no / T.C.</span><input id="customerTaxNo" name="customer_tax_no" value="<?php echo offer_field($edit, 'customer_tax_no'); ?>" placeholder="Vergi numarası"></label>
           <label class="wide"><span>Miktar başlığı</span><input name="quantity_label" value="<?php echo offer_field($edit, 'quantity_label', 'DZ'); ?>"></label>
+          <label><span>İskonto uygulansın mı?</span><div class="vat-box"><input type="checkbox" id="discountEnabled" name="discount_enabled" value="1" <?php echo ((int)($edit['discount_enabled'] ?? 0)===1)?'checked':''; ?>> <strong>Evet, iskonto uygula</strong></div></label>
+          <label><span>İskonto oranı</span><input id="discountRate" name="discount_rate" value="<?php echo e((string)($edit['discount_rate'] ?? '0')); ?>" inputmode="decimal"><small>Yüzde olarak yaz: 5, 10 gibi</small></label>
           <label><span>KDV uygulansın mı?</span><div class="vat-box"><input type="checkbox" id="vatEnabled" name="vat_enabled" value="1" <?php echo ((int)($edit['vat_enabled'] ?? 0)===1)?'checked':''; ?>> <strong>Evet, KDV ekle</strong></div></label>
           <label><span>KDV oranı</span><input id="vatRate" name="vat_rate" value="<?php echo e((string)($edit['vat_rate'] ?? '10')); ?>" inputmode="decimal"><small>Varsayılan %10</small></label>
           <label class="full"><span>Adres</span><textarea id="customerAddress" name="customer_address" rows="2" placeholder="Müşteri adresi"><?php echo e($edit['customer_address'] ?? ''); ?></textarea></label>
@@ -161,6 +163,7 @@ page_header('Teklif Ver', 'teklif_ver');
         </div>
         <div class="offer-totals">
           <div class="offer-total-line"><span>Ara toplam:</span><strong id="subtotalTotal">0,00</strong></div>
+          <div class="offer-total-line discount"><span>İskonto:</span><strong id="discountTotal">0,00</strong></div>
           <div class="offer-total-line"><span>KDV:</span><strong id="vatTotal">0,00</strong></div>
           <div class="offer-total-line"><span>Genel toplam:</span><strong id="grandTotal">0,00</strong></div>
         </div>
@@ -169,7 +172,7 @@ page_header('Teklif Ver', 'teklif_ver');
           <button class="primary" type="submit"><?php echo $edit ? 'Teklifi Güncelle' : 'Teklifi Kaydet'; ?></button>
           <?php if($edit): ?><a class="secondary" target="_blank" href="teklif-yazdir.php?id=<?php echo e($edit['id']); ?>">PDF / Yazdır</a><?php endif; ?>
         </div>
-        <p class="mini-help">Ürün satırları artık Barkod, Ürün Adı ve Ürün Cinsi/Açıklama olarak ayrı ayrı kaydedilir. PDF ve cari satış detayında da aynı sıra kullanılır.</p>
+        <p class="mini-help">İskonto işaretlenirse ara toplamdan düşülür; KDV kalan tutar üzerinden hesaplanır. PDF ve cariye işlenen tutar da buna göre kaydedilir.</p>
       </form>
       <?php else: ?>
         <p class="muted">Görüntüleme yetkisindesiniz. Teklif oluşturma kapalı.</p>
@@ -182,7 +185,7 @@ page_header('Teklif Ver', 'teklif_ver');
     <div class="offer-body">
       <div class="offer-table-wrap">
         <table class="saved-offers">
-          <thead><tr><th>Tarih / No</th><th>Firma</th><th>Tutar</th><th>KDV</th><th>İşlem</th></tr></thead>
+          <thead><tr><th>Tarih / No</th><th>Firma</th><th>Tutar</th><th>KDV / İskonto</th><th>İşlem</th></tr></thead>
           <tbody>
             <?php if(!$list): ?><tr><td colspan="5" class="empty">Kayıtlı teklif yok.</td></tr><?php endif; ?>
             <?php foreach($list as $offer): ?>
@@ -190,7 +193,7 @@ page_header('Teklif Ver', 'teklif_ver');
               <td><strong><?php echo e(tr_date($offer['offer_date'])); ?></strong><small><?php echo e($offer['offer_no']); ?></small></td>
               <td><strong><?php echo e($offer['customer_name']); ?></strong><small><?php echo e($offer['customer_city'] ?: '-'); ?><?php echo !empty($offer['customer_phone']) ? ' · Tel: ' . e($offer['customer_phone']) : ''; ?></small></td>
               <td><strong><?php echo e(teklif_money((float)$offer['grand_total']) . ' ' . $offer['currency']); ?></strong><small>Ara toplam: <?php echo e(teklif_money((float)$offer['subtotal'])); ?></small></td>
-              <td><?php echo ((int)$offer['vat_enabled']===1) ? '<span class="pill">%'.e((string)$offer['vat_rate']).' KDV</span><small>'.e(teklif_money((float)$offer['vat_amount'])).'</small>' : '<span class="pill off">KDV yok</span>'; ?></td>
+              <td><?php echo ((int)($offer['discount_enabled'] ?? 0)===1) ? '<span class="pill discount">%'.e((string)($offer['discount_rate'] ?? 0)).' iskonto</span><small>-'.e(teklif_money((float)($offer['discount_amount'] ?? 0))).'</small>' : '<span class="pill off">İskonto yok</span>'; ?><?php echo ((int)$offer['vat_enabled']===1) ? '<span class="pill" style="margin-left:4px">%'.e((string)$offer['vat_rate']).' KDV</span><small>'.e(teklif_money((float)$offer['vat_amount'])).'</small>' : '<small>KDV yok</small>'; ?></td>
               <td><div class="saved-actions"><a href="teklif-ver.php?edit=<?php echo e($offer['id']); ?>">Düzenle</a><a target="_blank" href="teklif-yazdir.php?id=<?php echo e($offer['id']); ?>">PDF</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
             </tr>
             <?php endforeach; ?>
@@ -239,9 +242,12 @@ page_header('Teklif Ver', 'teklif_ver');
   if (!table) return;
   const tbody = table.querySelector('tbody');
   const subtotalEl = document.getElementById('subtotalTotal');
+  const discountEl = document.getElementById('discountTotal');
   const vatEl = document.getElementById('vatTotal');
   const grand = document.getElementById('grandTotal');
   const add = document.getElementById('addRow');
+  const discountEnabled = document.getElementById('discountEnabled');
+  const discountRate = document.getElementById('discountRate');
   const vatEnabled = document.getElementById('vatEnabled');
   const vatRate = document.getElementById('vatRate');
   const fmt = new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -256,11 +262,17 @@ page_header('Teklif Ver', 'teklif_ver');
       const out = row.querySelector('.line-total');
       if (out) out.textContent = fmt.format(total);
     });
+    let dRate = discountEnabled?.checked ? num(discountRate?.value || '0') : 0;
+    if (dRate < 0) dRate = 0;
+    if (dRate > 100) dRate = 100;
+    const discount = sum * dRate / 100;
+    const vatBase = Math.max(0, sum - discount);
     const rate = vatEnabled?.checked ? num(vatRate?.value || '10') : 0;
-    const vat = sum * rate / 100;
+    const vat = vatBase * rate / 100;
     if (subtotalEl) subtotalEl.textContent = fmt.format(sum);
+    if (discountEl) discountEl.textContent = '-' + fmt.format(discount);
     if (vatEl) vatEl.textContent = fmt.format(vat);
-    if (grand) grand.textContent = fmt.format(sum + vat);
+    if (grand) grand.textContent = fmt.format(vatBase + vat);
   }
   function applyProduct(row){
     const nameInput = row.querySelector('.product-name');
@@ -277,6 +289,8 @@ page_header('Teklif Ver', 'teklif_ver');
   }
   tbody.addEventListener('input', e => { if (e.target.classList.contains('calc')) recalc(); });
   tbody.addEventListener('change', e => { if (e.target.classList.contains('product-name')) applyProduct(e.target.closest('tr')); });
+  discountEnabled?.addEventListener('change', recalc);
+  discountRate?.addEventListener('input', recalc);
   vatEnabled?.addEventListener('change', recalc);
   vatRate?.addEventListener('input', recalc);
   tbody.addEventListener('click', e => {
