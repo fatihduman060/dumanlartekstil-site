@@ -16,6 +16,9 @@ try {
         ensure_column(db(), 'offers', 'cari_movement_id', 'INTEGER');
         ensure_column(db(), 'offers', 'posted_at', 'TEXT');
         ensure_column(db(), 'offers', 'posted_by', 'INTEGER');
+        ensure_column(db(), 'offers', 'discount_enabled', 'INTEGER NOT NULL DEFAULT 0');
+        ensure_column(db(), 'offers', 'discount_rate', 'REAL NOT NULL DEFAULT 0');
+        ensure_column(db(), 'offers', 'discount_amount', 'REAL NOT NULL DEFAULT 0');
         ensure_column(db(), 'offer_items', 'product_barcode', 'TEXT');
     } catch (Throwable $e) {}
 
@@ -82,6 +85,9 @@ try {
             'currency' => (string)($offer['currency'] ?? 'TL'),
             'quantity_label' => (string)($offer['quantity_label'] ?? 'DZ'),
             'subtotal_text' => chk_money($offer['subtotal'] ?? 0),
+            'discount_enabled' => (int)($offer['discount_enabled'] ?? 0),
+            'discount_rate' => (float)($offer['discount_rate'] ?? 0),
+            'discount_amount_text' => chk_money($offer['discount_amount'] ?? 0),
             'vat_enabled' => (int)($offer['vat_enabled'] ?? 0),
             'vat_rate' => (float)($offer['vat_rate'] ?? 0),
             'vat_amount_text' => chk_money($offer['vat_amount'] ?? 0),
