@@ -33,25 +33,34 @@
       var out = row.querySelector('.line-total');
       if (out) out.textContent = fmt(total);
     });
+    var discountEnabled = document.getElementById('discountEnabled');
+    var discountRate = document.getElementById('discountRate');
+    var dRate = discountEnabled && discountEnabled.checked ? parseOfferNumber(discountRate && discountRate.value ? discountRate.value : '0') : 0;
+    if (dRate < 0) dRate = 0;
+    if (dRate > 100) dRate = 100;
+    var discount = sum * dRate / 100;
+    var vatBase = Math.max(0, sum - discount);
     var vatEnabled = document.getElementById('vatEnabled');
     var vatRate = document.getElementById('vatRate');
     var rate = vatEnabled && vatEnabled.checked ? parseOfferNumber(vatRate && vatRate.value ? vatRate.value : '10') : 0;
-    var vat = sum * rate / 100;
+    var vat = vatBase * rate / 100;
     var subtotalEl = document.getElementById('subtotalTotal');
+    var discountEl = document.getElementById('discountTotal');
     var vatEl = document.getElementById('vatTotal');
     var grandEl = document.getElementById('grandTotal');
     if (subtotalEl) subtotalEl.textContent = fmt(sum);
+    if (discountEl) discountEl.textContent = '-' + fmt(discount);
     if (vatEl) vatEl.textContent = fmt(vat);
-    if (grandEl) grandEl.textContent = fmt(sum + vat);
+    if (grandEl) grandEl.textContent = fmt(vatBase + vat);
   }
   function init(){
     if (!shouldRun()) return;
     recalc();
     document.addEventListener('input', function(e){
-      if (e.target && (e.target.classList.contains('calc') || e.target.id === 'vatRate')) setTimeout(recalc, 0);
+      if (e.target && (e.target.classList.contains('calc') || e.target.id === 'vatRate' || e.target.id === 'discountRate')) setTimeout(recalc, 0);
     });
     document.addEventListener('change', function(e){
-      if (e.target && (e.target.classList.contains('calc') || e.target.id === 'vatEnabled' || e.target.id === 'vatRate' || e.target.classList.contains('product-name'))) setTimeout(recalc, 50);
+      if (e.target && (e.target.classList.contains('calc') || e.target.id === 'vatEnabled' || e.target.id === 'vatRate' || e.target.id === 'discountEnabled' || e.target.id === 'discountRate' || e.target.classList.contains('product-name'))) setTimeout(recalc, 50);
     });
     document.addEventListener('click', function(e){
       if (e.target && (e.target.id === 'addRow' || e.target.classList.contains('row-remove'))) setTimeout(recalc, 100);
