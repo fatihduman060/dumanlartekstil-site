@@ -16,6 +16,7 @@ try {
         ensure_column(db(), 'offers', 'cari_movement_id', 'INTEGER');
         ensure_column(db(), 'offers', 'posted_at', 'TEXT');
         ensure_column(db(), 'offers', 'posted_by', 'INTEGER');
+        ensure_column(db(), 'offer_items', 'product_barcode', 'TEXT');
     } catch (Throwable $e) {}
 
     $movementId = (int)($_GET['movement_id'] ?? 0);
@@ -49,13 +50,15 @@ try {
     $itemsStmt->execute([(int)$offer['id']]);
     $items = [];
     foreach ($itemsStmt->fetchAll() as $item) {
+        $barcode = trim((string)($item['product_barcode'] ?? ''));
         $name = trim((string)($item['product_name'] ?? ''));
         $ptype = trim((string)($item['product_type'] ?? ''));
         $qty = (float)($item['quantity'] ?? 0);
         $price = (float)($item['unit_price'] ?? 0);
         $line = (float)($item['line_total'] ?? 0);
-        if ($name === '' && $ptype === '' && $qty <= 0 && $price <= 0 && $line <= 0) continue;
+        if ($barcode === '' && $name === '' && $ptype === '' && $qty <= 0 && $price <= 0 && $line <= 0) continue;
         $items[] = [
+            'product_barcode' => $barcode,
             'product_name' => $name,
             'product_type' => $ptype,
             'quantity' => $qty,
