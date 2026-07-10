@@ -177,13 +177,13 @@ function page_footer(): void
   <script src="assets/muhasebe.js?v=516"></script>
   <script src="assets/super-admin-role.js?v=1"></script>
   <script src="assets/muhasebe-polish.js?v=1"></script>
-  <script src="assets/teklif-hesap-fix.js?v=2"></script>
+  <script src="assets/teklif-hesap-fix.js?v=3"></script>
   <script src="assets/cek-vade-uyari.js?v=2"></script>
   <script src="assets/cari-doviz-bakiye.js?v=1"></script>
   <script src="assets/dashboard-cari-pozisyon.js?v=3"></script>
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/dashboard-acik-cekler.js?v=1"></script>
-  <script src="assets/cari-hareket-kaynak.js?v=2"></script>
+  <script src="assets/cari-hareket-kaynak.js?v=3"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
   <script src="assets/maas-excel-aktar.js?v=1"></script>
