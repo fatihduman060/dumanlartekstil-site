@@ -29,16 +29,22 @@
     var p = panel();
     var b = document.getElementById('cariKaynakIcerik');
     var o = data.offer || {};
+    var items = data.items || [];
     var currency = o.currency || 'TL';
     var qtyLabel = o.quantity_label || 'Miktar';
+    var hasType = items.some(function(it){ return String(it.product_type || '').trim() !== ''; });
     p.querySelector('h3').textContent = (o.document_title || 'Satış fişi') + ' no: ' + (o.offer_no || '');
-    var rows = (data.items || []).map(function(it){
-      return '<tr><td><strong>'+esc(it.product_barcode || '-')+'</strong></td><td><strong>'+esc(it.product_name || '-')+'</strong></td><td>'+esc(it.product_type || '-')+'</td><td class="right">'+esc(it.quantity_text || '')+'</td><td class="right">'+moneyText(it.unit_price_text,currency)+'</td><td class="right"><strong>'+moneyText(it.line_total_text,currency)+'</strong></td></tr>';
+    var rows = items.map(function(it){
+      var typeTd = hasType ? '<td>'+esc(it.product_type || '')+'</td>' : '';
+      return '<tr><td><strong>'+esc(it.product_barcode || '-')+'</strong></td><td><strong>'+esc(it.product_name || '-')+'</strong></td>'+typeTd+'<td class="right">'+esc(it.quantity_text || '')+'</td><td class="right">'+moneyText(it.unit_price_text,currency)+'</td><td class="right"><strong>'+moneyText(it.line_total_text,currency)+'</strong></td></tr>';
     }).join('');
-    if (!rows) rows = '<tr><td colspan="6" class="empty">Ürün satırı bulunamadı.</td></tr>';
-    var discountRow = o.discount_enabled ? '<tr><td colspan="5" class="right">İskonto %'+esc(o.discount_rate)+'</td><td class="right"><strong>-'+moneyText(o.discount_amount_text,currency)+'</strong></td></tr>' : '';
-    var vatRow = o.vat_enabled ? '<tr><td colspan="5" class="right">KDV %'+esc(o.vat_rate)+'</td><td class="right"><strong>'+moneyText(o.vat_amount_text,currency)+'</strong></td></tr>' : '';
-    b.innerHTML = '<div class="cari-kaynak-head"><div><strong>'+esc(o.customer_name || '')+'</strong><small>'+esc(o.offer_date || '')+'</small></div><div class="row-actions"><a href="'+esc(o.pdf_url || '#')+'" target="_blank">PDF Aç</a><a href="'+esc(o.edit_url || '#')+'">Düzenle</a></div></div><div class="table-wrap"><table><thead><tr><th>Barkod</th><th>Ürün adı</th><th>Ürün cinsi / açıklama</th><th class="right">'+esc(qtyLabel)+'</th><th class="right">Birim fiyat</th><th class="right">Tutar</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr><td colspan="5" class="right">Ara toplam</td><td class="right"><strong>'+moneyText(o.subtotal_text,currency)+'</strong></td></tr>'+discountRow+vatRow+'<tr><td colspan="5" class="right">Genel toplam</td><td class="right"><strong>'+moneyText(o.grand_total_text,currency)+'</strong></td></tr></tfoot></table></div>'+(o.note ? '<p class="muted"><strong>Not:</strong> '+esc(o.note)+'</p>' : '');
+    var colCount = hasType ? 6 : 5;
+    var totalSpan = hasType ? 5 : 4;
+    if (!rows) rows = '<tr><td colspan="'+colCount+'" class="empty">Ürün satırı bulunamadı.</td></tr>';
+    var typeHead = hasType ? '<th>Ürün cinsi / açıklama</th>' : '';
+    var discountRow = o.discount_enabled ? '<tr><td colspan="'+totalSpan+'" class="right">İskonto %'+esc(o.discount_rate)+'</td><td class="right"><strong>-'+moneyText(o.discount_amount_text,currency)+'</strong></td></tr>' : '';
+    var vatRow = o.vat_enabled ? '<tr><td colspan="'+totalSpan+'" class="right">KDV %'+esc(o.vat_rate)+'</td><td class="right"><strong>'+moneyText(o.vat_amount_text,currency)+'</strong></td></tr>' : '';
+    b.innerHTML = '<div class="cari-kaynak-head"><div><strong>'+esc(o.customer_name || '')+'</strong><small>'+esc(o.offer_date || '')+'</small></div><div class="row-actions"><a href="'+esc(o.pdf_url || '#')+'" target="_blank">PDF Aç</a><a href="'+esc(o.edit_url || '#')+'">Düzenle</a></div></div><div class="table-wrap"><table><thead><tr><th>Barkod</th><th>Ürün adı</th>'+typeHead+'<th class="right">'+esc(qtyLabel)+'</th><th class="right">Birim fiyat</th><th class="right">Tutar</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr><td colspan="'+totalSpan+'" class="right">Ara toplam</td><td class="right"><strong>'+moneyText(o.subtotal_text,currency)+'</strong></td></tr>'+discountRow+vatRow+'<tr><td colspan="'+totalSpan+'" class="right">Genel toplam</td><td class="right"><strong>'+moneyText(o.grand_total_text,currency)+'</strong></td></tr></tfoot></table></div>'+(o.note ? '<p class="muted"><strong>Not:</strong> '+esc(o.note)+'</p>' : '');
     p.style.display = 'block';
     p.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
