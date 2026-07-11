@@ -1,6 +1,13 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
 
+// Önceden kurulmuş veritabanlarında eksik olan Ödeme kategorisini bir kez ekle.
+if (setting_get('migration_odeme_category_v1', '0') !== '1') {
+    db()->prepare('INSERT OR IGNORE INTO categories (name, type, created_at) VALUES (?, ?, ?)')
+        ->execute(['Ödeme', 'gider', now()]);
+    setting_set('migration_odeme_category_v1', '1');
+}
+
 function super_admin_user_ids(): array
 {
     $raw = setting_get('super_admin_user_ids', '[]') ?: '[]';
