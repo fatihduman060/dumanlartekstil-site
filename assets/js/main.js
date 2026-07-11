@@ -254,7 +254,7 @@
     ensureScript('assets/js/home-brand-clean-v1.js');
 
     const heroTitle = document.querySelector('.hero h1');
-    if (heroTitle) heroTitle.innerHTML = 'Çorap Üretiminde <strong>Markalara Özel Güçlü Çözüm</strong>';
+    if (heroTitle) heroTitle.innerHTML = 'Çorap Üretiminde <strong>Güçlü Birikim Güvenilir Hizmet</strong>';
 
     const heroText = document.querySelector('.hero-text');
     if (heroText) heroText.textContent = 'BİTKE, MOFİY ve BAFİY markalarımızla toptan satış kanallarına, mağazalara ve özel marka projelerine uygun; planlı, kaliteli ve sürdürülebilir çorap üretimi sunuyoruz.';
