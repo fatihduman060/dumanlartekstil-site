@@ -306,5 +306,5 @@
   setupHomePage();
   setupFooterIcons();
   setupCorporatePage();
-  ensureStylesheet('assets/css/responsive-premium-v1.css?v=hero-split-9552b4d');
+  ensureStylesheet('assets/css/responsive-premium-v1.css?v=hero-split-3b2912f');
 })();
