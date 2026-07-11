@@ -551,3 +551,30 @@
     font-size: clamp(37px, 11vw, 49px) !important;
   }
 }
+
+
+@media (max-width: 760px) {
+  body .whatsapp-float::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  body .whatsapp-float .whatsapp-float-icon {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    width: 38px !important;
+    height: 38px !important;
+    display: grid !important;
+    place-items: center !important;
+    margin: 0 !important;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  body .whatsapp-float .whatsapp-float-icon svg {
+    display: block !important;
+    width: 38px !important;
+    height: 38px !important;
+    margin: 0 !important;
+  }
+}
