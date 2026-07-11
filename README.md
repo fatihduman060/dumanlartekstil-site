@@ -60,5 +60,5 @@ storage/
 ## İletişim
 
 - Telefon: 0 (356) 715-8283
-- WhatsApp: 0532 179 87 07
+- WhatsApp: 0356 715 82 83
 - E-posta: info@dumanlartekstil.com.tr
