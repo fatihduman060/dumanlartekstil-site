@@ -295,7 +295,7 @@
   };
 
   ensureStylesheet('assets/css/site-runtime.css');
-  ensureStylesheet('assets/css/responsive-premium-v1.css');
+  ensureStylesheet('assets/css/responsive-premium-v1.css?v=hero-split-9552b4d');
   setupPremiumFooter();
   setupCorporateDropdown();
   setupMenu();
