@@ -482,3 +482,72 @@
     .main-nav { top: calc(76px + env(safe-area-inset-top)) !important; }
   }
 }
+
+
+/* Hero split layout — keep product photography away from copy on tablet/mobile */
+@media (max-width: 1180px) {
+  body.home-page #home.hero {
+    min-height: 0 !important;
+    padding-top: clamp(300px, 44vw, 430px) !important;
+    background:
+      radial-gradient(circle at 12% 12%, rgba(201,154,63,.13), transparent 30%),
+      linear-gradient(145deg, #071523 0%, #0a1e32 62%, #071523 100%) !important;
+  }
+
+  body.home-page #home.hero::before {
+    inset: 0 0 auto 0 !important;
+    height: clamp(300px, 44vw, 430px) !important;
+    background:
+      linear-gradient(180deg, rgba(7,21,35,.03) 0%, rgba(7,21,35,.04) 68%, rgba(7,21,35,.70) 100%),
+      url("../img/hero-production-v11.webp") center 52% / cover no-repeat !important;
+    opacity: 1 !important;
+  }
+
+  body.home-page #home.hero::after {
+    inset: 0 0 auto 0 !important;
+    height: clamp(300px, 44vw, 430px) !important;
+    background:
+      linear-gradient(90deg, rgba(7,21,35,.18), transparent 34%, transparent 74%, rgba(7,21,35,.12)),
+      linear-gradient(180deg, transparent 64%, #071523 100%) !important;
+  }
+
+  body.home-page #home .hero-content {
+    width: min(900px, 100%) !important;
+    margin: 0 auto !important;
+    padding: 46px var(--responsive-gutter) 44px !important;
+  }
+
+  body.home-page #home .hero-content h1 {
+    max-width: 820px !important;
+    font-size: clamp(44px, 6.4vw, 64px) !important;
+  }
+
+  body.home-page #home .hero-text { max-width: 650px !important; }
+  body.home-page #home .hero-actions { max-width: 650px !important; }
+}
+
+@media (max-width: 760px) {
+  body.home-page #home.hero {
+    padding-top: clamp(210px, 62vw, 286px) !important;
+  }
+
+  body.home-page #home.hero::before,
+  body.home-page #home.hero::after {
+    height: clamp(210px, 62vw, 286px) !important;
+  }
+
+  body.home-page #home.hero::before {
+    background:
+      linear-gradient(180deg, rgba(7,21,35,.01) 0%, rgba(7,21,35,.03) 66%, rgba(7,21,35,.78) 100%),
+      url("../img/hero-production-v11.webp") 64% 52% / cover no-repeat !important;
+  }
+
+  body.home-page #home .hero-content {
+    padding: 34px var(--responsive-gutter) 36px !important;
+  }
+
+  body.home-page #home .hero-content h1 {
+    max-width: 12ch !important;
+    font-size: clamp(37px, 11vw, 49px) !important;
+  }
+}
