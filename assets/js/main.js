@@ -260,7 +260,7 @@
     if (heroTitle) heroTitle.innerHTML = 'Çorap Üretiminde <strong>Markalara Özel Güçlü Çözüm</strong>';
 
     const heroText = document.querySelector('.hero-text');
-    if (heroText) heroText.textContent = 'BİTKE ve MOFİY markalarımızla toptan satış kanallarına, mağazalara ve özel marka projelerine uygun; planlı, kaliteli ve sürdürülebilir çorap üretimi sunuyoruz.';
+    if (heroText) heroText.textContent = 'BİTKE, MOFİY ve BAFİY markalarımızla toptan satış kanallarına, mağazalara ve özel marka projelerine uygun; planlı, kaliteli ve sürdürülebilir çorap üretimi sunuyoruz.';
 
     const primaryCta = document.querySelector('.hero-actions .btn-gold');
     if (primaryCta) primaryCta.textContent = 'Ürün Gruplarını İncele';
