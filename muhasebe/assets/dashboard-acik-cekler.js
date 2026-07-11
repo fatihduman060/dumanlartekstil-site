@@ -18,6 +18,52 @@
     }
     return null;
   }
+  function parseMoney(text){
+    var raw=String(text||'').replace(/\s/g,'').replace(/TL/gi,'').replace(/\./g,'').replace(',','.').replace(/[^0-9.\-]/g,'');
+    var value=parseFloat(raw);
+    return Number.isFinite(value)?value:0;
+  }
+  function formatMoney(value){
+    return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
+  }
+  function updateCheckNetCard(){
+    var sections=Array.from(document.querySelectorAll('.dashboard-section'));
+    var section=null;
+    for(var i=0;i<sections.length;i++){
+      if(norm(sections[i].textContent).indexOf('cek vade takibi')!==-1){section=sections[i];break;}
+    }
+    if(!section) return;
+
+    var cards=Array.from(section.querySelectorAll('.section-stats .stat-card'));
+    var incoming=null;
+    var outgoing=null;
+    var target=null;
+
+    cards.forEach(function(card){
+      var label=norm((card.querySelector('span')||{}).textContent||'');
+      if(label.indexOf('alinacak cek')!==-1 || label.indexOf('alinan cek')!==-1) incoming=card;
+      if(label.indexOf('verilecek cek')!==-1 || label.indexOf('verilen cek')!==-1) outgoing=card;
+      if(label.indexOf('vadesi gecen cek')!==-1 || label.indexOf('genel durum')!==-1) target=card;
+    });
+
+    if(!incoming || !outgoing || !target) return;
+    var incomingStrong=incoming.querySelector('strong');
+    var outgoingStrong=outgoing.querySelector('strong');
+    if(!incomingStrong || !outgoingStrong) return;
+
+    var net=parseMoney(incomingStrong.textContent)-parseMoney(outgoingStrong.textContent);
+    var title=target.querySelector('span');
+    var value=target.querySelector('strong');
+    var note=target.querySelector('small');
+    if(!title || !value || !note) return;
+
+    title.textContent='Genel durum';
+    value.textContent=formatMoney(net);
+    value.classList.remove('text-success','text-danger');
+    value.classList.add(net>=0?'text-success':'text-danger');
+    note.textContent='Alınacak çek - verilecek çek';
+    target.classList.add('status');
+  }
   function itemHtml(ch){
     var isOut=(ch.direction||'')==='verilecek';
     var tone=isOut?'text-danger':'text-success';
@@ -50,6 +96,7 @@
   function run(){
     if(!/dashboard\.php/i.test(location.pathname)) return;
     styles();
+    updateCheckNetCard();
     var card=findCard();
     if(!card) return;
     fetch('dashboard-acik-cekler.php?_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
