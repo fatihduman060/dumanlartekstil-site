@@ -431,7 +431,7 @@
     box-shadow: 0 14px 34px rgba(0,0,0,.24) !important;
   }
   .whatsapp-float::before {
-    content: "W";
+    content: "";
     color: #073f22;
     font-size: 18px;
     font-weight: 950;
