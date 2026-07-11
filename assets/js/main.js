@@ -59,12 +59,9 @@
           <section class="footer-premium-col footer-premium-products" aria-label="Üretim alanları">
             <h3>Üretim Alanları</h3>
             <nav>
-              <a href="erkek-corap.html">Erkek Çorap</a>
-              <a href="urunler.html#kadin-corap">Kadın Çorap</a>
-              <a href="urunler.html#cocuk-corap">Çocuk Çorap</a>
-              <a href="urunler.html#spor-corap">Spor Çorap</a>
-              <a href="urunler.html#bambu-corap">Bambu Çorap</a>
-              <a href="urunler.html#modal-corap">Modal Çorap</a>
+              <a href="erkek-corap.html">Erkek Çorabı</a>
+              <a href="urunler.html#kadin-corap">Kadın Çorabı</a>
+              <a href="urunler.html#cocuk-corap">Çocuk Çorabı</a>
               <a href="ozel-marka-uretimi.html">Markaya Özel Üretim</a>
             </nav>
           </section>
