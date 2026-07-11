@@ -1,0 +1,3 @@
+Bitke site deploy trigger
+Reason: publish merged hero title and footer updates
+Date: 2026-07-11
