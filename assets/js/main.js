@@ -257,7 +257,7 @@
     if (heroTitle) heroTitle.innerHTML = 'Çorap Üretiminde <strong>Güçlü Birikim Güvenilir Hizmet</strong>';
 
     const heroText = document.querySelector('.hero-text');
-    if (heroText) heroText.textContent = 'BİTKE, MOFİY ve BAFİY markalarımızla toptan satış kanallarına, mağazalara ve özel marka projelerine uygun; planlı, kaliteli ve sürdürülebilir çorap üretimi sunuyoruz.';
+    if (heroText) heroText.textContent = 'Dumanlar A.Ş. olarak kendi markamız ve modern üretim altyapımızla kaliteli, planlı ve sürdürülebilir çorap üretimini sunuyoruz. Yıllara dayanan tecrübemizle sektöre değer katıyoruz.';
 
     const primaryCta = document.querySelector('.hero-actions .btn-gold');
     if (primaryCta) primaryCta.textContent = 'Ürün Gruplarını İncele';
