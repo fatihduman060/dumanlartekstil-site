@@ -1,0 +1,52 @@
+name: Update Dealership CTA Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/update-dealership-cta-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update-cta:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update CTA text and cache version
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index = Path('index.html')
+          html = index.read_text(encoding='utf-8')
+          html = html.replace('>Bizimle İletişime Geç</a>', '>Bayilik Başvurusu</a>')
+          html = html.replace('>Toptan Üretim Talebi</a>', '>Bayilik Başvurusu</a>')
+          html = html.replace('assets/js/main.js?v=hero-text-20260711-1', 'assets/js/main.js?v=bayilik-20260711-1')
+          html = html.replace('assets/js/main.js?v=hero-20260711-1', 'assets/js/main.js?v=bayilik-20260711-1')
+          index.write_text(html, encoding='utf-8')
+
+          main_js = Path('assets/js/main.js')
+          js = main_js.read_text(encoding='utf-8')
+          js = js.replace("if (outlineCta) outlineCta.textContent = 'Toptan Üretim Talebi';", "if (outlineCta) outlineCta.textContent = 'Bayilik Başvurusu';")
+          main_js.write_text(js, encoding='utf-8')
+
+          assert 'Bayilik Başvurusu' in html
+          assert "outlineCta.textContent = 'Bayilik Başvurusu'" in js
+          assert 'bayilik-20260711-1' in html
+          PY
+
+      - name: Remove one-time workflow and commit
+        shell: bash
+        run: |
+          rm .github/workflows/update-dealership-cta-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html assets/js/main.js .github/workflows/update-dealership-cta-once.yml
+          git commit -m "Toptan Üretim Talebi metnini Bayilik Başvurusu yap"
+          git push
