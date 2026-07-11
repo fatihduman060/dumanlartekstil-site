@@ -294,7 +294,7 @@
     if (window.location.hash) setTimeout(() => document.querySelector(window.location.hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
   };
 
-  ensureStylesheet('assets/css/site-runtime.css');
+  ensureStylesheet('assets/css/site-runtime.css');\n  ensureStylesheet('assets/css/responsive-premium-v1.css');
   setupPremiumFooter();
   setupCorporateDropdown();
   setupMenu();
