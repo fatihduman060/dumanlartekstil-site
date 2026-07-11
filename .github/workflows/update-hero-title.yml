@@ -1,0 +1,69 @@
+name: Update hero title
+
+on:
+  push:
+    branches:
+      - agent/hero-title-guclu-birikim
+
+permissions:
+  contents: write
+
+jobs:
+  update-title:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/hero-title-guclu-birikim
+
+      - name: Update visible and runtime hero title
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          index_path = Path('index.html')
+          main_js_path = Path('assets/js/main.js')
+
+          index = index_path.read_text(encoding='utf-8')
+          main_js = main_js_path.read_text(encoding='utf-8')
+
+          old_html = '<h1>Tekstil ve Çorap Üretiminde <strong>Güvenilir Çözüm Ortağınız</strong></h1>'
+          new_html = '<h1>Çorap Üretiminde <strong>Güçlü Birikim Güvenilir Hizmet</strong></h1>'
+          old_js = "if (heroTitle) heroTitle.innerHTML = 'Çorap Üretiminde <strong>Markalara Özel Güçlü Çözüm</strong>';"
+          new_js = "if (heroTitle) heroTitle.innerHTML = 'Çorap Üretiminde <strong>Güçlü Birikim Güvenilir Hizmet</strong>';"
+
+          if old_html not in index:
+              raise SystemExit('Beklenen HTML başlığı bulunamadı.')
+          if old_js not in main_js:
+              raise SystemExit('Beklenen JavaScript başlığı bulunamadı.')
+
+          index = index.replace(old_html, new_html, 1)
+          main_js = main_js.replace(old_js, new_js, 1)
+          index, count = re.subn(r'assets/js/main\.js\?v=[^"\s]+', 'assets/js/main.js?v=hero-20260711-1', index)
+          if count != 1:
+              raise SystemExit(f'Index script sürümü beklenen sayıda güncellenmedi: {count}')
+
+          index_path.write_text(index, encoding='utf-8')
+          main_js_path.write_text(main_js, encoding='utf-8')
+          PY
+
+      - name: Validate changes
+        shell: bash
+        run: |
+          grep -F 'Çorap Üretiminde <strong>Güçlü Birikim Güvenilir Hizmet</strong>' index.html
+          grep -F "heroTitle.innerHTML = 'Çorap Üretiminde <strong>Güçlü Birikim Güvenilir Hizmet</strong>'" assets/js/main.js
+          grep -F 'assets/js/main.js?v=hero-20260711-1' index.html
+
+      - name: Commit changes and remove temporary workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/update-hero-title.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html assets/js/main.js .github/workflows/update-hero-title.yml
+          git commit -m 'Ana sayfa başlığını Güçlü Birikim Güvenilir Hizmet yap'
+          git push origin HEAD:agent/hero-title-guclu-birikim
