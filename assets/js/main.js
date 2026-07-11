@@ -263,7 +263,7 @@
     if (primaryCta) primaryCta.textContent = 'Ürün Gruplarını İncele';
 
     const outlineCta = document.querySelector('.hero-actions .btn-outline');
-    if (outlineCta) outlineCta.textContent = 'Toptan Üretim Talebi';
+    if (outlineCta) outlineCta.textContent = 'Bayilik Başvurusu';
   };
 
 
