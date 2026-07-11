@@ -1,0 +1,87 @@
+name: Footer cache bust once
+
+on:
+  push:
+    branches:
+      - agent/footer-cache-bust
+
+permissions:
+  contents: write
+
+jobs:
+  update-footer-references:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/footer-cache-bust
+
+      - name: Update all public HTML pages
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          new_script = 'assets/js/main.js?v=footer-20260711-2'
+          production_links = '''
+            <a href="erkek-corap.html">Erkek Çorabı</a>
+            <a href="urunler.html#kadin-corap">Kadın Çorabı</a>
+            <a href="urunler.html#cocuk-corap">Çocuk Çorabı</a>
+            <a href="ozel-marka-uretimi.html">Markaya Özel Üretim</a>
+          '''.strip()
+
+          changed = []
+          for path in sorted(Path('.').glob('*.html')):
+              text = path.read_text(encoding='utf-8')
+              original = text
+
+              text = re.sub(
+                  r'assets/js/main\.js(?:\?v=[^"\']*)?',
+                  new_script,
+                  text,
+              )
+
+              pattern = re.compile(
+                  r'(<div class="footer-links footer-production">.*?<h3>Üretim Alanları</h3>\s*<nav[^>]*>).*?(</nav>)',
+                  re.S,
+              )
+              text = pattern.sub(
+                  lambda m: m.group(1) + '\n          ' + production_links.replace('\n', '\n          ') + '\n        ' + m.group(2),
+                  text,
+              )
+
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+                  changed.append(str(path))
+
+          print('Güncellenen HTML dosyaları:')
+          for item in changed:
+              print('-', item)
+
+          if not changed:
+              raise SystemExit('Hiçbir HTML dosyasında değişiklik yapılmadı.')
+          PY
+
+      - name: Validate footer standard
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R "assets/js/main.js?v=footer-20260711-2" -- *.html >/dev/null
+          ! grep -nE "footer-production.*(Spor Çorap|Bambu Çorap|Modal Çorap)" -- *.html
+          grep -n "Erkek Çorabı" assets/js/main.js >/dev/null
+          grep -n "Kadın Çorabı" assets/js/main.js >/dev/null
+          grep -n "Çocuk Çorabı" assets/js/main.js >/dev/null
+          grep -n "Markaya Özel Üretim" assets/js/main.js >/dev/null
+
+      - name: Remove one-off workflow and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/footer-cache-bust-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Footer üretim alanlarını tüm sayfalarda yenile"
+          git push origin HEAD:agent/footer-cache-bust
