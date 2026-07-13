@@ -1,9 +1,10 @@
 (function(){
-  var requested=false;
+  var loading=false;
+  var csrfToken='';
 
   function esc(value){
-    return String(value==null?'':value).replace(/[&<>\"]/g,function(char){
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[char];
+    return String(value==null?'':value).replace(/[&<>"]/g,function(char){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char];
     });
   }
 
@@ -11,10 +12,18 @@
     var description=item.description
       ? '<span class="vade-hatirlatma-aciklama">'+esc(item.description)+'</span>'
       : '';
-    return '<a class="vade-hatirlatma-satir" href="'+esc(item.url||'#')+'">'
+    var status='<span class="vade-hatirlatma-durum">'+esc(item.status_text||'Bekliyor')+'</span>';
+    var action=item.can_complete
+      ? '<button type="button" class="vade-hatirlatma-tamamla" data-source="'+esc(item.source||'movement')+'" data-id="'+esc(item.id||'')+'" data-label="'+esc(item.complete_label||'Tamamlandı')+'" title="Sadece vade hatırlatmasını kapatır; mevcut tahsilat veya ödeme kaydını değiştirmez.">'+esc(item.complete_label||'Tamamlandı')+'</button>'
+      : '';
+
+    return '<div class="vade-hatirlatma-satir">'
+      +'<a class="vade-hatirlatma-link" href="'+esc(item.url||'#')+'">'
       +'<span class="vade-hatirlatma-ana"><strong>'+esc(item.cari_name||'-')+'</strong><small>'+esc(item.kind||'Vade')+description+'</small></span>'
       +'<span class="vade-hatirlatma-tutar"><strong class="text-'+esc(item.tone||'success')+'">'+esc(item.amount_text||'0,00 TL')+'</strong><small>'+esc(item.due_text||'')+' · '+esc(item.state_text||'')+'</small></span>'
-      +'</a>';
+      +'</a>'
+      +'<span class="vade-hatirlatma-kontrol">'+status+action+'</span>'
+      +'</div>';
   }
 
   function groupHtml(group,isOpen){
@@ -33,6 +42,7 @@
 
   function render(data){
     if(!data||!data.ok) return;
+    csrfToken=String(data.csrf_token||'');
     var old=document.getElementById('dashboardVadeHatirlatmalari');
     if(old) old.remove();
 
@@ -56,6 +66,43 @@
     if(anchor) anchor.insertAdjacentElement('afterend',section);
   }
 
+  function load(){
+    if(loading) return;
+    loading=true;
+    fetch('dashboard-vade-hatirlatmalari.php?_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+      .then(function(response){return response.json();})
+      .then(render)
+      .catch(function(){})
+      .finally(function(){loading=false;});
+  }
+
+  function completeReminder(button){
+    var label=button.getAttribute('data-label')||'Tamamlandı';
+    if(!window.confirm('Bu kayıt '+label+' olarak işaretlensin mi?\n\nBu işlem sadece vade hatırlatmasını kapatır.')) return;
+
+    var oldText=button.textContent;
+    button.disabled=true;
+    button.textContent='Kaydediliyor';
+
+    var body=new FormData();
+    body.append('action','complete');
+    body.append('source',button.getAttribute('data-source')||'movement');
+    body.append('id',button.getAttribute('data-id')||'');
+    body.append('csrf_token',csrfToken);
+
+    fetch('dashboard-vade-hatirlatmalari.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
+      .then(function(response){return response.json();})
+      .then(function(data){
+        if(!data||!data.ok) throw new Error((data&&data.error)||'Vade durumu güncellenemedi.');
+        load();
+      })
+      .catch(function(error){
+        window.alert(error.message||'Vade durumu güncellenemedi.');
+        button.disabled=false;
+        button.textContent=oldText;
+      });
+  }
+
   function addStyles(){
     if(document.getElementById('vadeHatirlatmaStyle')) return;
     var style=document.createElement('style');
@@ -65,19 +112,23 @@
       +'.vade-hatirlatma-baslik{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin-bottom:12px}.vade-hatirlatma-baslik>div{display:grid;gap:3px}.vade-hatirlatma-baslik strong{font-size:17px}.vade-hatirlatma-baslik small{color:var(--muted);font-size:12px}.vade-hatirlatma-baslik>b{padding:7px 10px;border-radius:999px;background:#efe8dd;color:#544b3d;font-size:12px}.vade-hatirlatma-ikon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#fff4dc;font-size:19px}'
       +'.vade-hatirlatma-gruplar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.vade-hatirlatma-grup{border:1px solid var(--border);border-radius:15px;background:#fff;overflow:hidden}.vade-hatirlatma-grup summary{list-style:none;cursor:pointer;padding:13px 14px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.vade-hatirlatma-grup summary::-webkit-details-marker{display:none}.vade-hatirlatma-grup summary span{display:grid;gap:3px}.vade-hatirlatma-grup summary strong{font-size:14px}.vade-hatirlatma-grup summary small{color:var(--muted);font-size:11px}.vade-hatirlatma-grup summary b{font-size:12px;padding:6px 8px;border-radius:999px;background:#f3efe7}.vade-hatirlatma-grup[open] summary{border-bottom:1px solid var(--border)}'
       +'.vade-hatirlatma-grup.tone-danger{border-left:4px solid var(--danger)}.vade-hatirlatma-grup.tone-warning{border-left:4px solid var(--warning)}.vade-hatirlatma-grup.tone-info{border-left:4px solid var(--info)}'
-      +'.vade-hatirlatma-liste{display:grid;max-height:340px;overflow:auto}.vade-hatirlatma-satir{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px 13px;border-bottom:1px solid var(--border);background:#fff}.vade-hatirlatma-satir:last-child{border-bottom:0}.vade-hatirlatma-satir:hover{background:#fffaf3}.vade-hatirlatma-ana,.vade-hatirlatma-tutar{display:grid;gap:4px}.vade-hatirlatma-ana strong{font-size:13px}.vade-hatirlatma-ana small,.vade-hatirlatma-tutar small{font-size:11px;color:var(--muted)}.vade-hatirlatma-tutar{text-align:right}.vade-hatirlatma-tutar strong{font-size:13px}.vade-hatirlatma-aciklama{display:block;margin-top:2px;white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis}.vade-hatirlatma-bos,.vade-hatirlatma-temiz{margin:0;padding:14px;color:var(--muted);font-size:12px}.vade-hatirlatma-temiz{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:14px;font-weight:800}'
-      +'@media(max-width:1100px){.vade-hatirlatma-gruplar{grid-template-columns:1fr}.vade-hatirlatma-liste{max-height:280px}}@media(max-width:640px){.vade-hatirlatma-baslik{grid-template-columns:auto 1fr}.vade-hatirlatma-baslik>b{grid-column:1/-1;justify-self:start}.vade-hatirlatma-satir{grid-template-columns:1fr}.vade-hatirlatma-tutar{text-align:left}.vade-hatirlatma-aciklama{max-width:100%}}';
+      +'.vade-hatirlatma-liste{display:grid;max-height:340px;overflow:auto}.vade-hatirlatma-satir{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border);background:#fff}.vade-hatirlatma-satir:last-child{border-bottom:0}.vade-hatirlatma-satir:hover{background:#fffaf3}.vade-hatirlatma-link{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;min-width:0}.vade-hatirlatma-ana,.vade-hatirlatma-tutar{display:grid;gap:4px}.vade-hatirlatma-ana strong{font-size:13px}.vade-hatirlatma-ana small,.vade-hatirlatma-tutar small{font-size:11px;color:var(--muted)}.vade-hatirlatma-tutar{text-align:right}.vade-hatirlatma-tutar strong{font-size:13px}.vade-hatirlatma-aciklama{display:block;margin-top:2px;white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis}.vade-hatirlatma-kontrol{display:grid;gap:5px;justify-items:end}.vade-hatirlatma-durum{font-size:9px;font-weight:900;color:#776b5c;background:#f2eee6;border:1px solid #e4dccf;border-radius:999px;padding:4px 7px}.vade-hatirlatma-tamamla{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:9px;padding:5px 8px;font-size:10px;font-weight:900;cursor:pointer}.vade-hatirlatma-tamamla:hover{background:#d9efdf}.vade-hatirlatma-tamamla:disabled{opacity:.55;cursor:wait}.vade-hatirlatma-bos,.vade-hatirlatma-temiz{margin:0;padding:14px;color:var(--muted);font-size:12px}.vade-hatirlatma-temiz{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:14px;font-weight:800}'
+      +'@media(max-width:1100px){.vade-hatirlatma-gruplar{grid-template-columns:1fr}.vade-hatirlatma-liste{max-height:280px}}@media(max-width:640px){.vade-hatirlatma-baslik{grid-template-columns:auto 1fr}.vade-hatirlatma-baslik>b{grid-column:1/-1;justify-self:start}.vade-hatirlatma-satir{grid-template-columns:1fr}.vade-hatirlatma-link{grid-template-columns:1fr}.vade-hatirlatma-kontrol{grid-template-columns:auto auto;justify-content:start}.vade-hatirlatma-tutar{text-align:left}.vade-hatirlatma-aciklama{max-width:100%}}';
     document.head.appendChild(style);
   }
 
+  document.addEventListener('click',function(event){
+    var button=event.target.closest('.vade-hatirlatma-tamamla');
+    if(!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    completeReminder(button);
+  });
+
   function run(){
-    if(!/dashboard\.php/i.test(location.pathname)||requested) return;
-    requested=true;
+    if(!/dashboard\.php/i.test(location.pathname)) return;
     addStyles();
-    fetch('dashboard-vade-hatirlatmalari.php?_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
-      .then(function(response){return response.json();})
-      .then(render)
-      .catch(function(){requested=false;});
+    load();
   }
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run); else run();
