@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_login();
+
+ensure_column(db(), 'movements', 'reminder_status', "TEXT NOT NULL DEFAULT 'bekliyor'");
+ensure_column(db(), 'movements', 'reminder_completed_at', 'TEXT');
+ensure_column(db(), 'movements', 'reminder_completed_by', 'INTEGER');
+
 header('Content-Type: application/json; charset=utf-8');
 
 function dashboard_reminder_money($amount, ?string $currency = 'TL'): string
@@ -27,6 +32,48 @@ function dashboard_reminder_due_text(string $dueDate, string $today): string
 }
 
 try {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        require_write();
+        require_csrf();
+
+        $action = (string)($_POST['action'] ?? '');
+        $source = (string)($_POST['source'] ?? '');
+        $id = (int)($_POST['id'] ?? 0);
+
+        if ($source !== 'movement' || $id <= 0 || !in_array($action, ['complete', 'reopen'], true)) {
+            throw new RuntimeException('Vade durumu güncellenemedi.');
+        }
+
+        $stmt = db()->prepare("SELECT * FROM movements WHERE id=? AND COALESCE(is_cancelled,0)=0 AND movement_type IN ('alacak','verecek')");
+        $stmt->execute([$id]);
+        $movement = $stmt->fetch();
+        if (!$movement) throw new RuntimeException('Vadeli hareket bulunamadı.');
+
+        $incoming = (string)$movement['movement_type'] === 'alacak';
+        if ($action === 'complete') {
+            $completedAt = now();
+            $completedBy = current_user()['id'] ?? null;
+            db()->prepare("UPDATE movements SET reminder_status='tamamlandi', reminder_completed_at=?, reminder_completed_by=?, updated_at=? WHERE id=?")
+                ->execute([$completedAt, $completedBy, now(), $id]);
+            $label = $incoming ? 'Alındı' : 'Ödendi';
+            log_action('Vade hatırlatması kapatıldı', '#' . $id . ' ' . $label);
+            audit_action('hareket', $id, 'vade_tamamlandi', $movement, [
+                'reminder_status'=>'tamamlandi',
+                'reminder_completed_at'=>$completedAt,
+                'reminder_completed_by'=>$completedBy,
+            ], $label);
+            echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        db()->prepare("UPDATE movements SET reminder_status='bekliyor', reminder_completed_at=NULL, reminder_completed_by=NULL, updated_at=? WHERE id=?")
+            ->execute([now(), $id]);
+        log_action('Vade hatırlatması yeniden açıldı', '#' . $id);
+        audit_action('hareket', $id, 'vade_yeniden_acildi', $movement, ['reminder_status'=>'bekliyor'], 'Bekliyor');
+        echo json_encode(['ok'=>true, 'status'=>'bekliyor', 'label'=>'Bekliyor'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     $today = date('Y-m-d');
     $weekAhead = date('Y-m-d', strtotime('+7 days'));
     $groups = [
@@ -43,6 +90,7 @@ try {
         WHERE COALESCE(m.is_cancelled,0)=0
           AND COALESCE(m.is_check_adjustment,0)=0
           AND COALESCE(m.check_id,0)=0
+          AND COALESCE(m.reminder_status,'bekliyor')!='tamamlandi'
           AND m.due_date IS NOT NULL
           AND m.due_date != ''
           AND m.due_date <= ?
@@ -68,11 +116,14 @@ try {
             'due_date' => $dueDate,
             'due_text' => tr_date($dueDate),
             'state_text' => dashboard_reminder_due_text($dueDate, $today),
+            'status_text' => 'Bekliyor',
+            'can_complete' => can_write(),
+            'complete_label' => $incoming ? 'Alındı' : 'Ödendi',
             'url' => 'hareketler.php?edit=' . (int)$row['id'],
         ];
     }
 
-    $checkStmt = db()->prepare("SELECT ch.id, ch.cari_id, ch.direction, ch.amount, ch.due_date, ch.bank_name,
+    $checkStmt = db()->prepare("SELECT ch.id, ch.cari_id, ch.direction, ch.status, ch.amount, ch.due_date, ch.bank_name,
             ch.check_no, ch.drawer, ch.description, c.name AS cari_name
         FROM checks ch
         LEFT JOIN cariler c ON c.id=ch.cari_id
@@ -107,6 +158,9 @@ try {
             'due_date' => $dueDate,
             'due_text' => tr_date($dueDate),
             'state_text' => dashboard_reminder_due_text($dueDate, $today),
+            'status_text' => (string)$row['status'] === 'bankaya_verildi' ? 'Bankaya verildi' : 'Bekliyor',
+            'can_complete' => false,
+            'complete_label' => '',
             'url' => 'cekler.php?direction=' . urlencode((string)$row['direction']) . '&edit=' . (int)$row['id'] . '#cek-form',
         ];
     }
@@ -130,8 +184,10 @@ try {
         'today' => $today,
         'week_ahead' => $weekAhead,
         'count' => $totalCount,
+        'csrf_token' => csrf_token(),
         'groups' => array_values($groups),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
+    http_response_code(400);
     echo json_encode(['ok'=>false, 'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
