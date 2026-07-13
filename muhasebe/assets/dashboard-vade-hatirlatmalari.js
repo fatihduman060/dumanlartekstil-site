@@ -8,6 +8,13 @@
     });
   }
 
+  function removeTopBlocks(){
+    var hero=document.querySelector('.hero-card');
+    if(hero) hero.remove();
+    var backup=document.querySelector('.backup-mini-strip');
+    if(backup) backup.remove();
+  }
+
   function itemHtml(item){
     var description=item.description
       ? '<span class="vade-hatirlatma-aciklama">'+esc(item.description)+'</span>'
@@ -43,6 +50,7 @@
   function render(data){
     if(!data||!data.ok) return;
     csrfToken=String(data.csrf_token||'');
+    removeTopBlocks();
     var old=document.getElementById('dashboardVadeHatirlatmalari');
     if(old) old.remove();
 
@@ -62,8 +70,8 @@
         ? '<div class="vade-hatirlatma-gruplar">'+groups.map(function(group,index){return groupHtml(group,index===firstOpen);}).join('')+'</div>'
         : '<div class="vade-hatirlatma-temiz">✅ Yaklaşan veya geciken vade bulunmuyor.</div>');
 
-    var anchor=document.querySelector('.backup-mini-strip')||document.querySelector('.hero-card');
-    if(anchor) anchor.insertAdjacentElement('afterend',section);
+    var anchor=document.querySelector('.quick-grid.mobile-focus')||document.querySelector('.dashboard-section');
+    if(anchor) anchor.insertAdjacentElement('beforebegin',section);
   }
 
   function load(){
@@ -127,6 +135,7 @@
 
   function run(){
     if(!/dashboard\.php/i.test(location.pathname)) return;
+    removeTopBlocks();
     addStyles();
     load();
   }
