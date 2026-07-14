@@ -87,22 +87,34 @@
     return score;
   }
 
+  function numberParts(line){
+    var rows=[];
+    var regex=/(^|[^\d])((?:\d[\s.\/-]*){10,11})(?![\s.\/-]*\d)/g;
+    var match;
+    while((match=regex.exec(String(line||'')))!==null){
+      rows.push(match[2]);
+      if(match.index===regex.lastIndex) regex.lastIndex++;
+    }
+    return rows;
+  }
+
   function extractTaxCandidates(lines,direction){
     var candidates=[];
     var expected=direction==='giden'?['ALICI','SAYIN','MUSTERI','BUYER']:['SATICI','TEDARIKCI','SELLER'];
     var ownMarkers=['DUMANLAR','BITKE','MOFIY'];
 
     lines.forEach(function(line,index){
-      var matches=String(line).match(/(?:\d[\s.\/-]*){10,11}/g)||[];
-      matches.forEach(function(match){
+      numberParts(line).forEach(function(match){
         var tax=canonicalTax(match);
         if(tax.length!==10&&tax.length!==11) return;
         if(tax===companyTax) return;
+        var lineKey=norm(line);
         var around=norm(lines.slice(Math.max(0,index-4),Math.min(lines.length,index+5)).join(' '));
         var score=0;
-        if(/VKN|TCKN|VERGI NO|VERGI NUMARASI/.test(norm(line))) score+=80;
+        if(/VKN|TCKN|VERGI NO|VERGI NUMARASI/.test(lineKey)) score+=80;
         if(expected.some(function(marker){return around.indexOf(marker)!==-1;})) score+=45;
         if(ownMarkers.some(function(marker){return around.indexOf(marker)!==-1;})) score-=70;
+        if(/FATURA NO|BELGE NO|ETTN|UUID/.test(lineKey)) score-=100;
         if(tax.length===10) score+=10;
         candidates.push({tax:tax,index:index,score:score});
       });
@@ -112,7 +124,10 @@
     candidates.forEach(function(item){
       if(!unique[item.tax]||unique[item.tax].score<item.score) unique[item.tax]=item;
     });
-    return Object.keys(unique).map(function(key){return unique[key];}).sort(function(a,b){return b.score-a.score;});
+    return Object.keys(unique)
+      .map(function(key){return unique[key];})
+      .filter(function(item){return item.score>=20;})
+      .sort(function(a,b){return b.score-a.score;});
   }
 
   function findCompanyName(lines,taxIndex,direction){
@@ -173,7 +188,7 @@
   }
 
   function findCity(lines){
-    var cities=['ADANA','ADIYAMAN','AFYONKARAHISAR','AGRI','AMASYA','ANKARA','ANTALYA','ARTVIN','AYDIN','BALIKESIR','BILECIK','BINGOL','BITLIS','BOLU','BURDUR','BURSA','CANAKKALE','CANKIRI','CORUM','DENIZLI','DIYARBAKIR','EDIRNE','ELAZIG','ERZINCAN','ERZURUM','ESKISEHIR','GAZIANTEP','GIRESUN','GUMUSHANE','HAKKARI','HATAY','ISPARTA','MERSIN','ISTANBUL','IZMIR','KARS','KASTAMONU','KAYSERI','KIRKLARELI','KIRSEHIR','KOCAELI','KONYA','KUTAHYA','MALATYA','MANISA','KAHRAMANMARAS','MARDIN','MUGLA','MUS','NEVSEHIR','NIGDE','ORDU','RIZE','SAKARYA','SAMSUN','SIIRT','SINOP','SIVAS','TEKIRDAG','ERZURUM','TOKAT','TRABZON','TUNCELI','SANLIURFA','USAK','VAN','YOZGAT','ZONGULDAK','AKSARAY','BAYBURT','KARAMAN','KIRIKKALE','BATMAN','SIRNAK','BARTIN','ARDAHAN','IGDIR','YALOVA','KARABUK','KILIS','OSMANIYE','DUZCE'];
+    var cities=['ADANA','ADIYAMAN','AFYONKARAHISAR','AGRI','AMASYA','ANKARA','ANTALYA','ARTVIN','AYDIN','BALIKESIR','BILECIK','BINGOL','BITLIS','BOLU','BURDUR','BURSA','CANAKKALE','CANKIRI','CORUM','DENIZLI','DIYARBAKIR','EDIRNE','ELAZIG','ERZINCAN','ERZURUM','ESKISEHIR','GAZIANTEP','GIRESUN','GUMUSHANE','HAKKARI','HATAY','ISPARTA','MERSIN','ISTANBUL','IZMIR','KARS','KASTAMONU','KAYSERI','KIRKLARELI','KIRSEHIR','KOCAELI','KONYA','KUTAHYA','MALATYA','MANISA','KAHRAMANMARAS','MARDIN','MUGLA','MUS','NEVSEHIR','NIGDE','ORDU','RIZE','SAKARYA','SAMSUN','SIIRT','SINOP','SIVAS','TEKIRDAG','TOKAT','TRABZON','TUNCELI','SANLIURFA','USAK','VAN','YOZGAT','ZONGULDAK','AKSARAY','BAYBURT','KARAMAN','KIRIKKALE','BATMAN','SIRNAK','BARTIN','ARDAHAN','IGDIR','YALOVA','KARABUK','KILIS','OSMANIYE','DUZCE'];
     var text=norm(lines.join(' '));
     return cities.find(function(city){return new RegExp('(^| )'+city+'( |$)').test(text);})||'';
   }
@@ -193,7 +208,7 @@
   function extractCari(lines,direction){
     var candidates=extractTaxCandidates(lines,direction);
     if(!candidates.length){
-      return {name:'',tax_no:'',tax_office:'',city:'',phone:'',email:'',address:'',warning:'Karşı firmaya ait güvenilir vergi numarası bulunamadı.'};
+      return {name:'',tax_no:'',tax_office:'',city:'',phone:'',email:'',address:'',warning:'Karşı firmaya ait güvenilir vergi numarası bulunamadı. Sistem yanlış bilgi doldurmadı.'};
     }
     var chosen=candidates[0];
     var nearby=nearbyLines(lines,chosen.index,10);
@@ -208,7 +223,7 @@
       phone:findPhone(nearbyText,chosen.tax),
       email:findEmail(nearbyText),
       address:findAddress(nearby,name,taxOffice),
-      warning:name?'':'Firma ünvanı güvenli biçimde bulunamadı.'
+      warning:name?'':'Firma ünvanı güvenli biçimde bulunamadı. Sistem adres satırını ünvan olarak yazmadı.'
     };
   }
 
