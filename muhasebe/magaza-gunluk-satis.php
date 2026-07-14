@@ -25,14 +25,14 @@ function magaza_satis_payload(string $period): array
         'period' => $period,
         'summary' => magaza_satis_ozeti($period),
         'items' => $items,
-        'can_write' => can_write(),
+        'can_write' => can_manage_store_sales(),
         'csrf_token' => csrf_token(),
     ];
 }
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        require_write();
+        require_store_sales_write();
         require_csrf();
         $action = trim((string)($_POST['action'] ?? 'save'));
 
