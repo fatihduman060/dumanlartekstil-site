@@ -86,15 +86,32 @@
     window.requestAnimationFrame(sortRows);
   }
 
+  function unlockArea(area){
+    if(!area) return;
+    area.removeAttribute('inert');
+    area.style.pointerEvents='auto';
+    area.querySelectorAll('form,input,select,textarea,button,label').forEach(function(element){
+      element.removeAttribute('inert');
+      element.removeAttribute('aria-disabled');
+      element.style.pointerEvents='auto';
+      if(element.matches('input,textarea')) element.readOnly=false;
+      if(element.matches('input,select,textarea,button')) element.disabled=false;
+    });
+  }
+
   function ensureBottomArea(listSection){
     var area=document.querySelector('[data-fatura-alt-kontroller]');
-    if(area) return area;
+    if(area){
+      unlockArea(area);
+      return area;
+    }
 
     area=document.createElement('section');
     area.className='panel-card fatura-alt-kontroller';
     area.setAttribute('data-fatura-alt-kontroller','1');
     area.innerHTML='<div class="card-head"><div><h3>Fatura araçları</h3><small>Seyrek kullanılan dönem, toplu yükleme, KDV devir ve masraf fişi işlemleri</small></div></div><div class="fatura-alt-kontrol-body" data-fatura-alt-kontrol-body></div>';
     listSection.insertAdjacentElement('afterend',area);
+    unlockArea(area);
     return area;
   }
 
@@ -118,12 +135,14 @@
 
     var carryPanel=document.getElementById('kdvDevirPanel');
     if(carryPanel&&carryPanel.parentElement!==body) body.appendChild(carryPanel);
+
+    unlockArea(area);
   }
 
   function loadExpenseReceipts(){
     if(document.querySelector('script[data-masraf-fisleri-loader]')) return;
     var script=document.createElement('script');
-    script.src='assets/masraf-fisleri.js?v=1';
+    script.src='assets/masraf-fisleri.js?v=2';
     script.setAttribute('data-masraf-fisleri-loader','1');
     document.body.appendChild(script);
   }
@@ -132,13 +151,25 @@
     applyPayload(event.detail||{});
   });
 
+  document.addEventListener('pointerdown',function(event){
+    var control=event.target.closest('[data-fatura-alt-kontroller] input,[data-fatura-alt-kontroller] select,[data-fatura-alt-kontroller] textarea,[data-fatura-alt-kontroller] button');
+    if(!control) return;
+    control.removeAttribute('inert');
+    control.removeAttribute('aria-disabled');
+    control.disabled=false;
+    if(control.matches('input,textarea')) control.readOnly=false;
+  },true);
+
   var style=document.createElement('style');
   style.textContent=''
-    +'.fatura-alt-kontroller{display:grid;gap:12px;margin-top:18px;padding:16px}'
+    +'.fatura-alt-kontroller{display:grid;gap:12px;margin-top:18px;padding:16px;position:relative;z-index:30;isolation:isolate;pointer-events:auto!important}'
+    +'.fatura-alt-kontroller *{pointer-events:auto}'
     +'.fatura-alt-kontroller>.card-head{margin:0;padding-bottom:4px}'
     +'.fatura-alt-kontroller>.card-head small{display:block;margin-top:3px;color:var(--muted);font-size:10px}'
-    +'.fatura-alt-kontrol-body{display:grid;gap:12px}'
-    +'.fatura-alt-period-form{margin:0!important;padding:12px!important;border:1px solid var(--border);border-radius:14px;background:#faf9f6}'
+    +'.fatura-alt-kontrol-body{display:grid;gap:12px;position:relative;z-index:31;pointer-events:auto!important}'
+    +'.fatura-alt-period-form{margin:0!important;padding:12px!important;border:1px solid var(--border);border-radius:14px;background:#faf9f6;position:relative;z-index:32}'
+    +'.fatura-alt-kontroller form,.fatura-alt-kontroller input,.fatura-alt-kontroller select,.fatura-alt-kontroller textarea,.fatura-alt-kontroller button{position:relative;z-index:33;pointer-events:auto!important;opacity:1!important}'
+    +'.fatura-alt-kontroller input,.fatura-alt-kontroller textarea{user-select:text!important;-webkit-user-select:text!important}'
     +'.fatura-alt-kontroller .toplu-yon-duzelt-panel{margin:0}'
     +'.fatura-alt-kontroller .kdv-devir-panel{margin:0}'
     +'@media(max-width:720px){.fatura-alt-kontroller{padding:12px}.fatura-alt-period-form{align-items:stretch}}';
