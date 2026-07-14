@@ -194,14 +194,15 @@ function page_footer(): void
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/dashboard-acik-cekler.js?v=2"></script>
   <script src="assets/dashboard-vade-hatirlatmalari.js?v=3"></script>
-  <script src="assets/fatura-pdf-oku.js?v=2"></script>
+  <script src="assets/fatura-okuma-core.js?v=3"></script>
+  <script src="assets/fatura-pdf-oku.js?v=3"></script>
   <script src="assets/fatura-kdv-devir.js?v=1"></script>
   <script src="assets/fatura-toplu-link.js?v=2"></script>
-  <script src="assets/fatura-toplu-yukle.js?v=2"></script>
-  <script src="assets/fatura-no-onar.js?v=1"></script>
+  <script src="assets/fatura-toplu-yukle.js?v=3"></script>
+  <script src="assets/fatura-no-onar.js?v=2"></script>
   <script src="assets/fatura-sira-kontrol.js?v=2"></script>
   <script src="assets/fatura-cari-sec.js?v=2"></script>
-  <script src="assets/fatura-cari-okuma-duzelt.js?v=2"></script>
+  <script src="assets/fatura-cari-okuma-duzelt.js?v=3"></script>
   <script src="assets/fatura-yon-sec.js?v=1"></script>
   <script src="assets/fatura-turleri.js?v=2"></script>
   <script src="assets/fatura-tur-otomatik.js?v=1"></script>
