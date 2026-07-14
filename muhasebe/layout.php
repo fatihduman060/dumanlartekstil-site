@@ -103,6 +103,7 @@ function page_header(string $title, string $active = ''): void
     ];
     if (is_admin()) {
         $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
+        $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
         $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
         $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
     }
