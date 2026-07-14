@@ -195,6 +195,8 @@ function page_footer(): void
   <script src="assets/dashboard-vade-hatirlatmalari.js?v=3"></script>
   <script src="assets/fatura-pdf-oku.js?v=1"></script>
   <script src="assets/fatura-kdv-devir.js?v=1"></script>
+  <script src="assets/fatura-toplu-link.js?v=1"></script>
+  <script src="assets/fatura-toplu-yukle.js?v=1"></script>
   <script src="assets/cari-hareket-kaynak.js?v=4"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
