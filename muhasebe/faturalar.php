@@ -162,18 +162,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!isset(fatura_yonleri()[$direction])) $direction = 'gelen';
 
         $invoiceNo = trim((string)($_POST['invoice_no'] ?? ''));
+        $invoiceNoKey = preg_replace('/[^A-Z0-9]/', '', strtoupper($invoiceNo));
+        $invalidInvoiceNo = $invoiceNoKey === ''
+            || (bool)preg_match('/^(TICARETSICILNO|TICARETSICILNUMARASI|ETTN|UUID|VKN|TCKN|MERSISNO|\d{10,11})$/', $invoiceNoKey);
         $invoiceDate = (string)($_POST['invoice_date'] ?? date('Y-m-d'));
         $dueDate = !empty($_POST['due_date']) ? (string)$_POST['due_date'] : null;
         $cariId = ($_POST['cari_id'] ?? '') !== '' ? (int)$_POST['cari_id'] : null;
         $subtotal = decimal_from_input($_POST['subtotal'] ?? '0');
         $vatAmount = decimal_from_input($_POST['vat_amount'] ?? '0');
         $totalAmount = decimal_from_input($_POST['total_amount'] ?? '0');
-        if ($totalAmount <= 0 && ($subtotal > 0 || $vatAmount > 0)) $totalAmount = $subtotal + $vatAmount;
         $currency = fatura_para_birimi($_POST['currency'] ?? 'TL');
         $description = trim((string)($_POST['description'] ?? ''));
 
-        if ($invoiceDate === '' || $totalAmount <= 0 || $subtotal < 0 || $vatAmount < 0) {
-            flash('error', 'Fatura tarihi ve tutarları kontrol etmelisin.');
+        if ($invalidInvoiceNo || $invoiceDate === '' || $totalAmount <= 0 || $subtotal < 0 || $vatAmount < 0) {
+            flash('error', 'Fatura numarası, tarihi ve tutarları kontrol etmelisin.');
             redirect('faturalar.php' . ($id > 0 ? '?edit=' . $id : ''));
         }
 
@@ -501,12 +503,18 @@ page_header('Faturalar', 'faturalar');
   var total=document.querySelector('[data-invoice-total]');
   if(!subtotal||!vat||!total) return;
   function sync(){
-    if(document.activeElement===total && total.value.trim()!=='') return;
+    if(total.dataset.preserveTotal==='1'&&total.value.trim()!=='') return;
+    if(document.activeElement===total&&total.value.trim()!=='') return;
     var sum=numberValue(subtotal.value)+numberValue(vat.value);
     if(sum>0) total.value=format(sum);
   }
   subtotal.addEventListener('input',sync);
   vat.addEventListener('input',sync);
+  total.addEventListener('input',function(event){
+    if(!event.isTrusted) return;
+    if(total.value.trim()!=='') total.dataset.preserveTotal='1';
+    else delete total.dataset.preserveTotal;
+  });
 })();
 </script>
 <?php page_footer(); ?>
