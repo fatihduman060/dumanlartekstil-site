@@ -63,13 +63,56 @@
         if(Math.abs(rows[i].y-y)<=2.5){row=rows[i];break;}
       }
       if(!row){row={y:y,items:[]};rows.push(row);}
-      row.items.push({x:x,text:text});
+      row.items.push({x:x,width:Number(item.width||0),text:text});
     });
     rows.sort(function(a,b){return b.y-a.y;});
-    return rows.map(function(row){
+    var prepared=rows.map(function(row){
       row.items.sort(function(a,b){return a.x-b.x;});
-      return row.items.map(function(item){return item.text;}).join(' ').replace(/\s+/g,' ').trim();
-    }).filter(Boolean);
+      var chunks=[];
+      var current=[];
+      var rightEdge=null;
+      row.items.forEach(function(item){
+        var gap=rightEdge===null?0:item.x-rightEdge;
+        if(current.length&&gap>64){chunks.push(current);current=[];}
+        current.push(item);
+        rightEdge=Math.max(rightEdge===null?item.x:rightEdge,item.x+Math.max(0,item.width));
+      });
+      if(current.length) chunks.push(current);
+      return {
+        y:row.y,
+        chunks:chunks.map(function(parts){
+          var text=parts.map(function(part){return part.text;}).join(' ').replace(/\s+/g,' ').trim();
+          return {text:text,x:parts[0].x,right:Math.max.apply(null,parts.map(function(part){return part.x+Math.max(0,part.width);}))};
+        }).filter(function(chunk){return !!chunk.text;})
+      };
+    });
+
+    var lines=[];
+    prepared.forEach(function(row,rowIndex){
+      row.chunks.forEach(function(chunk){lines.push(chunk.text);});
+
+      // Bazı telefon faturalarında tablo başlığı ile tutar bir alt satırda,
+      // aynı sütunda yer alıyor. Sütun merkezlerini eşleyip okuyucuya
+      // "KDV(%20) 51,31" gibi güvenli bir sentetik satır ver.
+      var next=prepared[rowIndex+1];
+      if(!next||Math.abs(row.y-next.y)>42) return;
+      row.chunks.forEach(function(labelChunk){
+        var labelKey=norm(labelChunk.text);
+        if(!/(KDV|ODENECEK|GENEL TOPLAM|FATURA TOPLAMI|MAL HIZMET|MATRAH)/.test(labelKey)) return;
+        if(moneyCandidates(labelChunk.text).length) return;
+        var labelCenter=(labelChunk.x+labelChunk.right)/2;
+        var best=null;
+        next.chunks.forEach(function(valueChunk){
+          var amounts=moneyCandidates(valueChunk.text);
+          if(amounts.length!==1) return;
+          var valueCenter=(valueChunk.x+valueChunk.right)/2;
+          var distance=Math.abs(labelCenter-valueCenter);
+          if(!best||distance<best.distance) best={chunk:valueChunk,distance:distance};
+        });
+        if(best&&best.distance<=90) lines.push(labelChunk.text+' '+best.chunk.text);
+      });
+    });
+    return lines.filter(Boolean);
   }
 
   function moneyCandidates(text){
@@ -192,24 +235,65 @@
     return mode==='giden'||mode==='gelen'?mode:detected;
   }
 
-  function matchCari(fullText){
-    var nums=taxNumbers(fullText).filter(function(value){return value!==companyTaxNo;});
-    for(var i=0;i<nums.length;i++){
-      var found=cariler.find(function(cari){return String(cari.tax_no||'').replace(/\D/g,'')===nums[i];});
-      if(found) return {id:String(found.id),confidence:'Vergi numarası eşleşti',tone:'success'};
-    }
+  function companyKey(value){
+    return norm(value)
+      .replace(/\b(ANONIM|LIMITED|SIRKETI|SIRKET|LTD|STI|AS|SANAYI|SAN|TICARET|TIC|VE|HIZMETLERI)\b/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
 
-    var haystack=norm(fullText);
-    var options=cariler.map(function(cari){
-      return {cari:cari,key:norm(cari.name||'')};
-    }).filter(function(item){return item.key.length>=6;});
-    options.sort(function(a,b){return b.key.length-a.key.length;});
-    for(var j=0;j<options.length;j++){
-      if(haystack.indexOf(options[j].key)!==-1){
-        return {id:String(options[j].cari.id),confidence:'Firma adı eşleşti',tone:'warning'};
+  function isOwnOrGenericName(value){
+    var key=norm(value);
+    return /(^| )(DUMANLAR|BITKE|MOFIY|BAFIY)( |$)/.test(key)
+      ||/(^| )MUHTELIF( FATURA)?( GIRISI)?( |$)/.test(key);
+  }
+
+  function isMiscCari(cari){
+    return !!cari&&/(^| )MUHTELIF( FATURA)?( GIRISI)?( |$)/.test(norm(cari.name||''));
+  }
+
+  function selectedCari(id){
+    return cariler.find(function(cari){return String(cari.id)===String(id||'');})||null;
+  }
+
+  function matchCari(fullText,issuerName,direction){
+    if(direction!=='gelen') return {id:'',confidence:'Giden faturada alıcı carisini seç',tone:'warning'};
+
+    var issuerKey=norm(issuerName);
+    var issuerCompanyKey=companyKey(issuerName);
+    if(issuerKey&&!isOwnOrGenericName(issuerName)){
+      var exact=cariler.filter(function(cari){
+        if(isMiscCari(cari)||isOwnOrGenericName(cari.name||'')) return false;
+        var cariKey=norm(cari.name||'');
+        var cariCompanyKey=companyKey(cari.name||'');
+        return cariKey===issuerKey
+          ||(issuerCompanyKey.length>=4&&cariCompanyKey===issuerCompanyKey);
+      });
+      if(exact.length===1){
+        return {id:String(exact[0].id),confidence:'Gönderen firma mevcut cariyle eşleşti',tone:'success'};
       }
     }
-    return {id:'',confidence:'Cari bulunamadı; listeden seç',tone:'danger'};
+
+    // Gönderen adı henüz bulunamadıysa yalnız PDF'de açıkça ve tam olarak
+    // geçen tek cari adını öner. Belgedeki ilk 10/11 haneli sayıya göre
+    // eşleştirme yapılmaz; bu sayılar alıcıya veya farklı bir kuruma ait olabilir.
+    if(!issuerKey){
+      var haystack=norm(fullText);
+      var named=cariler.map(function(cari){
+        return {cari:cari,key:norm(cari.name||'')};
+      }).filter(function(item){
+        return item.key.length>=8&&!isMiscCari(item.cari)&&!isOwnOrGenericName(item.cari.name||'')&&haystack.indexOf(item.key)!==-1;
+      });
+      if(named.length===1){
+        return {id:String(named[0].cari.id),confidence:'PDF’deki tam firma adı eşleşti',tone:'warning'};
+      }
+    }
+
+    var misc=cariler.find(isMiscCari);
+    if(issuerKey&&misc){
+      return {id:String(misc.id),confidence:'Gönderen ayrı kaydedildi; MUHTELİF carisi seçildi',tone:'success'};
+    }
+    return {id:'',confidence:issuerKey?'Gönderen bulundu; cari seçimi isteğe bağlı':'Gönderen ve cari kontrol edilmeli',tone:'warning'};
   }
 
   function extractInvoice(lines,fileName){
@@ -219,13 +303,20 @@
         fileName:fileName||'',
         companyTaxNo:companyTaxNo
       });
-      var safeCari=matchCari(safeFullText);
+      var safeDirection=selectedDirection(safe.direction||'gelen');
+      var safeIssuer=safeDirection==='gelen'?String(safe.issuerName||'').trim():'';
+      var safeCari=matchCari(safeFullText,safeIssuer,safeDirection);
       return {
-        direction:selectedDirection(safe.direction||'gelen'),
+        direction:safeDirection,
         detected_direction:safe.direction||'',
         cari_id:safeCari.id,
         match_text:safeCari.confidence,
         match_tone:safeCari.tone,
+        issuer_name:safeIssuer,
+        issuer_source:safeIssuer?'pdf':'',
+        issuer_confidence:safeIssuer?Number(safe.issuerConfidence||0):0,
+        issuer_parser_version:safeIssuer?String(safe.version||window.FaturaOkumaCore.version||''):'',
+        issuer_warnings:safe.issuerWarnings||[],
         invoice_no:safe.invoiceNo,
         invoice_date:safe.invoiceDate,
         due_date:'',
@@ -238,7 +329,8 @@
         warnings:safe.warnings||[],
         needs_ocr:!!safe.needsOcr,
         can_auto_save:!!safe.canAutoSave,
-        parse_meta:safe.meta||{}
+        parse_meta:safe.meta||{},
+        raw_text:safeFullText
       };
     }
 
@@ -266,15 +358,21 @@
 
     var upper=norm(fullText);
     var currency=upper.indexOf(' EUR')!==-1||upper.indexOf(' EURO')!==-1?'EUR':(upper.indexOf(' USD')!==-1||upper.indexOf(' DOLAR')!==-1?'USD':'TL');
-    var cariMatch=matchCari(fullText);
     var detectedDirection=detectDirection(fullText);
+    var fallbackDirection=selectedDirection(detectedDirection);
+    var cariMatch=matchCari(fullText,'',fallbackDirection);
 
     return {
-      direction:selectedDirection(detectedDirection),
+      direction:fallbackDirection,
       detected_direction:detectedDirection,
       cari_id:cariMatch.id,
       match_text:cariMatch.confidence,
       match_tone:cariMatch.tone,
+      issuer_name:'',
+      issuer_source:'',
+      issuer_confidence:0,
+      issuer_parser_version:'',
+      issuer_warnings:[],
       invoice_no:invoiceNo,
       invoice_date:isoDate(dateText),
       due_date:'',
@@ -282,8 +380,68 @@
       vat_amount:vatValue,
       total_amount:totalValue,
       currency:currency,
-      description:'Toplu PDF fatura yüklemesi'
+      description:'Toplu PDF fatura yüklemesi',
+      raw_text:fullText,
+      critical_issues:[],
+      warnings:['Güvenli PDF okuyucu yüklenemedi; alanları kontrol et.']
     };
+  }
+
+  function parsedMoney(value){
+    if(window.FaturaOkumaCore) return window.FaturaOkumaCore.parseMoney(value);
+    if(value===null||value===undefined||value==='') return null;
+    var number=Number(value);
+    return Number.isFinite(number)?number:null;
+  }
+
+  function invalidInvoiceNo(value){
+    var no=String(value||'').trim();
+    var compact=no.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    return !no
+      ||/^(TICARETSICILNO|TICARETSICILNUMARASI|ETTN|UUID|VKN|TCKN|MERSISNO|\d{10,11})$/.test(compact);
+  }
+
+  function recordMissingFields(record){
+    var missing=[];
+    if(invalidInvoiceNo(record.invoice_no)) missing.push('Fatura no');
+    if(!record.invoice_date) missing.push('Tarih');
+    if(parsedMoney(record.subtotal)===null) missing.push('Matrah');
+    if(parsedMoney(record.vat_amount)===null) missing.push('KDV');
+    var total=parsedMoney(record.total_amount);
+    if(total===null||total<=0) missing.push('Genel toplam');
+    if(record.direction==='gelen'&&!String(record.issuer_name||'').trim()){
+      var cari=selectedCari(record.cari_id);
+      if(!cari||isMiscCari(cari)) missing.push('Gönderen firma');
+    }
+    return missing;
+  }
+
+  function recordWarnings(record){
+    var warnings=[];
+    (record.warnings||[]).concat(record.issuer_warnings||[]).forEach(function(message){
+      if(message&&warnings.indexOf(message)===-1) warnings.push(message);
+    });
+    if(record.direction==='gelen'&&record.issuer_name&&Number(record.issuer_confidence||0)>0&&Number(record.issuer_confidence||0)<75){
+      warnings.push('Gönderen firma düşük güvenle okundu.');
+    }
+    return warnings;
+  }
+
+  function updateRecordStatus(record){
+    if(!record||record.status==='Okunuyor') return;
+    var missing=recordMissingFields(record);
+    var warnings=recordWarnings(record);
+    record.missing_fields=missing;
+    if(missing.length){
+      record.status='Eksik: '+missing.join(', ');
+      record.status_tone='danger';
+    }else if(warnings.length){
+      record.status='Bilgiler okundu — kontrol önerilir';
+      record.status_tone='warning';
+    }else{
+      record.status='Bilgiler hazır';
+      record.status_tone='success';
+    }
   }
 
   async function parseFile(file,index){
@@ -299,6 +457,11 @@
       cari_id:'',
       match_text:'Cari kontrol edilecek',
       match_tone:'warning',
+      issuer_name:'',
+      issuer_source:'',
+      issuer_confidence:0,
+      issuer_parser_version:'',
+      issuer_warnings:[],
       invoice_no:'',
       invoice_date:'',
       due_date:'',
@@ -306,7 +469,11 @@
       vat_amount:null,
       total_amount:null,
       currency:'TL',
-      description:'Toplu PDF fatura yüklemesi'
+      description:'Toplu PDF fatura yüklemesi',
+      critical_issues:[],
+      warnings:[],
+      missing_fields:[],
+      raw_text:''
     };
     records[index]=base;
     render();
@@ -323,18 +490,19 @@
         lines=lines.concat(pageLines(content));
       }
       var parsed=extractInvoice(lines,file.name);
-      var criticalCount=(parsed.critical_issues||[]).length;
-      var warningCount=(parsed.warnings||[]).length;
       records[index]=Object.assign(base,parsed,{
-        status:criticalCount?'Eksik bilgi — kontrol gerekli':(warningCount?'Okundu — kontrol gerekli':'Bilgiler güvenli okundu'),
-        status_tone:criticalCount?'danger':(warningCount?'warning':'success')
+        status:'Okuma tamamlandı',
+        status_tone:'success'
       });
+      updateRecordStatus(records[index]);
     }catch(error){
       records[index]=Object.assign(base,{
-        status:'PDF okunamadı; alanları elle tamamla',
+        status:'PDF okunamadı — alanları elle tamamla',
         status_tone:'danger',
-        match_text:error&&error.message?error.message:'PDF okunamadı'
+        match_text:error&&error.message?error.message:'PDF okunamadı',
+        warnings:['PDF otomatik okunamadı.']
       });
+      updateRecordStatus(records[index]);
     }
     render();
   }
@@ -349,11 +517,25 @@
 
   function rowHtml(record){
     var directionNote=record.direction==='giden'?'Bizim kestiğimiz fatura':'Bize kesilen fatura';
+    var issuerHint='Gelen faturada gönderen firma zorunludur.';
+    var issuerTone='warning';
+    if(record.direction==='giden'){
+      issuerHint='Giden faturada gönderen firmamızdır.';
+      issuerTone='success';
+    }else if(record.issuer_name&&record.issuer_source==='manual'){
+      issuerHint='Kullanıcı tarafından düzeltildi.';
+      issuerTone='success';
+    }else if(record.issuer_name){
+      issuerHint='PDF’den okundu'+(Number(record.issuer_confidence||0)>0?' · %'+Math.round(Number(record.issuer_confidence||0))+' güven':'');
+      issuerTone=Number(record.issuer_confidence||0)>=75?'success':'warning';
+    }
+    var missing=record.missing_fields||recordMissingFields(record);
     return '<article class="bulk-invoice-row" data-index="'+record.index+'">'
       +'<div class="bulk-row-head"><div><strong>'+esc(record.file_name)+'</strong><small class="bulk-status is-'+esc(record.status_tone)+'">'+esc(record.status)+'</small></div><span>'+(record.index+1)+'. PDF</span></div>'
       +'<div class="bulk-row-grid">'
       +'<label>Yön<select data-field="direction"><option value="gelen" '+(record.direction==='gelen'?'selected':'')+'>Gelen fatura</option><option value="giden" '+(record.direction==='giden'?'selected':'')+'>Giden fatura</option></select></label>'
       +'<label class="bulk-cari-field">Cari<select data-field="cari_id">'+cariOptions(record.cari_id)+'</select><small class="is-'+esc(record.match_tone)+'">'+esc(record.match_text)+'</small></label>'
+      +'<label class="bulk-issuer-field">Gönderen firma<input data-field="issuer_name" maxlength="180" value="'+esc(record.issuer_name)+'" placeholder="PDF’den otomatik okunur; gerekirse yaz" '+(record.direction==='giden'?'disabled':'')+'><small class="is-'+esc(issuerTone)+'">'+esc(issuerHint)+'</small></label>'
       +'<label>Fatura no<input data-field="invoice_no" value="'+esc(record.invoice_no)+'" placeholder="Fatura no"></label>'
       +'<label>Fatura tarihi<input type="date" data-field="invoice_date" value="'+esc(record.invoice_date)+'"></label>'
       +'<label>Vade tarihi<input type="date" data-field="due_date" value="'+esc(record.due_date)+'"></label>'
@@ -362,6 +544,7 @@
       +'<label>Genel toplam<input data-field="total_amount" inputmode="decimal" value="'+esc(formatMoney(record.total_amount))+'" placeholder="0,00"></label>'
       +'<label>Para birimi<select data-field="currency"><option value="TL" '+(record.currency==='TL'?'selected':'')+'>TL</option><option value="USD" '+(record.currency==='USD'?'selected':'')+'>USD</option><option value="EUR" '+(record.currency==='EUR'?'selected':'')+'>EUR</option></select></label>'
       +'</div>'
+      +(missing.length?'<p class="bulk-row-issues"><strong>Tamamlanması gerekenler:</strong> '+esc(missing.join(', '))+'</p>':'')
       +'<p class="bulk-row-foot"><strong>'+esc(directionNote)+'.</strong> Bu kayıt yalnızca fatura arşivine kaydedilecek; cariye otomatik işlenmeyecek.</p>'
       +'</article>';
   }
@@ -372,7 +555,8 @@
     var total=records.filter(Boolean).length;
     var outgoing=records.filter(Boolean).filter(function(record){return record.direction==='giden';}).length;
     var incoming=total-outgoing;
-    summaryEl.textContent=total?completed+' / '+total+' PDF hazır · '+outgoing+' giden · '+incoming+' gelen. Yönleri ve sarı/kırmızı kayıtları kontrol et.':'Henüz PDF seçilmedi.';
+    var missingCount=records.filter(Boolean).filter(function(record){return record.status!=='Okunuyor'&&recordMissingFields(record).length>0;}).length;
+    summaryEl.textContent=total?completed+' / '+total+' PDF hazır · '+outgoing+' giden · '+incoming+' gelen · '+missingCount+' eksik kayıt. Kırmızı satırlarda eksik alanlar açıkça gösterilir.':'Henüz PDF seçilmedi.';
     saveButton.disabled=parsing||total===0||completed!==total;
   }
 
@@ -389,6 +573,17 @@
       records.forEach(function(record){
         if(!record) return;
         record.direction=directionMode.value==='auto'?(record.detected_direction||record.direction):directionMode.value;
+        if(record.direction==='giden'&&isMiscCari(selectedCari(record.cari_id))){
+          record.cari_id='';
+          record.match_text='Giden faturada alıcı carisini seç';
+          record.match_tone='warning';
+        }else if(record.direction==='gelen'&&!record.cari_id){
+          var match=matchCari(record.raw_text||'',record.issuer_name||'',record.direction);
+          record.cari_id=match.id;
+          record.match_text=match.confidence;
+          record.match_tone=match.tone;
+        }
+        updateRecordStatus(record);
       });
       render();
     });
@@ -436,6 +631,12 @@
       value=window.FaturaOkumaCore.parseMoney(value);
     }
     records[index][field]=value;
+    if(field==='issuer_name'){
+      records[index].issuer_source='manual';
+      records[index].issuer_confidence=100;
+      records[index].issuer_parser_version='';
+      records[index].issuer_warnings=[];
+    }
   });
   rowsEl.addEventListener('change',function(event){
     var field=event.target.getAttribute('data-field');
@@ -449,6 +650,37 @@
       value=window.FaturaOkumaCore.parseMoney(value);
     }
     records[index][field]=value;
+    if(field==='issuer_name'){
+      records[index].issuer_name=String(value||'').replace(/\s+/g,' ').trim();
+      records[index].issuer_source=records[index].issuer_name?'manual':'';
+      records[index].issuer_confidence=records[index].issuer_name?100:0;
+      records[index].issuer_parser_version='';
+      records[index].issuer_warnings=[];
+      if(!records[index].cari_id){
+        var issuerMatch=matchCari(records[index].raw_text||'',records[index].issuer_name,records[index].direction);
+        records[index].cari_id=issuerMatch.id;
+        records[index].match_text=issuerMatch.confidence;
+        records[index].match_tone=issuerMatch.tone;
+      }
+    }
+    if(field==='cari_id'){
+      var chosen=selectedCari(value);
+      records[index].match_text=chosen?'Cari kullanıcı tarafından seçildi':'Cari seçimi kaldırıldı';
+      records[index].match_tone=chosen?'success':'warning';
+    }
+    if(field==='direction'){
+      if(value==='giden'&&isMiscCari(selectedCari(records[index].cari_id))){
+        records[index].cari_id='';
+        records[index].match_text='Giden faturada alıcı carisini seç';
+        records[index].match_tone='warning';
+      }else if(value==='gelen'&&!records[index].cari_id){
+        var directionMatch=matchCari(records[index].raw_text||'',records[index].issuer_name||'',value);
+        records[index].cari_id=directionMatch.id;
+        records[index].match_text=directionMatch.confidence;
+        records[index].match_tone=directionMatch.tone;
+      }
+    }
+    updateRecordStatus(records[index]);
     render();
   });
 
@@ -465,29 +697,38 @@
         vat_amount:record.vat_amount==null?'':record.vat_amount,
         total_amount:record.total_amount==null?'':record.total_amount,
         currency:record.currency||'TL',
-        description:record.description||'Toplu PDF fatura yüklemesi'
+        description:record.description||'Toplu PDF fatura yüklemesi',
+        issuer_name:record.direction==='gelen'?String(record.issuer_name||'').trim():'',
+        issuer_source:record.direction==='gelen'?(record.issuer_source||''):'',
+        issuer_confidence:record.direction==='gelen'?Number(record.issuer_confidence||0):0,
+        issuer_parser_version:record.direction==='gelen'?(record.issuer_parser_version||''):''
       };
     });
 
     var parseMoney=window.FaturaOkumaCore
       ?window.FaturaOkumaCore.parseMoney
       :function(value){var number=Number(value);return Number.isFinite(number)?number:null;};
-    var missing=payload.filter(function(item){
-      var no=String(item.invoice_no||'').trim();
+    var missing=records.map(function(record,index){
+      return {index:index,fields:recordMissingFields(record)};
+    }).filter(function(item){return item.fields.length>0;});
+    if(missing.length){
+      event.preventDefault();
+      var examples=missing.slice(0,3).map(function(item){
+        return (item.index+1)+'. PDF: '+item.fields.join(', ');
+      }).join(' | ');
+      window.alert(missing.length+' faturada eksik bilgi var. '+examples+' Bu alanlar tamamlanmadan kayıt yapılmayacak.');
+      return;
+    }
+
+    var invalidMoney=payload.filter(function(item){
       var subtotalValue=parseMoney(item.subtotal);
       var vatValue=parseMoney(item.vat_amount);
       var totalValue=parseMoney(item.total_amount);
-      return !no
-        ||/^(TICARETSICILNO|TICARETSICILNUMARASI|ETTN|UUID|VKN|TCKN|MERSISNO)$/i.test(no.replace(/[^A-Z0-9]/gi,''))
-        ||!item.invoice_date
-        ||subtotalValue===null
-        ||vatValue===null
-        ||totalValue===null
-        ||totalValue<=0;
+      return subtotalValue===null||vatValue===null||totalValue===null||totalValue<=0;
     });
-    if(missing.length){
+    if(invalidMoney.length){
       event.preventDefault();
-      window.alert(missing.length+' faturada numara, tarih, matrah, KDV veya genel toplam eksik/hatalı. Bu kayıtlar düzeltilmeden kaydedilemez.');
+      window.alert(invalidMoney.length+' faturada tutar alanları geçersiz. Matrah, KDV ve genel toplamı kontrol et.');
       return;
     }
     var outgoing=payload.filter(function(item){return item.direction==='giden';}).length;
@@ -503,7 +744,7 @@
 
   var style=document.createElement('style');
   style.textContent=''
-    +'.bulk-invoice-panel{margin-bottom:20px}.bulk-file-picker{border:2px dashed #d8c6a5;background:#fffaf2;border-radius:18px;padding:18px;display:grid;gap:6px;cursor:pointer}.bulk-file-picker strong{font-size:16px}.bulk-file-picker small{color:var(--muted)}.bulk-file-picker input{margin-top:8px}.bulk-direction-mode{display:grid;grid-template-columns:1fr minmax(260px,420px);gap:14px;align-items:center;border:1px solid #d8c6a5;background:#fff;border-radius:15px;padding:13px 14px}.bulk-direction-mode>div{display:grid;gap:4px}.bulk-direction-mode strong{font-size:13px}.bulk-direction-mode small{font-size:11px;color:var(--muted)}.bulk-direction-mode select{border:1px solid var(--border);border-radius:11px;padding:10px 11px;background:#fff}.bulk-upload-note{border:1px solid #f1d59b;background:#fff4dc;color:#714e15;border-radius:13px;padding:12px 14px;font-size:12px}.bulk-summary{font-weight:800;color:#514a40}.bulk-invoice-rows{display:grid;gap:12px}.bulk-invoice-row{border:1px solid var(--border);border-radius:17px;background:#fff;overflow:hidden}.bulk-row-head{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;background:#faf7f1;border-bottom:1px solid var(--border)}.bulk-row-head>div{display:grid;gap:4px}.bulk-row-head strong{font-size:13px;overflow-wrap:anywhere}.bulk-row-head>span{font-size:11px;font-weight:900;color:var(--muted)}.bulk-status{font-size:10px;font-weight:900}.bulk-status.is-success,.bulk-cari-field small.is-success{color:var(--success)}.bulk-status.is-warning,.bulk-cari-field small.is-warning{color:#8a5b0a}.bulk-status.is-danger,.bulk-cari-field small.is-danger{color:var(--danger)}.bulk-status.is-loading{color:#23598b}.bulk-row-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.bulk-row-grid label{display:grid;gap:5px;font-size:11px;font-weight:850;color:#554d42}.bulk-row-grid input,.bulk-row-grid select{width:100%;border:1px solid var(--border);background:#fff;border-radius:11px;padding:10px 11px}.bulk-cari-field{grid-column:span 2}.bulk-cari-field small{font-size:10px}.bulk-row-foot{margin:0;padding:0 14px 13px;color:var(--muted);font-size:10px}.bulk-row-foot strong{color:#514a40}.bulk-actions{position:sticky;bottom:0;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);padding:12px 0 2px;z-index:2}@media(max-width:1050px){.bulk-row-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:720px){.bulk-direction-mode{grid-template-columns:1fr}}@media(max-width:640px){.bulk-row-grid{grid-template-columns:1fr}.bulk-cari-field{grid-column:auto}.bulk-row-head{grid-template-columns:1fr}}';
+    +'.bulk-invoice-panel{margin-bottom:20px}.bulk-file-picker{border:2px dashed #d8c6a5;background:#fffaf2;border-radius:18px;padding:18px;display:grid;gap:6px;cursor:pointer}.bulk-file-picker strong{font-size:16px}.bulk-file-picker small{color:var(--muted)}.bulk-file-picker input{margin-top:8px}.bulk-direction-mode{display:grid;grid-template-columns:1fr minmax(260px,420px);gap:14px;align-items:center;border:1px solid #d8c6a5;background:#fff;border-radius:15px;padding:13px 14px}.bulk-direction-mode>div{display:grid;gap:4px}.bulk-direction-mode strong{font-size:13px}.bulk-direction-mode small{font-size:11px;color:var(--muted)}.bulk-direction-mode select{border:1px solid var(--border);border-radius:11px;padding:10px 11px;background:#fff}.bulk-upload-note{border:1px solid #f1d59b;background:#fff4dc;color:#714e15;border-radius:13px;padding:12px 14px;font-size:12px}.bulk-summary{font-weight:800;color:#514a40}.bulk-invoice-rows{display:grid;gap:12px}.bulk-invoice-row{border:1px solid var(--border);border-radius:17px;background:#fff;overflow:hidden}.bulk-row-head{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;background:#faf7f1;border-bottom:1px solid var(--border)}.bulk-row-head>div{display:grid;gap:4px}.bulk-row-head strong{font-size:13px;overflow-wrap:anywhere}.bulk-row-head>span{font-size:11px;font-weight:900;color:var(--muted)}.bulk-status{font-size:10px;font-weight:900}.bulk-status.is-success,.bulk-cari-field small.is-success,.bulk-issuer-field small.is-success{color:var(--success)}.bulk-status.is-warning,.bulk-cari-field small.is-warning,.bulk-issuer-field small.is-warning{color:#8a5b0a}.bulk-status.is-danger,.bulk-cari-field small.is-danger,.bulk-issuer-field small.is-danger{color:var(--danger)}.bulk-status.is-loading{color:#23598b}.bulk-row-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.bulk-row-grid label{display:grid;gap:5px;font-size:11px;font-weight:850;color:#554d42}.bulk-row-grid input,.bulk-row-grid select{width:100%;border:1px solid var(--border);background:#fff;border-radius:11px;padding:10px 11px}.bulk-row-grid input:disabled{background:#f4f1ec;color:#81786c}.bulk-cari-field,.bulk-issuer-field{grid-column:span 2}.bulk-cari-field small,.bulk-issuer-field small{font-size:10px}.bulk-row-issues{margin:0 14px 10px;padding:9px 11px;border-radius:10px;background:#fff0ef;color:#96352f;font-size:10px}.bulk-row-foot{margin:0;padding:0 14px 13px;color:var(--muted);font-size:10px}.bulk-row-foot strong{color:#514a40}.bulk-actions{position:sticky;bottom:0;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);padding:12px 0 2px;z-index:2}@media(max-width:1050px){.bulk-row-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:720px){.bulk-direction-mode{grid-template-columns:1fr}}@media(max-width:640px){.bulk-row-grid{grid-template-columns:1fr}.bulk-cari-field,.bulk-issuer-field{grid-column:auto}.bulk-row-head{grid-template-columns:1fr}}';
   document.head.appendChild(style);
 
   addDirectionMode();
