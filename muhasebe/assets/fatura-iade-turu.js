@@ -86,23 +86,71 @@
     window.requestAnimationFrame(sortRows);
   }
 
+  function ensureBottomArea(listSection){
+    var area=document.querySelector('[data-fatura-alt-kontroller]');
+    if(area) return area;
+
+    area=document.createElement('section');
+    area.className='panel-card fatura-alt-kontroller';
+    area.setAttribute('data-fatura-alt-kontroller','1');
+    area.innerHTML='<div class="card-head"><div><h3>Fatura araçları</h3><small>Seyrek kullanılan dönem, toplu yükleme ve KDV devir işlemleri</small></div></div><div class="fatura-alt-kontrol-body" data-fatura-alt-kontrol-body></div>';
+    listSection.insertAdjacentElement('afterend',area);
+    return area;
+  }
+
+  function moveAuxiliaryControls(){
+    var dashboard=document.querySelector('.dashboard-section');
+    var listSection=document.querySelector('.form-grid');
+    if(!dashboard||!listSection) return;
+
+    var area=ensureBottomArea(listSection);
+    var body=area.querySelector('[data-fatura-alt-kontrol-body]');
+    if(!body) return;
+
+    var periodForm=dashboard.querySelector('form.filterbar');
+    if(periodForm&&periodForm.parentElement!==body){
+      periodForm.classList.add('fatura-alt-period-form');
+      body.appendChild(periodForm);
+    }
+
+    var bulkPanel=document.querySelector('.toplu-yon-duzelt-panel');
+    if(bulkPanel&&bulkPanel.parentElement!==body) body.appendChild(bulkPanel);
+
+    var carryPanel=document.getElementById('kdvDevirPanel');
+    if(carryPanel&&carryPanel.parentElement!==body) body.appendChild(carryPanel);
+  }
+
   document.addEventListener('bitke:fatura-meta-updated',function(event){
     applyPayload(event.detail||{});
   });
 
+  var style=document.createElement('style');
+  style.textContent=''
+    +'.fatura-alt-kontroller{display:grid;gap:12px;margin-top:18px;padding:16px}'
+    +'.fatura-alt-kontroller>.card-head{margin:0;padding-bottom:4px}'
+    +'.fatura-alt-kontroller>.card-head small{display:block;margin-top:3px;color:var(--muted);font-size:10px}'
+    +'.fatura-alt-kontrol-body{display:grid;gap:12px}'
+    +'.fatura-alt-period-form{margin:0!important;padding:12px!important;border:1px solid var(--border);border-radius:14px;background:#faf9f6}'
+    +'.fatura-alt-kontroller .toplu-yon-duzelt-panel{margin:0}'
+    +'.fatura-alt-kontroller .kdv-devir-panel{margin:0}'
+    +'@media(max-width:720px){.fatura-alt-kontroller{padding:12px}.fatura-alt-period-form{align-items:stretch}}';
+  document.head.appendChild(style);
+
   var observer=new MutationObserver(function(){
     applyAll();
     scheduleSort();
+    moveAuxiliaryControls();
   });
   observer.observe(document.documentElement,{childList:true,subtree:true});
 
   applyAll();
   scheduleSort();
+  moveAuxiliaryControls();
 
   fetch('fatura-tur.php?period='+encodeURIComponent(periodValue())+'&_='+Date.now(),{
     credentials:'same-origin',cache:'no-store'
   })
     .then(function(response){return response.json();})
     .then(function(data){if(data&&data.ok) applyPayload(data);})
-    .catch(function(){applyAll();scheduleSort();});
+    .catch(function(){applyAll();scheduleSort();moveAuxiliaryControls();});
 })();
