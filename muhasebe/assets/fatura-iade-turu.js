@@ -11,6 +11,14 @@
     return /^\d{4}-\d{2}$/.test(value)?value:new Date().toISOString().slice(0,7);
   }
 
+  function directionValue(){
+    var select=document.querySelector('form.filterbar select[name="direction"]');
+    var value=select?String(select.value||''):'';
+    if(value==='gelen'||value==='giden') return value;
+    value=new URLSearchParams(location.search).get('direction')||'';
+    return value==='gelen'||value==='giden'?value:'';
+  }
+
   function ensureOption(select){
     if(!select||select.querySelector('option[value="iade"]')) return;
     var option=document.createElement('option');
@@ -52,6 +60,40 @@
     return 0;
   }
 
+  function rowDirection(row){
+    var cell=row&&row.cells?row.cells[1]:null;
+    var text=String(cell?cell.textContent:'').toLocaleLowerCase('tr-TR');
+    if(text.indexOf('giden')!==-1) return 'giden';
+    if(text.indexOf('gelen')!==-1) return 'gelen';
+    return '';
+  }
+
+  function rowInvoiceNumber(row){
+    var cell=row&&row.cells?row.cells[0]:null;
+    if(!cell) return '';
+    var small=cell.querySelector('small');
+    var text=String(small?small.textContent:'').split('·')[0].trim();
+    return text;
+  }
+
+  function rowInvoiceSequence(row){
+    var invoiceNo=rowInvoiceNumber(row);
+    if(!invoiceNo) return '';
+    var match=invoiceNo.match(/(\d+)\D*$/);
+    return match?match[1].replace(/^0+(?=\d)/,''):'';
+  }
+
+  function compareDigitStringsDesc(a,b){
+    if(a&&b){
+      if(a.length!==b.length) return b.length-a.length;
+      if(a!==b) return b>a?1:-1;
+      return 0;
+    }
+    if(a&&!b) return -1;
+    if(!a&&b) return 1;
+    return 0;
+  }
+
   function rowInvoiceId(row){
     var input=row.querySelector('form input[name="id"]');
     if(input) return Number(input.value||0);
@@ -69,7 +111,13 @@
     var rows=Array.prototype.slice.call(body.querySelectorAll(':scope > tr'));
     var dated=rows.filter(function(row){return rowDateValue(row)>0;});
     if(dated.length<2) return;
+
+    var outgoingOnly=directionValue()==='giden'||dated.every(function(row){return rowDirection(row)==='giden';});
     var sorted=dated.slice().sort(function(a,b){
+      if(outgoingOnly){
+        var numberDiff=compareDigitStringsDesc(rowInvoiceSequence(a),rowInvoiceSequence(b));
+        if(numberDiff!==0) return numberDiff;
+      }
       var dateDiff=rowDateValue(b)-rowDateValue(a);
       if(dateDiff!==0) return dateDiff;
       return rowInvoiceId(b)-rowInvoiceId(a);
