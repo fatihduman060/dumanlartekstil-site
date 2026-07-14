@@ -461,18 +461,14 @@
     var missing=[];
     if(invalidInvoiceNo(record.invoice_no)) missing.push('Fatura no');
     if(!record.invoice_date) missing.push('Tarih');
-    if(parsedMoney(record.subtotal)===null) missing.push('Matrah');
-    if(parsedMoney(record.vat_amount)===null) missing.push('KDV');
+    var subtotal=parsedMoney(record.subtotal);
+    var vat=parsedMoney(record.vat_amount);
+    if(subtotal===null) missing.push('Matrah');
+    if(vat===null) missing.push('KDV');
     var total=parsedMoney(record.total_amount);
     if(total===null||total<=0) missing.push('Genel toplam');
     if(record.direction==='gelen'&&!String(record.issuer_name||'').trim()) missing.push('Gönderen firma');
-    var criticals=Array.isArray(record.critical_issues)?record.critical_issues:[];
-    if(criticals.some(function(message){return /KDV pozitifken matrah/i.test(String(message||''));})){
-      missing.push('Matrah/KDV tutarlılığı');
-    }
-    if(criticals.some(function(message){return /PDF metin katmanı/i.test(String(message||''));})){
-      missing.push('PDF metni/OCR');
-    }
+    if(subtotal!==null&&vat!==null&&subtotal<=0&&vat>0) missing.push('Matrah/KDV tutarlılığı');
     return missing;
   }
 
@@ -481,6 +477,9 @@
     (record.warnings||[]).concat(record.issuer_warnings||[]).forEach(function(message){
       if(message&&warnings.indexOf(message)===-1) warnings.push(message);
     });
+    if((record.critical_issues||[]).some(function(message){return /PDF metin katmanı/i.test(String(message||''));})){
+      warnings.push('PDF metin katmanı zayıf; elle tamamlanan alanları belgeyle karşılaştır.');
+    }
     if(record.direction==='gelen'&&record.issuer_name&&Number(record.issuer_confidence||0)>0&&Number(record.issuer_confidence||0)<75){
       warnings.push('Gönderen firma düşük güvenle okundu.');
     }
