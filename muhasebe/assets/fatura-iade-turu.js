@@ -93,7 +93,7 @@
     area=document.createElement('section');
     area.className='panel-card fatura-alt-kontroller';
     area.setAttribute('data-fatura-alt-kontroller','1');
-    area.innerHTML='<div class="card-head"><div><h3>Fatura araçları</h3><small>Seyrek kullanılan dönem, toplu yükleme ve KDV devir işlemleri</small></div></div><div class="fatura-alt-kontrol-body" data-fatura-alt-kontrol-body></div>';
+    area.innerHTML='<div class="card-head"><div><h3>Fatura araçları</h3><small>Seyrek kullanılan dönem, toplu yükleme, KDV devir ve masraf fişi işlemleri</small></div></div><div class="fatura-alt-kontrol-body" data-fatura-alt-kontrol-body></div>';
     listSection.insertAdjacentElement('afterend',area);
     return area;
   }
@@ -118,6 +118,14 @@
 
     var carryPanel=document.getElementById('kdvDevirPanel');
     if(carryPanel&&carryPanel.parentElement!==body) body.appendChild(carryPanel);
+  }
+
+  function loadExpenseReceipts(){
+    if(document.querySelector('script[data-masraf-fisleri-loader]')) return;
+    var script=document.createElement('script');
+    script.src='assets/masraf-fisleri.js?v=1';
+    script.setAttribute('data-masraf-fisleri-loader','1');
+    document.body.appendChild(script);
   }
 
   document.addEventListener('bitke:fatura-meta-updated',function(event){
@@ -146,6 +154,7 @@
   applyAll();
   scheduleSort();
   moveAuxiliaryControls();
+  loadExpenseReceipts();
 
   fetch('fatura-tur.php?period='+encodeURIComponent(periodValue())+'&_='+Date.now(),{
     credentials:'same-origin',cache:'no-store'
