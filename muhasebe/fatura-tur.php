@@ -13,6 +13,9 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoice_expense_types (
     updated_by INTEGER,
     updated_at TEXT
 )");
+ensure_column(db(), 'invoices', 'issuer_name', 'TEXT');
+ensure_column(db(), 'invoices', 'issuer_source', 'TEXT');
+ensure_column(db(), 'invoices', 'issuer_confidence', 'INTEGER NOT NULL DEFAULT 0');
 
 function fatura_turleri(): array
 {
@@ -40,6 +43,20 @@ function fatura_tur_norm(string $value): string
     $value = strtoupper(strtr($value, $map));
     $value = preg_replace('/[^A-Z0-9]+/', ' ', $value) ?: $value;
     return trim(preg_replace('/\s+/', ' ', $value) ?: $value);
+}
+
+function fatura_tur_muhtelif_cari(string $value): bool
+{
+    return strpos(fatura_tur_norm($value), 'MUHTELIF FATURA GIRISI') !== false;
+}
+
+function fatura_tur_kendi_unvani(string $value): bool
+{
+    $text = ' ' . fatura_tur_norm($value) . ' ';
+    foreach (['DUMANLAR', 'BITKE', 'MOFIY', 'BAFIY'] as $marker) {
+        if (strpos($text, ' ' . $marker . ' ') !== false) return true;
+    }
+    return false;
 }
 
 function fatura_tur_oner(string $value): array
@@ -85,6 +102,9 @@ function fatura_tur_payload(string $period): array
         COALESCE(i.description,'') AS description,
         COALESCE(i.document_name,'') AS document_name,
         COALESCE(i.document_path,'') AS document_path,
+        COALESCE(i.issuer_name,'') AS issuer_name,
+        COALESCE(i.issuer_source,'') AS issuer_source,
+        COALESCE(i.issuer_confidence,0) AS issuer_confidence,
         COALESCE(c.name,'') AS cari_name,
         COALESCE(t.category,'') AS category,
         COALESCE(t.source,'') AS category_source
@@ -99,15 +119,20 @@ function fatura_tur_payload(string $period): array
     $items = [];
     $summary = [];
     foreach ($types as $key => $label) {
-        $summary[$key] = ['key'=>$key,'label'=>$label,'count'=>0,'total'=>0.0,'confirmed_count'=>0,'suggested_count'=>0];
+        $summary[$key] = ['key'=>$key,'label'=>$label,'count'=>0,'total'=>0.0,'confirmed_count'=>0,'suggested_count'=>0,'unidentified_count'=>0,'issuer_map'=>[]];
     }
 
     foreach ($rows as $row) {
         $direction = (string)$row['direction'];
+        $cariName = trim((string)$row['cari_name']);
+        $genericCari = fatura_tur_muhtelif_cari($cariName);
+        $storedIssuer = trim((string)$row['issuer_name']);
+        $displayIssuer = $storedIssuer;
+        if ($displayIssuer === '' && $cariName !== '' && !$genericCari) $displayIssuer = $cariName;
         $assigned = array_key_exists((string)$row['category'], $types) ? (string)$row['category'] : '';
         $suggestion = ['category'=>'','confidence'=>0,'matched'=>''];
         if ($direction === 'gelen' && $assigned === '') {
-            $suggestion = fatura_tur_oner((string)$row['cari_name'] . ' ' . (string)$row['description'] . ' ' . (string)$row['document_name']);
+            $suggestion = fatura_tur_oner($displayIssuer . ' ' . (!$genericCari ? $cariName : '') . ' ' . (string)$row['description'] . ' ' . (string)$row['document_name']);
         }
         $effective = $direction === 'gelen' ? ($assigned !== '' ? $assigned : (string)$suggestion['category']) : 'satis';
 
@@ -115,6 +140,16 @@ function fatura_tur_payload(string $period): array
             $summary[$effective]['count']++;
             if ((string)$row['currency'] === 'TL') $summary[$effective]['total'] += (float)$row['total_amount'];
             if ($assigned !== '') $summary[$effective]['confirmed_count']++; else $summary[$effective]['suggested_count']++;
+            if ($displayIssuer !== '') {
+                $issuerKey = fatura_tur_norm($displayIssuer);
+                if (!isset($summary[$effective]['issuer_map'][$issuerKey])) {
+                    $summary[$effective]['issuer_map'][$issuerKey] = ['name'=>$displayIssuer,'count'=>0,'total'=>0.0];
+                }
+                $summary[$effective]['issuer_map'][$issuerKey]['count']++;
+                if ((string)$row['currency'] === 'TL') $summary[$effective]['issuer_map'][$issuerKey]['total'] += (float)$row['total_amount'];
+            } else {
+                $summary[$effective]['unidentified_count']++;
+            }
         }
 
         $items[] = [
@@ -128,12 +163,29 @@ function fatura_tur_payload(string $period): array
             'suggestion_confidence'=>(int)$suggestion['confidence'],
             'suggestion_match'=>(string)$suggestion['matched'],
             'effective_category'=>$effective,
-            'cari_name'=>(string)$row['cari_name'],
+            'cari_name'=>$cariName,
+            'is_generic_cari'=>$genericCari,
+            'issuer_name'=>$displayIssuer,
+            'issuer_is_stored'=>$storedIssuer !== '',
+            'issuer_source'=>(string)$row['issuer_source'],
+            'issuer_confidence'=>(int)$row['issuer_confidence'],
+            'needs_issuer'=>$direction === 'gelen' && $genericCari && $storedIssuer === '' && (string)$row['issuer_source'] !== 'pdf' && !empty($row['document_path']),
             'document_name'=>(string)$row['document_name'],
             'document_url'=>!empty($row['document_path']) ? 'fatura-indir.php?id=' . (int)$row['id'] : '',
             'has_document'=>!empty($row['document_path']),
         ];
     }
+
+    foreach ($summary as &$summaryRow) {
+        $issuers = array_values($summaryRow['issuer_map']);
+        usort($issuers, function ($a, $b) {
+            if ($a['total'] == $b['total']) return $b['count'] <=> $a['count'];
+            return $a['total'] < $b['total'] ? 1 : -1;
+        });
+        $summaryRow['issuers'] = $issuers;
+        unset($summaryRow['issuer_map']);
+    }
+    unset($summaryRow);
 
     $summaryRows = array_values(array_filter($summary, function ($row) { return (int)$row['count'] > 0; }));
     usort($summaryRows, function ($a, $b) {
@@ -149,42 +201,63 @@ try {
         require_write();
         require_csrf();
 
+        $action = trim((string)($_POST['action'] ?? 'category'));
         $invoiceId = (int)($_POST['invoice_id'] ?? 0);
-        $category = trim((string)($_POST['category'] ?? ''));
-        $source = trim((string)($_POST['source'] ?? 'manual'));
-        $types = fatura_turleri();
-
         if ($invoiceId <= 0) throw new RuntimeException('Fatura seçimi geçersiz.');
-        if ($category !== '' && !array_key_exists($category, $types)) throw new RuntimeException('Fatura türü geçersiz.');
 
-        $stmt = db()->prepare("SELECT id, direction FROM invoices WHERE id=? AND COALESCE(is_cancelled,0)=0");
+        $stmt = db()->prepare("SELECT id, direction, COALESCE(issuer_name,'') AS issuer_name, COALESCE(issuer_source,'') AS issuer_source FROM invoices WHERE id=? AND COALESCE(is_cancelled,0)=0");
         $stmt->execute([$invoiceId]);
         $invoice = $stmt->fetch();
         if (!$invoice) throw new RuntimeException('Fatura bulunamadı veya iptal edilmiş.');
-        if ((string)$invoice['direction'] !== 'gelen') throw new RuntimeException('Fatura türü yalnızca gelen faturalarda kullanılır.');
 
-        if ($category === '') {
-            db()->prepare('DELETE FROM invoice_expense_types WHERE invoice_id=?')->execute([$invoiceId]);
-            log_action('Fatura türü kaldırıldı', '#' . $invoiceId);
-        } else {
-            $userId = current_user()['id'] ?? null;
-            $stmt = db()->prepare('SELECT invoice_id FROM invoice_expense_types WHERE invoice_id=?');
-            $stmt->execute([$invoiceId]);
-            if ($stmt->fetchColumn()) {
-                db()->prepare('UPDATE invoice_expense_types SET category=?, source=?, updated_by=?, updated_at=? WHERE invoice_id=?')
-                    ->execute([$category, $source === 'pdf' ? 'pdf' : 'manual', $userId, now(), $invoiceId]);
-            } else {
-                db()->prepare('INSERT INTO invoice_expense_types (invoice_id, category, source, created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([$invoiceId, $category, $source === 'pdf' ? 'pdf' : 'manual', $userId, now(), $userId, now()]);
+        if ($action === 'issuer') {
+            if ((string)$invoice['direction'] !== 'gelen') throw new RuntimeException('Gönderen firma yalnızca gelen faturada kaydedilir.');
+            $issuerName = trim((string)($_POST['issuer_name'] ?? ''));
+            if (function_exists('mb_substr')) $issuerName = mb_substr($issuerName, 0, 180, 'UTF-8');
+            else $issuerName = substr($issuerName, 0, 180);
+            $source = (string)($_POST['source'] ?? 'manual') === 'pdf' ? 'pdf' : 'manual';
+            $confidence = max(0, min(100, (int)($_POST['confidence'] ?? ($source === 'manual' ? 100 : 0))));
+            if ($issuerName !== '' && fatura_tur_kendi_unvani($issuerName)) throw new RuntimeException('Kendi şirket ünvanımız gönderen firma olarak kaydedilemez.');
+            if ($issuerName !== '' && fatura_tur_muhtelif_cari($issuerName)) throw new RuntimeException('MUHTELİF cari adı gönderen firma olarak kaydedilemez.');
+            if ($source === 'pdf' && trim((string)$invoice['issuer_source']) === 'manual') {
+                throw new RuntimeException('Elle girilen gönderen firma otomatik olarak değiştirilemez.');
             }
-            log_action('Fatura türü güncellendi', '#' . $invoiceId . ' → ' . $types[$category]);
-            audit_action('fatura', $invoiceId, 'fatura_turu_guncellendi', null, ['category'=>$category], $types[$category]);
+            db()->prepare('UPDATE invoices SET issuer_name=?, issuer_source=?, issuer_confidence=?, updated_at=? WHERE id=?')
+                ->execute([$issuerName, $issuerName === '' && $source === 'manual' ? '' : $source, $issuerName === '' ? 0 : $confidence, now(), $invoiceId]);
+            log_action($issuerName === '' ? 'Fatura göndereni okunamadı' : 'Fatura göndereni güncellendi', '#' . $invoiceId . ($issuerName !== '' ? ' → ' . $issuerName : ''));
+            if ($issuerName !== '') audit_action('fatura', $invoiceId, 'gonderen_firma_guncellendi', null, ['issuer_name'=>$issuerName,'source'=>$source,'confidence'=>$confidence], $issuerName);
+            $message = $issuerName === '' ? 'Gönderen firma PDF’den güvenilir biçimde okunamadı.' : 'Gönderen firma kaydedildi.';
+        } else {
+            $category = trim((string)($_POST['category'] ?? ''));
+            $source = trim((string)($_POST['source'] ?? 'manual'));
+            $types = fatura_turleri();
+            if ($category !== '' && !array_key_exists($category, $types)) throw new RuntimeException('Fatura türü geçersiz.');
+            if ((string)$invoice['direction'] !== 'gelen') throw new RuntimeException('Fatura türü yalnızca gelen faturalarda kullanılır.');
+
+            if ($category === '') {
+                db()->prepare('DELETE FROM invoice_expense_types WHERE invoice_id=?')->execute([$invoiceId]);
+                log_action('Fatura türü kaldırıldı', '#' . $invoiceId);
+            } else {
+                $userId = current_user()['id'] ?? null;
+                $stmt = db()->prepare('SELECT invoice_id FROM invoice_expense_types WHERE invoice_id=?');
+                $stmt->execute([$invoiceId]);
+                if ($stmt->fetchColumn()) {
+                    db()->prepare('UPDATE invoice_expense_types SET category=?, source=?, updated_by=?, updated_at=? WHERE invoice_id=?')
+                        ->execute([$category, $source === 'pdf' ? 'pdf' : 'manual', $userId, now(), $invoiceId]);
+                } else {
+                    db()->prepare('INSERT INTO invoice_expense_types (invoice_id, category, source, created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                        ->execute([$invoiceId, $category, $source === 'pdf' ? 'pdf' : 'manual', $userId, now(), $userId, now()]);
+                }
+                log_action('Fatura türü güncellendi', '#' . $invoiceId . ' → ' . $types[$category]);
+                audit_action('fatura', $invoiceId, 'fatura_turu_guncellendi', null, ['category'=>$category], $types[$category]);
+            }
+            $message = $category === '' ? 'Fatura türü kaldırıldı.' : 'Fatura türü kaydedildi.';
         }
 
         $period = fatura_tur_period((string)($_POST['period'] ?? ''));
         $payload = fatura_tur_payload($period);
         $payload['ok'] = true;
-        $payload['message'] = $category === '' ? 'Fatura türü kaldırıldı.' : 'Fatura türü kaydedildi.';
+        $payload['message'] = $message;
         $payload['csrf_token'] = csrf_token();
         echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
