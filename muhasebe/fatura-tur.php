@@ -22,6 +22,7 @@ function fatura_turleri(): array
 {
     return [
         'iplik' => 'İplik / Hammadde',
+        'iade' => 'İade Faturası',
         'telefon' => 'Telefon / İnternet',
         'elektrik' => 'Elektrik',
         'dogalgaz' => 'Doğalgaz',
@@ -64,6 +65,7 @@ function fatura_tur_oner(string $value): array
 {
     $text = fatura_tur_norm($value);
     $rules = [
+        'iade' => ['IADE FATURASI'=>200,'SATIS IADE'=>190,'SATIS IADESI'=>190,'URUN IADESI'=>180,'MAL IADESI'=>180,'IADE EDILEN'=>170,'IADE'=>70],
         'telefon' => ['TURK TELEKOM'=>100,'TTNET'=>100,'TURKCELL'=>100,'VODAFONE'=>100,'SUPERONLINE'=>100,'TELEFON'=>80,'INTERNET'=>80,'GSM'=>70,'ILETISIM'=>45],
         'dogalgaz' => ['DOGALGAZ'=>110,'DOGAL GAZ'=>110,'AKSA GAZ'=>100,'AKSAGAZ'=>100,'ENERYA'=>100,'IGDAS'=>100,'GAZDAS'=>100],
         'elektrik' => ['ELEKTRIK'=>100,'ENERJI'=>65,'YEDAS'=>100,'CEDAS'=>100,'UEDAS'=>100,'CK ENERJI'=>100,'YESILIRMAK ELEKTRIK'=>110,'ULUDAG ELEKTRIK'=>110,'ELEKTRIK DAGITIM'=>110],
