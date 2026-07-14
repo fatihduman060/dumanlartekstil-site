@@ -12,6 +12,7 @@
   var companyTaxNo=String(window.BITKE_COMPANY_TAX_NO||'').replace(/\D/g,'');
   var records=[];
   var parsing=false;
+  var directionMode=null;
 
   function esc(value){
     return String(value==null?'':value).replace(/[&<>\"]/g,function(char){
@@ -131,26 +132,64 @@
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
 
+  function taxNoOccurrences(fullText){
+    var text=String(fullText||'');
+    var regex=/(?:\d[\s.\/-]*){10,11}/g;
+    var rows=[];
+    var match;
+    while((match=regex.exec(text))!==null){
+      var digits=match[0].replace(/\D/g,'');
+      if(digits.length===10||digits.length===11){
+        rows.push({value:digits,index:match.index});
+      }
+      if(match.index===regex.lastIndex) regex.lastIndex++;
+    }
+    return rows;
+  }
+
   function taxNumbers(fullText){
-    var matches=String(fullText||'').match(/\b\d{10,11}\b/g)||[];
-    return Array.from(new Set(matches.map(function(value){return value.replace(/\D/g,'');})));
+    return Array.from(new Set(taxNoOccurrences(fullText).map(function(row){return row.value;})));
+  }
+
+  function hasNear(text,index,words,radius){
+    if(index<0) return false;
+    var start=Math.max(0,index-radius);
+    var end=Math.min(text.length,index+radius);
+    var context=text.slice(start,end);
+    return words.some(function(word){return context.indexOf(word)!==-1;});
   }
 
   function detectDirection(fullText){
     var upper=norm(fullText);
-    var companyIndex=companyTaxNo?upper.indexOf(companyTaxNo):-1;
-    if(companyIndex<0) return 'gelen';
+    var occurrences=taxNoOccurrences(upper);
+    var companyRows=occurrences.filter(function(row){return row.value===companyTaxNo;});
+    var otherRows=occurrences.filter(function(row){return row.value!==companyTaxNo;});
+    var companyIndex=companyRows.length?companyRows[0].index:-1;
+    var otherIndex=otherRows.length?otherRows[0].index:-1;
 
-    var sellerIndex=Math.max(upper.lastIndexOf('SATICI',companyIndex),upper.lastIndexOf('SELLER',companyIndex));
-    var buyerIndex=Math.max(
-      upper.lastIndexOf('ALICI',companyIndex),
-      upper.lastIndexOf('SAYIN',companyIndex),
-      upper.lastIndexOf('MUSTERI',companyIndex),
-      upper.lastIndexOf('BUYER',companyIndex)
+    if(companyIndex>=0){
+      if(hasNear(upper,companyIndex,['SATICI','SELLER','TEDARIKCI'],260)) return 'giden';
+      if(hasNear(upper,companyIndex,['ALICI','SAYIN','MUSTERI','BUYER'],260)) return 'gelen';
+      if(otherIndex>=0){
+        if(companyIndex<otherIndex) return 'giden';
+        if(companyIndex>otherIndex) return 'gelen';
+      }
+      if(companyIndex<upper.length*0.42) return 'giden';
+    }
+
+    var companyNameIndex=Math.max(
+      upper.indexOf('DUMANLAR KONFEKSIYON'),
+      upper.indexOf('DUMANLAR A S'),
+      upper.indexOf('DUMANLAR TEKSTIL')
     );
-    if(sellerIndex>=0&&sellerIndex>buyerIndex) return 'giden';
-    if(buyerIndex>=0) return 'gelen';
+    if(companyNameIndex>=0&&companyNameIndex<upper.length*0.38) return 'giden';
+
     return 'gelen';
+  }
+
+  function selectedDirection(detected){
+    var mode=directionMode?directionMode.value:'auto';
+    return mode==='giden'||mode==='gelen'?mode:detected;
   }
 
   function matchCari(fullText){
@@ -199,9 +238,11 @@
     var upper=norm(fullText);
     var currency=upper.indexOf(' EUR')!==-1||upper.indexOf(' EURO')!==-1?'EUR':(upper.indexOf(' USD')!==-1||upper.indexOf(' DOLAR')!==-1?'USD':'TL');
     var cariMatch=matchCari(fullText);
+    var detectedDirection=detectDirection(fullText);
 
     return {
-      direction:detectDirection(fullText),
+      direction:selectedDirection(detectedDirection),
+      detected_direction:detectedDirection,
       cari_id:cariMatch.id,
       match_text:cariMatch.confidence,
       match_tone:cariMatch.tone,
@@ -217,13 +258,15 @@
   }
 
   async function parseFile(file,index){
+    var defaultDirection=selectedDirection('gelen');
     var base={
       index:index,
       file:file,
       file_name:file.name,
       status:'Okunuyor',
       status_tone:'loading',
-      direction:'gelen',
+      direction:defaultDirection,
+      detected_direction:'gelen',
       cari_id:'',
       match_text:'Cari kontrol edilecek',
       match_tone:'warning',
@@ -274,6 +317,7 @@
   }
 
   function rowHtml(record){
+    var directionNote=record.direction==='giden'?'Bizim kestiğimiz fatura':'Bize kesilen fatura';
     return '<article class="bulk-invoice-row" data-index="'+record.index+'">'
       +'<div class="bulk-row-head"><div><strong>'+esc(record.file_name)+'</strong><small class="bulk-status is-'+esc(record.status_tone)+'">'+esc(record.status)+'</small></div><span>'+(record.index+1)+'. PDF</span></div>'
       +'<div class="bulk-row-grid">'
@@ -287,7 +331,7 @@
       +'<label>Genel toplam<input data-field="total_amount" inputmode="decimal" value="'+esc(formatMoney(record.total_amount))+'" placeholder="0,00"></label>'
       +'<label>Para birimi<select data-field="currency"><option value="TL" '+(record.currency==='TL'?'selected':'')+'>TL</option><option value="USD" '+(record.currency==='USD'?'selected':'')+'>USD</option><option value="EUR" '+(record.currency==='EUR'?'selected':'')+'>EUR</option></select></label>'
       +'</div>'
-      +'<p class="bulk-row-foot">Bu kayıt yalnızca fatura arşivine kaydedilecek; cariye otomatik işlenmeyecek.</p>'
+      +'<p class="bulk-row-foot"><strong>'+esc(directionNote)+'.</strong> Bu kayıt yalnızca fatura arşivine kaydedilecek; cariye otomatik işlenmeyecek.</p>'
       +'</article>';
   }
 
@@ -295,8 +339,28 @@
     rowsEl.innerHTML=records.filter(Boolean).map(rowHtml).join('');
     var completed=records.filter(Boolean).filter(function(record){return record.status!=='Okunuyor';}).length;
     var total=records.filter(Boolean).length;
-    summaryEl.textContent=total?completed+' / '+total+' PDF hazır. Sarı veya kırmızı kayıtların alanlarını kontrol et.':'Henüz PDF seçilmedi.';
+    var outgoing=records.filter(Boolean).filter(function(record){return record.direction==='giden';}).length;
+    var incoming=total-outgoing;
+    summaryEl.textContent=total?completed+' / '+total+' PDF hazır · '+outgoing+' giden · '+incoming+' gelen. Yönleri ve sarı/kırmızı kayıtları kontrol et.':'Henüz PDF seçilmedi.';
     saveButton.disabled=parsing||total===0||completed!==total;
+  }
+
+  function addDirectionMode(){
+    var picker=form.querySelector('.bulk-file-picker');
+    if(!picker||document.getElementById('bulkDirectionMode')) return;
+    var box=document.createElement('div');
+    box.className='bulk-direction-mode';
+    box.innerHTML='<div><strong>Bu yüklemedeki faturaların yönü</strong><small>Kestiğimiz faturalar için “Giden”, bize kesilenler için “Gelen” seç. Karışık dosyalarda otomatik kullan.</small></div>'
+      +'<select id="bulkDirectionMode"><option value="auto">Otomatik tespit et</option><option value="giden">Hepsi bizim kestiğimiz — Giden</option><option value="gelen">Hepsi bize kesilen — Gelen</option></select>';
+    picker.insertAdjacentElement('afterend',box);
+    directionMode=box.querySelector('select');
+    directionMode.addEventListener('change',function(){
+      records.forEach(function(record){
+        if(!record) return;
+        record.direction=directionMode.value==='auto'?(record.detected_direction||record.direction):directionMode.value;
+      });
+      render();
+    });
   }
 
   fileInput.addEventListener('change',function(){
@@ -313,7 +377,8 @@
     saveButton.disabled=true;
     Promise.all(files.map(function(file,index){
       if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
-        records[index]={index:index,file:file,file_name:file.name,status:'PDF değil',status_tone:'danger',direction:'gelen',cari_id:'',match_text:'Yalnızca PDF seç',match_tone:'danger',invoice_no:'',invoice_date:'',due_date:'',subtotal:null,vat_amount:null,total_amount:null,currency:'TL',description:'Toplu PDF fatura yüklemesi'};
+        var dir=selectedDirection('gelen');
+        records[index]={index:index,file:file,file_name:file.name,status:'PDF değil',status_tone:'danger',direction:dir,detected_direction:'gelen',cari_id:'',match_text:'Yalnızca PDF seç',match_tone:'danger',invoice_no:'',invoice_date:'',due_date:'',subtotal:null,vat_amount:null,total_amount:null,currency:'TL',description:'Toplu PDF fatura yüklemesi'};
         render();
         return Promise.resolve();
       }
@@ -338,6 +403,7 @@
     var index=Number(row.getAttribute('data-index'));
     if(!records[index]) return;
     records[index][field]=event.target.value;
+    render();
   });
 
   form.addEventListener('submit',function(event){
@@ -363,7 +429,9 @@
       window.alert('Bazı kayıtlarda fatura tarihi veya genel toplam eksik. Kırmızı ve sarı kayıtları kontrol et.');
       return;
     }
-    if(!window.confirm(payload.length+' fatura yalnızca arşive kaydedilecek. Cari hareket oluşturulmayacak. Devam edilsin mi?')){
+    var outgoing=payload.filter(function(item){return item.direction==='giden';}).length;
+    var incoming=payload.length-outgoing;
+    if(!window.confirm(payload.length+' fatura arşive kaydedilecek: '+outgoing+' giden, '+incoming+' gelen. Cari hareket oluşturulmayacak. Devam edilsin mi?')){
       event.preventDefault();
       return;
     }
@@ -374,6 +442,8 @@
 
   var style=document.createElement('style');
   style.textContent=''
-    +'.bulk-invoice-panel{margin-bottom:20px}.bulk-file-picker{border:2px dashed #d8c6a5;background:#fffaf2;border-radius:18px;padding:18px;display:grid;gap:6px;cursor:pointer}.bulk-file-picker strong{font-size:16px}.bulk-file-picker small{color:var(--muted)}.bulk-file-picker input{margin-top:8px}.bulk-upload-note{border:1px solid #f1d59b;background:#fff4dc;color:#714e15;border-radius:13px;padding:12px 14px;font-size:12px}.bulk-summary{font-weight:800;color:#514a40}.bulk-invoice-rows{display:grid;gap:12px}.bulk-invoice-row{border:1px solid var(--border);border-radius:17px;background:#fff;overflow:hidden}.bulk-row-head{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;background:#faf7f1;border-bottom:1px solid var(--border)}.bulk-row-head>div{display:grid;gap:4px}.bulk-row-head strong{font-size:13px;overflow-wrap:anywhere}.bulk-row-head>span{font-size:11px;font-weight:900;color:var(--muted)}.bulk-status{font-size:10px;font-weight:900}.bulk-status.is-success,.bulk-cari-field small.is-success{color:var(--success)}.bulk-status.is-warning,.bulk-cari-field small.is-warning{color:#8a5b0a}.bulk-status.is-danger,.bulk-cari-field small.is-danger{color:var(--danger)}.bulk-status.is-loading{color:#23598b}.bulk-row-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.bulk-row-grid label{display:grid;gap:5px;font-size:11px;font-weight:850;color:#554d42}.bulk-row-grid input,.bulk-row-grid select{width:100%;border:1px solid var(--border);background:#fff;border-radius:11px;padding:10px 11px}.bulk-cari-field{grid-column:span 2}.bulk-cari-field small{font-size:10px}.bulk-row-foot{margin:0;padding:0 14px 13px;color:var(--muted);font-size:10px}.bulk-actions{position:sticky;bottom:0;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);padding:12px 0 2px;z-index:2}@media(max-width:1050px){.bulk-row-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:640px){.bulk-row-grid{grid-template-columns:1fr}.bulk-cari-field{grid-column:auto}.bulk-row-head{grid-template-columns:1fr}}';
+    +'.bulk-invoice-panel{margin-bottom:20px}.bulk-file-picker{border:2px dashed #d8c6a5;background:#fffaf2;border-radius:18px;padding:18px;display:grid;gap:6px;cursor:pointer}.bulk-file-picker strong{font-size:16px}.bulk-file-picker small{color:var(--muted)}.bulk-file-picker input{margin-top:8px}.bulk-direction-mode{display:grid;grid-template-columns:1fr minmax(260px,420px);gap:14px;align-items:center;border:1px solid #d8c6a5;background:#fff;border-radius:15px;padding:13px 14px}.bulk-direction-mode>div{display:grid;gap:4px}.bulk-direction-mode strong{font-size:13px}.bulk-direction-mode small{font-size:11px;color:var(--muted)}.bulk-direction-mode select{border:1px solid var(--border);border-radius:11px;padding:10px 11px;background:#fff}.bulk-upload-note{border:1px solid #f1d59b;background:#fff4dc;color:#714e15;border-radius:13px;padding:12px 14px;font-size:12px}.bulk-summary{font-weight:800;color:#514a40}.bulk-invoice-rows{display:grid;gap:12px}.bulk-invoice-row{border:1px solid var(--border);border-radius:17px;background:#fff;overflow:hidden}.bulk-row-head{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;background:#faf7f1;border-bottom:1px solid var(--border)}.bulk-row-head>div{display:grid;gap:4px}.bulk-row-head strong{font-size:13px;overflow-wrap:anywhere}.bulk-row-head>span{font-size:11px;font-weight:900;color:var(--muted)}.bulk-status{font-size:10px;font-weight:900}.bulk-status.is-success,.bulk-cari-field small.is-success{color:var(--success)}.bulk-status.is-warning,.bulk-cari-field small.is-warning{color:#8a5b0a}.bulk-status.is-danger,.bulk-cari-field small.is-danger{color:var(--danger)}.bulk-status.is-loading{color:#23598b}.bulk-row-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.bulk-row-grid label{display:grid;gap:5px;font-size:11px;font-weight:850;color:#554d42}.bulk-row-grid input,.bulk-row-grid select{width:100%;border:1px solid var(--border);background:#fff;border-radius:11px;padding:10px 11px}.bulk-cari-field{grid-column:span 2}.bulk-cari-field small{font-size:10px}.bulk-row-foot{margin:0;padding:0 14px 13px;color:var(--muted);font-size:10px}.bulk-row-foot strong{color:#514a40}.bulk-actions{position:sticky;bottom:0;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);padding:12px 0 2px;z-index:2}@media(max-width:1050px){.bulk-row-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:720px){.bulk-direction-mode{grid-template-columns:1fr}}@media(max-width:640px){.bulk-row-grid{grid-template-columns:1fr}.bulk-cari-field{grid-column:auto}.bulk-row-head{grid-template-columns:1fr}}';
   document.head.appendChild(style);
+
+  addDirectionMode();
 })();
