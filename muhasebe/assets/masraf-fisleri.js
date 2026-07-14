@@ -66,6 +66,19 @@
       .catch(function(){});
   }
 
+  function unlockPanel(panel){
+    if(!panel) return;
+    panel.removeAttribute('inert');
+    panel.style.pointerEvents='auto';
+    panel.querySelectorAll('form,input,select,textarea,button,label').forEach(function(element){
+      element.removeAttribute('inert');
+      element.removeAttribute('aria-disabled');
+      element.style.pointerEvents='auto';
+      if(element.matches('input,textarea')) element.readOnly=false;
+      if(element.matches('input,select,textarea,button')) element.disabled=false;
+    });
+  }
+
   function buildPanel(){
     var body=document.querySelector('[data-fatura-alt-kontrol-body]');
     if(!body||document.querySelector('[data-masraf-fisleri]')) return null;
@@ -76,7 +89,7 @@
     panel.innerHTML=''
       +'<div class="masraf-fisi-head"><div><strong>Masraf Fişleri</strong><small>Yemek, yol ve fabrika alışverişi fişlerinin KDV’sini dönem hesabına ekle.</small></div><span data-masraf-fisi-status></span></div>'
       +'<div class="masraf-fisi-summary"><article><span>Fiş toplamı</span><strong data-masraf-total>0,00 TL</strong></article><article><span>Matrah</span><strong data-masraf-subtotal>0,00 TL</strong></article><article><span>İndirilecek KDV</span><strong data-masraf-vat>0,00 TL</strong></article><article><span>Fiş adedi</span><strong data-masraf-count>0</strong></article></div>'
-      +'<form class="masraf-fisi-form" data-masraf-fisi-form>'
+      +'<form class="masraf-fisi-form" data-masraf-fisi-form autocomplete="off">'
       +'<label>Tarih<input type="date" name="receipt_date" required></label>'
       +'<label>Firma / açıklama<input type="text" name="vendor" maxlength="180" placeholder="Örn: Restoran, market, taksi"></label>'
       +'<label>Masraf türü<select name="category" required></select></label>'
@@ -89,12 +102,20 @@
       +'</form>'
       +'<div class="masraf-fisi-list" data-masraf-fisi-list><p class="muted">Masraf fişleri yükleniyor...</p></div>';
     body.appendChild(panel);
+    unlockPanel(panel);
 
     var form=panel.querySelector('[data-masraf-fisi-form]');
     form.querySelector('[name="receipt_date"]').value=defaultDate(state.period);
     form.addEventListener('input',updatePreview);
     form.addEventListener('change',updatePreview);
     form.addEventListener('submit',saveReceipt);
+    panel.addEventListener('pointerdown',function(event){
+      var control=event.target.closest('input,select,textarea,button');
+      if(!control) return;
+      control.disabled=false;
+      control.removeAttribute('inert');
+      if(control.matches('input,textarea')) control.readOnly=false;
+    },true);
     panel.addEventListener('click',function(event){
       var button=event.target.closest('[data-masraf-delete]');
       if(button) deleteReceipt(Number(button.getAttribute('data-masraf-delete')||0));
@@ -112,8 +133,10 @@
     var form=document.querySelector('[data-masraf-fisi-form]');
     var preview=document.querySelector('[data-masraf-preview]');
     if(!form||!preview) return;
-    var total=numberValue(form.total_amount.value);
-    var rate=Number(form.vat_rate.value||0);
+    var totalInput=form.querySelector('[name="total_amount"]');
+    var rateInput=form.querySelector('[name="vat_rate"]');
+    var total=numberValue(totalInput?totalInput.value:0);
+    var rate=Number(rateInput?rateInput.value:0);
     var subtotal=rate>0?total/(1+(rate/100)):total;
     var vat=total-subtotal;
     preview.textContent='Matrah: '+money(subtotal)+' · KDV: '+money(vat);
@@ -133,6 +156,7 @@
     var panel=buildPanel();
     if(!panel) panel=document.querySelector('[data-masraf-fisleri]');
     if(!panel) return;
+    unlockPanel(panel);
 
     var category=panel.querySelector('select[name="category"]');
     if(category&&category.options.length===0) category.innerHTML=categoryOptions('yemek');
@@ -172,6 +196,7 @@
   function saveReceipt(event){
     event.preventDefault();
     var form=event.target;
+    unlockPanel(form);
     var button=form.querySelector('button[type="submit"]');
     var oldText=button.textContent;
     button.disabled=true;
@@ -180,7 +205,8 @@
     body.set('action','save');
     body.set('period',state.period);
     body.set('csrf_token',state.csrf);
-    if(!form.include_in_vat.checked) body.set('include_in_vat','0');
+    var includeInput=form.querySelector('[name="include_in_vat"]');
+    if(!includeInput||!includeInput.checked) body.set('include_in_vat','0');
     fetch('masraf-fisleri.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
       .then(function(data){
@@ -211,10 +237,11 @@
 
   var style=document.createElement('style');
   style.textContent=''
-    +'.masraf-fisi-panel{display:grid;gap:14px;padding:15px;border:1px solid #cbd9ca;background:#f7fbf6;border-radius:16px}'
+    +'.masraf-fisi-panel{display:grid;gap:14px;padding:15px;border:1px solid #cbd9ca;background:#f7fbf6;border-radius:16px;position:relative;z-index:40;isolation:isolate;pointer-events:auto!important}'
+    +'.masraf-fisi-panel *{pointer-events:auto}'
     +'.masraf-fisi-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.masraf-fisi-head>div{display:grid;gap:4px}.masraf-fisi-head strong{font-size:15px}.masraf-fisi-head small{font-size:10px;color:var(--muted)}.masraf-fisi-head>span{font-size:10px;color:var(--muted)}.masraf-fisi-head>span.is-success{color:var(--success)}.masraf-fisi-head>span.is-danger{color:var(--danger)}'
     +'.masraf-fisi-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.masraf-fisi-summary article{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--border);background:#fff;border-radius:12px}.masraf-fisi-summary span{font-size:9px;color:var(--muted);font-weight:800}.masraf-fisi-summary strong{font-size:13px}'
-    +'.masraf-fisi-form{display:grid;grid-template-columns:130px minmax(180px,1fr) minmax(150px,.8fr) 145px 110px;gap:9px;align-items:end}.masraf-fisi-form label{display:grid;gap:5px;font-size:10px;font-weight:800}.masraf-fisi-form input,.masraf-fisi-form select{width:100%;border:1px solid var(--border);background:#fff;border-radius:10px;padding:9px 10px}.masraf-fisi-check{display:flex!important;align-items:center;gap:7px;padding-bottom:10px}.masraf-fisi-check input{width:auto}.masraf-fisi-note{grid-column:1/4}.masraf-fisi-preview{font-size:10px;color:#355c43;padding:9px 10px;border-radius:10px;background:#edf7ef}.masraf-fisi-form>.btn{white-space:nowrap}'
+    +'.masraf-fisi-form{display:grid;grid-template-columns:130px minmax(180px,1fr) minmax(150px,.8fr) 145px 110px;gap:9px;align-items:end;position:relative;z-index:41;pointer-events:auto!important}.masraf-fisi-form label{display:grid;gap:5px;font-size:10px;font-weight:800;pointer-events:auto!important}.masraf-fisi-form input,.masraf-fisi-form select{width:100%;border:1px solid var(--border);background:#fff;border-radius:10px;padding:9px 10px;position:relative;z-index:42;pointer-events:auto!important;opacity:1!important}.masraf-fisi-form input{user-select:text!important;-webkit-user-select:text!important;cursor:text}.masraf-fisi-form select{cursor:pointer}.masraf-fisi-check{display:flex!important;align-items:center;gap:7px;padding-bottom:10px}.masraf-fisi-check input{width:auto}.masraf-fisi-note{grid-column:1/4}.masraf-fisi-preview{font-size:10px;color:#355c43;padding:9px 10px;border-radius:10px;background:#edf7ef}.masraf-fisi-form>.btn{white-space:nowrap;position:relative;z-index:42;pointer-events:auto!important}'
     +'.masraf-fisi-list table{min-width:760px}.masraf-fisi-list th,.masraf-fisi-list td{font-size:10px;padding:8px}.masraf-fisi-list td small{display:block;margin-top:3px;font-size:8px;color:var(--muted)}.masraf-delete{border:0;background:transparent;color:var(--danger);font-weight:800;cursor:pointer}'
     +'@media(max-width:1050px){.masraf-fisi-form{grid-template-columns:1fr 1fr 1fr}.masraf-fisi-note{grid-column:1/3}.masraf-fisi-summary{grid-template-columns:1fr 1fr}}'
     +'@media(max-width:650px){.masraf-fisi-form{grid-template-columns:1fr}.masraf-fisi-note{grid-column:auto}.masraf-fisi-summary{grid-template-columns:1fr 1fr}.masraf-fisi-head{display:grid}}';
