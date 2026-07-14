@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
 
-  var VERSION='3.2.0';
+  var VERSION='3.3.0';
   var BLOCKED_NO=/^(ETTN|UUID|VKN|TCKN|VERGINO|VERGINUMARASI|TICARETSICILNO|TICARETSICILNUMARASI|MERSISNO|IBAN|SIPARISNO|IRSALIYENO)$/;
   var SELLER_ROLES=[
     'SATICI','SATICI FIRMA','SATICI FIRMA UNVANI','SATICI UNVANI','SATICI BILGILERI',
@@ -141,9 +141,31 @@
     var explicit=findAmount(lines,[
       'Toplam KDV',
       'KDV Toplamı',
+      'KDV Tutarı',
+      'Hesaplanan KDV Tutarı',
+      'Katma Değer Vergisi Tutarı',
       'Hesaplanan Katma Değer Vergisi'
-    ],['Tevkifat']);
+    ],['Tevkifat','KDV Matrahı','KDV Oranı','KDV Dahil','KDV Hariç']);
     if(explicit!==null) return explicit;
+
+    // Telefon operatörü faturalarında KDV çoğu zaman klasik e-Fatura
+    // etiketleri yerine "KDV(%20)" gibi bir tablo sütununda gösteriliyor.
+    // Yüzde değerini para sanmadan, yalnız etiketin sağındaki/altındaki
+    // gerçek parasal tutarı al.
+    for(var i=0;i<lines.length;i++){
+      var raw=String(lines[i]||'');
+      var lineNorm=norm(raw);
+      if(/KDV MATRAHI|KDV ORANI|KDV DAHIL|KDV HARIC|TEVKIFAT/.test(lineNorm)) continue;
+      var rateLabel=/\bKDV\s*(?:\(\s*%\s*\d{1,2}\s*\)|%\s*\d{1,2})/i.exec(fold(raw));
+      if(!rateLabel) continue;
+      var inline=moneyMatches(raw).filter(function(item){
+        return item.index>=rateLabel.index+rateLabel[0].length-2;
+      });
+      if(inline.length) return inline[0].value;
+      var nextAmounts=moneyMatches(lines[i+1]||'');
+      if(nextAmounts.length===1) return nextAmounts[0].value;
+    }
+
     var parts=findAllAmounts(lines,'Hesaplanan KDV',['Tevkifat']);
     if(!parts.length) return null;
     return roundMoney(parts.reduce(function(total,value){return total+value;},0));
