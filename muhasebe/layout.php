@@ -201,7 +201,7 @@ function page_footer(): void
   <script src="assets/fatura-no-onar.js?v=1"></script>
   <script src="assets/fatura-sira-kontrol.js?v=2"></script>
   <script src="assets/fatura-cari-sec.js?v=2"></script>
-  <script src="assets/fatura-cari-okuma-duzelt.js?v=1"></script>
+  <script src="assets/fatura-cari-okuma-duzelt.js?v=2"></script>
   <script src="assets/fatura-yon-sec.js?v=1"></script>
   <script src="assets/cari-hareket-kaynak.js?v=4"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
