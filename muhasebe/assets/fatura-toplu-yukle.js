@@ -212,7 +212,36 @@
     return {id:'',confidence:'Cari bulunamadı; listeden seç',tone:'danger'};
   }
 
-  function extractInvoice(lines){
+  function extractInvoice(lines,fileName){
+    if(window.FaturaOkumaCore){
+      var safeFullText=lines.join('\n');
+      var safe=window.FaturaOkumaCore.extractInvoice(lines,{
+        fileName:fileName||'',
+        companyTaxNo:companyTaxNo
+      });
+      var safeCari=matchCari(safeFullText);
+      return {
+        direction:selectedDirection(safe.direction||'gelen'),
+        detected_direction:safe.direction||'',
+        cari_id:safeCari.id,
+        match_text:safeCari.confidence,
+        match_tone:safeCari.tone,
+        invoice_no:safe.invoiceNo,
+        invoice_date:safe.invoiceDate,
+        due_date:'',
+        subtotal:safe.subtotal,
+        vat_amount:safe.vat,
+        total_amount:safe.total,
+        currency:safe.currency,
+        description:'Toplu PDF fatura yüklemesi',
+        critical_issues:safe.criticalIssues||[],
+        warnings:safe.warnings||[],
+        needs_ocr:!!safe.needsOcr,
+        can_auto_save:!!safe.canAutoSave,
+        parse_meta:safe.meta||{}
+      };
+    }
+
     var fullText=lines.join('\n');
     var invoiceNo=findTextAfter(lines,
       ['Fatura No','Fatura Numarası','Belge No','E-Arşiv Fatura No','E-Fatura No'],
@@ -293,10 +322,12 @@
         var content=await page.getTextContent();
         lines=lines.concat(pageLines(content));
       }
-      var parsed=extractInvoice(lines);
+      var parsed=extractInvoice(lines,file.name);
+      var criticalCount=(parsed.critical_issues||[]).length;
+      var warningCount=(parsed.warnings||[]).length;
       records[index]=Object.assign(base,parsed,{
-        status:(parsed.invoice_date&&parsed.total_amount!==null)?'Bilgiler okundu':'Kontrol gerekli',
-        status_tone:(parsed.invoice_date&&parsed.total_amount!==null)?'success':'warning'
+        status:criticalCount?'Eksik bilgi — kontrol gerekli':(warningCount?'Okundu — kontrol gerekli':'Bilgiler güvenli okundu'),
+        status_tone:criticalCount?'danger':(warningCount?'warning':'success')
       });
     }catch(error){
       records[index]=Object.assign(base,{
@@ -375,15 +406,22 @@
     records=[];
     parsing=true;
     saveButton.disabled=true;
-    Promise.all(files.map(function(file,index){
-      if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
-        var dir=selectedDirection('gelen');
-        records[index]={index:index,file:file,file_name:file.name,status:'PDF değil',status_tone:'danger',direction:dir,detected_direction:'gelen',cari_id:'',match_text:'Yalnızca PDF seç',match_tone:'danger',invoice_no:'',invoice_date:'',due_date:'',subtotal:null,vat_amount:null,total_amount:null,currency:'TL',description:'Toplu PDF fatura yüklemesi'};
-        render();
-        return Promise.resolve();
+    var cursor=0;
+    async function worker(){
+      while(cursor<files.length){
+        var index=cursor++;
+        var file=files[index];
+        if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
+          var dir=selectedDirection('gelen');
+          records[index]={index:index,file:file,file_name:file.name,status:'PDF değil',status_tone:'danger',direction:dir,detected_direction:'',cari_id:'',match_text:'Yalnızca PDF seç',match_tone:'danger',invoice_no:'',invoice_date:'',due_date:'',subtotal:null,vat_amount:null,total_amount:null,currency:'TL',description:'Toplu PDF fatura yüklemesi',critical_issues:['Yalnızca PDF dosyası seçilebilir.'],warnings:[]};
+          render();
+          continue;
+        }
+        await parseFile(file,index);
       }
-      return parseFile(file,index);
-    })).finally(function(){parsing=false;render();});
+    }
+    var workerCount=Math.min(3,Math.max(1,files.length));
+    Promise.all(Array.from({length:workerCount},worker)).finally(function(){parsing=false;render();});
   });
 
   rowsEl.addEventListener('input',function(event){
@@ -393,7 +431,11 @@
     if(!row) return;
     var index=Number(row.getAttribute('data-index'));
     if(!records[index]) return;
-    records[index][field]=event.target.value;
+    var value=event.target.value;
+    if(window.FaturaOkumaCore&&/^(subtotal|vat_amount|total_amount)$/.test(field)){
+      value=window.FaturaOkumaCore.parseMoney(value);
+    }
+    records[index][field]=value;
   });
   rowsEl.addEventListener('change',function(event){
     var field=event.target.getAttribute('data-field');
@@ -402,7 +444,11 @@
     if(!row) return;
     var index=Number(row.getAttribute('data-index'));
     if(!records[index]) return;
-    records[index][field]=event.target.value;
+    var value=event.target.value;
+    if(window.FaturaOkumaCore&&/^(subtotal|vat_amount|total_amount)$/.test(field)){
+      value=window.FaturaOkumaCore.parseMoney(value);
+    }
+    records[index][field]=value;
     render();
   });
 
@@ -423,10 +469,25 @@
       };
     });
 
-    var missing=payload.filter(function(item){return !item.invoice_date||!String(item.total_amount||'').trim();});
+    var parseMoney=window.FaturaOkumaCore
+      ?window.FaturaOkumaCore.parseMoney
+      :function(value){var number=Number(value);return Number.isFinite(number)?number:null;};
+    var missing=payload.filter(function(item){
+      var no=String(item.invoice_no||'').trim();
+      var subtotalValue=parseMoney(item.subtotal);
+      var vatValue=parseMoney(item.vat_amount);
+      var totalValue=parseMoney(item.total_amount);
+      return !no
+        ||/^(TICARETSICILNO|TICARETSICILNUMARASI|ETTN|UUID|VKN|TCKN|MERSISNO)$/i.test(no.replace(/[^A-Z0-9]/gi,''))
+        ||!item.invoice_date
+        ||subtotalValue===null
+        ||vatValue===null
+        ||totalValue===null
+        ||totalValue<=0;
+    });
     if(missing.length){
       event.preventDefault();
-      window.alert('Bazı kayıtlarda fatura tarihi veya genel toplam eksik. Kırmızı ve sarı kayıtları kontrol et.');
+      window.alert(missing.length+' faturada numara, tarih, matrah, KDV veya genel toplam eksik/hatalı. Bu kayıtlar düzeltilmeden kaydedilemez.');
       return;
     }
     var outgoing=payload.filter(function(item){return item.direction==='giden';}).length;

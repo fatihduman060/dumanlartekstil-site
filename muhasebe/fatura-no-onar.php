@@ -6,7 +6,7 @@ function fatura_no_dosya_adindan(?string $fileName): string
     $fileName = preg_replace('/\.(PDF|XML|XSLT?)$/i', '', $fileName) ?: $fileName;
 
     // DMN2026000000218 gibi harfle başlayıp uzun rakam dizisiyle devam eden gerçek belge numaraları.
-    if (preg_match('/\b([A-Z]{2,8}[0-9]{10,30})\b/', $fileName, $m)) {
+    if (preg_match('/\b([A-Z0-9]{2,8}20\d{2}\d{5,20})\b/', $fileName, $m)) {
         return $m[1];
     }
 
@@ -15,8 +15,10 @@ function fatura_no_dosya_adindan(?string $fileName): string
 
 function fatura_no_vergi_no_gibi(?string $value): bool
 {
-    $value = preg_replace('/\s+/', '', trim((string)$value)) ?: '';
-    return (bool)preg_match('/^\d{10,11}$/', $value);
+    $value = strtoupper(trim((string)$value));
+    $value = preg_replace('/[^A-Z0-9]/', '', $value) ?: '';
+    return $value === ''
+        || (bool)preg_match('/^(\d{10,11}|TICARETSICILNO|TICARETSICILNUMARASI|ETTN|UUID|VKN|TCKN|MERSISNO)$/', $value);
 }
 
 function fatura_no_onar_post_verisi(): void
@@ -64,7 +66,11 @@ function fatura_no_onar_mevcut_kayitlar(): void
     $rows = db()->query("SELECT id, invoice_no, document_name FROM invoices
         WHERE COALESCE(is_cancelled,0)=0
           AND COALESCE(document_name,'')!=''
-          AND (COALESCE(invoice_no,'')='' OR LENGTH(TRIM(invoice_no)) IN (10,11))
+          AND (
+            COALESCE(invoice_no,'')=''
+            OR LENGTH(TRIM(invoice_no)) IN (10,11)
+            OR UPPER(REPLACE(TRIM(invoice_no),' ','')) IN ('TICARETSICILNO','TICARETSICILNUMARASI','ETTN','UUID','VKN','TCKN','MERSISNO')
+          )
         ORDER BY id ASC")->fetchAll();
 
     if (!$rows) return;

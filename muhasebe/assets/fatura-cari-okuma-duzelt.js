@@ -71,7 +71,7 @@
     var key=norm(raw);
     if(raw.length<4||raw.length>120) return true;
     if(isAddressLine(raw)) return true;
-    if(/DUMANLAR|BITKE|MOFIY/.test(key)) return true;
+    if(/DUMANLAR|BITKE|MOFIY|BAFIY/.test(key)) return true;
     if(/FATURA|ETTN|UUID|SENARYO|TARIH|SAAT|IRSALIYE|VERGI|VKN|TCKN|MERSIS|TICARET SICIL|IBAN|BANKA|TOPLAM|KDV|MATRAH|TELEFON|E POSTA|EMAIL/.test(key)) return true;
     if(/^\d+$/.test(raw.replace(/\D/g,''))&&raw.replace(/\D/g,'').length>=8) return true;
     return false;
@@ -101,7 +101,7 @@
   function extractTaxCandidates(lines,direction){
     var candidates=[];
     var expected=direction==='giden'?['ALICI','SAYIN','MUSTERI','BUYER']:['SATICI','TEDARIKCI','SELLER'];
-    var ownMarkers=['DUMANLAR','BITKE','MOFIY'];
+    var ownMarkers=['DUMANLAR','BITKE','MOFIY','BAFIY'];
 
     lines.forEach(function(line,index){
       numberParts(line).forEach(function(match){
@@ -115,6 +115,7 @@
         if(expected.some(function(marker){return around.indexOf(marker)!==-1;})) score+=45;
         if(ownMarkers.some(function(marker){return around.indexOf(marker)!==-1;})) score-=70;
         if(/FATURA NO|BELGE NO|ETTN|UUID/.test(lineKey)) score-=100;
+        if(/TICARET SICIL|MERSIS|IBAN|SIPARIS|IRSALIYE/.test(lineKey)) score-=150;
         if(tax.length===10) score+=10;
         candidates.push({tax:tax,index:index,score:score});
       });
@@ -174,7 +175,7 @@
 
   function findEmail(text){
     var matches=String(text||'').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)||[];
-    return matches.find(function(mail){return !/DUMANLAR|BITKE|MOFIY/i.test(mail);})||'';
+    return matches.find(function(mail){return !/DUMANLAR|BITKE|MOFIY|BAFIY/i.test(mail);})||'';
   }
 
   function findPhone(text,taxNo){
@@ -199,7 +200,7 @@
       var raw=String(line||'').trim();
       var key=norm(raw);
       if(!raw||raw===name||raw===taxOffice) return;
-      if(/DUMANLAR|BITKE|MOFIY|VKN|TCKN|VERGI|EMAIL|E POSTA|TELEFON|FATURA|ETTN|MERSIS|TICARET SICIL|IBAN|BANKA|TOPLAM|KDV/.test(key)) return;
+      if(/DUMANLAR|BITKE|MOFIY|BAFIY|VKN|TCKN|VERGI|EMAIL|E POSTA|TELEFON|FATURA|ETTN|MERSIS|TICARET SICIL|IBAN|BANKA|TOPLAM|KDV/.test(key)) return;
       if(isAddressLine(raw)&&parts.length<3) parts.push(raw);
     });
     return parts.join(' ');
