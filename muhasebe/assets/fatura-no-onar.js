@@ -1,12 +1,17 @@
 (function(){
   function invoiceNoFromFileName(fileName){
+    if(window.FaturaOkumaCore) return window.FaturaOkumaCore.invoiceNoFromFileName(fileName);
     var name=String(fileName||'').toUpperCase().replace(/\.(PDF|XML|XSLT?)$/i,'');
-    var match=name.match(/\b([A-Z]{2,8}[0-9]{10,30})\b/);
-    return match?match[1]:'';
+    var matches=name.match(/[A-Z0-9]{2,8}20\d{2}\d{5,20}/g)||[];
+    return matches.length?matches[0]:'';
   }
 
-  function looksLikeTaxNo(value){
-    return /^\d{10,11}$/.test(String(value||'').replace(/\s/g,''));
+  function looksInvalid(value){
+    var compact=String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(!compact) return true;
+    if(/^(TICARETSICILNO|TICARETSICILNUMARASI|ETTN|UUID|VKN|TCKN|MERSISNO)$/.test(compact)) return true;
+    if(/^\d{10,11}$/.test(compact)) return true;
+    return window.FaturaOkumaCore?!window.FaturaOkumaCore.isValidInvoiceNo(compact):false;
   }
 
   function fixSingle(){
@@ -21,15 +26,16 @@
       var file=fileInput.files&&fileInput.files[0];
       if(!file) return;
       var fromFile=invoiceNoFromFileName(file.name);
-      if(fromFile&&(!invoiceNo.value.trim()||looksLikeTaxNo(invoiceNo.value))){
+      if(fromFile&&looksInvalid(invoiceNo.value)&&invoiceNo.value!==fromFile){
         invoiceNo.value=fromFile;
         invoiceNo.dispatchEvent(new Event('input',{bubbles:true}));
       }
     }
 
-    fileInput.addEventListener('change',function(){setTimeout(apply,900);});
+    fileInput.addEventListener('change',apply);
+    invoiceNo.addEventListener('input',function(){if(looksInvalid(invoiceNo.value)) setTimeout(apply,0);});
     document.addEventListener('click',function(event){
-      if(event.target.closest('[data-fatura-pdf-oku]')) setTimeout(apply,900);
+      if(event.target.closest('[data-fatura-pdf-oku]')) setTimeout(apply,0);
     });
   }
 
@@ -44,15 +50,18 @@
         var input=row.querySelector('[data-field="invoice_no"]');
         if(!input) return;
         var fromFile=invoiceNoFromFileName(fileName);
-        if(fromFile&&(!input.value.trim()||looksLikeTaxNo(input.value))&&input.value!==fromFile){
+        if(fromFile&&looksInvalid(input.value)&&input.value!==fromFile){
           input.value=fromFile;
           input.dispatchEvent(new Event('input',{bubbles:true}));
         }
       });
     }
 
-    var observer=new MutationObserver(function(){repair();});
+    var observer=new MutationObserver(repair);
     observer.observe(rows,{childList:true,subtree:true});
+    rows.addEventListener('input',function(event){
+      if(event.target&&event.target.getAttribute('data-field')==='invoice_no'&&looksInvalid(event.target.value)) setTimeout(repair,0);
+    });
     repair();
   }
 
