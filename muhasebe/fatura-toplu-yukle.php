@@ -99,20 +99,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $direction = (string)($meta['direction'] ?? 'gelen');
             if (!in_array($direction, ['gelen','giden'], true)) $direction = 'gelen';
             $invoiceNo = trim((string)($meta['invoice_no'] ?? ''));
+            $invoiceNoKey = preg_replace('/[^A-Z0-9]/', '', strtoupper($invoiceNo));
+            $invalidInvoiceNo = $invoiceNoKey === ''
+                || (bool)preg_match('/^(TICARETSICILNO|TICARETSICILNUMARASI|ETTN|UUID|VKN|TCKN|MERSISNO|\d{10,11})$/', $invoiceNoKey);
             $invoiceDate = trim((string)($meta['invoice_date'] ?? ''));
             $dueDate = trim((string)($meta['due_date'] ?? ''));
             $dueDate = $dueDate !== '' && toplu_fatura_gecerli_tarih($dueDate) ? $dueDate : null;
-            $subtotal = decimal_from_input($meta['subtotal'] ?? '0');
-            $vatAmount = decimal_from_input($meta['vat_amount'] ?? '0');
-            $totalAmount = decimal_from_input($meta['total_amount'] ?? '0');
+            $subtotalRaw = trim((string)($meta['subtotal'] ?? ''));
+            $vatRaw = trim((string)($meta['vat_amount'] ?? ''));
+            $totalRaw = trim((string)($meta['total_amount'] ?? ''));
+            $subtotal = decimal_from_input($subtotalRaw);
+            $vatAmount = decimal_from_input($vatRaw);
+            $totalAmount = decimal_from_input($totalRaw);
             $currency = toplu_fatura_para_birimi($meta['currency'] ?? 'TL');
             $cariId = (int)($meta['cari_id'] ?? 0);
             $description = trim((string)($meta['description'] ?? 'Toplu PDF fatura yüklemesi'));
 
+            if ($invalidInvoiceNo) {
+                throw new RuntimeException('Fatura numarası eksik veya geçersiz.');
+            }
             if (!toplu_fatura_gecerli_tarih($invoiceDate)) {
                 throw new RuntimeException('Fatura tarihi eksik veya geçersiz.');
             }
-            if ($totalAmount <= 0 && ($subtotal > 0 || $vatAmount > 0)) $totalAmount = $subtotal + $vatAmount;
+            if ($subtotalRaw === '' || $vatRaw === '' || $totalRaw === '') {
+                throw new RuntimeException('Matrah, KDV ve genel toplam alanları eksik olamaz.');
+            }
             if ($totalAmount <= 0) {
                 throw new RuntimeException('Fatura toplamı sıfır olamaz.');
             }
