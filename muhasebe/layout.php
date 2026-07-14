@@ -250,7 +250,7 @@ function page_footer(): void
   <script src="assets/fatura-toplu-link.js?v=7"></script>
   <script src="assets/fatura-toplu-yukle.js?v=4"></script>
   <script src="assets/fatura-no-onar.js?v=2"></script>
-  <script src="assets/fatura-sira-kontrol.js?v=2"></script>
+  <script src="assets/fatura-sira-kontrol.js?v=3"></script>
   <script src="assets/fatura-cari-sec.js?v=3"></script>
   <script src="assets/fatura-cari-okuma-duzelt.js?v=4"></script>
   <script src="assets/fatura-yon-sec.js?v=1"></script>
