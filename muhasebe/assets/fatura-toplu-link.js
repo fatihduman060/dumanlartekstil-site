@@ -97,11 +97,12 @@
     +'.fatura-list-only table th:nth-child(3),.fatura-list-only table td:nth-child(3){width:17%;font-size:10.5px}'
     +'.fatura-list-only table th:nth-child(4),.fatura-list-only table td:nth-child(4){width:13%}'
     +'.fatura-list-only table th:nth-child(5),.fatura-list-only table td:nth-child(5){width:12%}'
-    +'.fatura-list-only table th:nth-child(6),.fatura-list-only table td:nth-child(6){width:10%}'
-    +'.fatura-list-only table th:nth-child(7),.fatura-list-only table td:nth-child(7){width:13%}'
-    +'.fatura-list-only table th:nth-child(8),.fatura-list-only table td:nth-child(8){width:9%}'
-    +'.fatura-list-only table th:nth-child(9),.fatura-list-only table td:nth-child(9){width:8%}'
+    +'.fatura-list-only table th:nth-child(6),.fatura-list-only table td:nth-child(6){width:10%;padding-right:18px!important}'
+    +'.fatura-list-only table th:nth-child(7),.fatura-list-only table td:nth-child(7){width:13%;text-align:center}'
+    +'.fatura-list-only table th:nth-child(8),.fatura-list-only table td:nth-child(8){width:9%;padding-left:10px}'
+    +'.fatura-list-only table th:nth-child(9),.fatura-list-only table td:nth-child(9){width:8%;padding-left:9px}'
     +'.fatura-list-only table td:nth-child(3) a{font-size:10.5px;line-height:1.2}'
+    +'.fatura-list-only table td:nth-child(7) a{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}'
     +'.fatura-list-only .fatura-issuer-line{font-size:8.5px!important;line-height:1.18}'
     +'.fatura-list-only .fatura-tur-button{min-width:0!important;max-width:none!important;width:100%;padding:6px 7px}'
     +'.fatura-list-only .fatura-tur-button strong{font-size:9.5px!important}'
@@ -117,7 +118,7 @@
     +'.toplu-yon-duzelt-panel small{font-size:11px;color:var(--muted)}'
     +'.toplu-yon-actions{display:flex;gap:8px;flex-wrap:wrap}'
     +'.toplu-yon-actions .btn{padding:8px 10px;font-size:11px}'
-    +'@media(max-width:900px){.fatura-list-only table{min-width:840px!important}.fatura-list-only table th,.fatura-list-only table td{padding:8px 5px}.fatura-list-only table td:nth-child(3),.fatura-list-only table td:nth-child(3) a{font-size:10px}}'
+    +'@media(max-width:900px){.fatura-list-only table{min-width:840px!important}.fatura-list-only table th,.fatura-list-only table td{padding:8px 5px}.fatura-list-only table td:nth-child(3),.fatura-list-only table td:nth-child(3) a{font-size:10px}.fatura-list-only table th:nth-child(6),.fatura-list-only table td:nth-child(6){padding-right:14px!important}}'
     +'@media(max-width:720px){.toplu-yon-duzelt-panel{grid-template-columns:1fr}.toplu-yon-actions{justify-content:flex-start}.fatura-list-only table{min-width:820px!important}}';
   document.head.appendChild(style);
 
