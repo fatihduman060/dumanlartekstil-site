@@ -20,6 +20,7 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoices (
     issuer_name TEXT,
     issuer_source TEXT,
     issuer_confidence INTEGER NOT NULL DEFAULT 0,
+    issuer_parser_version TEXT,
     cari_movement_id INTEGER,
     posted_to_cari INTEGER NOT NULL DEFAULT 0,
     posted_at TEXT,
@@ -35,6 +36,7 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoices (
 ensure_column(db(), 'invoices', 'issuer_name', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_source', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_confidence', 'INTEGER NOT NULL DEFAULT 0');
+ensure_column(db(), 'invoices', 'issuer_parser_version', 'TEXT');
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(invoice_date)");
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_cari ON invoices(cari_id)");
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_movement ON invoices(cari_movement_id)");
@@ -200,6 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $issuerUnchanged = $oldRow && trim((string)($oldRow['issuer_name'] ?? '')) === $issuerName;
         $issuerSource = $issuerUnchanged ? (string)($oldRow['issuer_source'] ?? '') : ($issuerName !== '' ? 'manual' : '');
         $issuerConfidence = $issuerUnchanged ? (int)($oldRow['issuer_confidence'] ?? 0) : ($issuerName !== '' ? 100 : 0);
+        $issuerParserVersion = $issuerUnchanged ? (string)($oldRow['issuer_parser_version'] ?? '') : '';
         $oldDoc = $oldRow ? [
             'path'=>$oldRow['document_path'] ?? null,
             'name'=>$oldRow['document_name'] ?? null,
@@ -222,12 +225,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->prepare("UPDATE invoices SET
                 direction=?, cari_id=?, invoice_no=?, invoice_date=?, due_date=?, subtotal=?, vat_amount=?,
                 total_amount=?, currency=?, description=?, document_path=?, document_name=?, document_mime=?,
-                issuer_name=?, issuer_source=?, issuer_confidence=?, updated_at=?
+                issuer_name=?, issuer_source=?, issuer_confidence=?, issuer_parser_version=?, updated_at=?
                 WHERE id=?")
                 ->execute([
                     $direction, $cariId, $invoiceNo, $invoiceDate, $dueDate, $subtotal, $vatAmount,
                     $totalAmount, $currency, $description, $doc['path'], $doc['name'], $doc['mime'],
-                    $issuerName, $issuerSource, $issuerConfidence, now(), $id
+                    $issuerName, $issuerSource, $issuerConfidence, $issuerParserVersion, now(), $id
                 ]);
             delete_replaced_upload($oldDoc, $doc);
             $saved = fatura_getir($id);
@@ -240,13 +243,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             db()->prepare("INSERT INTO invoices (
                 direction, cari_id, invoice_no, invoice_date, due_date, subtotal, vat_amount, total_amount,
-                currency, description, document_path, document_name, document_mime, issuer_name, issuer_source, issuer_confidence,
+                currency, description, document_path, document_name, document_mime, issuer_name, issuer_source, issuer_confidence, issuer_parser_version,
                 created_by, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
                 ->execute([
                     $direction, $cariId, $invoiceNo, $invoiceDate, $dueDate, $subtotal, $vatAmount, $totalAmount,
                     $currency, $description, $doc['path'], $doc['name'], $doc['mime'], $issuerName,
-                    $issuerName !== '' ? 'manual' : '', $issuerName !== '' ? 100 : 0,
+                    $issuerName !== '' ? 'manual' : '', $issuerName !== '' ? 100 : 0, '',
                     current_user()['id'] ?? null, now(), now()
                 ]);
             $newId = (int)db()->lastInsertId();
