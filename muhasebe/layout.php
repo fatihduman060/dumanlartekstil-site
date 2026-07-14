@@ -70,6 +70,44 @@ function require_user_manager(): void
     }
 }
 
+function can_access_private_finance_modules(): bool
+{
+    $u = current_user();
+    if (!$u) return false;
+
+    $username = strtolower(trim((string)($u['username'] ?? '')));
+    if (in_array($username, ['admin', 'fatih'], true)) return true;
+
+    // Fatih hesabı süper yönetici olarak tanımlıysa kullanıcı adı değişse bile yetkisi korunur.
+    return is_super_admin((int)($u['id'] ?? 0));
+}
+
+function require_private_finance_modules(): void
+{
+    require_login();
+    if (!can_access_private_finance_modules()) {
+        flash('error', 'Bu bölüm yalnızca Fatih ve admin kullanıcılarına açıktır.');
+        redirect('dashboard.php');
+    }
+}
+
+function private_finance_script_names(): array
+{
+    return [
+        'hesaplar.php',
+        'cekler.php',
+        'teklif-ver.php',
+        'teklif-yazdir.php',
+        'tahsilat-makbuzu.php',
+        'tahsilat-yazdir.php',
+    ];
+}
+
+$currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+if (is_logged_in() && in_array($currentScript, private_finance_script_names(), true)) {
+    require_private_finance_modules();
+}
+
 if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'kullanicilar.php') {
     if (is_logged_in() && current_user() && !can_manage_users()) {
         flash('error', 'Kullanıcı tanımları yalnızca süper yönetici tarafından yönetilebilir.');
@@ -102,17 +140,29 @@ function page_header(string $title, string $active = ''): void
         ['ozel_alacaklar', 'ozel-alacaklar.php', 'Özel Alacak', '◆'],
         ['hareketler', 'hareketler.php', 'Hareketler', '↕'],
     ];
-    if (is_admin()) {
+
+    if (can_access_private_finance_modules()) {
         $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
+    }
+
+    if (is_admin()) {
         $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
         $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
         $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
     }
+
+    if (can_access_private_finance_modules()) {
+        $nav[] = ['cekler', 'cekler.php', 'Çekler', '◈'];
+    }
+
+    $nav[] = ['belgeler', 'belgeler.php', 'Belgeler', '▤'];
+
+    if (can_access_private_finance_modules()) {
+        $nav[] = ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'];
+        $nav[] = ['tahsilat_makbuzu', 'tahsilat-makbuzu.php', 'Tahsilat Makbuzu', '₺'];
+    }
+
     $nav = array_merge($nav, [
-        ['cekler', 'cekler.php', 'Çekler', '◈'],
-        ['belgeler', 'belgeler.php', 'Belgeler', '▤'],
-        ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'],
-        ['tahsilat_makbuzu', 'tahsilat-makbuzu.php', 'Tahsilat Makbuzu', '₺'],
         ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'],
         ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
         ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
@@ -138,7 +188,7 @@ function page_header(string $title, string $active = ''): void
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/muhasebe.css?v=515" />
   <link rel="stylesheet" href="assets/cek-renkleri.css?v=1" />
-  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}</style>
+  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"]{display:none!important}<?php endif; ?></style>
 </head>
 <body class="app-page">
   <div class="app-shell">
@@ -182,7 +232,7 @@ function page_footer(): void
     ?>
     </main>
   </div>
-  <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_COMPANY_TAX_NO = <?php echo json_encode(preg_replace('/\D+/', '', (string)setting_get('company_tax_no', '3140036788')) ?: '3140036788', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
+  <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_COMPANY_TAX_NO = <?php echo json_encode(preg_replace('/\D+/', '', (string)setting_get('company_tax_no', '3140036788')) ?: '3140036788', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_PRIVATE_FINANCE_ACCESS = <?php echo can_access_private_finance_modules() ? 'true' : 'false'; ?>;</script>
   <script src="assets/muhasebe.js?v=516"></script>
   <script src="assets/super-admin-role.js?v=1"></script>
   <script src="assets/muhasebe-polish.js?v=1"></script>
