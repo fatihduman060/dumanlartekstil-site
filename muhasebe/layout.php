@@ -181,7 +181,7 @@ function page_footer(): void
     ?>
     </main>
   </div>
-  <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
+  <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_COMPANY_TAX_NO = <?php echo json_encode(preg_replace('/\D+/', '', (string)setting_get('company_tax_no', '3140036788')) ?: '3140036788', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
   <script src="assets/muhasebe.js?v=516"></script>
   <script src="assets/super-admin-role.js?v=1"></script>
   <script src="assets/muhasebe-polish.js?v=1"></script>
@@ -193,11 +193,12 @@ function page_footer(): void
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/dashboard-acik-cekler.js?v=2"></script>
   <script src="assets/dashboard-vade-hatirlatmalari.js?v=3"></script>
-  <script src="assets/fatura-pdf-oku.js?v=1"></script>
+  <script src="assets/fatura-pdf-oku.js?v=2"></script>
   <script src="assets/fatura-kdv-devir.js?v=1"></script>
   <script src="assets/fatura-toplu-link.js?v=2"></script>
   <script src="assets/fatura-toplu-yukle.js?v=2"></script>
   <script src="assets/fatura-cari-sec.js?v=1"></script>
+  <script src="assets/fatura-yon-sec.js?v=1"></script>
   <script src="assets/cari-hareket-kaynak.js?v=4"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
