@@ -310,7 +310,13 @@
         return item.key.length>=8&&!isMiscCari(item.cari)&&!isOwnOrGenericName(item.cari.name||'')&&haystack.indexOf(item.key)!==-1;
       });
       if(named.length===1){
-        return {id:String(named[0].cari.id),confidence:'PDF’deki tam firma adı eşleşti',tone:'warning'};
+        return {
+          id:String(named[0].cari.id),
+          confidence:'PDF’deki tam firma adı eşleşti',
+          tone:'warning',
+          issuer_name:String(named[0].cari.name||'').trim(),
+          issuer_confidence:70
+        };
       }
     }
 
@@ -349,6 +355,10 @@
       var safeDirection=selectedDirection(safe.direction||forcedDirection||'gelen');
       var safeIssuer=safeDirection==='gelen'?String(safe.issuerName||'').trim():'';
       var safeCari=matchCari(safeFullText,safeIssuer,safeDirection);
+      var issuerFromCariMatch=!safeIssuer&&safeDirection==='gelen'&&String(safeCari.issuer_name||'').trim()!=='';
+      if(issuerFromCariMatch) safeIssuer=String(safeCari.issuer_name||'').trim();
+      var safeIssuerWarnings=(safe.issuerWarnings||[]).slice();
+      if(issuerFromCariMatch) safeIssuerWarnings.push('Gönderen firma PDF’deki tam cari adı eşleşmesinden önerildi.');
       return {
         direction:safeDirection,
         detected_direction:safe.direction||'',
@@ -357,10 +367,10 @@
         match_text:safeCari.confidence,
         match_tone:safeCari.tone,
         issuer_name:safeIssuer,
-        issuer_source:safeIssuer?'pdf':'',
-        issuer_confidence:safeIssuer?Number(safe.issuerConfidence||0):0,
+        issuer_source:safeIssuer?(issuerFromCariMatch?'cari':'pdf'):'',
+        issuer_confidence:safeIssuer?(issuerFromCariMatch?Number(safeCari.issuer_confidence||70):Number(safe.issuerConfidence||0)):0,
         issuer_parser_version:safeIssuer?String(safe.version||window.FaturaOkumaCore.version||''):'',
-        issuer_warnings:safe.issuerWarnings||[],
+        issuer_warnings:safeIssuerWarnings,
         invoice_no:safe.invoiceNo,
         invoice_date:safe.invoiceDate,
         due_date:'',
@@ -405,6 +415,7 @@
     var detectedDirection=detectDirection(fullText);
     var fallbackDirection=selectedDirection(detectedDirection);
     var cariMatch=matchCari(fullText,'',fallbackDirection);
+    var fallbackIssuer=fallbackDirection==='gelen'?String(cariMatch.issuer_name||'').trim():'';
 
     return {
       direction:fallbackDirection,
@@ -413,11 +424,11 @@
       cari_auto_selected:!!cariMatch.id,
       match_text:cariMatch.confidence,
       match_tone:cariMatch.tone,
-      issuer_name:'',
-      issuer_source:'',
-      issuer_confidence:0,
+      issuer_name:fallbackIssuer,
+      issuer_source:fallbackIssuer?'cari':'',
+      issuer_confidence:fallbackIssuer?Number(cariMatch.issuer_confidence||70):0,
       issuer_parser_version:'',
-      issuer_warnings:[],
+      issuer_warnings:fallbackIssuer?['Gönderen firma PDF’deki tam cari adı eşleşmesinden önerildi.']:[],
       invoice_no:invoiceNo,
       invoice_date:isoDate(dateText),
       due_date:'',
@@ -454,9 +465,13 @@
     if(parsedMoney(record.vat_amount)===null) missing.push('KDV');
     var total=parsedMoney(record.total_amount);
     if(total===null||total<=0) missing.push('Genel toplam');
-    if(record.direction==='gelen'&&!String(record.issuer_name||'').trim()){
-      var cari=selectedCari(record.cari_id);
-      if(!cari||isMiscCari(cari)) missing.push('Gönderen firma');
+    if(record.direction==='gelen'&&!String(record.issuer_name||'').trim()) missing.push('Gönderen firma');
+    var criticals=Array.isArray(record.critical_issues)?record.critical_issues:[];
+    if(criticals.some(function(message){return /KDV pozitifken matrah/i.test(String(message||''));})){
+      missing.push('Matrah/KDV tutarlılığı');
+    }
+    if(criticals.some(function(message){return /PDF metin katmanı/i.test(String(message||''));})){
+      missing.push('PDF metni/OCR');
     }
     return missing;
   }
@@ -620,7 +635,7 @@
         if(!record) return;
         record.direction=directionMode.value==='auto'?(record.detected_direction||record.direction):directionMode.value;
         refreshIssuerForDirection(record);
-        if(record.direction==='giden'&&isMiscCari(selectedCari(record.cari_id))){
+        if(record.direction==='giden'&&record.cari_auto_selected){
           record.cari_id='';
           record.cari_auto_selected=false;
           record.match_text='Giden faturada alıcı carisini seç';
@@ -721,7 +736,7 @@
     }
     if(field==='direction'){
       refreshIssuerForDirection(records[index]);
-      if(value==='giden'&&isMiscCari(selectedCari(records[index].cari_id))){
+      if(value==='giden'&&records[index].cari_auto_selected){
         records[index].cari_id='';
         records[index].cari_auto_selected=false;
         records[index].match_text='Giden faturada alıcı carisini seç';
