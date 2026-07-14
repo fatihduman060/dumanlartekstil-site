@@ -280,9 +280,10 @@
   }
 
   function openModal(invoiceId,cell){
+    var requestedId=Number(invoiceId||0);
     buildModal();
     var modal=document.getElementById('faturaCariModal');
-    state.invoiceId=invoiceId;
+    state.invoiceId=requestedId;
     state.cell=cell;
     state.invoice=null;
     modal.querySelector('input[type="search"]').value='';
@@ -293,14 +294,16 @@
     setStatus('Fatura bilgileri hazırlanıyor...','loading');
     modal.hidden=false;
 
-    fetch('fatura-cari-sec.php?invoice_id='+encodeURIComponent(invoiceId)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+    fetch('fatura-cari-sec.php?invoice_id='+encodeURIComponent(requestedId)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
       .then(function(data){
+        if(state.invoiceId!==requestedId) return;
         if(!data.ok) throw new Error(data.error||'Fatura bilgisi alınamadı.');
         state.csrf=String(data.csrf_token||state.csrf);
         state.invoice=data.invoice||null;
         if(Array.isArray(data.cariler)&&data.cariler.length){state.cariler=data.cariler;fillOptions('');}
         setStatus(state.invoice&&state.invoice.has_document?'PDF hazır. Mevcut cariyi seçebilir veya otomatik cari ekleyebilirsin.':'Bu faturada okunacak PDF bulunmuyor. Mevcut carilerden seçim yap.','neutral');
+        modal.dispatchEvent(new CustomEvent('bitke:fatura-cari-ready',{bubbles:true,detail:{invoiceId:requestedId,invoice:state.invoice}}));
       })
       .catch(function(error){setStatus(error.message||'Fatura bilgisi alınamadı.','danger');});
   }
