@@ -1,6 +1,18 @@
 (function(){
   if(!/\/faturalar\.php$/i.test(location.pathname)) return;
 
+  var params=new URLSearchParams(location.search);
+  var editId=Number(params.get('edit')||0);
+  var formGrid=document.querySelector('.form-grid');
+
+  // Normal fatura listesindeyken sol taraftaki yeni/düzenleme formunu kaldır.
+  // Form yalnızca listeden Düzenle bağlantısına basılıp ?edit=ID ile gelindiğinde görünür.
+  if(formGrid&&editId<=0){
+    var formCard=formGrid.querySelector('.form-card');
+    if(formCard) formCard.remove();
+    formGrid.classList.add('fatura-list-only');
+  }
+
   var section=document.querySelector('.dashboard-section');
   if(!section) return;
   var filter=section.querySelector('.filterbar');
@@ -71,7 +83,19 @@
   });
 
   var style=document.createElement('style');
-  style.textContent='.toplu-yon-duzelt-panel{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin:10px 0 14px;padding:12px 14px;border:1px solid #efcf95;background:#fff7e5;border-radius:14px}.toplu-yon-duzelt-panel[hidden]{display:none}.toplu-yon-duzelt-panel>div:first-child{display:grid;gap:3px}.toplu-yon-duzelt-panel strong{font-size:13px}.toplu-yon-duzelt-panel small{font-size:11px;color:var(--muted)}.toplu-yon-actions{display:flex;gap:8px;flex-wrap:wrap}.toplu-yon-actions .btn{padding:8px 10px;font-size:11px}@media(max-width:720px){.toplu-yon-duzelt-panel{grid-template-columns:1fr}.toplu-yon-actions{justify-content:flex-start}}';
+  style.textContent=''
+    +'.form-grid.fatura-list-only{display:block!important;grid-template-columns:minmax(0,1fr)!important;width:100%}'
+    +'.fatura-list-only>.panel-card{width:100%;max-width:none;margin:0}'
+    +'.fatura-list-only .table-wrap{width:100%;overflow:auto}'
+    +'.fatura-list-only table{width:100%;min-width:1120px}'
+    +'.toplu-yon-duzelt-panel{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin:10px 0 14px;padding:12px 14px;border:1px solid #efcf95;background:#fff7e5;border-radius:14px}'
+    +'.toplu-yon-duzelt-panel[hidden]{display:none}'
+    +'.toplu-yon-duzelt-panel>div:first-child{display:grid;gap:3px}'
+    +'.toplu-yon-duzelt-panel strong{font-size:13px}'
+    +'.toplu-yon-duzelt-panel small{font-size:11px;color:var(--muted)}'
+    +'.toplu-yon-actions{display:flex;gap:8px;flex-wrap:wrap}'
+    +'.toplu-yon-actions .btn{padding:8px 10px;font-size:11px}'
+    +'@media(max-width:720px){.toplu-yon-duzelt-panel{grid-template-columns:1fr}.toplu-yon-actions{justify-content:flex-start}.fatura-list-only table{min-width:980px}}';
   document.head.appendChild(style);
 
   load();
