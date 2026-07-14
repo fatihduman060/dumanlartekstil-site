@@ -88,6 +88,8 @@
     +'.fatura-list-only>.panel-card{width:100%;max-width:none;margin:0}'
     +'.fatura-list-only .table-wrap{width:100%;overflow:auto}'
     +'.fatura-list-only table{width:100%;min-width:1120px}'
+    +'.fatura-list-only table th,.fatura-list-only table td{font-size:calc(1em - .5px)}'
+    +'.fatura-list-only table select,.fatura-list-only table button{font-size:calc(1em - .25px)}'
     +'.toplu-yon-duzelt-panel{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin:10px 0 14px;padding:12px 14px;border:1px solid #efcf95;background:#fff7e5;border-radius:14px}'
     +'.toplu-yon-duzelt-panel[hidden]{display:none}'
     +'.toplu-yon-duzelt-panel>div:first-child{display:grid;gap:3px}'
