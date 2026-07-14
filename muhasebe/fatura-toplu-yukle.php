@@ -49,6 +49,13 @@ function toplu_fatura_gecerli_tarih(string $value): bool
     return $date && $date->format('Y-m-d') === $value;
 }
 
+function toplu_fatura_gecerli_tutar(string $value): bool
+{
+    $value = preg_replace('/[\x{00A0}\s]+/u', '', trim($value)) ?: '';
+    if ($value === '') return false;
+    return (bool)preg_match('/^-?(?:(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?|(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)$/', $value);
+}
+
 function toplu_fatura_gonderen_temizle($value): string
 {
     $value = preg_replace('/\s+/u', ' ', trim((string)$value)) ?: '';
@@ -130,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $direction = (string)($meta['direction'] ?? 'gelen');
             if (!in_array($direction, ['gelen','giden'], true)) $direction = 'gelen';
+            $clientVersion = max(0, (int)($meta['client_version'] ?? 0));
             $invoiceNo = trim((string)($meta['invoice_no'] ?? ''));
             $invoiceNoKey = preg_replace('/[^A-Z0-9]/', '', strtoupper($invoiceNo));
             $invalidInvoiceNo = $invoiceNoKey === ''
@@ -184,6 +192,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($subtotalRaw === '' || $vatRaw === '' || $totalRaw === '') {
                 throw new RuntimeException('Matrah, KDV ve genel toplam alanları eksik olamaz.');
             }
+            if (!toplu_fatura_gecerli_tutar($subtotalRaw)
+                || !toplu_fatura_gecerli_tutar($vatRaw)
+                || !toplu_fatura_gecerli_tutar($totalRaw)) {
+                throw new RuntimeException('Matrah, KDV veya genel toplam sayısal biçimde değil.');
+            }
             if ($totalAmount <= 0) {
                 throw new RuntimeException('Fatura toplamı sıfır olamaz.');
             }
@@ -207,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $issuerName = '';
                 }
             }
-            if ($direction === 'gelen' && $issuerName === '') {
+            if ($direction === 'gelen' && $issuerName === '' && $clientVersion >= 4) {
                 throw new RuntimeException('Gönderen firma eksik. PDF’den okunmadıysa satırdaki gönderen alanını doldur.');
             }
 
@@ -289,7 +302,7 @@ page_header('Toplu Fatura Yükle', 'faturalar');
   <div>
     <span class="status-pill">Toplu PDF arşivi</span>
     <h2>PDF faturaları birlikte yükle, kontrol et ve cari cari ayır.</h2>
-    <p>Gönderen firma PDF’den okunur, mevcut cariyle eşleşirse seçilir; eşleşmezse gerçek firma adı korunarak MUHTELİF carisine ayrılır. Bu ekran otomatik cari hareket oluşturmaz.</p>
+    <p>Gönderen firma PDF’den okunur, mevcut cariyle eşleşirse seçilir; eşleşmezse gerçek firma adı korunur ve varsa MUHTELİF carisi seçilir. MUHTELİF cari yoksa cari alanı boş kalır. Bu ekran otomatik cari hareket oluşturmaz.</p>
   </div>
   <div class="hero-actions"><a class="btn btn-secondary" href="faturalar.php">Fatura listesine dön</a></div>
 </section>
