@@ -197,6 +197,7 @@ function page_footer(): void
   <script src="assets/fatura-kdv-devir.js?v=1"></script>
   <script src="assets/fatura-toplu-link.js?v=2"></script>
   <script src="assets/fatura-toplu-yukle.js?v=2"></script>
+  <script src="assets/fatura-cari-sec.js?v=1"></script>
   <script src="assets/cari-hareket-kaynak.js?v=4"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
