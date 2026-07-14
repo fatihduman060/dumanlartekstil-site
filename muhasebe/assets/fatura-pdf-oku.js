@@ -1,0 +1,287 @@
+(function(){
+  if(!/\/faturalar\.php$/i.test(location.pathname)) return;
+
+  var form=document.getElementById('invoiceForm');
+  if(!form) return;
+  var fileInput=form.querySelector('input[name="document"]');
+  if(!fileInput) return;
+
+  var invoiceNo=form.querySelector('[name="invoice_no"]');
+  var invoiceDate=form.querySelector('[name="invoice_date"]');
+  var subtotal=form.querySelector('[name="subtotal"]');
+  var vat=form.querySelector('[name="vat_amount"]');
+  var total=form.querySelector('[name="total_amount"]');
+  var currency=form.querySelector('[name="currency"]');
+  var cari=form.querySelector('[name="cari_id"]');
+
+  function norm(value){
+    return String(value||'')
+      .toLocaleUpperCase('tr-TR')
+      .replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ğ/g,'G').replace(/Ü/g,'U').replace(/Ö/g,'O').replace(/Ç/g,'C')
+      .replace(/[^A-Z0-9]+/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
+
+  function esc(value){
+    return String(value==null?'':value).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c];});
+  }
+
+  function loadPdfJs(){
+    if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    return new Promise(function(resolve,reject){
+      var old=document.querySelector('script[data-fatura-pdfjs]');
+      if(old){
+        old.addEventListener('load',function(){resolve(window.pdfjsLib);},{once:true});
+        old.addEventListener('error',reject,{once:true});
+        return;
+      }
+      var script=document.createElement('script');
+      script.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.setAttribute('data-fatura-pdfjs','1');
+      script.onload=function(){
+        if(!window.pdfjsLib){reject(new Error('PDF okuma kütüphanesi yüklenemedi.'));return;}
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      };
+      script.onerror=function(){reject(new Error('PDF okuma kütüphanesi yüklenemedi.'));};
+      document.head.appendChild(script);
+    });
+  }
+
+  function pageLines(content){
+    var rows=[];
+    (content.items||[]).forEach(function(item){
+      var text=String(item.str||'').trim();
+      if(!text) return;
+      var x=item.transform&&item.transform.length>4?Number(item.transform[4]||0):0;
+      var y=item.transform&&item.transform.length>5?Number(item.transform[5]||0):0;
+      var row=null;
+      for(var i=0;i<rows.length;i++){
+        if(Math.abs(rows[i].y-y)<=2.5){row=rows[i];break;}
+      }
+      if(!row){row={y:y,items:[]};rows.push(row);}
+      row.items.push({x:x,text:text});
+    });
+    rows.sort(function(a,b){return b.y-a.y;});
+    return rows.map(function(row){
+      row.items.sort(function(a,b){return a.x-b.x;});
+      return row.items.map(function(item){return item.text;}).join(' ').replace(/\s+/g,' ').trim();
+    }).filter(Boolean);
+  }
+
+  function moneyCandidates(text){
+    var matches=String(text||'').match(/-?\d[\d.\s]*(?:,\d{2})|-?\d[\d,\s]*(?:\.\d{2})/g)||[];
+    return matches.map(function(raw){
+      var value=raw.replace(/\s/g,'');
+      var comma=value.lastIndexOf(',');
+      var dot=value.lastIndexOf('.');
+      if(comma>-1&&dot>-1){
+        if(comma>dot) value=value.replace(/\./g,'').replace(',','.');
+        else value=value.replace(/,/g,'');
+      }else if(comma>-1){
+        value=value.replace(/\./g,'').replace(',','.');
+      }else if(dot>-1){
+        var decimals=value.length-dot-1;
+        if(decimals!==2) value=value.replace(/\./g,'');
+      }
+      var number=parseFloat(value);
+      return Number.isFinite(number)?number:null;
+    }).filter(function(v){return v!==null;});
+  }
+
+  function findAmount(lines,labels){
+    var labelNorms=labels.map(norm);
+    for(var i=0;i<lines.length;i++){
+      var lineNorm=norm(lines[i]);
+      var matched=labelNorms.some(function(label){return lineNorm.indexOf(label)!==-1;});
+      if(!matched) continue;
+      for(var offset=0;offset<=2;offset++){
+        if(!lines[i+offset]) continue;
+        var values=moneyCandidates(lines[i+offset]);
+        if(values.length) return values[values.length-1];
+      }
+    }
+    return null;
+  }
+
+  function findTextAfter(lines,labels,pattern){
+    var labelNorms=labels.map(norm);
+    for(var i=0;i<lines.length;i++){
+      var line=lines[i];
+      var lineNorm=norm(line);
+      if(!labelNorms.some(function(label){return lineNorm.indexOf(label)!==-1;})) continue;
+      var candidates=[line,lines[i+1]||'',lines[i+2]||''];
+      for(var j=0;j<candidates.length;j++){
+        var match=String(candidates[j]).match(pattern);
+        if(match) return match[1]||match[0];
+      }
+    }
+    return '';
+  }
+
+  function isoDate(value){
+    var match=String(value||'').match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
+    if(!match) return '';
+    return match[3]+'-'+String(match[2]).padStart(2,'0')+'-'+String(match[1]).padStart(2,'0');
+  }
+
+  function formatMoney(value){
+    return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+
+  function findCari(fullText){
+    if(!cari) return false;
+    var haystack=norm(fullText);
+    var options=Array.from(cari.options).filter(function(option){return option.value;}).map(function(option){
+      var name=option.textContent.split('—')[0].trim();
+      return {option:option,name:name,key:norm(name)};
+    }).filter(function(item){return item.key.length>=6;});
+    options.sort(function(a,b){return b.key.length-a.key.length;});
+    for(var i=0;i<options.length;i++){
+      if(haystack.indexOf(options[i].key)!==-1){
+        cari.value=options[i].option.value;
+        return options[i].name;
+      }
+    }
+    return false;
+  }
+
+  function extractInvoice(lines){
+    var fullText=lines.join('\n');
+    var no=findTextAfter(lines,
+      ['Fatura No','Fatura Numarası','Belge No','E-Arşiv Fatura No','E-Fatura No'],
+      /\b([A-Z0-9]{8,30})\b/i
+    );
+    if(no&&/^(ETTN|VKN|TCKN)$/i.test(no)) no='';
+
+    var dateText=findTextAfter(lines,
+      ['Fatura Tarihi','Düzenleme Tarihi','Belge Tarihi','Fatura Düzenleme Tarihi'],
+      /(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4})/
+    );
+    if(!dateText){
+      var generalDate=fullText.match(/\b(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4})\b/);
+      dateText=generalDate?generalDate[1]:'';
+    }
+
+    var totalValue=findAmount(lines,['Ödenecek Tutar','Vergiler Dahil Toplam Tutar','Genel Toplam','Fatura Toplamı','Ödenecek Toplam']);
+    var vatValue=findAmount(lines,['Hesaplanan KDV','KDV Toplamı','Toplam KDV','Hesaplanan Katma Değer Vergisi']);
+    var subtotalValue=findAmount(lines,['Mal Hizmet Toplam Tutarı','Vergiler Hariç Toplam Tutar','KDV Matrahı','Ara Toplam','Matrah']);
+
+    if(totalValue===null&&subtotalValue!==null&&vatValue!==null) totalValue=subtotalValue+vatValue;
+    if(subtotalValue===null&&totalValue!==null&&vatValue!==null) subtotalValue=totalValue-vatValue;
+
+    var upper=norm(fullText);
+    var curr=upper.indexOf(' EUR')!==-1||upper.indexOf(' EURO')!==-1?'EUR':(upper.indexOf(' USD')!==-1||upper.indexOf(' DOLAR')!==-1?'USD':'TL');
+    var cariName=findCari(fullText);
+
+    return {
+      invoiceNo:no,
+      invoiceDate:isoDate(dateText),
+      subtotal:subtotalValue,
+      vat:vatValue,
+      total:totalValue,
+      currency:curr,
+      cariName:cariName
+    };
+  }
+
+  var fileLabel=fileInput.closest('label');
+  var box=document.createElement('div');
+  box.className='fatura-pdf-okuma';
+  box.innerHTML='<div class="fatura-pdf-baslik"><span>📄</span><div><strong>Fatura PDF’sini yükle</strong><small>PDF seçildiğinde fatura no, tarih, matrah, KDV ve toplam otomatik okunmaya çalışılır.</small></div></div>'
+    +'<div class="fatura-pdf-actions"><button type="button" class="btn btn-secondary" data-fatura-pdf-oku disabled>PDF’den bilgileri oku</button><a class="btn btn-secondary" data-fatura-pdf-onizle target="_blank" hidden>PDF’yi önizle</a></div>'
+    +'<p class="fatura-pdf-status" data-fatura-pdf-status>Önce bilgisayarından PDF faturayı seç.</p>'
+    +'<p class="fatura-pdf-uyari">Otomatik bulunan bilgileri kaydetmeden önce kontrol et. Görüntü olarak taranmış PDF’lerde alanlar elle tamamlanabilir.</p>';
+  if(fileLabel) fileLabel.insertAdjacentElement('beforebegin',box);
+
+  var readButton=box.querySelector('[data-fatura-pdf-oku]');
+  var preview=box.querySelector('[data-fatura-pdf-onizle]');
+  var status=box.querySelector('[data-fatura-pdf-status]');
+  var previewUrl='';
+
+  function setStatus(text,tone){
+    status.textContent=text;
+    status.className='fatura-pdf-status '+(tone?'is-'+tone:'');
+  }
+
+  function applyResult(result){
+    var found=[];
+    if(result.invoiceNo&&invoiceNo){invoiceNo.value=result.invoiceNo;found.push('fatura no');}
+    if(result.invoiceDate&&invoiceDate){invoiceDate.value=result.invoiceDate;found.push('tarih');}
+    if(result.subtotal!==null&&subtotal){subtotal.value=formatMoney(result.subtotal);found.push('matrah');}
+    if(result.vat!==null&&vat){vat.value=formatMoney(result.vat);found.push('KDV');}
+    if(result.total!==null&&total){total.value=formatMoney(result.total);found.push('genel toplam');}
+    if(result.currency&&currency){currency.value=result.currency;}
+    if(result.cariName) found.push('cari eşleşmesi');
+    [subtotal,vat,total].forEach(function(input){if(input) input.dispatchEvent(new Event('input',{bubbles:true}));});
+    if(found.length){
+      setStatus('PDF okundu: '+found.join(', ')+' bulundu. Bilgileri kontrol edip faturayı kaydet.','success');
+    }else{
+      setStatus('PDF açıldı ancak alanlar otomatik bulunamadı. PDF arşive yüklenebilir; gerekli alanları elle tamamla.','warning');
+    }
+  }
+
+  function readSelectedPdf(){
+    var file=fileInput.files&&fileInput.files[0];
+    if(!file){setStatus('Önce PDF dosyasını seç.','warning');return;}
+    if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
+      setStatus('Otomatik okuma yalnızca PDF dosyalarında çalışır.','warning');return;
+    }
+    readButton.disabled=true;
+    readButton.textContent='PDF okunuyor...';
+    setStatus('PDF içindeki fatura bilgileri aranıyor...','loading');
+    Promise.all([loadPdfJs(),file.arrayBuffer()])
+      .then(function(values){
+        var pdfjs=values[0];
+        return pdfjs.getDocument({data:values[1]}).promise;
+      })
+      .then(async function(pdf){
+        var lines=[];
+        var pageCount=Math.min(pdf.numPages,5);
+        for(var pageNo=1;pageNo<=pageCount;pageNo++){
+          var page=await pdf.getPage(pageNo);
+          var content=await page.getTextContent();
+          lines=lines.concat(pageLines(content));
+        }
+        applyResult(extractInvoice(lines));
+      })
+      .catch(function(error){
+        setStatus('PDF okunamadı: '+(error&&error.message?error.message:'Bilinmeyen hata')+'. Dosyayı yine yükleyebilir, alanları elle tamamlayabilirsin.','danger');
+      })
+      .finally(function(){
+        readButton.disabled=false;
+        readButton.textContent='PDF’den bilgileri tekrar oku';
+      });
+  }
+
+  fileInput.addEventListener('change',function(){
+    var file=fileInput.files&&fileInput.files[0];
+    if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl='';}
+    if(!file){
+      readButton.disabled=true;
+      preview.hidden=true;
+      setStatus('Önce bilgisayarından PDF faturayı seç.');
+      return;
+    }
+    var isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name);
+    readButton.disabled=!isPdf;
+    if(isPdf){
+      previewUrl=URL.createObjectURL(file);
+      preview.href=previewUrl;
+      preview.hidden=false;
+      setStatus(file.name+' seçildi. Bilgiler otomatik okunuyor...','loading');
+      readSelectedPdf();
+    }else{
+      preview.hidden=true;
+      setStatus(file.name+' seçildi. Görsel faturalar arşive yüklenir; otomatik alan okuma PDF için çalışır.','warning');
+    }
+  });
+
+  readButton.addEventListener('click',readSelectedPdf);
+  window.addEventListener('beforeunload',function(){if(previewUrl) URL.revokeObjectURL(previewUrl);});
+
+  var style=document.createElement('style');
+  style.textContent='.fatura-pdf-okuma{border:1px solid #d8c6a5;background:linear-gradient(135deg,#fff7e8,#fff);border-radius:16px;padding:14px;display:grid;gap:11px}.fatura-pdf-baslik{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}.fatura-pdf-baslik>span{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#efe3cc;font-size:19px}.fatura-pdf-baslik>div{display:grid;gap:3px}.fatura-pdf-baslik strong{font-size:14px}.fatura-pdf-baslik small,.fatura-pdf-uyari{font-size:11px;color:var(--muted)}.fatura-pdf-actions{display:flex;gap:8px;flex-wrap:wrap}.fatura-pdf-actions .btn{padding:9px 12px;font-size:12px}.fatura-pdf-status{margin:0;padding:9px 11px;border-radius:10px;background:#f3efe7;color:#655e53;font-size:12px;font-weight:800}.fatura-pdf-status.is-success{background:#e8f5ed;color:#1f6b3d}.fatura-pdf-status.is-warning{background:#fff4dc;color:#835710}.fatura-pdf-status.is-danger{background:#fff0ef;color:#96352f}.fatura-pdf-status.is-loading{background:#eef5ff;color:#234f84}.fatura-pdf-uyari{margin:0}';
+  document.head.appendChild(style);
+})();
