@@ -18,7 +18,23 @@ function fatura_cari_norm(string $value): string
 
 function fatura_cari_tax_digits(string $value): string
 {
-    return preg_replace('/\D+/', '', $value) ?: '';
+    $digits = preg_replace('/\D+/', '', $value) ?: '';
+    // Bazı PDF'ler 10 haneli VKN'nin başına yanlışlıkla 0 ekleyerek 11 hane döndürüyor.
+    if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
+        $digits = substr($digits, 1);
+    }
+    return $digits;
+}
+
+function fatura_cari_name_valid(string $name): bool
+{
+    $key = fatura_cari_norm($name);
+    if (mb_strlen(trim($name), 'UTF-8') < 3) return false;
+    if (preg_match('/\b(MAH|MAHALLESI|CAD|CADDESI|SOK|SOKAK|BULVAR|BLV|KAT|DAIRE|MEVKII|KOYU|ILCE|POSTA KODU|NO|NUMARA)\b/', $key)) return false;
+    if (str_contains($key, 'ORGANIZE SANAYI BOLGESI') || preg_match('/\bOSB\b/', $key)) return false;
+    if (preg_match('/DUMANLAR|BITKE|MOFIY/', $key)) return false;
+    if (preg_match('/FATURA|ETTN|UUID|VERGI|VKN|TCKN|MERSIS|TICARET SICIL|IBAN|BANKA|TOPLAM|KDV|MATRAH/', $key)) return false;
+    return true;
 }
 
 function fatura_cari_attach(array $invoice, array $cari): void
@@ -81,7 +97,7 @@ try {
 
         if ($action === 'create_auto') {
             $name = trim((string)($_POST['name'] ?? ''));
-            $taxNo = trim((string)($_POST['tax_no'] ?? ''));
+            $taxNo = fatura_cari_tax_digits((string)($_POST['tax_no'] ?? ''));
             $taxOffice = trim((string)($_POST['tax_office'] ?? ''));
             $city = trim((string)($_POST['city'] ?? ''));
             $address = trim((string)($_POST['address'] ?? ''));
@@ -89,10 +105,24 @@ try {
             $email = trim((string)($_POST['email'] ?? ''));
 
             if ($name === '') throw new RuntimeException('Faturadan firma adı bulunamadı. Ad / ünvan alanını kontrol et.');
+            if (!fatura_cari_name_valid($name)) {
+                throw new RuntimeException('Ad / ünvan alanı firma adı yerine adres veya Dumanlar bilgisi içeriyor. Faturadaki karşı firma ünvanını kontrol et.');
+            }
 
             $companyTaxNo = fatura_cari_tax_digits((string)setting_get('company_tax_no', '3140036788'));
-            if ($taxNo !== '' && fatura_cari_tax_digits($taxNo) === $companyTaxNo) {
+            if ($taxNo !== '' && $taxNo === $companyTaxNo) {
                 throw new RuntimeException('Bulunan vergi numarası Dumanlar’a ait. Karşı firmanın bilgilerini kontrol et.');
+            }
+
+            $phoneDigits = fatura_cari_tax_digits($phone);
+            if ($phoneDigits !== '' && ($phoneDigits === $taxNo || $phoneDigits === $companyTaxNo)) {
+                $phone = '';
+            }
+            if (preg_match('/DUMANLAR|BITKE|MOFIY/i', $email)) {
+                $email = '';
+            }
+            if (preg_match('/DUMANLAR|BITKE|MOFIY/', fatura_cari_norm($address))) {
+                $address = '';
             }
 
             $cari = fatura_cari_find_existing($name, $taxNo);
