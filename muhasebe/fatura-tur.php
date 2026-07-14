@@ -38,71 +38,36 @@ function fatura_tur_norm(string $value): string
         'ç'=>'C','ğ'=>'G','ı'=>'I','i'=>'I','ö'=>'O','ş'=>'S','ü'=>'U',
     ];
     $value = strtoupper(strtr($value, $map));
-    $value = preg_replace('/[^A-Z0-9]+/', ' ', $value) ?? $value;
-    return trim(preg_replace('/\s+/', ' ', $value) ?? $value);
+    $value = preg_replace('/[^A-Z0-9]+/', ' ', $value) ?: $value;
+    return trim(preg_replace('/\s+/', ' ', $value) ?: $value);
 }
 
 function fatura_tur_oner(string $value): array
 {
     $text = fatura_tur_norm($value);
     $rules = [
-        'telefon' => [
-            'TURK TELEKOM'=>100, 'TTNET'=>100, 'TURKCELL'=>100, 'VODAFONE'=>100,
-            'SUPERONLINE'=>100, 'TELEFON'=>80, 'INTERNET'=>80, 'GSM'=>70, 'ILETISIM'=>45,
-        ],
-        'dogalgaz' => [
-            'DOGALGAZ'=>110, 'DOGAL GAZ'=>110, 'AKSA GAZ'=>100, 'AKSAGAZ'=>100,
-            'ENERYA'=>100, 'IGDAS'=>100, 'GAZDAS'=>100,
-        ],
-        'elektrik' => [
-            'ELEKTRIK'=>100, 'ENERJI'=>65, 'YEDAS'=>100, 'CEDAS'=>100, 'UEDAS'=>100,
-            'CK ENERJI'=>100, 'YESILIRMAK ELEKTRIK'=>110, 'ULUDAG ELEKTRIK'=>110,
-            'ELEKTRIK DAGITIM'=>110,
-        ],
-        'iplik' => [
-            'IPLIK'=>110, 'PAMUK'=>80, 'POLYESTER'=>80, 'ELYAF'=>80, 'LIKRA'=>80,
-            'BAMBU'=>65, 'MODAL'=>65, 'TEKSTIL HAMMADDE'=>100, 'HAMMADDE'=>80,
-        ],
-        'kargo' => [
-            'KARGO'=>100, 'NAKLIYE'=>100, 'LOJISTIK'=>90, 'SURAT KARGO'=>120,
-            'YURTICI KARGO'=>120, 'ARAS KARGO'=>120, 'MNG KARGO'=>120, 'PTT KARGO'=>120,
-        ],
-        'akaryakit' => [
-            'AKARYAKIT'=>110, 'BENZIN'=>90, 'MOTORIN'=>90, 'PETROL'=>70, 'OPET'=>100,
-            'SHELL'=>100, 'PETROL OFISI'=>110, 'TOTAL ENERGIES'=>100, 'BP PETROL'=>100,
-        ],
-        'bakim' => [
-            'MAKINE'=>70, 'BAKIM'=>100, 'YEDEK PARCA'=>100, 'SERVIS'=>55, 'RULMAN'=>85,
-            'KOMPRESOR'=>85, 'ELEKTRONIK KART'=>75, 'TEKNIK SERVIS'=>100,
-        ],
-        'ambalaj' => [
-            'AMBALAJ'=>110, 'KOLI'=>80, 'KARTON'=>75, 'POSET'=>75, 'KUTU'=>65,
-            'ETIKET'=>65, 'BANT'=>55, 'PAKETLEME'=>80,
-        ],
-        'personel' => [
-            'PERSONEL'=>90, 'MAAS'=>100, 'SGK'=>100, 'IS SAGLIGI'=>85,
-            'YEMEK HIZMET'=>80, 'PERSONEL SERVIS'=>90,
-        ],
-        'ofis' => [
-            'KIRTASIYE'=>100, 'OFIS'=>80, 'TEMIZLIK'=>70, 'MUHASEBE'=>70,
-            'DANISMANLIK'=>65, 'YAZILIM'=>60, 'LISANS'=>60, 'ABONELIK'=>55,
-        ],
+        'telefon' => ['TURK TELEKOM'=>100,'TTNET'=>100,'TURKCELL'=>100,'VODAFONE'=>100,'SUPERONLINE'=>100,'TELEFON'=>80,'INTERNET'=>80,'GSM'=>70,'ILETISIM'=>45],
+        'dogalgaz' => ['DOGALGAZ'=>110,'DOGAL GAZ'=>110,'AKSA GAZ'=>100,'AKSAGAZ'=>100,'ENERYA'=>100,'IGDAS'=>100,'GAZDAS'=>100],
+        'elektrik' => ['ELEKTRIK'=>100,'ENERJI'=>65,'YEDAS'=>100,'CEDAS'=>100,'UEDAS'=>100,'CK ENERJI'=>100,'YESILIRMAK ELEKTRIK'=>110,'ULUDAG ELEKTRIK'=>110,'ELEKTRIK DAGITIM'=>110],
+        'iplik' => ['IPLIK'=>110,'PAMUK'=>80,'POLYESTER'=>80,'ELYAF'=>80,'LIKRA'=>80,'BAMBU'=>65,'MODAL'=>65,'TEKSTIL HAMMADDE'=>100,'HAMMADDE'=>80],
+        'kargo' => ['KARGO'=>100,'NAKLIYE'=>100,'LOJISTIK'=>90,'SURAT KARGO'=>120,'YURTICI KARGO'=>120,'ARAS KARGO'=>120,'MNG KARGO'=>120,'PTT KARGO'=>120],
+        'akaryakit' => ['AKARYAKIT'=>110,'BENZIN'=>90,'MOTORIN'=>90,'PETROL'=>70,'OPET'=>100,'SHELL'=>100,'PETROL OFISI'=>110,'TOTAL ENERGIES'=>100,'BP PETROL'=>100],
+        'bakim' => ['MAKINE'=>70,'BAKIM'=>100,'YEDEK PARCA'=>100,'SERVIS'=>55,'RULMAN'=>85,'KOMPRESOR'=>85,'ELEKTRONIK KART'=>75,'TEKNIK SERVIS'=>100],
+        'ambalaj' => ['AMBALAJ'=>110,'KOLI'=>80,'KARTON'=>75,'POSET'=>75,'KUTU'=>65,'ETIKET'=>65,'BANT'=>55,'PAKETLEME'=>80],
+        'personel' => ['PERSONEL'=>90,'MAAS'=>100,'SGK'=>100,'IS SAGLIGI'=>85,'YEMEK HIZMET'=>80,'PERSONEL SERVIS'=>90],
+        'ofis' => ['KIRTASIYE'=>100,'OFIS'=>80,'TEMIZLIK'=>70,'MUHASEBE'=>70,'DANISMANLIK'=>65,'YAZILIM'=>60,'LISANS'=>60,'ABONELIK'=>55],
     ];
 
     $best = ['', 0, ''];
     foreach ($rules as $category => $keywords) {
         foreach ($keywords as $keyword => $score) {
-            if ($keyword !== '' && str_contains($text, $keyword) && $score > $best[1]) {
+            if ($keyword !== '' && strpos($text, $keyword) !== false && $score > $best[1]) {
                 $best = [$category, $score, $keyword];
             }
         }
     }
 
-    return [
-        'category' => $best[1] >= 55 ? $best[0] : '',
-        'confidence' => $best[1],
-        'matched' => $best[2],
-    ];
+    return ['category'=>$best[1] >= 55 ? $best[0] : '', 'confidence'=>$best[1], 'matched'=>$best[2]];
 }
 
 function fatura_tur_period(string $value): string
@@ -134,29 +99,22 @@ function fatura_tur_payload(string $period): array
     $items = [];
     $summary = [];
     foreach ($types as $key => $label) {
-        $summary[$key] = ['key'=>$key, 'label'=>$label, 'count'=>0, 'total'=>0.0, 'confirmed_count'=>0, 'suggested_count'=>0];
+        $summary[$key] = ['key'=>$key,'label'=>$label,'count'=>0,'total'=>0.0,'confirmed_count'=>0,'suggested_count'=>0];
     }
 
     foreach ($rows as $row) {
         $direction = (string)$row['direction'];
         $assigned = array_key_exists((string)$row['category'], $types) ? (string)$row['category'] : '';
-        $suggestion = ['category'=>'', 'confidence'=>0, 'matched'=>''];
+        $suggestion = ['category'=>'','confidence'=>0,'matched'=>''];
         if ($direction === 'gelen' && $assigned === '') {
-            $suggestion = fatura_tur_oner(
-                (string)$row['cari_name'] . ' ' .
-                (string)$row['description'] . ' ' .
-                (string)$row['document_name']
-            );
+            $suggestion = fatura_tur_oner((string)$row['cari_name'] . ' ' . (string)$row['description'] . ' ' . (string)$row['document_name']);
         }
-        $effective = $direction === 'gelen' ? ($assigned ?: (string)$suggestion['category']) : 'satis';
+        $effective = $direction === 'gelen' ? ($assigned !== '' ? $assigned : (string)$suggestion['category']) : 'satis';
 
         if ($direction === 'gelen' && isset($summary[$effective])) {
             $summary[$effective]['count']++;
-            if ((string)$row['currency'] === 'TL') {
-                $summary[$effective]['total'] += (float)$row['total_amount'];
-            }
-            if ($assigned !== '') $summary[$effective]['confirmed_count']++;
-            else $summary[$effective]['suggested_count']++;
+            if ((string)$row['currency'] === 'TL') $summary[$effective]['total'] += (float)$row['total_amount'];
+            if ($assigned !== '') $summary[$effective]['confirmed_count']++; else $summary[$effective]['suggested_count']++;
         }
 
         $items[] = [
@@ -177,15 +135,13 @@ function fatura_tur_payload(string $period): array
         ];
     }
 
-    $summaryRows = array_values(array_filter($summary, fn($row) => (int)$row['count'] > 0));
-    usort($summaryRows, fn($a, $b) => $b['total'] <=> $a['total']);
+    $summaryRows = array_values(array_filter($summary, function ($row) { return (int)$row['count'] > 0; }));
+    usort($summaryRows, function ($a, $b) {
+        if ($a['total'] == $b['total']) return 0;
+        return $a['total'] < $b['total'] ? 1 : -1;
+    });
 
-    return [
-        'period'=>$period,
-        'categories'=>$types,
-        'items'=>$items,
-        'summary'=>$summaryRows,
-    ];
+    return ['period'=>$period,'categories'=>$types,'items'=>$items,'summary'=>$summaryRows];
 }
 
 try {
@@ -242,5 +198,5 @@ try {
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(400);
-    echo json_encode(['ok'=>false, 'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['ok'=>false,'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
