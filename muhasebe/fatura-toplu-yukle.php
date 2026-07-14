@@ -34,6 +34,7 @@ ensure_column(db(), 'invoices', 'import_batch', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_name', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_source', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_confidence', 'INTEGER NOT NULL DEFAULT 0');
+ensure_column(db(), 'invoices', 'issuer_parser_version', 'TEXT');
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_file_hash ON invoices(file_hash)");
 
 function toplu_fatura_para_birimi($value): string
