@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/masraf-fisi-lib.php';
+require_once __DIR__ . '/magaza-satis-lib.php';
 require_login();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -28,7 +29,7 @@ function kdv_devir_summary(string $period): array
 
     $tableExists = (int)db()->query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='invoices'")->fetchColumn() > 0;
     $invoiceIncomingVat = 0.0;
-    $outgoingVat = 0.0;
+    $invoiceOutgoingVat = 0.0;
 
     if ($tableExists) {
         $stmt = db()->prepare("SELECT
@@ -39,12 +40,16 @@ function kdv_devir_summary(string $period): array
         $stmt->execute([$periodStart, $periodEnd]);
         $row = $stmt->fetch() ?: [];
         $invoiceIncomingVat = (float)($row['incoming_vat'] ?? 0);
-        $outgoingVat = (float)($row['outgoing_vat'] ?? 0);
+        $invoiceOutgoingVat = (float)($row['outgoing_vat'] ?? 0);
     }
 
     $expenseSummary = masraf_fisi_ozeti($period);
     $expenseVat = (float)($expenseSummary['vat'] ?? 0);
     $incomingVat = $invoiceIncomingVat + $expenseVat;
+
+    $storeSummary = magaza_satis_ozeti($period);
+    $storeSalesVat = (float)($storeSummary['vat'] ?? 0);
+    $outgoingVat = $invoiceOutgoingVat + $storeSalesVat;
 
     $stmt = db()->prepare('SELECT amount, note, updated_at FROM vat_carryovers WHERE period=?');
     $stmt->execute([$period]);
@@ -64,6 +69,10 @@ function kdv_devir_summary(string $period): array
         'expense_vat' => $expenseVat,
         'expense_count' => (int)($expenseSummary['count'] ?? 0),
         'outgoing_vat' => $outgoingVat,
+        'invoice_outgoing_vat' => $invoiceOutgoingVat,
+        'store_sales_vat' => $storeSalesVat,
+        'store_sales_gross' => (float)($storeSummary['gross'] ?? 0),
+        'store_sales_count' => (int)($storeSummary['count'] ?? 0),
         'carryover' => $carryover,
         'note' => (string)($carry['note'] ?? ''),
         'updated_at' => (string)($carry['updated_at'] ?? ''),
