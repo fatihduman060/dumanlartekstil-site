@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/fatura-no-onar.php';
+require_once __DIR__ . '/magaza-kullanici.php';
 
 // Önceden kurulmuş veritabanlarında eksik olan Ödeme kategorisini bir kez ekle.
 if (setting_get('migration_odeme_category_v1', '0') !== '1') {
@@ -134,45 +135,53 @@ if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'kullanicilar.php') {
 function page_header(string $title, string $active = ''): void
 {
     $u = current_user();
-    $nav = [
-        ['dashboard', 'dashboard.php', 'Genel Bakış', '⌂'],
-        ['cariler', 'cariler.php', 'Cariler', '◎'],
-        ['ozel_alacaklar', 'ozel-alacaklar.php', 'Özel Alacak', '◆'],
-        ['hareketler', 'hareketler.php', 'Hareketler', '↕'],
-    ];
+    $storeOnly = is_store_sales_user($u);
 
-    if (can_access_private_finance_modules()) {
-        $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
-    }
+    if ($storeOnly) {
+        $nav = [
+            ['faturalar', 'faturalar.php', 'Faturalar', '▤'],
+        ];
+    } else {
+        $nav = [
+            ['dashboard', 'dashboard.php', 'Genel Bakış', '⌂'],
+            ['cariler', 'cariler.php', 'Cariler', '◎'],
+            ['ozel_alacaklar', 'ozel-alacaklar.php', 'Özel Alacak', '◆'],
+            ['hareketler', 'hareketler.php', 'Hareketler', '↕'],
+        ];
 
-    if (is_admin()) {
-        $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
-        $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
-        $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
-    }
+        if (can_access_private_finance_modules()) {
+            $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
+        }
 
-    if (can_access_private_finance_modules()) {
-        $nav[] = ['cekler', 'cekler.php', 'Çekler', '◈'];
-    }
+        if (is_admin()) {
+            $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
+            $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
+            $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
+        }
 
-    $nav[] = ['belgeler', 'belgeler.php', 'Belgeler', '▤'];
+        if (can_access_private_finance_modules()) {
+            $nav[] = ['cekler', 'cekler.php', 'Çekler', '◈'];
+        }
 
-    if (can_access_private_finance_modules()) {
-        $nav[] = ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'];
-        $nav[] = ['tahsilat_makbuzu', 'tahsilat-makbuzu.php', 'Tahsilat Makbuzu', '₺'];
-    }
+        $nav[] = ['belgeler', 'belgeler.php', 'Belgeler', '▤'];
 
-    $nav = array_merge($nav, [
-        ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'],
-        ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
-        ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
-    ]);
-    if (is_admin()) {
-        $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
-        $nav[] = ['loglar', 'loglar.php', 'Loglar', '☰'];
-    }
-    if (can_manage_users()) {
-        $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
+        if (can_access_private_finance_modules()) {
+            $nav[] = ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'];
+            $nav[] = ['tahsilat_makbuzu', 'tahsilat-makbuzu.php', 'Tahsilat Makbuzu', '₺'];
+        }
+
+        $nav = array_merge($nav, [
+            ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'],
+            ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
+            ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
+        ]);
+        if (is_admin()) {
+            $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
+            $nav[] = ['loglar', 'loglar.php', 'Loglar', '☰'];
+        }
+        if (can_manage_users()) {
+            $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
+        }
     }
     ?>
 <!doctype html>
@@ -188,12 +197,12 @@ function page_header(string $title, string $active = ''): void
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/muhasebe.css?v=515" />
   <link rel="stylesheet" href="assets/cek-renkleri.css?v=1" />
-  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"]{display:none!important}<?php endif; ?></style>
+  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
 </head>
-<body class="app-page">
+<body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ''; ?>">
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="dashboard.php" aria-label="Dumanlar Muhasebe">
+      <a class="brand" href="<?php echo $storeOnly ? 'faturalar.php' : 'dashboard.php'; ?>" aria-label="Dumanlar Muhasebe">
         <img src="assets/dumanlar-logo-arkaplansiz.png?v=1" alt="Dumanlar" />
         <span>Muhasebe <small><?php echo e(APP_VERSION); ?></small></span>
       </a>
@@ -206,7 +215,7 @@ function page_header(string $title, string $active = ''): void
         <?php endforeach; ?>
       </nav>
       <div class="side-footer">
-        <span><?php echo is_super_admin() ? 'Süper Yönetici' : e(role_label($u['role'] ?? 'viewer')); ?></span>
+        <span><?php echo $storeOnly ? 'Mağaza Kullanıcısı' : (is_super_admin() ? 'Süper Yönetici' : e(role_label($u['role'] ?? 'viewer'))); ?></span>
         <strong><?php echo e($u['display_name'] ?? 'Kullanıcı'); ?></strong>
       </div>
     </aside>
@@ -218,7 +227,7 @@ function page_header(string $title, string $active = ''): void
           <h1><?php echo e($title); ?></h1>
         </div>
         <div class="top-actions">
-          <a class="ghost-link" href="../" target="_blank" rel="noopener">Siteyi aç</a>
+          <?php if (!$storeOnly): ?><a class="ghost-link" href="../" target="_blank" rel="noopener">Siteyi aç</a><?php endif; ?>
           <span class="session-chip" title="İşlem yapılmazsa otomatik çıkış süresi">30 dk</span><a class="logout-link" href="logout.php">Çıkış</a>
         </div>
       </header>
@@ -229,11 +238,16 @@ function page_header(string $title, string $active = ''): void
 
 function page_footer(): void
 {
+    $storeOnly = is_store_sales_user();
     ?>
     </main>
   </div>
-  <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_COMPANY_TAX_NO = <?php echo json_encode(preg_replace('/\D+/', '', (string)setting_get('company_tax_no', '3140036788')) ?: '3140036788', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_PRIVATE_FINANCE_ACCESS = <?php echo can_access_private_finance_modules() ? 'true' : 'false'; ?>;</script>
+  <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_COMPANY_TAX_NO = <?php echo json_encode(preg_replace('/\D+/', '', (string)setting_get('company_tax_no', '3140036788')) ?: '3140036788', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_PRIVATE_FINANCE_ACCESS = <?php echo can_access_private_finance_modules() ? 'true' : 'false'; ?>; window.BITKE_STORE_SALES_ONLY = <?php echo $storeOnly ? 'true' : 'false'; ?>;</script>
   <script src="assets/muhasebe.js?v=516"></script>
+  <?php if ($storeOnly): ?>
+  <script src="assets/magaza-kullanici-ekrani.js?v=1"></script>
+  <script src="assets/magaza-gunluk-satis.js?v=2"></script>
+  <?php else: ?>
   <script src="assets/super-admin-role.js?v=1"></script>
   <script src="assets/muhasebe-polish.js?v=1"></script>
   <script src="assets/teklif-hesap-fix.js?v=3"></script>
@@ -262,6 +276,7 @@ function page_footer(): void
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
   <script src="assets/maas-excel-aktar.js?v=1"></script>
   <script src="assets/hesap-banka-detay.js?v=1"></script>
+  <?php endif; ?>
 </body>
 </html>
 <?php }
