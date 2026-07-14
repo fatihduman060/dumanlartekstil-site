@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/masraf-fisi-lib.php';
 require_login();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -26,7 +27,7 @@ function kdv_devir_summary(string $period): array
     $periodEnd = date('Y-m-t', strtotime($periodStart));
 
     $tableExists = (int)db()->query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='invoices'")->fetchColumn() > 0;
-    $incomingVat = 0.0;
+    $invoiceIncomingVat = 0.0;
     $outgoingVat = 0.0;
 
     if ($tableExists) {
@@ -37,9 +38,13 @@ function kdv_devir_summary(string $period): array
             WHERE COALESCE(is_cancelled,0)=0 AND invoice_date BETWEEN ? AND ?");
         $stmt->execute([$periodStart, $periodEnd]);
         $row = $stmt->fetch() ?: [];
-        $incomingVat = (float)($row['incoming_vat'] ?? 0);
+        $invoiceIncomingVat = (float)($row['incoming_vat'] ?? 0);
         $outgoingVat = (float)($row['outgoing_vat'] ?? 0);
     }
+
+    $expenseSummary = masraf_fisi_ozeti($period);
+    $expenseVat = (float)($expenseSummary['vat'] ?? 0);
+    $incomingVat = $invoiceIncomingVat + $expenseVat;
 
     $stmt = db()->prepare('SELECT amount, note, updated_at FROM vat_carryovers WHERE period=?');
     $stmt->execute([$period]);
@@ -55,6 +60,9 @@ function kdv_devir_summary(string $period): array
         'period' => $period,
         'period_label' => date('m.Y', strtotime($periodStart)),
         'incoming_vat' => $incomingVat,
+        'invoice_incoming_vat' => $invoiceIncomingVat,
+        'expense_vat' => $expenseVat,
+        'expense_count' => (int)($expenseSummary['count'] ?? 0),
         'outgoing_vat' => $outgoingVat,
         'carryover' => $carryover,
         'note' => (string)($carry['note'] ?? ''),
