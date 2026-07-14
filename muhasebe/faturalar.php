@@ -17,6 +17,9 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoices (
     document_path TEXT,
     document_name TEXT,
     document_mime TEXT,
+    issuer_name TEXT,
+    issuer_source TEXT,
+    issuer_confidence INTEGER NOT NULL DEFAULT 0,
     cari_movement_id INTEGER,
     posted_to_cari INTEGER NOT NULL DEFAULT 0,
     posted_at TEXT,
@@ -29,6 +32,9 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoices (
     created_at TEXT,
     updated_at TEXT
 )");
+ensure_column(db(), 'invoices', 'issuer_name', 'TEXT');
+ensure_column(db(), 'invoices', 'issuer_source', 'TEXT');
+ensure_column(db(), 'invoices', 'issuer_confidence', 'INTEGER NOT NULL DEFAULT 0');
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(invoice_date)");
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_cari ON invoices(cari_id)");
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_movement ON invoices(cari_movement_id)");
@@ -55,6 +61,14 @@ function fatura_para_birimi($value): string
 function fatura_para($amount, string $currency = 'TL'): string
 {
     return number_format((float)$amount, 2, ',', '.') . ' ' . fatura_para_birimi($currency);
+}
+
+function fatura_muhtelif_cari_mi($value): bool
+{
+    $map = ['Ç'=>'C','Ğ'=>'G','İ'=>'I','I'=>'I','Ö'=>'O','Ş'=>'S','Ü'=>'U','ç'=>'C','ğ'=>'G','ı'=>'I','i'=>'I','ö'=>'O','ş'=>'S','ü'=>'U'];
+    $value = strtoupper(strtr(trim((string)$value), $map));
+    $value = preg_replace('/[^A-Z0-9]+/', ' ', $value) ?: $value;
+    return strpos(trim($value), 'MUHTELIF FATURA GIRISI') !== false;
 }
 
 function fatura_kategori_id(): ?int
@@ -173,6 +187,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $totalAmount = decimal_from_input($_POST['total_amount'] ?? '0');
         $currency = fatura_para_birimi($_POST['currency'] ?? 'TL');
         $description = trim((string)($_POST['description'] ?? ''));
+        $issuerName = trim((string)($_POST['issuer_name'] ?? ''));
+        if (function_exists('mb_substr')) $issuerName = mb_substr($issuerName, 0, 180, 'UTF-8');
+        else $issuerName = substr($issuerName, 0, 180);
 
         if ($invalidInvoiceNo || $invoiceDate === '' || $totalAmount <= 0 || $subtotal < 0 || $vatAmount < 0) {
             flash('error', 'Fatura numarası, tarihi ve tutarları kontrol etmelisin.');
@@ -180,6 +197,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $oldRow = $id > 0 ? fatura_getir($id) : null;
+        $issuerUnchanged = $oldRow && trim((string)($oldRow['issuer_name'] ?? '')) === $issuerName;
+        $issuerSource = $issuerUnchanged ? (string)($oldRow['issuer_source'] ?? '') : ($issuerName !== '' ? 'manual' : '');
+        $issuerConfidence = $issuerUnchanged ? (int)($oldRow['issuer_confidence'] ?? 0) : ($issuerName !== '' ? 100 : 0);
         $oldDoc = $oldRow ? [
             'path'=>$oldRow['document_path'] ?? null,
             'name'=>$oldRow['document_name'] ?? null,
@@ -201,11 +221,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id > 0 && $oldRow) {
             db()->prepare("UPDATE invoices SET
                 direction=?, cari_id=?, invoice_no=?, invoice_date=?, due_date=?, subtotal=?, vat_amount=?,
-                total_amount=?, currency=?, description=?, document_path=?, document_name=?, document_mime=?, updated_at=?
+                total_amount=?, currency=?, description=?, document_path=?, document_name=?, document_mime=?,
+                issuer_name=?, issuer_source=?, issuer_confidence=?, updated_at=?
                 WHERE id=?")
                 ->execute([
                     $direction, $cariId, $invoiceNo, $invoiceDate, $dueDate, $subtotal, $vatAmount,
-                    $totalAmount, $currency, $description, $doc['path'], $doc['name'], $doc['mime'], now(), $id
+                    $totalAmount, $currency, $description, $doc['path'], $doc['name'], $doc['mime'],
+                    $issuerName, $issuerSource, $issuerConfidence, now(), $id
                 ]);
             delete_replaced_upload($oldDoc, $doc);
             $saved = fatura_getir($id);
@@ -218,12 +240,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             db()->prepare("INSERT INTO invoices (
                 direction, cari_id, invoice_no, invoice_date, due_date, subtotal, vat_amount, total_amount,
-                currency, description, document_path, document_name, document_mime,
+                currency, description, document_path, document_name, document_mime, issuer_name, issuer_source, issuer_confidence,
                 created_by, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
                 ->execute([
                     $direction, $cariId, $invoiceNo, $invoiceDate, $dueDate, $subtotal, $vatAmount, $totalAmount,
-                    $currency, $description, $doc['path'], $doc['name'], $doc['mime'],
+                    $currency, $description, $doc['path'], $doc['name'], $doc['mime'], $issuerName,
+                    $issuerName !== '' ? 'manual' : '', $issuerName !== '' ? 100 : 0,
                     current_user()['id'] ?? null, now(), now()
                 ]);
             $newId = (int)db()->lastInsertId();
@@ -334,8 +357,8 @@ if ($directionFilter !== '' && isset(fatura_yonleri()[$directionFilter])) {
     $params[] = $directionFilter;
 }
 if ($q !== '') {
-    $where[] = '(i.invoice_no LIKE ? OR i.description LIKE ? OR i.document_name LIKE ? OR c.name LIKE ?)';
-    array_push($params, "%$q%", "%$q%", "%$q%", "%$q%");
+    $where[] = '(i.invoice_no LIKE ? OR i.description LIKE ? OR i.document_name LIKE ? OR i.issuer_name LIKE ? OR c.name LIKE ?)';
+    array_push($params, "%$q%", "%$q%", "%$q%", "%$q%", "%$q%");
 }
 $sql = "SELECT i.*, c.name AS cari_name, m.is_cancelled AS movement_cancelled
     FROM invoices i
@@ -403,6 +426,11 @@ page_header('Faturalar', 'faturalar');
         <small>Cariye İşle düğmesi için cari seçilmiş olmalı.</small>
       </label>
 
+      <label>Gönderen firma
+        <input name="issuer_name" maxlength="180" value="<?php echo e($edit['issuer_name'] ?? ''); ?>" placeholder="PDF'den otomatik okunur; gerekirse düzelt">
+        <small>Bu bilgi cariden ayrıdır. MUHTELİF FATURA GİRİŞİ carisi değişmeden kalır.</small>
+      </label>
+
       <div class="two-col">
         <label>Matrah<input type="text" inputmode="decimal" name="subtotal" data-invoice-subtotal value="<?php echo e($edit['subtotal'] ?? ''); ?>" placeholder="0,00"></label>
         <label>KDV<input type="text" inputmode="decimal" name="vat_amount" data-invoice-vat value="<?php echo e($edit['vat_amount'] ?? ''); ?>" placeholder="0,00"></label>
@@ -435,7 +463,7 @@ page_header('Faturalar', 'faturalar');
     <div class="card-head"><h3>Fatura listesi</h3><span><?php echo e(count($rows)); ?> kayıt</span></div>
     <form class="filterbar multi" method="get">
       <input type="hidden" name="period" value="<?php echo e($period); ?>">
-      <input name="q" placeholder="Fatura no, cari veya açıklama ara" value="<?php echo e($q); ?>">
+      <input name="q" placeholder="Fatura no, gönderen, cari veya açıklama ara" value="<?php echo e($q); ?>">
       <select name="direction">
         <option value="">Gelen + giden</option>
         <?php foreach(fatura_yonleri() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo $directionFilter===$key?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?>
@@ -453,7 +481,14 @@ page_header('Faturalar', 'faturalar');
           <tr class="<?php echo $cancelled?'row-cancelled':''; ?>">
             <td><strong><?php echo e(tr_date($r['invoice_date'])); ?></strong><small><?php echo e($r['invoice_no'] ?: 'Fatura #' . $r['id']); ?><?php echo $r['due_date'] ? ' · Vade: ' . e(tr_date($r['due_date'])) : ''; ?></small></td>
             <td><?php echo $cancelled ? badge('İptal','neutral') : badge($meta['label'], $meta['tone']); ?></td>
-            <td><?php echo $r['cari_id'] ? '<a href="cari-detay.php?id='.e($r['cari_id']).'">'.e($r['cari_name']).'</a>' : '<span class="muted">Cari yok</span>'; ?></td>
+            <td>
+              <?php echo $r['cari_id'] ? '<a href="cari-detay.php?id='.e($r['cari_id']).'">'.e($r['cari_name']).'</a>' : '<span class="muted">Cari yok</span>'; ?>
+              <?php if ($r['direction'] === 'gelen' && trim((string)($r['issuer_name'] ?? '')) !== ''): ?>
+                <small class="fatura-issuer-line"><strong>Gönderen:</strong> <?php echo e($r['issuer_name']); ?></small>
+              <?php elseif ($r['direction'] === 'gelen' && fatura_muhtelif_cari_mi($r['cari_name'] ?? '')): ?>
+                <small class="fatura-issuer-line muted">Gönderen henüz okunmadı</small>
+              <?php endif; ?>
+            </td>
             <td><?php echo e(fatura_para($r['subtotal'], $r['currency'])); ?><small>KDV: <?php echo e(fatura_para($r['vat_amount'], $r['currency'])); ?></small></td>
             <td class="right"><strong><?php echo e(fatura_para($r['total_amount'], $r['currency'])); ?></strong></td>
             <td><?php if($r['document_path']): ?><a href="fatura-indir.php?id=<?php echo e($r['id']); ?>" target="_blank"><?php echo e($r['document_name'] ?: 'Faturayı aç'); ?></a><?php else: ?>-<?php endif; ?></td>

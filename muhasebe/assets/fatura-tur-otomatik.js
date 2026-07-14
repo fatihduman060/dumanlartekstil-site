@@ -99,7 +99,7 @@
     var bar=ensureStatus();
     if(!bar) return;
     bar.className='fatura-tur-auto-status'+(tone?' is-'+tone:'');
-    bar.innerHTML='<strong>Otomatik fatura türü</strong><span>'+esc(text)+'</span>';
+    bar.innerHTML='<strong>Otomatik fatura bilgisi</strong><span>'+esc(text)+'</span>';
   }
 
   function selectHtml(item){
@@ -112,7 +112,25 @@
       html+='<option value="'+key+'"'+(key===selected?' selected':'')+'>'+esc(categoryLabels[key])+'</option>';
     });
     html+='</select><small>'+(item.category_source==='manual'?'Manuel seçildi':'PDF’den otomatik seçildi')+'</small>';
+    if(item.issuer_name){
+      html+='<small class="fatura-issuer-chip"><strong>Gönderen:</strong> '+esc(item.issuer_name)+'</small>';
+    }else if(item.is_generic_cari&&item.issuer_source==='pdf'){
+      html+='<small class="fatura-issuer-chip is-muted">Gönderen PDF’den okunamadı</small>';
+    }
     return html;
+  }
+
+  function renderCariIssuer(row,item){
+    var cell=row&&row.children?row.children[2]:null;
+    if(!cell) return;
+    var old=cell.querySelector('.fatura-issuer-line');
+    if(item.direction!=='gelen'||(!item.issuer_is_stored&&!item.is_generic_cari)) return;
+    if(!item.issuer_name&&item.issuer_source!=='pdf') return;
+    if(old) old.remove();
+    var line=document.createElement('small');
+    line.className='fatura-issuer-line'+(!item.issuer_name?' muted':'');
+    line.textContent=item.issuer_name?'Gönderen: '+item.issuer_name:'Gönderen PDF’den okunamadı';
+    cell.appendChild(line);
   }
 
   function renderItems(items){
@@ -123,6 +141,7 @@
       var row=rows[item.id];
       if(!row) return;
       row.setAttribute('data-invoice-type',item.direction==='gelen'?(item.category||'diger'):'satis');
+      renderCariIssuer(row,item);
       var cell=row.querySelector('[data-fatura-tur-cell]');
       if(cell) cell.innerHTML=selectHtml(item);
     });
@@ -179,7 +198,38 @@
     });
   }
 
-  async function readPdfText(item){
+  function pdfPageLines(content){
+    var parts=(content.items||[]).map(function(part){
+      var transform=part.transform||[];
+      return {text:String(part.str||'').trim(),x:Number(transform[4]||0),y:Number(transform[5]||0),width:Number(part.width||0)};
+    }).filter(function(part){return part.text!=='';});
+    parts.sort(function(a,b){return Math.abs(a.y-b.y)>2.5?b.y-a.y:a.x-b.x;});
+    var rows=[];
+    parts.forEach(function(part){
+      var row=rows.find(function(candidate){return Math.abs(candidate.y-part.y)<=2.5;});
+      if(!row){row={y:part.y,parts:[]};rows.push(row);}
+      row.parts.push(part);
+    });
+    rows.sort(function(a,b){return b.y-a.y;});
+    var lines=[];
+    rows.forEach(function(row){
+      row.parts.sort(function(a,b){return a.x-b.x;});
+      var chunks=[];
+      var current=[];
+      var right=null;
+      row.parts.forEach(function(part){
+        var gap=right===null?0:part.x-right;
+        if(current.length&&gap>64){chunks.push(current);current=[];}
+        current.push(part.text);
+        right=Math.max(right===null?part.x:right,part.x+Math.max(0,part.width));
+      });
+      if(current.length) chunks.push(current);
+      chunks.forEach(function(chunk){var line=chunk.join(' ').replace(/\s+/g,' ').trim();if(line) lines.push(line);});
+    });
+    return lines;
+  }
+
+  async function readPdfData(item){
     var values=await Promise.all([
       loadPdfJs(),
       fetch(item.document_url,{credentials:'same-origin',cache:'no-store'}).then(function(response){
@@ -188,13 +238,17 @@
       })
     ]);
     var pdf=await values[0].getDocument({data:values[1]}).promise;
-    var text='';
+    var lines=[];
     for(var pageNo=1;pageNo<=Math.min(pdf.numPages,5);pageNo++){
       var page=await pdf.getPage(pageNo);
       var content=await page.getTextContent();
-      text+=' '+(content.items||[]).map(function(part){return part.str||'';}).join(' ');
+      lines=lines.concat(pdfPageLines(content));
     }
-    return text;
+    return {lines:lines,text:lines.join(' ')};
+  }
+
+  function emitPayload(data){
+    document.dispatchEvent(new CustomEvent('bitke:fatura-meta-updated',{detail:data}));
   }
 
   async function persistCategory(item,category){
@@ -208,57 +262,93 @@
     var data=await response.json();
     if(!data.ok) throw new Error(data.error||'Fatura türü kaydedilemedi.');
     state.csrf=String(data.csrf_token||state.csrf);
+    emitPayload(data);
     return data;
   }
 
+  async function persistIssuer(item,result){
+    var body=new FormData();
+    body.set('csrf_token',state.csrf);
+    body.set('action','issuer');
+    body.set('invoice_id',String(item.id));
+    body.set('issuer_name',result&&result.name?result.name:'');
+    body.set('confidence',String(result&&result.confidence?result.confidence:0));
+    body.set('source','pdf');
+    body.set('period',state.period);
+    var response=await fetch('fatura-tur.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'});
+    var data=await response.json();
+    if(!data.ok) throw new Error(data.error||'Gönderen firma kaydedilemedi.');
+    state.csrf=String(data.csrf_token||state.csrf);
+    emitPayload(data);
+    return data;
+  }
+
+  function updatedItem(data,id){
+    var rows=Array.isArray(data&&data.items)?data.items:[];
+    return rows.find(function(row){return Number(row.id)===Number(id);})||null;
+  }
+
   async function classifyItem(item){
-    var category='';
-    if(item.suggestion&&Number(item.suggestion_confidence||0)>=80){
-      category=item.suggestion;
-    }else if(item.has_document&&item.document_url&&/\.pdf$/i.test(item.document_name||'')){
-      try{
-        var text=await readPdfText(item);
-        category=scoreCategory((item.cari_name||'')+' '+text).category;
-      }catch(error){
+    var needsCategory=!item.category;
+    var needsIssuer=!!item.needs_issuer;
+    var pdfData=null;
+    var canRead=item.has_document&&item.document_url&&/\.pdf$/i.test(item.document_name||'');
+    if(canRead&&(needsIssuer||needsCategory)){
+      try{pdfData=await readPdfData(item);}catch(error){pdfData=null;}
+    }
+
+    if(needsCategory){
+      var category='';
+      if(item.suggestion&&Number(item.suggestion_confidence||0)>=80){
+        category=item.suggestion;
+      }else if(pdfData){
+        var partyText=item.issuer_name||(!item.is_generic_cari?item.cari_name:'')||'';
+        category=scoreCategory(partyText+' '+pdfData.text).category;
+      }else{
         category='diger';
       }
-    }else{
-      category='diger';
+      var categoryPayload=await persistCategory(item,category||'diger');
+      var categoryItem=updatedItem(categoryPayload,item.id);
+      if(categoryItem) item=categoryItem;
     }
-    await persistCategory(item,category||'diger');
-    item.category=category||'diger';
-    item.category_label=categoryLabels[item.category]||categoryLabels.diger;
-    item.category_source='pdf';
+
+    if(needsIssuer){
+      var issuer={name:'',confidence:0,source:'none'};
+      if(pdfData&&window.FaturaOkumaCore&&typeof window.FaturaOkumaCore.extractIssuer==='function'){
+        issuer=window.FaturaOkumaCore.extractIssuer(pdfData.lines,{direction:item.direction,companyTaxNo:window.BITKE_COMPANY_TAX_NO||''});
+        if(!issuer||Number(issuer.confidence||0)<75) issuer={name:'',confidence:0,source:'none'};
+      }
+      var issuerPayload=await persistIssuer(item,issuer);
+      var issuerItem=updatedItem(issuerPayload,item.id);
+      if(issuerItem) item=issuerItem;
+    }
     return item;
   }
 
   async function runAutomatic(items){
     if(state.running) return;
-    var pending=items.filter(function(item){return item.direction==='gelen'&&!item.category;});
+    var pending=items.filter(function(item){return item.direction==='gelen'&&(!item.category||item.needs_issuer);});
     state.total=pending.length;
     if(!pending.length){
-      setStatus('Gelen faturaların türleri otomatik olarak tamamlandı. Yanlış olanı listeden değiştirebilirsin.','success');
+      setStatus('Fatura türleri ve gönderen firma bilgileri tamamlandı. Yanlış olanı düzenleyebilirsin.','success');
       return;
     }
     state.running=true;
     state.completed=0;
-    setStatus(pending.length+' gelen fatura PDF içeriğinden otomatik sınıflandırılıyor…','loading');
+    setStatus(pending.length+' gelen faturanın türü ve gönderen firması PDF’den okunuyor…','loading');
     for(var i=0;i<pending.length;i++){
       var item=pending[i];
       try{
-        await classifyItem(item);
+        item=await classifyItem(item);
         state.completed++;
         renderItems([item]);
-        setStatus(state.completed+' / '+state.total+' fatura otomatik sınıflandırıldı.','loading');
+        setStatus(state.completed+' / '+state.total+' fatura işlendi.','loading');
       }catch(error){
-        item.category='diger';
-        item.category_label=categoryLabels.diger;
-        item.category_source='pdf';
         renderItems([item]);
       }
     }
     state.running=false;
-    setStatus('Tamamlandı: '+state.completed+' fatura PDF içeriğinden seçilip sisteme kaydedildi. Yanlış görünen türü açılır listeden değiştirebilirsin.','success');
+    setStatus('Tamamlandı: '+state.completed+' faturanın türü ve gönderen firma bilgisi kontrol edildi. Okunamayan göndereni “Düzenle”den yazabilirsin.','success');
   }
 
   document.addEventListener('change',function(event){
@@ -280,6 +370,7 @@
       .then(function(data){
         if(!data.ok) throw new Error(data.error||'Fatura türü kaydedilemedi.');
         state.csrf=String(data.csrf_token||state.csrf);
+        emitPayload(data);
         item.category=select.value;
         item.category_source='manual';
         var cell=select.closest('[data-fatura-tur-cell]');
@@ -296,11 +387,11 @@
   var style=document.createElement('style');
   style.textContent=''
     +'.fatura-tur-auto-status{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;padding:10px 12px;border:1px solid #d8dfda;background:#f5faf6;border-radius:12px;font-size:10px}.fatura-tur-auto-status strong{font-size:11px}.fatura-tur-auto-status span{color:var(--muted)}.fatura-tur-auto-status.is-loading{border-color:#c8d8ea;background:#f1f7ff}.fatura-tur-auto-status.is-success{border-color:#b8d7c2;background:#eef9f1}.fatura-tur-auto-status.is-danger{border-color:#e2b7b2;background:#fff3f1}'
-    +'[data-fatura-tur-cell] select{width:145px;max-width:100%;border:1px solid #b7cebF;background:#f2faf4;color:#245e39;border-radius:9px;padding:7px 8px;font-size:9px;font-weight:850;cursor:pointer}[data-fatura-tur-cell]>small{display:block;margin-top:3px;font-size:8px;color:var(--muted)}.fatura-tur-auto-sale{display:inline-flex;padding:5px 8px;border-radius:999px;background:#eaf5ee;color:#27623d;font-size:9px;font-weight:900}.fatura-tur-auto-loading{font-size:9px;color:#7a6b55;font-weight:800}';
+    +'[data-fatura-tur-cell] select{width:145px;max-width:100%;border:1px solid #b7cebF;background:#f2faf4;color:#245e39;border-radius:9px;padding:7px 8px;font-size:9px;font-weight:850;cursor:pointer}[data-fatura-tur-cell]>small{display:block;margin-top:3px;font-size:8px;color:var(--muted)}.fatura-issuer-chip{display:block;margin-top:5px!important;padding:5px 7px;border-radius:8px;background:#edf5ff;color:#234f73!important;font-size:8px!important;line-height:1.35;max-width:165px}.fatura-issuer-chip.is-muted{background:#f5f2ed;color:#7d7060!important}.fatura-tur-auto-sale{display:inline-flex;padding:5px 8px;border-radius:999px;background:#eaf5ee;color:#27623d;font-size:9px;font-weight:900}.fatura-tur-auto-loading{font-size:9px;color:#7a6b55;font-weight:800}';
   document.head.appendChild(style);
 
   ensureColumn();
-  setStatus('Fatura türleri hazırlanıyor…','loading');
+  setStatus('Fatura türü ve gönderen firma bilgileri hazırlanıyor…','loading');
   state.period=periodValue();
   fetch('fatura-tur.php?period='+encodeURIComponent(state.period)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
     .then(function(response){return response.json();})
