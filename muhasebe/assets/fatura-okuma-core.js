@@ -141,9 +141,8 @@
     var explicit=findAmount(lines,[
       'Toplam KDV',
       'KDV Toplamı',
-      'KDV Tutarı',
       'Hesaplanan KDV Tutarı',
-      'Katma Değer Vergisi Tutarı',
+      'Toplam Katma Değer Vergisi',
       'Hesaplanan Katma Değer Vergisi'
     ],['Tevkifat','KDV Matrahı','KDV Oranı','KDV Dahil','KDV Hariç']);
     if(explicit!==null) return explicit;
@@ -612,19 +611,22 @@
     var taxExclusive=taxRows.length>1
       ?roundMoney(taxRows.reduce(function(total,row){return total+row.base;},0))
       :findAmount(lines,['Vergiler Hariç Toplam Tutar','Toplam Matrah','KDV Matrahı']);
-    var vat=findVat(lines);
-    if(vat===null&&taxRows.length){
-      vat=roundMoney(taxRows.reduce(function(total,row){return total+row.vat;},0));
-    }
+    var vat=taxRows.length
+      ?roundMoney(taxRows.reduce(function(total,row){return total+row.vat;},0))
+      :findVat(lines);
     var taxInclusive=findAmount(lines,['Vergiler Dahil Toplam Tutar','Vergiler Dahil Toplam']);
     var withholding=findAmount(lines,['Toplam Tevkifat','Tevkifat Tutarı','KDV Tevkifatı']);
     var payable=findAmount(lines,['Net Ödenecek Tutar','Ödenecek Tutar','Ödenecek Toplam']);
     var general=findAmount(lines,['Genel Toplam','Fatura Toplamı']);
 
     var subtotal=taxExclusive;
+    var subtotalFromPayable=false;
     if(subtotal===null&&gross!==null) subtotal=roundMoney(gross-(discount||0));
     if(subtotal===null&&taxInclusive!==null&&vat!==null) subtotal=roundMoney(taxInclusive-vat);
-    if(subtotal===null&&payable!==null&&vat!==null&&withholding===null) subtotal=roundMoney(payable-vat);
+    if(subtotal===null&&payable!==null&&vat!==null&&withholding===null){
+      subtotal=roundMoney(payable-vat);
+      subtotalFromPayable=true;
+    }
 
     var total=payable!==null?payable:(taxInclusive!==null?taxInclusive:general);
     if(total===null&&subtotal!==null&&vat!==null){
@@ -634,6 +636,7 @@
 
     if(discount!==null&&discount>0) addIssue(warnings,'İskontolu fatura: matrah iskonto sonrası hesaplandı.');
     if(withholding!==null&&withholding>0) addIssue(warnings,'Tevkifatlı fatura: belgedeki ödenecek tutar korundu.');
+    if(subtotalFromPayable) addIssue(warnings,'Matrah, ödenecek tutardan KDV çıkarılarak hesaplandı; diğer vergi ve ücretleri kontrol et.');
     if(taxRows.length>1) addIssue(warnings,'Birden fazla KDV satırı birleştirildi; tutarları kontrol et.');
     if(!detectedDirection&&!needsOcr) addIssue(warnings,'Fatura yönü otomatik belirlenemedi.');
 
