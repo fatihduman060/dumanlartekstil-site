@@ -8,6 +8,18 @@ function chk_qty($amount): string {
     $n = (float)$amount;
     return abs($n - round($n)) < 0.00001 ? number_format($n, 0, ',', '.') : number_format($n, 2, ',', '.');
 }
+function chk_invoice_short_no(string $invoiceNo, int $invoiceId): string {
+    $compact = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($invoiceNo))) ?: '';
+    if ($compact !== '' && preg_match('/^[A-Z]{2,8}20\d{2}(\d+)$/', $compact, $m)) {
+        $serial = ltrim((string)$m[1], '0');
+        return $serial !== '' ? $serial : '0';
+    }
+    if ($compact !== '' && preg_match('/(\d+)$/', $compact, $m)) {
+        $serial = ltrim((string)$m[1], '0');
+        return $serial !== '' ? $serial : '0';
+    }
+    return (string)$invoiceId;
+}
 
 try {
     teklif_db_ensure();
@@ -30,6 +42,54 @@ try {
     $movement = $stmt->fetch();
     if (!$movement) throw new RuntimeException('Hareket bulunamadı.');
 
+    // Önce bağlı faturayı ara. Fatura hareketleri teklif/sipariş fişlerinden bağımsızdır.
+    $invoice = null;
+    try {
+        $tableExists = (int)db()->query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='invoices'")->fetchColumn() > 0;
+        if ($tableExists) {
+            $stmt = db()->prepare("SELECT i.*, COALESCE(c.name,'') AS cari_name
+                FROM invoices i
+                LEFT JOIN cariler c ON c.id=i.cari_id
+                WHERE i.cari_movement_id=? AND COALESCE(i.is_cancelled,0)=0
+                ORDER BY i.id DESC LIMIT 1");
+            $stmt->execute([$movementId]);
+            $invoice = $stmt->fetch() ?: null;
+        }
+    } catch (Throwable $e) {
+        $invoice = null;
+    }
+
+    if ($invoice) {
+        $invoiceId = (int)$invoice['id'];
+        $invoiceNo = trim((string)($invoice['invoice_no'] ?? ''));
+        $currency = trim((string)($invoice['currency'] ?? 'TL')) ?: 'TL';
+        echo json_encode([
+            'ok' => true,
+            'type' => 'invoice',
+            'invoice' => [
+                'id' => $invoiceId,
+                'invoice_no' => $invoiceNo,
+                'short_no' => chk_invoice_short_no($invoiceNo, $invoiceId),
+                'direction' => (string)($invoice['direction'] ?? 'giden'),
+                'direction_label' => (string)($invoice['direction'] ?? '') === 'gelen' ? 'Gelen fatura' : 'Giden fatura',
+                'invoice_date' => tr_date($invoice['invoice_date'] ?? ''),
+                'due_date' => tr_date($invoice['due_date'] ?? ''),
+                'cari_name' => (string)($invoice['cari_name'] ?? ''),
+                'currency' => $currency,
+                'subtotal_text' => chk_money($invoice['subtotal'] ?? 0),
+                'vat_text' => chk_money($invoice['vat_amount'] ?? 0),
+                'total_text' => chk_money($invoice['total_amount'] ?? 0),
+                'description' => (string)($invoice['description'] ?? ''),
+                'document_name' => (string)($invoice['document_name'] ?? ''),
+                'has_document' => !empty($invoice['document_path']),
+                'document_url' => !empty($invoice['document_path']) ? 'fatura-indir.php?id=' . $invoiceId : '',
+                'edit_url' => 'faturalar.php?edit=' . $invoiceId,
+                'list_url' => 'faturalar.php?period=' . substr((string)($invoice['invoice_date'] ?? date('Y-m-d')), 0, 7),
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     $offer = null;
     try {
         $stmt = db()->prepare('SELECT * FROM offers WHERE cari_movement_id=? AND COALESCE(is_deleted,0)=0 LIMIT 1');
@@ -47,7 +107,7 @@ try {
         }
     }
 
-    if (!$offer) throw new RuntimeException('Bu hareket için bağlı teklif/sipariş fişi bulunamadı.');
+    if (!$offer) throw new RuntimeException('Bu hareket için bağlı fatura, teklif veya sipariş fişi bulunamadı.');
 
     $itemsStmt = db()->prepare('SELECT * FROM offer_items WHERE offer_id=? ORDER BY sort_order ASC, id ASC');
     $itemsStmt->execute([(int)$offer['id']]);
