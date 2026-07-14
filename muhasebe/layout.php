@@ -194,7 +194,7 @@ function page_footer(): void
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/dashboard-acik-cekler.js?v=2"></script>
   <script src="assets/dashboard-vade-hatirlatmalari.js?v=3"></script>
-  <script src="assets/fatura-okuma-core.js?v=4"></script>
+  <script src="assets/fatura-okuma-core.js?v=5"></script>
   <script src="assets/fatura-pdf-oku.js?v=3"></script>
   <script src="assets/fatura-kdv-devir.js?v=1"></script>
   <script src="assets/fatura-toplu-link.js?v=2"></script>
@@ -205,7 +205,7 @@ function page_footer(): void
   <script src="assets/fatura-cari-okuma-duzelt.js?v=4"></script>
   <script src="assets/fatura-yon-sec.js?v=1"></script>
   <script src="assets/fatura-turleri.js?v=3"></script>
-  <script src="assets/fatura-tur-otomatik.js?v=2"></script>
+  <script src="assets/fatura-tur-otomatik.js?v=3"></script>
   <script src="assets/cari-hareket-kaynak.js?v=6"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
