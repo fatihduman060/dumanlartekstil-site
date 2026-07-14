@@ -274,6 +274,7 @@
     body.set('issuer_name',result&&result.name?result.name:'');
     body.set('confidence',String(result&&result.confidence?result.confidence:0));
     body.set('source','pdf');
+    body.set('parser_version',window.FaturaOkumaCore&&window.FaturaOkumaCore.version?window.FaturaOkumaCore.version:'');
     body.set('period',state.period);
     var response=await fetch('fatura-tur.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'});
     var data=await response.json();
@@ -286,6 +287,18 @@
   function updatedItem(data,id){
     var rows=Array.isArray(data&&data.items)?data.items:[];
     return rows.find(function(row){return Number(row.id)===Number(id);})||null;
+  }
+
+  function issuerFromKnownDocument(item,pdfData){
+    var file=norm(item&&item.document_name||'').replace(/ /g,'');
+    var textCategory=pdfData?scoreCategory(pdfData.text||'').category:'';
+    if(/^IAA20\d{2}\d+/.test(file)&&(item.category==='dogalgaz'||textCategory==='dogalgaz')){
+      return {name:'AKSA TOKAT AMASYA DOĞALGAZ DAĞITIM A.Ş.',confidence:90,source:'document-series'};
+    }
+    if(/^GH520\d{2}\d+/.test(file)){
+      return {name:'Güzel Hosting',confidence:90,source:'document-series'};
+    }
+    return {name:'',confidence:0,source:'none'};
   }
 
   async function classifyItem(item){
@@ -316,7 +329,7 @@
       var issuer={name:'',confidence:0,source:'none'};
       if(pdfData&&window.FaturaOkumaCore&&typeof window.FaturaOkumaCore.extractIssuer==='function'){
         issuer=window.FaturaOkumaCore.extractIssuer(pdfData.lines,{direction:item.direction,companyTaxNo:window.BITKE_COMPANY_TAX_NO||''});
-        if(!issuer||Number(issuer.confidence||0)<75) issuer={name:'',confidence:0,source:'none'};
+        if(!issuer||Number(issuer.confidence||0)<75) issuer=issuerFromKnownDocument(item,pdfData);
       }
       var issuerPayload=await persistIssuer(item,issuer);
       var issuerItem=updatedItem(issuerPayload,item.id);
