@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
 
-  var VERSION='3.1.0';
+  var VERSION='3.2.0';
   var BLOCKED_NO=/^(ETTN|UUID|VKN|TCKN|VERGINO|VERGINUMARASI|TICARETSICILNO|TICARETSICILNUMARASI|MERSISNO|IBAN|SIPARISNO|IRSALIYENO)$/;
   var SELLER_ROLES=[
     'SATICI','SATICI FIRMA','SATICI FIRMA UNVANI','SATICI UNVANI','SATICI BILGILERI',
@@ -385,6 +385,9 @@
 
     raw=raw.replace(/^[\s:;|,\-–—]+|[\s:;|,\-–—]+$/g,'').trim();
     if(!raw) return '';
+
+    var legalEnd=raw.match(/^(.*?(?:A\.?\s*Ş\.?|LTD\.?\s*ŞTİ\.?|LİMİTED\s+ŞİRKETİ|ANONİM\s+ŞİRKETİ))/i);
+    if(legalEnd&&legalEnd[1]) raw=legalEnd[1].trim();
 
     var pieces=raw.split(/\|+|\t+/).map(function(piece){return piece.trim();}).filter(Boolean);
     if(pieces.length>1){

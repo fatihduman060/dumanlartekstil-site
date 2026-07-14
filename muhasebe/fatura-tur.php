@@ -16,6 +16,7 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoice_expense_types (
 ensure_column(db(), 'invoices', 'issuer_name', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_source', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_confidence', 'INTEGER NOT NULL DEFAULT 0');
+ensure_column(db(), 'invoices', 'issuer_parser_version', 'TEXT');
 
 function fatura_turleri(): array
 {
@@ -105,6 +106,7 @@ function fatura_tur_payload(string $period): array
         COALESCE(i.issuer_name,'') AS issuer_name,
         COALESCE(i.issuer_source,'') AS issuer_source,
         COALESCE(i.issuer_confidence,0) AS issuer_confidence,
+        COALESCE(i.issuer_parser_version,'') AS issuer_parser_version,
         COALESCE(c.name,'') AS cari_name,
         COALESCE(t.category,'') AS category,
         COALESCE(t.source,'') AS category_source
@@ -169,7 +171,8 @@ function fatura_tur_payload(string $period): array
             'issuer_is_stored'=>$storedIssuer !== '',
             'issuer_source'=>(string)$row['issuer_source'],
             'issuer_confidence'=>(int)$row['issuer_confidence'],
-            'needs_issuer'=>$direction === 'gelen' && $genericCari && $storedIssuer === '' && (string)$row['issuer_source'] !== 'pdf' && !empty($row['document_path']),
+            'issuer_parser_version'=>(string)$row['issuer_parser_version'],
+            'needs_issuer'=>$direction === 'gelen' && $genericCari && (string)$row['issuer_source'] !== 'manual' && (string)$row['issuer_parser_version'] !== '3.2.0' && !empty($row['document_path']),
             'document_name'=>(string)$row['document_name'],
             'document_url'=>!empty($row['document_path']) ? 'fatura-indir.php?id=' . (int)$row['id'] : '',
             'has_document'=>!empty($row['document_path']),
@@ -222,8 +225,9 @@ try {
             if ($source === 'pdf' && trim((string)$invoice['issuer_source']) === 'manual') {
                 throw new RuntimeException('Elle girilen gönderen firma otomatik olarak değiştirilemez.');
             }
-            db()->prepare('UPDATE invoices SET issuer_name=?, issuer_source=?, issuer_confidence=?, updated_at=? WHERE id=?')
-                ->execute([$issuerName, $issuerName === '' && $source === 'manual' ? '' : $source, $issuerName === '' ? 0 : $confidence, now(), $invoiceId]);
+            $parserVersion = $source === 'pdf' ? '3.2.0' : '';
+            db()->prepare('UPDATE invoices SET issuer_name=?, issuer_source=?, issuer_confidence=?, issuer_parser_version=?, updated_at=? WHERE id=?')
+                ->execute([$issuerName, $issuerName === '' && $source === 'manual' ? '' : $source, $issuerName === '' ? 0 : $confidence, $parserVersion, now(), $invoiceId]);
             log_action($issuerName === '' ? 'Fatura göndereni okunamadı' : 'Fatura göndereni güncellendi', '#' . $invoiceId . ($issuerName !== '' ? ' → ' . $issuerName : ''));
             if ($issuerName !== '') audit_action('fatura', $invoiceId, 'gonderen_firma_guncellendi', null, ['issuer_name'=>$issuerName,'source'=>$source,'confidence'=>$confidence], $issuerName);
             $message = $issuerName === '' ? 'Gönderen firma PDF’den güvenilir biçimde okunamadı.' : 'Gönderen firma kaydedildi.';
