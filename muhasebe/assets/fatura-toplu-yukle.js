@@ -51,6 +51,17 @@
     });
   }
 
+  function financialLabelKind(value){
+    var key=norm(value);
+    var kinds=[];
+    if(/(^| )ODENECEK( TUTAR| TOPLAM)?( |$)/.test(key)) kinds.push('payable');
+    if(/(^| )(GENEL TOPLAM|FATURA TOPLAMI|VERGILER DAHIL TOPLAM)( |$)/.test(key)) kinds.push('total');
+    if(/(^| )(MAL HIZMET TOPLAM|VERGILER HARIC TOPLAM|TOPLAM MATRAH)( |$)/.test(key)) kinds.push('subtotal');
+    if(/(^| )KDV( |$)/.test(key)&&!/MATRAH|ORAN|DAHIL|HARIC|TEVKIFAT/.test(key)) kinds.push('vat');
+    kinds=kinds.filter(function(kind,index){return kinds.indexOf(kind)===index;});
+    return kinds.length===1?kinds[0]:'';
+  }
+
   function pageLines(content){
     var rows=[];
     (content.items||[]).forEach(function(item){
@@ -96,28 +107,39 @@
       // "KDV(%20) 51,31" gibi güvenli bir sentetik satır ver.
       var next=prepared[rowIndex+1];
       if(!next||Math.abs(row.y-next.y)>42) return;
+      var usedValues={};
       row.chunks.forEach(function(labelChunk){
-        var labelKey=norm(labelChunk.text);
-        if(!/(KDV|ODENECEK|GENEL TOPLAM|FATURA TOPLAMI|MAL HIZMET|MATRAH)/.test(labelKey)) return;
+        if(!financialLabelKind(labelChunk.text)) return;
         if(moneyCandidates(labelChunk.text).length) return;
         var labelCenter=(labelChunk.x+labelChunk.right)/2;
         var best=null;
-        next.chunks.forEach(function(valueChunk){
+        next.chunks.forEach(function(valueChunk,valueIndex){
+          if(usedValues[valueIndex]||/%/.test(valueChunk.text)) return;
           var amounts=moneyCandidates(valueChunk.text);
           if(amounts.length!==1) return;
           var valueCenter=(valueChunk.x+valueChunk.right)/2;
           var distance=Math.abs(labelCenter-valueCenter);
-          if(!best||distance<best.distance) best={chunk:valueChunk,distance:distance};
+          var overlap=Math.min(labelChunk.right,valueChunk.right)-Math.max(labelChunk.x,valueChunk.x);
+          if(overlap<0) return;
+          if(!best||distance<best.distance) best={chunk:valueChunk,index:valueIndex,distance:distance};
         });
-        if(best&&best.distance<=90) lines.push(labelChunk.text+' '+best.chunk.text);
+        if(best){
+          usedValues[best.index]=true;
+          lines.push(labelChunk.text+' '+best.chunk.text);
+        }
       });
     });
     return lines.filter(Boolean);
   }
 
   function moneyCandidates(text){
-    var matches=String(text||'').match(/-?\d[\d.\s]*(?:,\d{2})|-?\d[\d,\s]*(?:\.\d{2})/g)||[];
-    return matches.map(function(raw){
+    var source=String(text||'');
+    var regex=/-?\d[\d.\s]*(?:,\d{2})|-?\d[\d,\s]*(?:\.\d{2})/g;
+    var rows=[];
+    var match;
+    while((match=regex.exec(source))!==null){
+      if(/%\s*$/.test(source.slice(Math.max(0,match.index-4),match.index))) continue;
+      var raw=match[0];
       var value=raw.replace(/\s/g,'');
       var comma=value.lastIndexOf(',');
       var dot=value.lastIndexOf('.');
@@ -131,8 +153,10 @@
         if(decimals!==2) value=value.replace(/\./g,'');
       }
       var number=parseFloat(value);
-      return Number.isFinite(number)?number:null;
-    }).filter(function(value){return value!==null;});
+      if(Number.isFinite(number)) rows.push(number);
+      if(match.index===regex.lastIndex) regex.lastIndex++;
+    }
+    return rows;
   }
 
   function findAmount(lines,labels){
@@ -237,6 +261,7 @@
 
   function companyKey(value){
     return norm(value)
+      .replace(/\b(ANONIM SIRKETI|LIMITED SIRKETI|LTD STI|A S)\b/g,' ')
       .replace(/\b(ANONIM|LIMITED|SIRKETI|SIRKET|LTD|STI|AS|SANAYI|SAN|TICARET|TIC|VE|HIZMETLERI)\b/g,' ')
       .replace(/\s+/g,' ')
       .trim();
@@ -296,20 +321,39 @@
     return {id:'',confidence:issuerKey?'Gönderen bulundu; cari seçimi isteğe bağlı':'Gönderen ve cari kontrol edilmeli',tone:'warning'};
   }
 
+  function refreshIssuerForDirection(record){
+    if(!record||record.direction!=='gelen'||record.issuer_name||record.issuer_source==='manual') return;
+    if(!window.FaturaOkumaCore||!record.raw_text||typeof window.FaturaOkumaCore.extractIssuer!=='function') return;
+    var issuer=window.FaturaOkumaCore.extractIssuer(String(record.raw_text).split('\n'),{
+      direction:'gelen',
+      companyTaxNo:companyTaxNo,
+      ownNames:['DUMANLAR','BİTKE','MOFİY','BAFİY']
+    });
+    if(!issuer||!issuer.name) return;
+    record.issuer_name=String(issuer.name).trim();
+    record.issuer_source='pdf';
+    record.issuer_confidence=Number(issuer.confidence||0);
+    record.issuer_parser_version=String(window.FaturaOkumaCore.version||'');
+    record.issuer_warnings=issuer.warnings||[];
+  }
+
   function extractInvoice(lines,fileName){
     if(window.FaturaOkumaCore){
       var safeFullText=lines.join('\n');
+      var forcedDirection=directionMode&&/^(gelen|giden)$/.test(directionMode.value)?directionMode.value:'';
       var safe=window.FaturaOkumaCore.extractInvoice(lines,{
         fileName:fileName||'',
-        companyTaxNo:companyTaxNo
+        companyTaxNo:companyTaxNo,
+        direction:forcedDirection
       });
-      var safeDirection=selectedDirection(safe.direction||'gelen');
+      var safeDirection=selectedDirection(safe.direction||forcedDirection||'gelen');
       var safeIssuer=safeDirection==='gelen'?String(safe.issuerName||'').trim():'';
       var safeCari=matchCari(safeFullText,safeIssuer,safeDirection);
       return {
         direction:safeDirection,
         detected_direction:safe.direction||'',
         cari_id:safeCari.id,
+        cari_auto_selected:!!safeCari.id,
         match_text:safeCari.confidence,
         match_tone:safeCari.tone,
         issuer_name:safeIssuer,
@@ -366,6 +410,7 @@
       direction:fallbackDirection,
       detected_direction:detectedDirection,
       cari_id:cariMatch.id,
+      cari_auto_selected:!!cariMatch.id,
       match_text:cariMatch.confidence,
       match_tone:cariMatch.tone,
       issuer_name:'',
@@ -455,6 +500,7 @@
       direction:defaultDirection,
       detected_direction:'gelen',
       cari_id:'',
+      cari_auto_selected:false,
       match_text:'Cari kontrol edilecek',
       match_tone:'warning',
       issuer_name:'',
@@ -573,13 +619,16 @@
       records.forEach(function(record){
         if(!record) return;
         record.direction=directionMode.value==='auto'?(record.detected_direction||record.direction):directionMode.value;
+        refreshIssuerForDirection(record);
         if(record.direction==='giden'&&isMiscCari(selectedCari(record.cari_id))){
           record.cari_id='';
+          record.cari_auto_selected=false;
           record.match_text='Giden faturada alıcı carisini seç';
           record.match_tone='warning';
         }else if(record.direction==='gelen'&&!record.cari_id){
           var match=matchCari(record.raw_text||'',record.issuer_name||'',record.direction);
           record.cari_id=match.id;
+          record.cari_auto_selected=!!match.id;
           record.match_text=match.confidence;
           record.match_tone=match.tone;
         }
@@ -656,26 +705,31 @@
       records[index].issuer_confidence=records[index].issuer_name?100:0;
       records[index].issuer_parser_version='';
       records[index].issuer_warnings=[];
-      if(!records[index].cari_id){
+      if(!records[index].cari_id||records[index].cari_auto_selected){
         var issuerMatch=matchCari(records[index].raw_text||'',records[index].issuer_name,records[index].direction);
         records[index].cari_id=issuerMatch.id;
+        records[index].cari_auto_selected=!!issuerMatch.id;
         records[index].match_text=issuerMatch.confidence;
         records[index].match_tone=issuerMatch.tone;
       }
     }
     if(field==='cari_id'){
       var chosen=selectedCari(value);
+      records[index].cari_auto_selected=false;
       records[index].match_text=chosen?'Cari kullanıcı tarafından seçildi':'Cari seçimi kaldırıldı';
       records[index].match_tone=chosen?'success':'warning';
     }
     if(field==='direction'){
+      refreshIssuerForDirection(records[index]);
       if(value==='giden'&&isMiscCari(selectedCari(records[index].cari_id))){
         records[index].cari_id='';
+        records[index].cari_auto_selected=false;
         records[index].match_text='Giden faturada alıcı carisini seç';
         records[index].match_tone='warning';
       }else if(value==='gelen'&&!records[index].cari_id){
         var directionMatch=matchCari(records[index].raw_text||'',records[index].issuer_name||'',value);
         records[index].cari_id=directionMatch.id;
+        records[index].cari_auto_selected=!!directionMatch.id;
         records[index].match_text=directionMatch.confidence;
         records[index].match_tone=directionMatch.tone;
       }
@@ -688,6 +742,7 @@
     if(parsing){event.preventDefault();window.alert('PDF okuma işlemi henüz tamamlanmadı.');return;}
     var payload=records.map(function(record){
       return {
+        client_version:4,
         direction:record.direction||'gelen',
         cari_id:record.cari_id||'',
         invoice_no:record.invoice_no||'',
