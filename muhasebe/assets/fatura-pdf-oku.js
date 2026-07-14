@@ -6,6 +6,7 @@
   var fileInput=form.querySelector('input[name="document"]');
   if(!fileInput) return;
 
+  var direction=form.querySelector('[name="direction"]');
   var invoiceNo=form.querySelector('[name="invoice_no"]');
   var invoiceDate=form.querySelector('[name="invoice_date"]');
   var subtotal=form.querySelector('[name="subtotal"]');
@@ -13,6 +14,7 @@
   var total=form.querySelector('[name="total_amount"]');
   var currency=form.querySelector('[name="currency"]');
   var cari=form.querySelector('[name="cari_id"]');
+  var companyTaxNo=String(window.BITKE_COMPANY_TAX_NO||'3140036788').replace(/\D/g,'');
 
   function norm(value){
     return String(value||'')
@@ -130,6 +132,67 @@
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
 
+  function taxNoOccurrences(fullText){
+    var text=String(fullText||'');
+    var regex=/(?:\d[\s.\/-]*){10,11}/g;
+    var rows=[];
+    var match;
+    while((match=regex.exec(text))!==null){
+      var digits=match[0].replace(/\D/g,'');
+      if(digits.length===10||digits.length===11) rows.push({value:digits,index:match.index});
+      if(match.index===regex.lastIndex) regex.lastIndex++;
+    }
+    return rows;
+  }
+
+  function hasNear(text,index,words,radius){
+    if(index<0) return false;
+    var start=Math.max(0,index-radius);
+    var end=Math.min(text.length,index+radius);
+    var context=text.slice(start,end);
+    return words.some(function(word){return context.indexOf(word)!==-1;});
+  }
+
+  function firstIndex(text,values){
+    var indexes=values.map(function(value){return text.indexOf(value);}).filter(function(index){return index>=0;});
+    return indexes.length?Math.min.apply(Math,indexes):-1;
+  }
+
+  function detectDirection(fullText){
+    var upper=norm(fullText);
+    var occurrences=taxNoOccurrences(upper);
+    var companyRows=occurrences.filter(function(row){return row.value===companyTaxNo;});
+    var otherRows=occurrences.filter(function(row){return row.value!==companyTaxNo;});
+    var companyIndex=companyRows.length?companyRows[0].index:-1;
+    var otherIndex=otherRows.length?otherRows[0].index:-1;
+
+    if(companyIndex>=0){
+      if(hasNear(upper,companyIndex,['SATICI','SELLER','TEDARIKCI'],260)) return 'giden';
+      if(hasNear(upper,companyIndex,['ALICI','SAYIN','MUSTERI','BUYER'],260)) return 'gelen';
+      if(otherIndex>=0){
+        if(companyIndex<otherIndex) return 'giden';
+        if(companyIndex>otherIndex) return 'gelen';
+      }
+      if(companyIndex<upper.length*0.45) return 'giden';
+    }
+
+    var companyNameIndex=firstIndex(upper,[
+      'DUMANLAR KONFEKSIYON',
+      'DUMANLAR A S',
+      'DUMANLAR TEKSTIL',
+      'DUMANLAR'
+    ]);
+    if(companyNameIndex>=0){
+      if(hasNear(upper,companyNameIndex,['SATICI','SELLER','TEDARIKCI'],300)) return 'giden';
+      if(hasNear(upper,companyNameIndex,['ALICI','SAYIN','MUSTERI','BUYER'],220)) return 'gelen';
+      var buyerIndex=firstIndex(upper,['ALICI','SAYIN','MUSTERI','BUYER']);
+      if(buyerIndex>=0&&companyNameIndex<buyerIndex) return 'giden';
+      if(companyNameIndex<upper.length*0.45) return 'giden';
+    }
+
+    return '';
+  }
+
   function findCari(fullText){
     if(!cari) return false;
     var haystack=norm(fullText);
@@ -176,6 +239,7 @@
     var cariName=findCari(fullText);
 
     return {
+      direction:detectDirection(fullText),
       invoiceNo:no,
       invoiceDate:isoDate(dateText),
       subtotal:subtotalValue,
@@ -189,7 +253,7 @@
   var fileLabel=fileInput.closest('label');
   var box=document.createElement('div');
   box.className='fatura-pdf-okuma';
-  box.innerHTML='<div class="fatura-pdf-baslik"><span>📄</span><div><strong>Fatura PDF’sini yükle</strong><small>PDF seçildiğinde fatura no, tarih, matrah, KDV ve toplam otomatik okunmaya çalışılır.</small></div></div>'
+  box.innerHTML='<div class="fatura-pdf-baslik"><span>📄</span><div><strong>Fatura PDF’sini yükle</strong><small>PDF seçildiğinde yön, fatura no, tarih, matrah, KDV ve toplam otomatik okunmaya çalışılır.</small></div></div>'
     +'<div class="fatura-pdf-actions"><button type="button" class="btn btn-secondary" data-fatura-pdf-oku disabled>PDF’den bilgileri oku</button><a class="btn btn-secondary" data-fatura-pdf-onizle target="_blank" hidden>PDF’yi önizle</a></div>'
     +'<p class="fatura-pdf-status" data-fatura-pdf-status>Önce bilgisayarından PDF faturayı seç.</p>'
     +'<p class="fatura-pdf-uyari">Otomatik bulunan bilgileri kaydetmeden önce kontrol et. Görüntü olarak taranmış PDF’lerde alanlar elle tamamlanabilir.</p>';
@@ -207,6 +271,10 @@
 
   function applyResult(result){
     var found=[];
+    if(result.direction&&direction){
+      direction.value=result.direction;
+      found.push(result.direction==='giden'?'giden yönü':'gelen yönü');
+    }
     if(result.invoiceNo&&invoiceNo){invoiceNo.value=result.invoiceNo;found.push('fatura no');}
     if(result.invoiceDate&&invoiceDate){invoiceDate.value=result.invoiceDate;found.push('tarih');}
     if(result.subtotal!==null&&subtotal){subtotal.value=formatMoney(result.subtotal);found.push('matrah');}
@@ -216,7 +284,8 @@
     if(result.cariName) found.push('cari eşleşmesi');
     [subtotal,vat,total].forEach(function(input){if(input) input.dispatchEvent(new Event('input',{bubbles:true}));});
     if(found.length){
-      setStatus('PDF okundu: '+found.join(', ')+' bulundu. Bilgileri kontrol edip faturayı kaydet.','success');
+      var directionText=result.direction?(result.direction==='giden'?' Bizim kestiğimiz fatura olarak Giden seçildi.':' Bize kesilen fatura olarak Gelen seçildi.'):' Fatura yönünü ayrıca kontrol et.';
+      setStatus('PDF okundu: '+found.join(', ')+' bulundu.'+directionText,'success');
     }else{
       setStatus('PDF açıldı ancak alanlar otomatik bulunamadı. PDF arşive yüklenebilir; gerekli alanları elle tamamla.','warning');
     }
@@ -230,7 +299,7 @@
     }
     readButton.disabled=true;
     readButton.textContent='PDF okunuyor...';
-    setStatus('PDF içindeki fatura bilgileri aranıyor...','loading');
+    setStatus('PDF içindeki fatura bilgileri ve yönü aranıyor...','loading');
     Promise.all([loadPdfJs(),file.arrayBuffer()])
       .then(function(values){
         var pdfjs=values[0];
@@ -270,7 +339,7 @@
       previewUrl=URL.createObjectURL(file);
       preview.href=previewUrl;
       preview.hidden=false;
-      setStatus(file.name+' seçildi. Bilgiler otomatik okunuyor...','loading');
+      setStatus(file.name+' seçildi. Bilgiler ve fatura yönü otomatik okunuyor...','loading');
       readSelectedPdf();
     }else{
       preview.hidden=true;
