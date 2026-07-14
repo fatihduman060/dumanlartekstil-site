@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
 
-  var VERSION='3.2.0';
+  var VERSION='3.3.0';
   var BLOCKED_NO=/^(ETTN|UUID|VKN|TCKN|VERGINO|VERGINUMARASI|TICARETSICILNO|TICARETSICILNUMARASI|MERSISNO|IBAN|SIPARISNO|IRSALIYENO)$/;
   var SELLER_ROLES=[
     'SATICI','SATICI FIRMA','SATICI FIRMA UNVANI','SATICI UNVANI','SATICI BILGILERI',
@@ -141,9 +141,30 @@
     var explicit=findAmount(lines,[
       'Toplam KDV',
       'KDV Toplamı',
+      'Hesaplanan KDV Tutarı',
+      'Toplam Katma Değer Vergisi',
       'Hesaplanan Katma Değer Vergisi'
-    ],['Tevkifat']);
+    ],['Tevkifat','KDV Matrahı','KDV Oranı','KDV Dahil','KDV Hariç']);
     if(explicit!==null) return explicit;
+
+    // Telefon operatörü faturalarında KDV çoğu zaman klasik e-Fatura
+    // etiketleri yerine "KDV(%20)" gibi bir tablo sütununda gösteriliyor.
+    // Yüzde değerini para sanmadan, yalnız etiketin sağındaki/altındaki
+    // gerçek parasal tutarı al.
+    for(var i=0;i<lines.length;i++){
+      var raw=String(lines[i]||'');
+      var lineNorm=norm(raw);
+      if(/KDV MATRAHI|KDV ORANI|KDV DAHIL|KDV HARIC|TEVKIFAT/.test(lineNorm)) continue;
+      var rateLabel=/\bKDV\s*(?:\(\s*%\s*\d{1,2}\s*\)|%\s*\d{1,2})/i.exec(fold(raw));
+      if(!rateLabel) continue;
+      var inline=moneyMatches(raw).filter(function(item){
+        return item.index>=rateLabel.index+rateLabel[0].length-2;
+      });
+      if(inline.length) return inline[0].value;
+      var nextAmounts=moneyMatches(lines[i+1]||'');
+      if(nextAmounts.length===1) return nextAmounts[0].value;
+    }
+
     var parts=findAllAmounts(lines,'Hesaplanan KDV',['Tevkifat']);
     if(!parts.length) return null;
     return roundMoney(parts.reduce(function(total,value){return total+value;},0));
@@ -158,7 +179,16 @@
       if(!found) return;
       var amounts=moneyMatches(raw).filter(function(item){return item.index>=found.index+found[0].length-2;});
       if(amounts.length<2) return;
-      rows.push({base:amounts[0].value,vat:amounts[amounts.length-1].value});
+      var folded=fold(raw);
+      var rateIndex=folded.search(/\bKDV\s+ORANI\b/);
+      var vatIndex=folded.search(/\b(?:HESAPLANAN\s+KDV(?:\s+TUTARI)?|KDV\s+TUTARI)\b/);
+      var vatValue=amounts[amounts.length-1].value;
+      // Bazı tablolarda sıra "Matrah · KDV Tutarı · KDV Oranı"dır.
+      // Böyle bir satırda sondaki yüzdeyi KDV tutarı sanma.
+      if(amounts.length>=3&&vatIndex>=0&&rateIndex>=0&&vatIndex<rateIndex){
+        vatValue=amounts[1].value;
+      }
+      rows.push({base:amounts[0].value,vat:vatValue});
     });
     return rows;
   }
@@ -590,19 +620,22 @@
     var taxExclusive=taxRows.length>1
       ?roundMoney(taxRows.reduce(function(total,row){return total+row.base;},0))
       :findAmount(lines,['Vergiler Hariç Toplam Tutar','Toplam Matrah','KDV Matrahı']);
-    var vat=findVat(lines);
-    if(vat===null&&taxRows.length){
-      vat=roundMoney(taxRows.reduce(function(total,row){return total+row.vat;},0));
-    }
+    var vat=taxRows.length
+      ?roundMoney(taxRows.reduce(function(total,row){return total+row.vat;},0))
+      :findVat(lines);
     var taxInclusive=findAmount(lines,['Vergiler Dahil Toplam Tutar','Vergiler Dahil Toplam']);
     var withholding=findAmount(lines,['Toplam Tevkifat','Tevkifat Tutarı','KDV Tevkifatı']);
     var payable=findAmount(lines,['Net Ödenecek Tutar','Ödenecek Tutar','Ödenecek Toplam']);
     var general=findAmount(lines,['Genel Toplam','Fatura Toplamı']);
 
     var subtotal=taxExclusive;
+    var subtotalFromPayable=false;
     if(subtotal===null&&gross!==null) subtotal=roundMoney(gross-(discount||0));
     if(subtotal===null&&taxInclusive!==null&&vat!==null) subtotal=roundMoney(taxInclusive-vat);
-    if(subtotal===null&&payable!==null&&vat!==null&&withholding===null) subtotal=roundMoney(payable-vat);
+    if(subtotal===null&&payable!==null&&vat!==null&&withholding===null){
+      subtotal=roundMoney(payable-vat);
+      subtotalFromPayable=true;
+    }
 
     var total=payable!==null?payable:(taxInclusive!==null?taxInclusive:general);
     if(total===null&&subtotal!==null&&vat!==null){
@@ -612,6 +645,7 @@
 
     if(discount!==null&&discount>0) addIssue(warnings,'İskontolu fatura: matrah iskonto sonrası hesaplandı.');
     if(withholding!==null&&withholding>0) addIssue(warnings,'Tevkifatlı fatura: belgedeki ödenecek tutar korundu.');
+    if(subtotalFromPayable) addIssue(warnings,'Matrah, ödenecek tutardan KDV çıkarılarak hesaplandı; diğer vergi ve ücretleri kontrol et.');
     if(taxRows.length>1) addIssue(warnings,'Birden fazla KDV satırı birleştirildi; tutarları kontrol et.');
     if(!detectedDirection&&!needsOcr) addIssue(warnings,'Fatura yönü otomatik belirlenemedi.');
 
@@ -621,6 +655,9 @@
     if(subtotal===null) addIssue(critical,'Matrah bulunamadı.');
     if(vat===null) addIssue(critical,'KDV tutarı bulunamadı.');
     if(total===null) addIssue(critical,'Genel toplam bulunamadı.');
+    if(subtotal!==null&&vat!==null&&subtotal<=0&&vat>0){
+      addIssue(critical,'KDV pozitifken matrah sıfır veya negatif olamaz; tutarları kontrol et.');
+    }
 
     var tolerance=0.05;
     if(taxInclusive!==null&&subtotal!==null&&vat!==null&&Math.abs(taxInclusive-(subtotal+vat))>tolerance){
@@ -629,11 +666,17 @@
     if(payable!==null&&taxInclusive!==null&&withholding!==null&&Math.abs(payable-(taxInclusive-withholding))>tolerance){
       addIssue(warnings,'Ödenecek tutar ile tevkifat özeti uyuşmuyor.');
     }
+    if(payable!==null&&taxInclusive!==null&&withholding===null&&Math.abs(payable-taxInclusive)>tolerance){
+      addIssue(warnings,'Ödenecek tutar, vergiler dahil toplamla uyuşmuyor.');
+    }
     if(gross!==null&&discount!==null&&subtotal!==null&&Math.abs(subtotal-(gross-discount))>tolerance){
       addIssue(warnings,'İskonto sonrası matrah doğrulanamadı.');
     }
     if(payable!==null&&subtotal!==null&&vat!==null&&withholding===null&&taxInclusive===null&&Math.abs(payable-(subtotal+vat))>tolerance){
       addIssue(warnings,'Ödenecek tutar, matrah + KDV ile uyuşmuyor.');
+    }
+    if(general!==null&&payable===null&&taxInclusive===null&&subtotal!==null&&vat!==null&&withholding===null&&Math.abs(general-(subtotal+vat))>tolerance){
+      addIssue(warnings,'Genel toplam, matrah + KDV ile uyuşmuyor.');
     }
 
     return {

@@ -172,7 +172,7 @@ function fatura_tur_payload(string $period): array
             'issuer_source'=>(string)$row['issuer_source'],
             'issuer_confidence'=>(int)$row['issuer_confidence'],
             'issuer_parser_version'=>(string)$row['issuer_parser_version'],
-            'needs_issuer'=>$direction === 'gelen' && $genericCari && (string)$row['issuer_source'] !== 'manual' && (string)$row['issuer_parser_version'] !== '3.2.0' && !empty($row['document_path']),
+            'needs_issuer'=>$direction === 'gelen' && $genericCari && $storedIssuer === '' && (string)$row['issuer_source'] !== 'manual' && !in_array((string)$row['issuer_parser_version'], ['3.2.0','3.3.0'], true) && !empty($row['document_path']),
             'document_name'=>(string)$row['document_name'],
             'document_url'=>!empty($row['document_path']) ? 'fatura-indir.php?id=' . (int)$row['id'] : '',
             'has_document'=>!empty($row['document_path']),
@@ -225,7 +225,11 @@ try {
             if ($source === 'pdf' && trim((string)$invoice['issuer_source']) === 'manual') {
                 throw new RuntimeException('Elle girilen gönderen firma otomatik olarak değiştirilemez.');
             }
-            $parserVersion = $source === 'pdf' ? '3.2.0' : '';
+            $parserVersion = '';
+            if ($source === 'pdf') {
+                $parserVersion = preg_replace('/[^A-Za-z0-9._-]/', '', trim((string)($_POST['parser_version'] ?? ''))) ?: '';
+                $parserVersion = substr($parserVersion, 0, 32);
+            }
             db()->prepare('UPDATE invoices SET issuer_name=?, issuer_source=?, issuer_confidence=?, issuer_parser_version=?, updated_at=? WHERE id=?')
                 ->execute([$issuerName, $issuerName === '' && $source === 'manual' ? '' : $source, $issuerName === '' ? 0 : $confidence, $parserVersion, now(), $invoiceId]);
             log_action($issuerName === '' ? 'Fatura göndereni okunamadı' : 'Fatura göndereni güncellendi', '#' . $invoiceId . ($issuerName !== '' ? ' → ' . $issuerName : ''));
