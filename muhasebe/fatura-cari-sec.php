@@ -20,7 +20,7 @@ function fatura_cari_tax_digits(string $value): string
 {
     $digits = preg_replace('/\D+/', '', $value) ?: '';
     // Bazı PDF'ler 10 haneli VKN'nin başına yanlışlıkla 0 ekleyerek 11 hane döndürüyor.
-    if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
+    if (strlen($digits) === 11 && $digits[0] === '0') {
         $digits = substr($digits, 1);
     }
     return $digits;
@@ -31,8 +31,8 @@ function fatura_cari_name_valid(string $name): bool
     $key = fatura_cari_norm($name);
     if (mb_strlen(trim($name), 'UTF-8') < 3) return false;
     if (preg_match('/\b(MAH|MAHALLESI|CAD|CADDESI|SOK|SOKAK|BULVAR|BLV|KAT|DAIRE|MEVKII|KOYU|ILCE|POSTA KODU|NO|NUMARA)\b/', $key)) return false;
-    if (str_contains($key, 'ORGANIZE SANAYI BOLGESI') || preg_match('/\bOSB\b/', $key)) return false;
-    if (preg_match('/DUMANLAR|BITKE|MOFIY/', $key)) return false;
+    if (strpos($key, 'ORGANIZE SANAYI BOLGESI') !== false || preg_match('/\bOSB\b/', $key)) return false;
+    if (preg_match('/DUMANLAR|BITKE|MOFIY|BAFIY/', $key)) return false;
     if (preg_match('/FATURA|ETTN|UUID|VERGI|VKN|TCKN|MERSIS|TICARET SICIL|IBAN|BANKA|TOPLAM|KDV|MATRAH/', $key)) return false;
     return true;
 }
@@ -118,10 +118,10 @@ try {
             if ($phoneDigits !== '' && ($phoneDigits === $taxNo || $phoneDigits === $companyTaxNo)) {
                 $phone = '';
             }
-            if (preg_match('/DUMANLAR|BITKE|MOFIY/i', $email)) {
+            if (preg_match('/DUMANLAR|BITKE|MOFIY|BAFIY/i', $email)) {
                 $email = '';
             }
-            if (preg_match('/DUMANLAR|BITKE|MOFIY/', fatura_cari_norm($address))) {
+            if (preg_match('/DUMANLAR|BITKE|MOFIY|BAFIY/', fatura_cari_norm($address))) {
                 $address = '';
             }
 
