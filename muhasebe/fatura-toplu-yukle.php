@@ -49,11 +49,16 @@ function toplu_fatura_gecerli_tarih(string $value): bool
     return $date && $date->format('Y-m-d') === $value;
 }
 
+function toplu_fatura_tutar_temizle($value): string
+{
+    return preg_replace('/[\x{00A0}\s]+/u', '', trim((string)$value)) ?: '';
+}
+
 function toplu_fatura_gecerli_tutar(string $value): bool
 {
-    $value = preg_replace('/[\x{00A0}\s]+/u', '', trim($value)) ?: '';
+    $value = toplu_fatura_tutar_temizle($value);
     if ($value === '') return false;
-    return (bool)preg_match('/^-?(?:(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?|(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)$/', $value);
+    return (bool)preg_match('/^-?(?:(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?|\d{1,3}(?:,\d{3})+\.\d{1,2}|\d+\.\d{1,2})$/', $value);
 }
 
 function toplu_fatura_gonderen_temizle($value): string
@@ -145,9 +150,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $invoiceDate = trim((string)($meta['invoice_date'] ?? ''));
             $dueDate = trim((string)($meta['due_date'] ?? ''));
             $dueDate = $dueDate !== '' && toplu_fatura_gecerli_tarih($dueDate) ? $dueDate : null;
-            $subtotalRaw = trim((string)($meta['subtotal'] ?? ''));
-            $vatRaw = trim((string)($meta['vat_amount'] ?? ''));
-            $totalRaw = trim((string)($meta['total_amount'] ?? ''));
+            $subtotalRaw = toplu_fatura_tutar_temizle($meta['subtotal'] ?? '');
+            $vatRaw = toplu_fatura_tutar_temizle($meta['vat_amount'] ?? '');
+            $totalRaw = toplu_fatura_tutar_temizle($meta['total_amount'] ?? '');
             $subtotal = decimal_from_input($subtotalRaw);
             $vatAmount = decimal_from_input($vatRaw);
             $totalAmount = decimal_from_input($totalRaw);
