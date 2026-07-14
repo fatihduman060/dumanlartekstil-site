@@ -247,7 +247,7 @@ function page_footer(): void
   <script src="assets/fatura-okuma-core.js?v=6"></script>
   <script src="assets/fatura-pdf-oku.js?v=3"></script>
   <script src="assets/fatura-kdv-devir.js?v=1"></script>
-  <script src="assets/fatura-toplu-link.js?v=5"></script>
+  <script src="assets/fatura-toplu-link.js?v=6"></script>
   <script src="assets/fatura-toplu-yukle.js?v=4"></script>
   <script src="assets/fatura-no-onar.js?v=2"></script>
   <script src="assets/fatura-sira-kontrol.js?v=2"></script>
