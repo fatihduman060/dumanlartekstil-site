@@ -49,6 +49,34 @@ function toplu_fatura_gecerli_tarih(string $value): bool
     return $date && $date->format('Y-m-d') === $value;
 }
 
+function toplu_fatura_gonderen_temizle($value): string
+{
+    $value = preg_replace('/\s+/u', ' ', trim((string)$value)) ?: '';
+    if (function_exists('mb_substr')) return mb_substr($value, 0, 180, 'UTF-8');
+    return substr($value, 0, 180);
+}
+
+function toplu_fatura_gonderen_gecerli(string $value): bool
+{
+    if ($value === '') return false;
+    $upper = function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+    $upper = strtr($upper, ['İ'=>'I','Ş'=>'S','Ğ'=>'G','Ü'=>'U','Ö'=>'O','Ç'=>'C']);
+    $key = preg_replace('/[^A-Z0-9]+/', ' ', $upper) ?: '';
+    $key = trim(preg_replace('/\s+/', ' ', $key) ?: '');
+    if (strlen(str_replace(' ', '', $key)) < 3) return false;
+    if (preg_match('/(^| )(DUMANLAR|BITKE|MOFIY|BAFIY)( |$)/', $key)) return false;
+    if (preg_match('/(^| )MUHTELIF( FATURA)?( GIRISI)?( |$)/', $key)) return false;
+    return true;
+}
+
+function toplu_fatura_muhtelif_cari(string $value): bool
+{
+    $upper = function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+    $upper = strtr($upper, ['İ'=>'I','Ş'=>'S','Ğ'=>'G','Ü'=>'U','Ö'=>'O','Ç'=>'C']);
+    $key = trim(preg_replace('/[^A-Z0-9]+/', ' ', $upper) ?: '');
+    return (bool)preg_match('/(^| )MUHTELIF( FATURA)?( GIRISI)?( |$)/', $key);
+}
+
 function toplu_fatura_dosya(int $index): ?array
 {
     if (!isset($_FILES['documents']['name'][$index])) return null;
@@ -118,6 +146,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $currency = toplu_fatura_para_birimi($meta['currency'] ?? 'TL');
             $cariId = (int)($meta['cari_id'] ?? 0);
             $description = trim((string)($meta['description'] ?? 'Toplu PDF fatura yüklemesi'));
+            $issuerName = toplu_fatura_gonderen_temizle($meta['issuer_name'] ?? '');
+            $issuerSource = trim((string)($meta['issuer_source'] ?? ''));
+            $issuerSource = in_array($issuerSource, ['pdf','manual','cari'], true) ? $issuerSource : '';
+            $issuerConfidence = max(0, min(100, (int)($meta['issuer_confidence'] ?? 0)));
+            $issuerParserVersion = trim((string)($meta['issuer_parser_version'] ?? ''));
+            $issuerParserVersion = preg_replace('/[^A-Za-z0-9._-]/', '', $issuerParserVersion) ?: '';
+            $issuerParserVersion = substr($issuerParserVersion, 0, 32);
+
+            if ($direction === 'giden') {
+                $issuerName = '';
+                $issuerSource = '';
+                $issuerConfidence = 0;
+                $issuerParserVersion = '';
+            } elseif (!toplu_fatura_gonderen_gecerli($issuerName)) {
+                $issuerName = '';
+                $issuerSource = '';
+                $issuerConfidence = 0;
+                $issuerParserVersion = '';
+            } elseif ($issuerSource === 'pdf' && $issuerConfidence < 70) {
+                $issuerName = '';
+                $issuerSource = '';
+                $issuerConfidence = 0;
+                $issuerParserVersion = '';
+            } elseif ($issuerSource === '') {
+                $issuerSource = 'manual';
+                $issuerConfidence = 100;
+                $issuerParserVersion = '';
+            }
 
             if ($invalidInvoiceNo) {
                 throw new RuntimeException('Fatura numarası eksik veya geçersiz.');
@@ -134,10 +190,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($subtotal < 0 || $vatAmount < 0) {
                 throw new RuntimeException('Matrah ve KDV negatif olamaz.');
             }
+            $cariRow = null;
             if ($cariId > 0) {
-                $stmt = db()->prepare('SELECT COUNT(*) FROM cariler WHERE id=?');
+                $stmt = db()->prepare('SELECT id, name FROM cariler WHERE id=? LIMIT 1');
                 $stmt->execute([$cariId]);
-                if ((int)$stmt->fetchColumn() < 1) $cariId = 0;
+                $cariRow = $stmt->fetch();
+                if (!$cariRow) $cariId = 0;
+            }
+            if ($direction === 'gelen' && $issuerName === '' && $cariRow && !toplu_fatura_muhtelif_cari((string)$cariRow['name'])) {
+                $issuerName = toplu_fatura_gonderen_temizle($cariRow['name']);
+                if (toplu_fatura_gonderen_gecerli($issuerName)) {
+                    $issuerSource = 'cari';
+                    $issuerConfidence = 100;
+                    $issuerParserVersion = '';
+                } else {
+                    $issuerName = '';
+                }
+            }
+            if ($direction === 'gelen' && $issuerName === '') {
+                throw new RuntimeException('Gönderen firma eksik. PDF’den okunmadıysa satırdaki gönderen alanını doldur.');
             }
 
             $hash = is_file((string)$file['tmp_name']) ? hash_file('sha256', (string)$file['tmp_name']) : '';
@@ -168,12 +239,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->prepare("INSERT INTO invoices (
                 direction, cari_id, invoice_no, invoice_date, due_date, subtotal, vat_amount, total_amount,
                 currency, description, document_path, document_name, document_mime, file_hash, import_batch,
+                issuer_name, issuer_source, issuer_confidence, issuer_parser_version,
                 posted_to_cari, cari_movement_id, created_by, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)")
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)")
                 ->execute([
                     $direction, $cariId > 0 ? $cariId : null, $invoiceNo, $invoiceDate, $dueDate,
                     $subtotal, $vatAmount, $totalAmount, $currency, $description,
                     $doc['path'], $doc['name'], $doc['mime'], $hash ?: null, $batch,
+                    $issuerName ?: null, $issuerSource ?: null, $issuerConfidence, $issuerParserVersion ?: null,
                     $userId, now(), now()
                 ]);
 
@@ -185,6 +258,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'invoice_no'=>$invoiceNo,
                 'invoice_date'=>$invoiceDate,
                 'total_amount'=>$totalAmount,
+                'issuer_name'=>$issuerName ?: null,
+                'issuer_source'=>$issuerSource ?: null,
+                'issuer_confidence'=>$issuerConfidence,
                 'posted_to_cari'=>0,
                 'import_batch'=>$batch,
             ], $invoiceNo ?: $fileName);
@@ -213,7 +289,7 @@ page_header('Toplu Fatura Yükle', 'faturalar');
   <div>
     <span class="status-pill">Toplu PDF arşivi</span>
     <h2>PDF faturaları birlikte yükle, kontrol et ve cari cari ayır.</h2>
-    <p>Bu ekran faturaları yalnızca arşive kaydeder. Otomatik cari hareket oluşturmaz; istediğin faturayı daha sonra listeden “Cariye işle” diyerek işlersin.</p>
+    <p>Gönderen firma PDF’den okunur, mevcut cariyle eşleşirse seçilir; eşleşmezse gerçek firma adı korunarak MUHTELİF carisine ayrılır. Bu ekran otomatik cari hareket oluşturmaz.</p>
   </div>
   <div class="hero-actions"><a class="btn btn-secondary" href="faturalar.php">Fatura listesine dön</a></div>
 </section>
@@ -226,12 +302,12 @@ page_header('Toplu Fatura Yükle', 'faturalar');
 
     <label class="bulk-file-picker">
       <strong>PDF faturaları seç</strong>
-      <small>Tek seferde en fazla 50 PDF, her biri en fazla 10 MB. Seçimden sonra bilgiler otomatik okunmaya çalışılır.</small>
+      <small>Tek seferde en fazla 50 PDF, her biri en fazla 10 MB. Firma adı, fatura bilgileri, matrah, KDV ve toplam otomatik okunmaya çalışılır.</small>
       <input type="file" name="documents[]" id="bulkInvoiceFiles" accept="application/pdf,.pdf" multiple required>
     </label>
 
     <div class="bulk-upload-note">
-      <strong>Önemli:</strong> Bu toplu yüklemede “Kaydet” dediğinde cariye borç veya alacak yazılmaz. Geçmiş faturaların cari hareketleri zaten girildiyse mükerrer oluşmaz.
+      <strong>Önemli:</strong> Gönderen firma ile cari ayrı bilgilerdir. Örneğin cari “MUHTELİF FATURA GİRİŞİ”, gönderen “Vodafone Telekomünikasyon A.Ş.” olabilir. “Kaydet” dediğinde cariye borç veya alacak yazılmaz.
     </div>
 
     <div id="bulkInvoiceSummary" class="bulk-summary">Henüz PDF seçilmedi.</div>
