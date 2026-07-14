@@ -109,7 +109,7 @@
     area=document.createElement('section');
     area.className='panel-card fatura-alt-kontroller';
     area.setAttribute('data-fatura-alt-kontroller','1');
-    area.innerHTML='<div class="card-head"><div><h3>Fatura araçları</h3><small>Seyrek kullanılan dönem, toplu yükleme, KDV devir ve masraf fişi işlemleri</small></div></div><div class="fatura-alt-kontrol-body" data-fatura-alt-kontrol-body></div>';
+    area.innerHTML='<div class="card-head"><div><h3>Fatura araçları</h3><small>Seyrek kullanılan dönem, toplu yükleme, KDV devir, masraf fişi ve mağaza satış işlemleri</small></div></div><div class="fatura-alt-kontrol-body" data-fatura-alt-kontrol-body></div>';
     listSection.insertAdjacentElement('afterend',area);
     unlockArea(area);
     return area;
@@ -139,11 +139,24 @@
     unlockArea(area);
   }
 
+  function loadStoreSales(){
+    if(document.querySelector('script[data-magaza-satis-loader]')) return;
+    var script=document.createElement('script');
+    script.src='assets/magaza-gunluk-satis.js?v=1';
+    script.setAttribute('data-magaza-satis-loader','1');
+    document.body.appendChild(script);
+  }
+
   function loadExpenseReceipts(){
-    if(document.querySelector('script[data-masraf-fisleri-loader]')) return;
+    if(document.querySelector('script[data-masraf-fisleri-loader]')){
+      loadStoreSales();
+      return;
+    }
     var script=document.createElement('script');
     script.src='assets/masraf-fisleri.js?v=2';
     script.setAttribute('data-masraf-fisleri-loader','1');
+    script.onload=loadStoreSales;
+    script.onerror=loadStoreSales;
     document.body.appendChild(script);
   }
 
