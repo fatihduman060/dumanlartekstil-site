@@ -44,6 +44,7 @@ if (is_logged_in() && is_store_sales_user()) {
     $allowedStoreScripts = [
         'magaza.php',
         'magaza-gunluk-satis.php',
+        'magaza-odeme-dagilimi.php',
         'logout.php',
         'index.php',
     ];
