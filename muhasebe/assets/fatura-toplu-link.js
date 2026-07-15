@@ -86,6 +86,14 @@
       .finally(function(){buttons.forEach(function(btn){btn.disabled=false;});});
   });
 
+  function loadSplitView(){
+    if(document.querySelector('script[data-fatura-iki-kolon-loader]')) return;
+    var script=document.createElement('script');
+    script.src='assets/fatura-iki-kolon.js?v=1';
+    script.setAttribute('data-fatura-iki-kolon-loader','1');
+    document.body.appendChild(script);
+  }
+
   var style=document.createElement('style');
   style.textContent=''
     +'.form-grid.fatura-list-only{display:block!important;grid-template-columns:minmax(0,1fr)!important;width:100%}'
@@ -106,4 +114,5 @@
   document.head.appendChild(style);
 
   load();
+  loadSplitView();
 })();
