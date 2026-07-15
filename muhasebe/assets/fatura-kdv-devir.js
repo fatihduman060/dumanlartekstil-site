@@ -22,6 +22,11 @@
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
   }
 
+  function trDate(value){
+    var parts=String(value||'').split('-');
+    return parts.length===3?parts.reverse().join('.'):String(value||'');
+  }
+
   function ensureUi(){
     var panel=document.getElementById('kdvDevirPanel');
     if(!panel){
@@ -50,6 +55,15 @@
       if(statusCard) stats.insertBefore(carryCard,statusCard); else stats.appendChild(carryCard);
     }
 
+    var storeCard=document.getElementById('magazaGunlukRaporCard');
+    if(!storeCard){
+      storeCard=document.createElement('article');
+      storeCard.id='magazaGunlukRaporCard';
+      storeCard.className='stat-card soft';
+      storeCard.innerHTML='<span>Mağaza günlük rapor</span><strong>0,00 TL</strong><small>Z raporu KDV toplamı</small>';
+      stats.appendChild(storeCard);
+    }
+
     return panel;
   }
 
@@ -58,6 +72,39 @@
     if(!el) return;
     el.textContent=text||'';
     el.className='kdv-devir-status'+(tone?' is-'+tone:'');
+  }
+
+  function renderStoreCard(data,latestDate){
+    var card=document.getElementById('magazaGunlukRaporCard');
+    if(!card) return;
+
+    var vat=Number(data&&data.store_sales_vat||0);
+    var gross=Number(data&&data.store_sales_gross||0);
+    var count=Number(data&&data.store_sales_count||0);
+    var strong=card.querySelector('strong');
+    var small=card.querySelector('small');
+
+    if(strong) strong.textContent=money(vat);
+    if(small){
+      if(count>0){
+        small.textContent='Z raporu KDV toplamı'+(latestDate?' · '+trDate(latestDate)+' tarihine kadar':'')+' · '+count+' kayıt';
+      }else{
+        small.textContent='Bu dönemde mağaza Z raporu girilmedi';
+      }
+    }
+    card.title='Mağaza brüt Z raporu toplamı: '+money(gross);
+  }
+
+  function loadStoreLatestDate(data){
+    renderStoreCard(data,'');
+    fetch('magaza-gunluk-satis.php?period='+encodeURIComponent(periodInput.value)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+      .then(function(response){return response.json();})
+      .then(function(storeData){
+        if(!storeData||!storeData.ok) return;
+        var items=Array.isArray(storeData.items)?storeData.items:[];
+        renderStoreCard(data,items.length?items[0].sale_date:'');
+      })
+      .catch(function(){});
   }
 
   function render(data){
@@ -75,6 +122,8 @@
       carryCard.querySelector('small').textContent=data.note ? data.note : 'Manuel girilen KDV devri';
     }
 
+    renderStoreCard(data,'');
+
     var cards=stats.querySelectorAll('.stat-card');
     var statusCard=Array.prototype.find.call(cards,function(card){
       var span=card.querySelector('span');
@@ -89,7 +138,7 @@
     }
 
     if(note){
-      note.innerHTML='<strong>KDV durumu</strong> = hesaplanan KDV - indirilecek KDV - önceki dönemden devreden KDV. Tevkifat, istisna ve iade bu taslakta ayrıca hesaplanmaz.';
+      note.innerHTML='<strong>KDV durumu</strong> = faturalardaki hesaplanan KDV + mağaza Z raporu KDV - indirilecek KDV - önceki dönemden devreden KDV. Tevkifat, istisna ve iade bu taslakta ayrıca hesaplanmaz.';
     }
 
     if(data.updated_at){
@@ -105,7 +154,11 @@
     ensureUi();
     fetch('fatura-kdv-devir.php?period='+encodeURIComponent(periodInput.value)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
-      .then(function(data){if(!data.ok) throw new Error(data.error||'KDV devri yüklenemedi.');render(data);})
+      .then(function(data){
+        if(!data.ok) throw new Error(data.error||'KDV devri yüklenemedi.');
+        render(data);
+        loadStoreLatestDate(data);
+      })
       .catch(function(error){setStatus(error.message||'KDV devri yüklenemedi.','danger');})
       .finally(function(){loading=false;});
   }
@@ -126,7 +179,12 @@
 
     fetch('fatura-kdv-devir.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
-      .then(function(data){if(!data.ok) throw new Error(data.error||'KDV devri kaydedilemedi.');render(data);setStatus('KDV devri kaydedildi ve dönem hesabına eklendi.','success');})
+      .then(function(data){
+        if(!data.ok) throw new Error(data.error||'KDV devri kaydedilemedi.');
+        render(data);
+        loadStoreLatestDate(data);
+        setStatus('KDV devri kaydedildi ve dönem hesabına eklendi.','success');
+      })
       .catch(function(error){setStatus(error.message||'KDV devri kaydedilemedi.','danger');})
       .finally(function(){button.disabled=false;button.textContent=oldText;});
   });
