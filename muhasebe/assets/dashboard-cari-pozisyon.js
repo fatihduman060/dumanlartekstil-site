@@ -25,13 +25,32 @@
     var p=panel();p.style.display='block';document.getElementById('cariPozisyonIcerik').innerHTML='<p class="muted">Yükleniyor...</p>';
     fetch('dashboard-cari-pozisyon.php?type='+type+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){show(type,(d&&d.rows)||[]);}).catch(function(){document.getElementById('cariPozisyonIcerik').innerHTML='<p class="text-danger">Liste yüklenemedi.</p>';});
   }
-  function init(){
-    if(!/dashboard\.php|\/muhasebe\/?$/i.test(location.pathname))return;
+  function initCards(){
     var a=cardAny(['net alacak','durum alacak','alacak'],['verecek','borc','borç','alis','alış','genel durum']);
     var v=cardAny(['net verecek','durum alis','durum alış','borc','borç','verecek'],['alacak','genel durum']);
     [a,v].forEach(function(x){if(x){x.style.cursor='pointer';x.title='Cari listesini aç';}});
     if(a)a.onclick=function(){load('alacak');};
     if(v)v.onclick=function(){load('verecek');};
+  }
+  function syncDueStorePayments(){
+    fetch('magaza-odeme-dagilimi.php?sync_due=1&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+      .then(function(response){return response.json();})
+      .then(function(data){
+        var count=Number(data&&data.processed_due_count||0);
+        if(count<=0) return;
+        var key='magaza-vadesi-gelen-yenileme-'+new Date().toISOString().slice(0,10);
+        try{
+          if(sessionStorage.getItem(key)==='1') return;
+          sessionStorage.setItem(key,'1');
+        }catch(error){}
+        location.reload();
+      })
+      .catch(function(){});
+  }
+  function init(){
+    if(!/dashboard\.php|\/muhasebe\/?$/i.test(location.pathname))return;
+    initCards();
+    syncDueStorePayments();
   }
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();
 })();
