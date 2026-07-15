@@ -25,6 +25,7 @@ function magaza_odeme_dagilim_payload(string $period): array
             'credit_collection_amount' => round($cashCollection + $cardCollection, 2),
             'cash_total_amount' => round($cash + $cashCollection, 2),
             'card_total_amount' => round($card + $cardCollection, 2),
+            'cash_change_left_amount' => (float)($row['cash_change_left_amount'] ?? 0),
             'daily_total' => (float)$row['daily_total'],
         ];
     }
@@ -39,6 +40,19 @@ function magaza_odeme_dagilim_payload(string $period): array
 }
 
 try {
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'previous_cash_change') {
+        $saleDate = trim((string)($_GET['sale_date'] ?? ''));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) {
+            throw new RuntimeException('Önceki kasa bilgisinin tarihi geçersiz.');
+        }
+
+        echo json_encode([
+            'ok' => true,
+            'previous' => magaza_odeme_dagilim_onceki_kasa_parasi($saleDate),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         require_store_sales_write();
         require_csrf();
@@ -63,15 +77,16 @@ try {
             $credit = decimal_from_input($_POST['credit_amount'] ?? '0');
             $cashCollection = decimal_from_input($_POST['cash_credit_collection_amount'] ?? ($_POST['credit_collection_amount'] ?? '0'));
             $cardCollection = decimal_from_input($_POST['card_credit_collection_amount'] ?? '0');
+            $cashChangeLeft = decimal_from_input($_POST['cash_change_left_amount'] ?? '0');
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) {
                 throw new RuntimeException('Satış tarihini kontrol etmelisin.');
             }
-            foreach ([$cash, $card, $credit, $cashCollection, $cardCollection] as $amount) {
-                if ($amount < 0) throw new RuntimeException('Ödeme tutarları negatif olamaz.');
+            foreach ([$cash, $card, $credit, $cashCollection, $cardCollection, $cashChangeLeft] as $amount) {
+                if ($amount < 0) throw new RuntimeException('Tutarlar negatif olamaz.');
             }
-            if (($cash + $card + $credit + $cashCollection + $cardCollection) <= 0) {
-                throw new RuntimeException('En az bir ödeme alanına sıfırdan büyük tutar girmelisin.');
+            if (($cash + $card + $credit + $cashCollection + $cardCollection + $cashChangeLeft) <= 0) {
+                throw new RuntimeException('En az bir alana sıfırdan büyük tutar girmelisin.');
             }
 
             $dailyTotal = magaza_odeme_dagilim_gunluk_toplam($cash, $card, $credit);
@@ -84,8 +99,8 @@ try {
 
             if ($old) {
                 $id = (int)$old['id'];
-                db()->prepare('UPDATE store_daily_payment_breakdown SET cash_amount=?, card_amount=?, credit_amount=?, credit_collection_amount=?, cash_credit_collection_amount=?, card_credit_collection_amount=?, daily_total=?, updated_by=?, updated_at=? WHERE id=?')
-                    ->execute([$cash, $card, $credit, $legacyCollectionTotal, $cashCollection, $cardCollection, $dailyTotal, $userId, now(), $id]);
+                db()->prepare('UPDATE store_daily_payment_breakdown SET cash_amount=?, card_amount=?, credit_amount=?, credit_collection_amount=?, cash_credit_collection_amount=?, card_credit_collection_amount=?, cash_change_left_amount=?, daily_total=?, updated_by=?, updated_at=? WHERE id=?')
+                    ->execute([$cash, $card, $credit, $legacyCollectionTotal, $cashCollection, $cardCollection, $cashChangeLeft, $dailyTotal, $userId, now(), $id]);
 
                 $newStmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
                 $newStmt->execute([$id]);
@@ -94,9 +109,9 @@ try {
                 audit_action('magaza_odeme_dagilimi', $id, 'guncellendi', $old, $saved, $saleDate);
             } else {
                 db()->prepare('INSERT INTO store_daily_payment_breakdown
-                    (sale_date, cash_amount, card_amount, credit_amount, credit_collection_amount, cash_credit_collection_amount, card_credit_collection_amount, daily_total, created_by, created_at, updated_by, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([$saleDate, $cash, $card, $credit, $legacyCollectionTotal, $cashCollection, $cardCollection, $dailyTotal, $userId, now(), $userId, now()]);
+                    (sale_date, cash_amount, card_amount, credit_amount, credit_collection_amount, cash_credit_collection_amount, card_credit_collection_amount, cash_change_left_amount, daily_total, created_by, created_at, updated_by, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$saleDate, $cash, $card, $credit, $legacyCollectionTotal, $cashCollection, $cardCollection, $cashChangeLeft, $dailyTotal, $userId, now(), $userId, now()]);
                 $id = (int)db()->lastInsertId();
 
                 log_action('Mağaza günlük ödeme dağılımı eklendi', $saleDate . ' · ' . number_format($dailyTotal, 2, ',', '.') . ' TL satış');
@@ -107,6 +122,7 @@ try {
                     'credit_amount' => $credit,
                     'cash_credit_collection_amount' => $cashCollection,
                     'card_credit_collection_amount' => $cardCollection,
+                    'cash_change_left_amount' => $cashChangeLeft,
                     'daily_total' => $dailyTotal,
                 ], $saleDate);
             }
