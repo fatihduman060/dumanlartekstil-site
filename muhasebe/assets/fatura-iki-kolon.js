@@ -40,11 +40,36 @@
     }
     return -1;
   }
-  function rowDirection(row,index){
-    var text=index>=0&&row.cells[index]?norm(row.cells[index].textContent):norm(row.textContent);
-    if(text.indexOf('giden')!==-1) return 'giden';
-    if(text.indexOf('gelen')!==-1) return 'gelen';
+  function directionFromCell(cell){
+    if(!cell) return '';
+
+    var directionButton=cell.querySelector('[data-fatura-yon-sec][data-current]');
+    if(directionButton){
+      var current=String(directionButton.getAttribute('data-current')||'');
+      if(current==='giden'||current==='gelen') return current;
+    }
+
+    var badge=cell.querySelector('.badge');
+    var badgeText=norm(badge?badge.textContent:'');
+    if(badgeText.indexOf('giden')!==-1) return 'giden';
+    if(badgeText.indexOf('gelen')!==-1) return 'gelen';
+
+    var control=cell.querySelector('select[name="direction"],input[name="direction"]');
+    if(control){
+      var value=String(control.value||'');
+      if(value==='giden'||value==='gelen') return value;
+    }
+
+    var cleanCell=cell.cloneNode(true);
+    qsa('button',cleanCell).forEach(function(button){button.remove();});
+    var text=norm(cleanCell.textContent);
+    if(text.indexOf('giden fatura')!==-1) return 'giden';
+    if(text.indexOf('gelen fatura')!==-1) return 'gelen';
     return '';
+  }
+  function rowDirection(row,index){
+    var cell=index>=0&&row.cells[index]?row.cells[index]:null;
+    return directionFromCell(cell);
   }
   function activeDirection(){
     var saved='';
@@ -164,16 +189,27 @@
         return !row.classList.contains('empty')&&!row.hasAttribute('data-fatura-tab-empty');
       });
     }
-    function calculate(direction){
-      var subtotal=0,vat=0,grand=0,count=0;
+    function showRow(row,visible){
+      row.hidden=!visible;
+      row.setAttribute('aria-hidden',visible?'false':'true');
+      row.classList.toggle('fatura-tab-row-hidden',!visible);
+      if(visible) row.style.removeProperty('display');
+      else row.style.setProperty('display','none','important');
+    }
+    function render(){
+      var counts={giden:0,gelen:0};
+      var subtotal=0,vat=0,grand=0;
+
       realRows().forEach(function(row){
         var rowDir=rowDirection(row,directionIndex);
         row.setAttribute('data-fatura-row-direction',rowDir);
         row.classList.add('fatura-tab-row');
-        row.hidden=rowDir!==direction;
-        if(rowDir!==direction) return;
-        count++;
-        if(row.classList.contains('row-cancelled')) return;
+        if(rowDir==='giden'||rowDir==='gelen') counts[rowDir]++;
+
+        var visible=rowDir===selected;
+        showRow(row,visible);
+        if(!visible||row.classList.contains('row-cancelled')) return;
+
         var amountCell=amountIndex>=0?row.cells[amountIndex]:null;
         var totalCell=totalIndex>=0?row.cells[totalIndex]:null;
         var amounts=moneyValues(amountCell?amountCell.textContent:'');
@@ -182,13 +218,7 @@
         var totals=moneyValues(totalCell?totalCell.textContent:'');
         grand+=Number(totals[0]||0);
       });
-      return {count:count,subtotal:subtotal,vat:vat,grand:grand};
-    }
-    function countDirection(direction){
-      return realRows().filter(function(row){return rowDirection(row,directionIndex)===direction;}).length;
-    }
-    function render(){
-      var result=calculate(selected);
+
       qsa('[data-fatura-direction]',tabs).forEach(function(button){
         var direction=button.getAttribute('data-fatura-direction');
         var active=direction===selected;
@@ -197,26 +227,27 @@
       });
       ['giden','gelen'].forEach(function(direction){
         var count=qs('[data-fatura-tab-count="'+direction+'"]',tabs);
-        if(count) count.textContent=String(countDirection(direction));
+        if(count) count.textContent=String(counts[direction]||0);
       });
-      qs('[data-fatura-total-subtotal]',tfoot).textContent=money(result.subtotal);
-      qs('[data-fatura-total-vat]',tfoot).textContent=money(result.vat);
-      qs('[data-fatura-total-grand]',tfoot).textContent=money(result.grand);
+      qs('[data-fatura-total-subtotal]',tfoot).textContent=money(subtotal);
+      qs('[data-fatura-total-vat]',tfoot).textContent=money(vat);
+      qs('[data-fatura-total-grand]',tfoot).textContent=money(grand);
 
       var generatedEmpty=qs('tr[data-fatura-tab-empty]',tbody);
-      if(result.count===0){
+      if((counts[selected]||0)===0){
         if(!generatedEmpty){
-          var empty=document.createElement('tr');
-          empty.setAttribute('data-fatura-tab-empty','1');
-          empty.innerHTML='<td colspan="'+columnCount+'" class="empty">Bu dönemde '+(selected==='giden'?'giden':'gelen')+' fatura bulunamadı.</td>';
-          tbody.appendChild(empty);
+          generatedEmpty=document.createElement('tr');
+          generatedEmpty.setAttribute('data-fatura-tab-empty','1');
+          generatedEmpty.innerHTML='<td colspan="'+columnCount+'" class="empty">Bu dönemde '+(selected==='giden'?'giden':'gelen')+' fatura bulunamadı.</td>';
+          tbody.appendChild(generatedEmpty);
         }
+        showRow(generatedEmpty,true);
       }else if(generatedEmpty){
         generatedEmpty.remove();
       }
 
       var headCount=qs('.card-head > span',listCard);
-      if(headCount) headCount.textContent=(selected==='giden'?'Giden faturalar':'Gelen faturalar')+' · '+result.count+' kayıt';
+      if(headCount) headCount.textContent=(selected==='giden'?'Giden faturalar':'Gelen faturalar')+' · '+(counts[selected]||0)+' kayıt';
     }
 
     tabs.addEventListener('click',function(event){
@@ -231,7 +262,7 @@
     var observer=new MutationObserver(function(){
       if(scheduled) return;
       scheduled=true;
-      window.setTimeout(function(){scheduled=false;render();},80);
+      window.setTimeout(function(){scheduled=false;render();},120);
     });
     observer.observe(tbody,{childList:true,subtree:true,characterData:true});
     render();
@@ -246,7 +277,7 @@
       +'.fatura-direction-tabs button{flex:1 1 0;display:grid;gap:3px;text-align:center;border:1px solid transparent;border-radius:12px;padding:11px 14px;background:#fbf6ed;color:#16482e;cursor:pointer}'
       +'.fatura-direction-tabs button strong{font-size:13px}.fatura-direction-tabs button small{font-size:9px;font-weight:700;opacity:.72}'
       +'.fatura-direction-tabs button.active{background:#c49a4f;color:#102818;border-color:#b58a3f;box-shadow:0 6px 16px rgba(196,154,79,.2)}'
-      +'.fatura-tab-row[hidden]{display:none!important}.fatura-direction-total-row td{padding:10px!important;border-top:2px solid #dfd5c6;background:#fbf8f2}'
+      +'.fatura-tab-row-hidden,.fatura-tab-row[hidden]{display:none!important}.fatura-direction-total-row td{padding:10px!important;border-top:2px solid #dfd5c6;background:#fbf8f2}'
       +'.fatura-direction-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.fatura-direction-totals span{display:grid;gap:3px;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:#fff}.fatura-direction-totals small{font-size:8px;color:var(--muted);font-weight:800}.fatura-direction-totals strong{font-size:12px}'
       +'.fatura-entry-open{margin-left:auto;white-space:nowrap}.fatura-entry-overlay[hidden]{display:none!important}.fatura-entry-overlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(14,24,37,.62);backdrop-filter:blur(3px)}.fatura-entry-dialog{position:relative;width:min(920px,96vw);max-height:92vh;overflow:auto;border-radius:20px;background:#f8f6f1;box-shadow:0 30px 90px rgba(0,0,0,.3);padding:18px}.fatura-entry-close{position:absolute;right:12px;top:10px;z-index:2;width:34px;height:34px;border:0;border-radius:50%;background:#eee6d8;color:#503f25;font-size:23px;cursor:pointer}.fatura-entry-note{display:grid;gap:4px;padding:3px 44px 14px 3px}.fatura-entry-note strong{font-size:17px}.fatura-entry-note small{font-size:11px;color:var(--muted)}.fatura-entry-modal-card{width:100%!important;max-width:none!important;margin:0!important}.fatura-entry-modal-card>.card-head{display:none}.fatura-entry-modal-open{overflow:hidden}'
       +'@media(max-width:650px){.fatura-direction-tabs{display:grid}.fatura-direction-totals{grid-template-columns:1fr}.fatura-entry-overlay{padding:8px}.fatura-entry-dialog{width:100%;max-height:96vh;padding:12px;border-radius:15px}.fatura-entry-open{width:100%;margin-top:8px}}';
