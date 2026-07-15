@@ -5,11 +5,15 @@
   var editId=Number(params.get('edit')||0);
   var formGrid=document.querySelector('.form-grid');
 
-  // Normal fatura listesindeyken sol taraftaki yeni/düzenleme formunu kaldır.
-  // Form yalnızca listeden Düzenle bağlantısına basılıp ?edit=ID ile gelindiğinde görünür.
+  // Normal fatura listesindeyken tekli fatura formunu sayfada yer kaplamayacak şekilde gizle.
+  // Ayrı fatura giriş penceresi bu kartı gerektiğinde açar; ?edit=ID görünümünde form normal kalır.
   if(formGrid&&editId<=0){
     var formCard=formGrid.querySelector('.form-card');
-    if(formCard) formCard.remove();
+    if(formCard){
+      formCard.classList.add('fatura-entry-source');
+      formCard.hidden=true;
+      formCard.setAttribute('aria-hidden','true');
+    }
     formGrid.classList.add('fatura-list-only');
   }
 
@@ -86,6 +90,7 @@
   style.textContent=''
     +'.form-grid.fatura-list-only{display:block!important;grid-template-columns:minmax(0,1fr)!important;width:100%}'
     +'.fatura-list-only>.panel-card{width:100%;max-width:none;margin:0}'
+    +'.fatura-entry-source[hidden]{display:none!important}'
     +'.fatura-list-only .table-wrap{width:100%;overflow:auto}'
     +'.fatura-list-only table{width:100%;min-width:1120px}'
     +'.fatura-list-only table th,.fatura-list-only table td{font-size:calc(1em - .5px)}'
