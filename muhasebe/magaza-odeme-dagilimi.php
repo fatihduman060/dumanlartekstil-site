@@ -10,13 +10,21 @@ function magaza_odeme_dagilim_payload(string $period): array
 {
     $items = [];
     foreach (magaza_odeme_dagilim_satirlari($period) as $row) {
+        $cash = (float)($row['cash_amount'] ?? 0);
+        $card = (float)($row['card_amount'] ?? 0);
+        $cashCollection = (float)($row['cash_credit_collection_amount'] ?? 0);
+        $cardCollection = (float)($row['card_credit_collection_amount'] ?? 0);
         $items[] = [
             'id' => (int)$row['id'],
             'sale_date' => (string)$row['sale_date'],
-            'cash_amount' => (float)$row['cash_amount'],
-            'card_amount' => (float)$row['card_amount'],
+            'cash_amount' => $cash,
+            'card_amount' => $card,
             'credit_amount' => (float)$row['credit_amount'],
-            'credit_collection_amount' => (float)$row['credit_collection_amount'],
+            'cash_credit_collection_amount' => $cashCollection,
+            'card_credit_collection_amount' => $cardCollection,
+            'credit_collection_amount' => round($cashCollection + $cardCollection, 2),
+            'cash_total_amount' => round($cash + $cashCollection, 2),
+            'card_total_amount' => round($card + $cardCollection, 2),
             'daily_total' => (float)$row['daily_total'],
         ];
     }
@@ -53,19 +61,21 @@ try {
             $cash = decimal_from_input($_POST['cash_amount'] ?? '0');
             $card = decimal_from_input($_POST['card_amount'] ?? '0');
             $credit = decimal_from_input($_POST['credit_amount'] ?? '0');
-            $creditCollection = decimal_from_input($_POST['credit_collection_amount'] ?? '0');
+            $cashCollection = decimal_from_input($_POST['cash_credit_collection_amount'] ?? ($_POST['credit_collection_amount'] ?? '0'));
+            $cardCollection = decimal_from_input($_POST['card_credit_collection_amount'] ?? '0');
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) {
                 throw new RuntimeException('Satış tarihini kontrol etmelisin.');
             }
-            foreach ([$cash, $card, $credit, $creditCollection] as $amount) {
+            foreach ([$cash, $card, $credit, $cashCollection, $cardCollection] as $amount) {
                 if ($amount < 0) throw new RuntimeException('Ödeme tutarları negatif olamaz.');
             }
-            if (($cash + $card + $credit + $creditCollection) <= 0) {
+            if (($cash + $card + $credit + $cashCollection + $cardCollection) <= 0) {
                 throw new RuntimeException('En az bir ödeme alanına sıfırdan büyük tutar girmelisin.');
             }
 
             $dailyTotal = magaza_odeme_dagilim_gunluk_toplam($cash, $card, $credit);
+            $legacyCollectionTotal = round($cashCollection + $cardCollection, 2);
             $userId = current_user()['id'] ?? null;
 
             $stmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1');
@@ -74,28 +84,29 @@ try {
 
             if ($old) {
                 $id = (int)$old['id'];
-                db()->prepare('UPDATE store_daily_payment_breakdown SET cash_amount=?, card_amount=?, credit_amount=?, credit_collection_amount=?, daily_total=?, updated_by=?, updated_at=? WHERE id=?')
-                    ->execute([$cash, $card, $credit, $creditCollection, $dailyTotal, $userId, now(), $id]);
+                db()->prepare('UPDATE store_daily_payment_breakdown SET cash_amount=?, card_amount=?, credit_amount=?, credit_collection_amount=?, cash_credit_collection_amount=?, card_credit_collection_amount=?, daily_total=?, updated_by=?, updated_at=? WHERE id=?')
+                    ->execute([$cash, $card, $credit, $legacyCollectionTotal, $cashCollection, $cardCollection, $dailyTotal, $userId, now(), $id]);
 
                 $newStmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
                 $newStmt->execute([$id]);
                 $saved = $newStmt->fetch() ?: [];
-                log_action('Mağaza günlük ödeme dağılımı güncellendi', $saleDate . ' · ' . number_format($dailyTotal, 2, ',', '.') . ' TL');
+                log_action('Mağaza günlük ödeme dağılımı güncellendi', $saleDate . ' · ' . number_format($dailyTotal, 2, ',', '.') . ' TL satış');
                 audit_action('magaza_odeme_dagilimi', $id, 'guncellendi', $old, $saved, $saleDate);
             } else {
                 db()->prepare('INSERT INTO store_daily_payment_breakdown
-                    (sale_date, cash_amount, card_amount, credit_amount, credit_collection_amount, daily_total, created_by, created_at, updated_by, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([$saleDate, $cash, $card, $credit, $creditCollection, $dailyTotal, $userId, now(), $userId, now()]);
+                    (sale_date, cash_amount, card_amount, credit_amount, credit_collection_amount, cash_credit_collection_amount, card_credit_collection_amount, daily_total, created_by, created_at, updated_by, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$saleDate, $cash, $card, $credit, $legacyCollectionTotal, $cashCollection, $cardCollection, $dailyTotal, $userId, now(), $userId, now()]);
                 $id = (int)db()->lastInsertId();
 
-                log_action('Mağaza günlük ödeme dağılımı eklendi', $saleDate . ' · ' . number_format($dailyTotal, 2, ',', '.') . ' TL');
+                log_action('Mağaza günlük ödeme dağılımı eklendi', $saleDate . ' · ' . number_format($dailyTotal, 2, ',', '.') . ' TL satış');
                 audit_action('magaza_odeme_dagilimi', $id, 'eklendi', null, [
                     'sale_date' => $saleDate,
                     'cash_amount' => $cash,
                     'card_amount' => $card,
                     'credit_amount' => $credit,
-                    'credit_collection_amount' => $creditCollection,
+                    'cash_credit_collection_amount' => $cashCollection,
+                    'card_credit_collection_amount' => $cardCollection,
                     'daily_total' => $dailyTotal,
                 ], $saleDate);
             }
