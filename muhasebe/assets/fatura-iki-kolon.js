@@ -55,8 +55,6 @@
     try{sessionStorage.setItem('faturaAktifYon',direction);}catch(error){}
   }
 
-  // Eski yön filtresiyle açılmış sayfada yalnızca tek yön yüklenmiş olabilir.
-  // Sekmelerin ikisinin de aynı sayfada çalışması için yön parametresini bir kez temizle.
   if((serverDirection==='giden'||serverDirection==='gelen')&&editId<=0){
     saveActiveDirection(serverDirection);
     params.delete('direction');
@@ -126,6 +124,7 @@
     var table=qs('.table-wrap table',listCard);
     if(!table||!table.tBodies.length) return;
     var tbody=table.tBodies[0];
+    qsa(':scope > tr.empty',tbody).forEach(function(row){row.remove();});
     var headers=qsa('thead th',table);
     var directionIndex=headerIndex(headers,['yon']);
     var amountIndex=headerIndex(headers,['matrah','kdv']);
@@ -160,9 +159,6 @@
     tfoot.className='fatura-direction-total-foot';
     tfoot.innerHTML='<tr class="fatura-direction-total-row"><td colspan="'+columnCount+'"><div class="fatura-direction-totals"><span><small>Matrah toplamı</small><strong data-fatura-total-subtotal>0,00 TL</strong></span><span><small>KDV toplamı</small><strong data-fatura-total-vat>0,00 TL</strong></span><span><small>Genel toplam</small><strong data-fatura-total-grand>0,00 TL</strong></span></div></td></tr>';
 
-    function removeGeneratedEmpty(){
-      qsa('tr[data-fatura-tab-empty]',tbody).forEach(function(row){row.remove();});
-    }
     function realRows(){
       return qsa(':scope > tr',tbody).filter(function(row){
         return !row.classList.contains('empty')&&!row.hasAttribute('data-fatura-tab-empty');
@@ -192,7 +188,6 @@
       return realRows().filter(function(row){return rowDirection(row,directionIndex)===direction;}).length;
     }
     function render(){
-      removeGeneratedEmpty();
       var result=calculate(selected);
       qsa('[data-fatura-direction]',tabs).forEach(function(button){
         var direction=button.getAttribute('data-fatura-direction');
@@ -208,11 +203,16 @@
       qs('[data-fatura-total-vat]',tfoot).textContent=money(result.vat);
       qs('[data-fatura-total-grand]',tfoot).textContent=money(result.grand);
 
+      var generatedEmpty=qs('tr[data-fatura-tab-empty]',tbody);
       if(result.count===0){
-        var empty=document.createElement('tr');
-        empty.setAttribute('data-fatura-tab-empty','1');
-        empty.innerHTML='<td colspan="'+columnCount+'" class="empty">Bu dönemde '+(selected==='giden'?'giden':'gelen')+' fatura bulunamadı.</td>';
-        tbody.appendChild(empty);
+        if(!generatedEmpty){
+          var empty=document.createElement('tr');
+          empty.setAttribute('data-fatura-tab-empty','1');
+          empty.innerHTML='<td colspan="'+columnCount+'" class="empty">Bu dönemde '+(selected==='giden'?'giden':'gelen')+' fatura bulunamadı.</td>';
+          tbody.appendChild(empty);
+        }
+      }else if(generatedEmpty){
+        generatedEmpty.remove();
       }
 
       var headCount=qs('.card-head > span',listCard);
