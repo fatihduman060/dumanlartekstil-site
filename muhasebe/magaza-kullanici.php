@@ -38,12 +38,13 @@ function require_store_sales_write(): void
 $currentStoreScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
 if (is_logged_in() && is_store_sales_user()) {
     $allowedStoreScripts = [
+        'magaza.php',
         'faturalar.php',
         'magaza-gunluk-satis.php',
         'logout.php',
         'index.php',
     ];
     if (!in_array($currentStoreScript, $allowedStoreScripts, true)) {
-        redirect('faturalar.php');
+        redirect('magaza.php');
     }
 }
