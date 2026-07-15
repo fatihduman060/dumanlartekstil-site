@@ -10,7 +10,7 @@ page_header('Mağaza', 'magaza');
 <section class="dashboard-section magaza-page-shell">
   <div class="dashboard-section-head">
     <div><span>Mağaza</span><h3>Günlük satışlar</h3></div>
-    <p>Fabrika satış mağazasının günlük KDV dâhil satışlarını bu bölümden kaydet ve takip et.</p>
+    <p>Günlük ödeme dağılımını ve KDV dâhil mağaza satışlarını aynı ay içinde ayrı tablolar olarak kaydet ve takip et.</p>
   </div>
 
   <form class="filterbar magaza-period-filter" method="get" action="magaza.php">
@@ -18,6 +18,7 @@ page_header('Mağaza', 'magaza');
     <button class="btn btn-secondary" type="submit">Ayı göster</button>
   </form>
 
+  <div class="magaza-page-body" data-magaza-odeme-dagilimi-body></div>
   <div class="magaza-page-body" data-fatura-alt-kontrol-body></div>
 </section>
 
@@ -29,6 +30,7 @@ page_header('Mağaza', 'magaza');
 @media(max-width:700px){.magaza-period-filter{align-items:stretch}}
 </style>
 <?php if (!is_store_sales_user()): ?>
+<script src="assets/magaza-odeme-dagilimi.js?v=1"></script>
 <script src="assets/magaza-gunluk-satis.js?v=3"></script>
 <?php endif; ?>
 <?php page_footer(); ?>
