@@ -29,7 +29,7 @@ page_header('Mağaza', 'magaza');
 .magaza-page-body{display:grid;gap:14px}
 @media(max-width:700px){.magaza-period-filter{align-items:stretch}}
 </style>
-<script src="assets/magaza-odeme-dagilimi.js?v=1"></script>
+<script src="assets/magaza-odeme-dagilimi.js?v=2"></script>
 <?php if (!is_store_sales_user()): ?>
 <script src="assets/magaza-gunluk-satis.js?v=3"></script>
 <?php endif; ?>
