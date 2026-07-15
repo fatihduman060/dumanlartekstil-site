@@ -89,7 +89,7 @@
   function loadSplitView(){
     if(document.querySelector('script[data-fatura-iki-kolon-loader]')) return;
     var script=document.createElement('script');
-    script.src='assets/fatura-iki-kolon.js?v=2';
+    script.src='assets/fatura-iki-kolon.js?v=3';
     script.setAttribute('data-fatura-iki-kolon-loader','1');
     document.body.appendChild(script);
   }
