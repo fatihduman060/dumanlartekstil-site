@@ -20,6 +20,7 @@ function magaza_odeme_dagilim_tablosunu_hazirla(): void
         credit_collection_amount REAL NOT NULL DEFAULT 0,
         cash_credit_collection_amount REAL NOT NULL DEFAULT 0,
         card_credit_collection_amount REAL NOT NULL DEFAULT 0,
+        cash_change_left_amount REAL NOT NULL DEFAULT 0,
         daily_total REAL NOT NULL DEFAULT 0,
         created_by INTEGER,
         created_at TEXT,
@@ -32,6 +33,9 @@ function magaza_odeme_dagilim_tablosunu_hazirla(): void
     }
     if (!magaza_odeme_dagilim_kolonu_var_mi('card_credit_collection_amount')) {
         db()->exec("ALTER TABLE store_daily_payment_breakdown ADD COLUMN card_credit_collection_amount REAL NOT NULL DEFAULT 0");
+    }
+    if (!magaza_odeme_dagilim_kolonu_var_mi('cash_change_left_amount')) {
+        db()->exec("ALTER TABLE store_daily_payment_breakdown ADD COLUMN cash_change_left_amount REAL NOT NULL DEFAULT 0");
     }
 
     db()->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_store_daily_payment_breakdown_date ON store_daily_payment_breakdown(sale_date)");
@@ -57,8 +61,29 @@ function magaza_odeme_dagilim_period(string $value): string
 
 function magaza_odeme_dagilim_gunluk_toplam(float $cash, float $card, float $credit): float
 {
-    // Tahsilatlar geçmiş satışın tahsilatıdır; bugünün satış toplamına yeniden eklenmez.
+    // Tahsilatlar ve kasada bırakılan bozuk para geçmiş/ertesi gün bilgisidir; satış toplamına eklenmez.
     return round($cash + $card + $credit, 2);
+}
+
+function magaza_odeme_dagilim_onceki_kasa_parasi(string $saleDate): array
+{
+    magaza_odeme_dagilim_tablosunu_hazirla();
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) {
+        return ['sale_date' => '', 'amount' => 0.0];
+    }
+
+    $stmt = db()->prepare("SELECT sale_date, cash_change_left_amount
+        FROM store_daily_payment_breakdown
+        WHERE sale_date < ?
+        ORDER BY sale_date DESC, id DESC
+        LIMIT 1");
+    $stmt->execute([$saleDate]);
+    $row = $stmt->fetch() ?: [];
+
+    return [
+        'sale_date' => (string)($row['sale_date'] ?? ''),
+        'amount' => (float)($row['cash_change_left_amount'] ?? 0),
+    ];
 }
 
 function magaza_odeme_dagilim_ozeti(string $period): array
