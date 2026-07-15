@@ -1,5 +1,5 @@
 (function(){
-  if(!/\/faturalar\.php$/i.test(location.pathname)) return;
+  if(!/\/(?:faturalar|magaza)\.php$/i.test(location.pathname)) return;
 
   var state={period:'',csrf:'',canWrite:false};
 
@@ -177,7 +177,7 @@
             +'<td>'+(item.note?esc(item.note):'<span class="muted">-</span>')+'</td>'
             +'<td class="magaza-row-actions">'+(state.canWrite?'<button type="button" data-magaza-edit>Düzenle</button><button type="button" data-magaza-delete="'+item.id+'">Sil</button>':'')+'</td>'
             +'</tr>';
-        }).join('')+'</tbody></table></div>';
+        }).join('')+'</tbody><tfoot><tr class="magaza-total-row"><td><strong>GENEL TOPLAM</strong></td><td><strong>'+money(summary.gross)+'</strong></td><td><strong>'+money(summary.subtotal)+'</strong></td><td><strong>'+money(summary.vat)+'</strong></td><td colspan="2"></td></tr></tfoot></table></div>';
     }
     setStatus((summary.count||0)+' gün · '+money(summary.gross)+' satış · '+money(summary.vat)+' KDV','success');
     updatePreview();
@@ -248,7 +248,7 @@
     +'.magaza-satis-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.magaza-satis-head>div{display:grid;gap:4px}.magaza-satis-head strong{font-size:15px}.magaza-satis-head small{font-size:10px;color:var(--muted)}.magaza-satis-head>span{font-size:10px;color:var(--muted)}.magaza-satis-head>span.is-success{color:var(--success)}.magaza-satis-head>span.is-danger{color:var(--danger)}'
     +'.magaza-satis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.magaza-satis-summary article{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--border);background:#fff;border-radius:12px}.magaza-satis-summary span{font-size:9px;color:var(--muted);font-weight:800}.magaza-satis-summary strong{font-size:13px}'
     +'.magaza-satis-form{display:grid;grid-template-columns:150px minmax(220px,1fr) minmax(220px,1.2fr) minmax(210px,.9fr) auto;gap:9px;align-items:end}.magaza-satis-form label{display:grid;gap:5px;font-size:10px;font-weight:800}.magaza-satis-form input{width:100%;border:1px solid var(--border);background:#fff;border-radius:10px;padding:9px 10px;user-select:text!important;-webkit-user-select:text!important}.magaza-satis-preview{font-size:10px;color:#6d5018;padding:9px 10px;border-radius:10px;background:#fff2d7}.magaza-satis-form>.btn{white-space:nowrap}'
-    +'.magaza-satis-list table{min-width:760px}.magaza-satis-list th,.magaza-satis-list td{font-size:10px;padding:8px}.magaza-row-actions{display:flex;gap:8px}.magaza-row-actions button{border:0;background:transparent;color:var(--accent);font-weight:800;cursor:pointer;padding:0}.magaza-row-actions button:last-child{color:var(--danger)}'
+    +'.magaza-satis-list table{min-width:760px}.magaza-satis-list th,.magaza-satis-list td{font-size:10px;padding:8px}.magaza-row-actions{display:flex;gap:8px}.magaza-row-actions button{border:0;background:transparent;color:var(--accent);font-weight:800;cursor:pointer;padding:0}.magaza-row-actions button:last-child{color:var(--danger)}.magaza-total-row td{border-top:2px solid #d8c6a5;background:#fff6e5;font-size:10px}.magaza-total-row strong{font-size:11px}'
     +'@media(max-width:1100px){.magaza-satis-form{grid-template-columns:1fr 1fr 1fr}.magaza-satis-preview{grid-column:1/3}.magaza-satis-summary{grid-template-columns:1fr 1fr}}'
     +'@media(max-width:650px){.magaza-satis-form{grid-template-columns:1fr}.magaza-satis-preview{grid-column:auto}.magaza-satis-summary{grid-template-columns:1fr 1fr}.magaza-satis-head{display:grid}}';
   document.head.appendChild(style);
