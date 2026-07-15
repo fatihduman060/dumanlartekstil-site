@@ -139,7 +139,7 @@ function page_header(string $title, string $active = ''): void
 
     if ($storeOnly) {
         $nav = [
-            ['faturalar', 'faturalar.php', 'Faturalar', '▤'],
+            ['magaza', 'magaza.php', 'Mağaza', '▤'],
         ];
     } else {
         $nav = [
@@ -155,6 +155,7 @@ function page_header(string $title, string $active = ''): void
 
         if (is_admin()) {
             $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
+            $nav[] = ['magaza', 'magaza.php', 'Mağaza', '▥'];
             $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
             $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
         }
@@ -197,12 +198,12 @@ function page_header(string $title, string $active = ''): void
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/muhasebe.css?v=515" />
   <link rel="stylesheet" href="assets/cek-renkleri.css?v=1" />
-  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
+  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
 </head>
 <body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ''; ?>">
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="<?php echo $storeOnly ? 'faturalar.php' : 'dashboard.php'; ?>" aria-label="Dumanlar Muhasebe">
+      <a class="brand" href="<?php echo $storeOnly ? 'magaza.php' : 'dashboard.php'; ?>" aria-label="Dumanlar Muhasebe">
         <img src="assets/dumanlar-logo-arkaplansiz.png?v=1" alt="Dumanlar" />
         <span>Muhasebe <small><?php echo e(APP_VERSION); ?></small></span>
       </a>
@@ -246,7 +247,7 @@ function page_footer(): void
   <script src="assets/muhasebe.js?v=516"></script>
   <?php if ($storeOnly): ?>
   <script src="assets/magaza-kullanici-ekrani.js?v=1"></script>
-  <script src="assets/magaza-gunluk-satis.js?v=2"></script>
+  <script src="assets/magaza-gunluk-satis.js?v=3"></script>
   <?php else: ?>
   <script src="assets/super-admin-role.js?v=1"></script>
   <script src="assets/muhasebe-polish.js?v=1"></script>
@@ -270,7 +271,7 @@ function page_footer(): void
   <script src="assets/fatura-yon-sec.js?v=1"></script>
   <script src="assets/fatura-turleri.js?v=3"></script>
   <script src="assets/fatura-tur-otomatik.js?v=3"></script>
-  <script src="assets/fatura-iade-turu.js?v=7"></script>
+  <script src="assets/fatura-iade-turu.js?v=8"></script>
   <script src="assets/cari-hareket-kaynak.js?v=6"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
