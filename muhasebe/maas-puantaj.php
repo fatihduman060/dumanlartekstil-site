@@ -28,6 +28,14 @@ function maas_puantaj_response_payload(int $employeeId, string $period): array
     ];
     [$start, $end] = maas_puantaj_period_bounds($period);
 
+    $defaultPaymentDate = maas_aylik_kayit_default_payment_date($period);
+    $defaultAccountId = maas_aylik_kayit_default_account_id();
+    if ($employee) {
+        if (!$payroll) $payroll = [];
+        if (empty($payroll['payment_date'])) $payroll['payment_date'] = $record['payment_date'] ?? $defaultPaymentDate;
+        if (empty($payroll['account_id'])) $payroll['account_id'] = $record['account_id'] ?? $defaultAccountId;
+    }
+
     return [
         'ok' => true,
         'period' => $period,
@@ -53,6 +61,8 @@ function maas_puantaj_response_payload(int $employeeId, string $period): array
         'summary_source' => $record && (int)($record['attendance_override_enabled'] ?? 0) === 1 ? 'aylik_kayit' : 'gunluk_puantaj',
         'salary_basis' => $salaryBasis,
         'payroll' => $payroll,
+        'default_payment_date' => $defaultPaymentDate,
+        'default_account_id' => $defaultAccountId,
     ];
 }
 
@@ -105,7 +115,7 @@ try {
             $autoPayroll = null;
             $warning = null;
             try {
-                $syncInput = [];
+                $syncInput = ['use_salary_payment_defaults' => 1];
                 $existingPayroll = maas_puantaj_payroll($employeeId, $period);
                 $existingRecord = maas_aylik_kayit_record($employeeId, $period);
                 if ($existingPayroll) {
