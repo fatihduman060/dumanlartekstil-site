@@ -57,6 +57,7 @@ try {
         'hourly_rate' => round(($baseSalary / 30) / 9, 2),
         'absent_days' => (float)($record['absent_days'] ?? $payroll['absent_days'] ?? 0),
         'missing_hours' => (float)($record['missing_hours'] ?? $payroll['missing_hours'] ?? 0),
+        'garnishment_amount' => (float)($record['garnishment_amount'] ?? $payroll['garnishment_amount'] ?? 0),
         'manual_deduction_amount' => $manualDeduction,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
