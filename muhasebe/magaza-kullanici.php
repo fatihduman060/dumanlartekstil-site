@@ -153,6 +153,7 @@ if (is_logged_in() && is_salary_only_user()) {
         'maas-puantaj.php',
         'maas-puantaj-yazdir.php',
         'maas-puantaj-toplu-excel.php',
+        'maas-puantaj-toplu-liste.php',
         'maas-bordro-yazdir.php',
         'maas-excel-aktar.php',
         'maas-aylik-kayit.php',
