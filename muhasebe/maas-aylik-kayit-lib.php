@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/maas-avans-lib.php';
 
 function maas_aylik_kayit_db_ensure(): void
 {
@@ -11,6 +12,7 @@ function maas_aylik_kayit_db_ensure(): void
     ensure_column($pdo, 'salary_records', 'attendance_override_enabled', 'INTEGER NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_payroll_details', 'garnishment_amount', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_payroll_details', 'source_mode', "TEXT NOT NULL DEFAULT 'puantaj'");
+    maas_avans_db_ensure();
 }
 
 function maas_aylik_kayit_record(int $employeeId, string $period): ?array
@@ -83,7 +85,11 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
     $manualDeductionRaw = $input['deduction_amount'] ?? $input['other_deduction_amount'] ?? $existingPayroll['other_deduction_amount'] ?? $existingRecord['manual_deduction_amount'] ?? 0;
     $manualDeduction = max(0, decimal_from_input($manualDeductionRaw));
     $garnishmentAmount = max(0, decimal_from_input($input['garnishment_amount'] ?? $existingPayroll['garnishment_amount'] ?? $existingRecord['garnishment_amount'] ?? 0));
-    $advanceAmount = max(0, decimal_from_input($input['advance_amount'] ?? $existingPayroll['advance_amount'] ?? $existingRecord['advance_amount'] ?? 0));
+
+    // Avans artık maaş formundan elle alınmaz. Seçili personelin dönem içindeki
+    // tarihli avans hareketlerinin toplamı bordroya otomatik yansır.
+    $advanceAmount = maas_avans_period_total($employeeId, $period);
+
     $overtimeAmount = max(0, decimal_from_input($input['overtime_amount'] ?? $existingPayroll['overtime_amount'] ?? 0));
     $bonusAmount = max(0, decimal_from_input($input['bonus_amount'] ?? $existingPayroll['bonus_amount'] ?? 0));
     $otherAddition = max(0, decimal_from_input($input['other_addition_amount'] ?? $existingPayroll['other_addition_amount'] ?? 0));
@@ -161,6 +167,7 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
             'absent_days' => $absentDays,
             'missing_hours' => $missingHours,
             'garnishment_amount' => $garnishmentAmount,
+            'advance_amount' => $advanceAmount,
             'daily_rate' => round($dailyRate, 2),
             'hourly_rate' => round($hourlyRate, 2),
             'net_payable' => $netPayable,
@@ -185,6 +192,7 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
         'hour_deduction_amount' => $hourDeduction,
         'garnishment_amount' => $garnishmentAmount,
         'manual_deduction_amount' => $manualDeduction,
+        'advance_amount' => $advanceAmount,
         'total_deduction_amount' => $totalDeduction,
         'net_payable' => $netPayable,
         'paid_amount' => $paidAmount,
