@@ -11,6 +11,53 @@
     return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
   }
 
+  function key(value){
+    return String(value||'').toLocaleLowerCase('tr-TR')
+      .replace(/ı/g,'i').replace(/ğ/g,'g').replace(/ü/g,'u')
+      .replace(/ş/g,'s').replace(/ö/g,'o').replace(/ç/g,'c')
+      .replace(/[^a-z0-9]+/g,'');
+  }
+
+  function paymentDateForPeriod(period){
+    if(!/^\d{4}-\d{2}$/.test(period||'')) period=currentPeriod();
+    var parts=period.split('-');
+    var date=new Date(Number(parts[0]),Number(parts[1]),5);
+    return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-05';
+  }
+
+  function garantiDumanlarOption(select){
+    if(!select) return null;
+    var options=Array.prototype.slice.call(select.options||[]);
+    return options.find(function(option){
+      var optionKey=key(option.textContent);
+      return optionKey.indexOf('garanti')>-1&&optionKey.indexOf('dumanlar')>-1;
+    })||null;
+  }
+
+  function applyMonthlyPaymentDefaults(force){
+    var action=document.querySelector('form input[name="action"][value="save_salary"]');
+    var form=action&&action.closest('form');
+    if(!form) return;
+
+    var idField=form.querySelector('input[name="id"]');
+    var editing=Number(idField&&idField.value||0)>0;
+    if(editing&&!force) return;
+
+    var period=form.querySelector('[name="period"]');
+    var paymentDate=form.querySelector('[name="payment_date"]');
+    var account=form.querySelector('[name="account_id"]');
+    var selectedPeriod=period&&period.value||currentPeriod();
+
+    if(paymentDate&&(force||!paymentDate.value||!editing)){
+      paymentDate.value=paymentDateForPeriod(selectedPeriod);
+    }
+
+    if(account&&(force||!account.value||!editing)){
+      var garanti=garantiDumanlarOption(account);
+      if(garanti) account.value=garanti.value;
+    }
+  }
+
   function updateLink(){
     var link=document.getElementById('attendanceBulkExcel');
     if(!link) return;
@@ -93,6 +140,8 @@
 
   function init(){
     ensureButtons();
+    applyMonthlyPaymentDefaults(false);
+
     document.addEventListener('click',function(event){
       if(event.target.id==='fillSaturdays'){
         event.preventDefault();
@@ -102,9 +151,14 @@
       if(event.target.closest('[data-salary-tab="puantaj"]')) setTimeout(ensureButtons,80);
       if(event.target.id==='attendanceReload') setTimeout(function(){updateLink();ensureSaturdayButton();},80);
     });
+
     document.addEventListener('change',function(event){
       if(event.target.id==='attendancePeriod') updateLink();
+      if(event.target.matches('form [name="period"]')&&event.target.closest('form')&&event.target.closest('form').querySelector('input[name="action"][value="save_salary"]')){
+        applyMonthlyPaymentDefaults(true);
+      }
     });
+
     var observer=new MutationObserver(function(){ensureButtons();});
     observer.observe(document.body,{childList:true,subtree:true});
   }
