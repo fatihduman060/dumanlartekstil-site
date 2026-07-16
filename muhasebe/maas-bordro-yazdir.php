@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/magaza-kullanici.php';
 require_once __DIR__ . '/maas-puantaj-lib.php';
-require_admin();
+require_salary_access();
 maas_puantaj_db_ensure();
 
 $payrollId = (int)($_GET['id'] ?? 0);
@@ -16,7 +17,9 @@ $stmt->execute([$payrollId]);
 $row = $stmt->fetch();
 if (!$row) { http_response_code(404); exit('Bordro bulunamadı.'); }
 
-$totalDeductions = (float)$row['absence_deduction_amount'] + (float)$row['other_deduction_amount'] + (float)$row['advance_amount'];
+$dailyRate = (float)$row['base_salary'] / 30;
+$hourlyRate = $dailyRate / 9;
+$totalDeductions = (float)$row['absence_deduction_amount'] + (float)($row['hour_deduction_amount'] ?? 0) + (float)$row['other_deduction_amount'] + (float)$row['advance_amount'];
 $statusLabel = ['bekliyor'=>'Bekliyor','kismi'=>'Kısmi ödendi','odendi'=>'Ödendi'][$row['status'] ?? ''] ?? ($row['status'] ?? '-');
 ?>
 <!doctype html>
@@ -26,7 +29,7 @@ $statusLabel = ['bekliyor'=>'Bekliyor','kismi'=>'Kısmi ödendi','odendi'=>'Öde
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?php echo e($row['full_name']); ?> - Bordro <?php echo e(month_label($row['period'])); ?></title>
 <style>
-@page{size:A4 portrait;margin:13mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17251d;margin:0;font-size:12px}.toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}.toolbar button{border:0;border-radius:8px;padding:9px 14px;background:#16482e;color:#fff;font-weight:700}.head{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;border-bottom:2px solid #16482e;padding-bottom:12px}.head h1{margin:0 0 5px;font-size:24px}.period{font-size:19px;font-weight:700;color:#16482e}.employee{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin:15px 0;padding:12px;border:1px solid #ced9d0;border-radius:9px}.employee div{display:grid;grid-template-columns:120px 1fr}.employee span{color:#617067}.columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.box{border:1px solid #cbd5cd;border-radius:9px;overflow:hidden}.box h2{margin:0;padding:10px 12px;background:#edf4ef;color:#16482e;font-size:14px}.row{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;border-top:1px solid #e3e9e4}.row:first-of-type{border-top:0}.row.total{background:#f8f1e5;font-size:14px;font-weight:700}.net{margin-top:14px;padding:17px;border-radius:10px;background:#16482e;color:#fff;display:flex;justify-content:space-between;align-items:center}.net span{font-size:13px}.net strong{font-size:24px}.payment{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px}.payment div{border:1px solid #cbd5cd;border-radius:8px;padding:10px}.payment span{display:block;color:#617067;font-size:10px}.payment b{display:block;margin-top:4px}.note{margin-top:12px;border:1px solid #cbd5cd;border-radius:8px;padding:10px;min-height:48px}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:14px}.summary div{padding:9px;border:1px solid #cbd5cd;border-radius:8px}.summary span{display:block;color:#617067;font-size:10px}.summary b{display:block;margin-top:4px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:48px;text-align:center}.signatures div{padding-top:32px;border-top:1px solid #555}@media print{.toolbar{display:none}}
+@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17251d;margin:0;font-size:11.5px}.toolbar{display:flex;justify-content:flex-end;margin-bottom:10px}.toolbar button{border:0;border-radius:8px;padding:9px 14px;background:#16482e;color:#fff;font-weight:700}.head{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;border-bottom:2px solid #16482e;padding-bottom:10px}.head h1{margin:0 0 5px;font-size:23px}.period{font-size:18px;font-weight:700;color:#16482e}.employee{display:grid;grid-template-columns:1fr 1fr;gap:7px 18px;margin:13px 0;padding:11px;border:1px solid #ced9d0;border-radius:9px}.employee div{display:grid;grid-template-columns:115px 1fr}.employee span{color:#617067}.rates{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.rates div{padding:9px;border:1px solid #cbd5cd;border-radius:8px;background:#f7faf8}.rates span{display:block;color:#617067;font-size:9px}.rates b{display:block;margin-top:3px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #cbd5cd;border-radius:9px;overflow:hidden}.box h2{margin:0;padding:9px 11px;background:#edf4ef;color:#16482e;font-size:14px}.row{display:flex;justify-content:space-between;gap:12px;padding:8px 11px;border-top:1px solid #e3e9e4}.row:first-of-type{border-top:0}.row.total{background:#f8f1e5;font-size:14px;font-weight:700}.net{margin-top:12px;padding:15px;border-radius:10px;background:#16482e;color:#fff;display:flex;justify-content:space-between;align-items:center}.net span{font-size:13px}.net strong{font-size:23px}.payment{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:11px}.payment div{border:1px solid #cbd5cd;border-radius:8px;padding:9px}.payment span{display:block;color:#617067;font-size:9px}.payment b{display:block;margin-top:4px}.note{margin-top:11px;border:1px solid #cbd5cd;border-radius:8px;padding:9px;min-height:44px}.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:12px}.summary div{padding:8px;border:1px solid #cbd5cd;border-radius:8px}.summary span{display:block;color:#617067;font-size:9px}.summary b{display:block;margin-top:4px}.summary .primary{background:#16482e;color:#fff}.summary .primary span,.summary .primary b{color:#fff}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:42px;text-align:center}.signatures div{padding-top:28px;border-top:1px solid #555}@media print{.toolbar{display:none}}
 </style>
 </head>
 <body>
@@ -38,6 +41,11 @@ $statusLabel = ['bekliyor'=>'Bekliyor','kismi'=>'Kısmi ödendi','odendi'=>'Öde
   <div><span>Telefon</span><b><?php echo e($row['phone'] ?: '-'); ?></b></div>
   <div><span>Puantaj dönemi</span><b><?php echo e(month_label($row['period'])); ?></b></div>
 </section>
+<div class="rates">
+  <div><span>Aylık maaş</span><b><?php echo e(money($row['base_salary'])); ?></b></div>
+  <div><span>Günlük yevmiye (maaş ÷ 30)</span><b><?php echo e(money($dailyRate)); ?></b></div>
+  <div><span>Saatlik ücret (yevmiye ÷ 9)</span><b><?php echo e(money($hourlyRate)); ?></b></div>
+</div>
 <div class="columns">
   <section class="box"><h2>Kazançlar</h2>
     <div class="row"><span>Aylık ücret</span><b><?php echo e(money($row['base_salary'])); ?></b></div>
@@ -47,7 +55,8 @@ $statusLabel = ['bekliyor'=>'Bekliyor','kismi'=>'Kısmi ödendi','odendi'=>'Öde
     <div class="row total"><span>Brüt hakediş</span><b><?php echo e(money($row['gross_earning'])); ?></b></div>
   </section>
   <section class="box"><h2>Kesintiler</h2>
-    <div class="row"><span>Eksik gün kesintisi</span><b><?php echo e(money($row['absence_deduction_amount'])); ?></b></div>
+    <div class="row"><span>Devamsızlık kesintisi</span><b><?php echo e(money($row['absence_deduction_amount'])); ?></b></div>
+    <div class="row"><span>Eksik saat kesintisi</span><b><?php echo e(money($row['hour_deduction_amount'] ?? 0)); ?></b></div>
     <div class="row"><span>Diğer kesinti</span><b><?php echo e(money($row['other_deduction_amount'])); ?></b></div>
     <div class="row"><span>Avans</span><b><?php echo e(money($row['advance_amount'])); ?></b></div>
     <div class="row total"><span>Toplam kesinti</span><b><?php echo e(money($totalDeductions)); ?></b></div>
@@ -63,10 +72,11 @@ $statusLabel = ['bekliyor'=>'Bekliyor','kismi'=>'Kısmi ödendi','odendi'=>'Öde
   <div><span>Fazla mesai süresi</span><b><?php echo e(number_format((float)$row['overtime_hours'],1,',','.')); ?> saat</b></div>
 </div>
 <div class="summary">
-  <div><span>Çalıştı</span><b><?php echo e($row['work_days']); ?> gün</b></div>
-  <div><span>İzin / Rapor</span><b><?php echo e((float)$row['paid_leave_days'] + (float)$row['report_days']); ?> gün</b></div>
-  <div><span>Gelmedi</span><b><?php echo e($row['absent_days']); ?> gün</b></div>
-  <div><span>Tatil</span><b><?php echo e((float)$row['weekly_off_days'] + (float)$row['holiday_days']); ?> gün</b></div>
+  <div class="primary"><span>Bordro günü</span><b><?php echo e(number_format((float)($row['paid_days'] ?? (30-(float)$row['absent_days'])),0,',','.')); ?> gün</b></div>
+  <div><span>Devamsızlık</span><b><?php echo e(number_format((float)$row['absent_days'],0,',','.')); ?> gün</b></div>
+  <div><span>Eksik / geç giriş</span><b><?php echo e(number_format((float)($row['missing_hours'] ?? 0),1,',','.')); ?> saat</b></div>
+  <div><span>İzin / Rapor</span><b><?php echo e(number_format((float)$row['paid_leave_days'] + (float)$row['report_days'],0,',','.')); ?> gün</b></div>
+  <div><span>Tatil</span><b><?php echo e(number_format((float)$row['weekly_off_days'] + (float)$row['holiday_days'],0,',','.')); ?> gün</b></div>
 </div>
 <div class="note"><strong>Açıklama:</strong> <?php echo nl2br(e($row['note'] ?: '-')); ?></div>
 <div class="signatures"><div>Personel imzası</div><div>İşveren / Yetkili</div></div>
