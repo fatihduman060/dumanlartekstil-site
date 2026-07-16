@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/magaza-kullanici.php';
 require_once __DIR__ . '/maas-puantaj-lib.php';
-require_admin();
+require_salary_access();
 maas_puantaj_db_ensure();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -16,10 +17,13 @@ function maas_puantaj_response_payload(int $employeeId, string $period): array
     $employee = maas_puantaj_employee($employeeId);
     $entries = $employee ? maas_puantaj_entries($employeeId, $period) : [];
     $summary = $employee ? maas_puantaj_summary($employeeId, $period) : [
-        'recorded_days'=>0,'work_days'=>0,'paid_leave_days'=>0,'report_days'=>0,
-        'absent_days'=>0,'weekly_off_days'=>0,'holiday_days'=>0,'overtime_hours'=>0,
+        'recorded_days'=>0,'paid_days'=>30,'work_days'=>0,'paid_leave_days'=>0,'report_days'=>0,
+        'absent_days'=>0,'weekly_off_days'=>0,'holiday_days'=>0,'overtime_hours'=>0,'missing_hours'=>0,
     ];
     $payroll = $employee ? maas_puantaj_payroll($employeeId, $period) : null;
+    $salaryBasis = $employee ? maas_puantaj_salary_basis($employeeId, $period) : [
+        'base_salary'=>0,'daily_rate'=>0,'hourly_rate'=>0,'source'=>'personel_karti',
+    ];
     [$start, $end] = maas_puantaj_period_bounds($period);
 
     return [
@@ -29,6 +33,8 @@ function maas_puantaj_response_payload(int $employeeId, string $period): array
         'period_start' => $start,
         'period_end' => $end,
         'days_in_month' => (int)date('t', strtotime($start)),
+        'salary_day_basis' => 30,
+        'daily_work_hours' => 9,
         'employee_id' => $employeeId,
         'employee' => $employee,
         'employees' => $employees,
@@ -42,6 +48,7 @@ function maas_puantaj_response_payload(int $employeeId, string $period): array
         'statuses' => maas_puantaj_statuses(),
         'entries' => $entries,
         'summary' => $summary,
+        'salary_basis' => $salaryBasis,
         'payroll' => $payroll,
     ];
 }
@@ -70,7 +77,8 @@ try {
                 $pdo->prepare('DELETE FROM salary_attendance WHERE employee_id=? AND work_date BETWEEN ? AND ?')
                     ->execute([$employeeId, $start, $end]);
 
-                $insert = $pdo->prepare('INSERT INTO salary_attendance (employee_id, work_date, status, overtime_hours, note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+                $insert = $pdo->prepare('INSERT INTO salary_attendance (employee_id, work_date, status, overtime_hours, missing_hours, note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $savedCount = 0;
                 foreach ($decoded as $date => $entry) {
                     if (!is_array($entry)) continue;
                     $date = (string)$date;
@@ -78,17 +86,31 @@ try {
                     $status = (string)($entry['status'] ?? '');
                     if (!isset($statuses[$status])) continue;
                     $overtime = max(0, min(24, decimal_from_input($entry['overtime_hours'] ?? 0)));
+                    $missingHours = $status === 'gelmedi' ? 0 : max(0, min(9, decimal_from_input($entry['missing_hours'] ?? 0)));
                     $note = trim((string)($entry['note'] ?? ''));
-                    $insert->execute([$employeeId, $date, $status, $overtime, $note, current_user()['id'] ?? null, now(), now()]);
+                    $insert->execute([$employeeId, $date, $status, $overtime, $missingHours, $note, current_user()['id'] ?? null, now(), now()]);
+                    $savedCount++;
                 }
-                audit_action('maas_puantaj', $employeeId, 'guncellendi', null, ['period'=>$period, 'entry_count'=>count($decoded)], $period);
+                audit_action('maas_puantaj', $employeeId, 'guncellendi', null, ['period'=>$period, 'entry_count'=>$savedCount], $period);
                 $pdo->commit();
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $e;
             }
 
-            echo json_encode(maas_puantaj_response_payload($employeeId, $period), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $autoPayroll = null;
+            $warning = null;
+            try {
+                $autoPayroll = maas_puantaj_auto_sync_payroll($employeeId, $period);
+                if (!empty($autoPayroll['skipped'])) $warning = (string)($autoPayroll['reason'] ?? 'Bordro otomatik oluşturulamadı.');
+            } catch (Throwable $e) {
+                $warning = 'Puantaj kaydedildi ancak bordro otomatik güncellenemedi: ' . $e->getMessage();
+            }
+
+            $payload = maas_puantaj_response_payload($employeeId, $period);
+            $payload['auto_payroll'] = $autoPayroll;
+            if ($warning) $payload['warning'] = $warning;
+            echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
         }
 
