@@ -105,7 +105,19 @@ try {
             $autoPayroll = null;
             $warning = null;
             try {
-                $autoPayroll = maas_aylik_kayit_save($employeeId, $period, [], false);
+                $syncInput = [];
+                $existingPayroll = maas_puantaj_payroll($employeeId, $period);
+                $existingRecord = maas_aylik_kayit_record($employeeId, $period);
+                if ($existingPayroll) {
+                    $syncInput['other_deduction_amount'] = (float)($existingPayroll['other_deduction_amount'] ?? 0);
+                } elseif ($existingRecord) {
+                    $manual = (float)($existingRecord['manual_deduction_amount'] ?? 0);
+                    if ($manual <= 0 && (float)($existingRecord['deduction_amount'] ?? 0) > 0) {
+                        $manual = (float)$existingRecord['deduction_amount'];
+                    }
+                    $syncInput['other_deduction_amount'] = $manual;
+                }
+                $autoPayroll = maas_aylik_kayit_save($employeeId, $period, $syncInput, false);
             } catch (Throwable $e) {
                 $warning = 'Puantaj kaydedildi ancak bordro otomatik güncellenemedi: ' . $e->getMessage();
             }
