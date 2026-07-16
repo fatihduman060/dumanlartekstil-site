@@ -77,7 +77,9 @@
 
   function ensureLists(){
     addStyles();
-    return !!(ensureAttendanceList()||ensurePayrollList());
+    var attendance=ensureAttendanceList();
+    var payroll=ensurePayrollList();
+    return !!(attendance||payroll);
   }
 
   function selectedEmployeeId(type){
