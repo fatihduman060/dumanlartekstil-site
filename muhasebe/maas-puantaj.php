@@ -2,8 +2,9 @@
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/magaza-kullanici.php';
 require_once __DIR__ . '/maas-puantaj-lib.php';
+require_once __DIR__ . '/maas-aylik-kayit-lib.php';
 require_salary_access();
-maas_puantaj_db_ensure();
+maas_aylik_kayit_db_ensure();
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -16,10 +17,11 @@ function maas_puantaj_response_payload(int $employeeId, string $period): array
     $accounts = accounts_for_select(true);
     $employee = maas_puantaj_employee($employeeId);
     $entries = $employee ? maas_puantaj_entries($employeeId, $period) : [];
-    $summary = $employee ? maas_puantaj_summary($employeeId, $period) : [
+    $summary = $employee ? maas_aylik_kayit_effective_summary($employeeId, $period) : [
         'recorded_days'=>0,'paid_days'=>30,'work_days'=>0,'paid_leave_days'=>0,'report_days'=>0,
         'absent_days'=>0,'weekly_off_days'=>0,'holiday_days'=>0,'overtime_hours'=>0,'missing_hours'=>0,
     ];
+    $record = $employee ? maas_aylik_kayit_record($employeeId, $period) : null;
     $payroll = $employee ? maas_puantaj_payroll($employeeId, $period) : null;
     $salaryBasis = $employee ? maas_puantaj_salary_basis($employeeId, $period) : [
         'base_salary'=>0,'daily_rate'=>0,'hourly_rate'=>0,'source'=>'personel_karti',
@@ -48,6 +50,7 @@ function maas_puantaj_response_payload(int $employeeId, string $period): array
         'statuses' => maas_puantaj_statuses(),
         'entries' => $entries,
         'summary' => $summary,
+        'summary_source' => $record && (int)($record['attendance_override_enabled'] ?? 0) === 1 ? 'aylik_kayit' : 'gunluk_puantaj',
         'salary_basis' => $salaryBasis,
         'payroll' => $payroll,
     ];
@@ -91,6 +94,7 @@ try {
                     $insert->execute([$employeeId, $date, $status, $overtime, $missingHours, $note, current_user()['id'] ?? null, now(), now()]);
                     $savedCount++;
                 }
+                maas_aylik_kayit_clear_override($employeeId, $period);
                 audit_action('maas_puantaj', $employeeId, 'guncellendi', null, ['period'=>$period, 'entry_count'=>$savedCount], $period);
                 $pdo->commit();
             } catch (Throwable $e) {
@@ -101,8 +105,7 @@ try {
             $autoPayroll = null;
             $warning = null;
             try {
-                $autoPayroll = maas_puantaj_auto_sync_payroll($employeeId, $period);
-                if (!empty($autoPayroll['skipped'])) $warning = (string)($autoPayroll['reason'] ?? 'Bordro otomatik oluşturulamadı.');
+                $autoPayroll = maas_aylik_kayit_save($employeeId, $period, [], false);
             } catch (Throwable $e) {
                 $warning = 'Puantaj kaydedildi ancak bordro otomatik güncellenemedi: ' . $e->getMessage();
             }
@@ -115,7 +118,9 @@ try {
         }
 
         if ($action === 'save_payroll') {
-            $result = maas_puantaj_save_payroll($employeeId, $period, $_POST);
+            $record = maas_aylik_kayit_record($employeeId, $period);
+            $monthlyOverride = $record && (int)($record['attendance_override_enabled'] ?? 0) === 1;
+            $result = maas_aylik_kayit_save($employeeId, $period, $_POST, $monthlyOverride);
             $payload = maas_puantaj_response_payload($employeeId, $period);
             $payload['saved_payroll'] = $result;
             echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
