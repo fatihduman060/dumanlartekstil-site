@@ -2,8 +2,9 @@
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/magaza-kullanici.php';
 require_once __DIR__ . '/maas-puantaj-lib.php';
+require_once __DIR__ . '/maas-aylik-kayit-lib.php';
 require_salary_access();
-maas_puantaj_db_ensure();
+maas_aylik_kayit_db_ensure();
 
 $employeeId = (int)($_GET['employee_id'] ?? 0);
 $period = maas_puantaj_period((string)($_GET['period'] ?? date('Y-m')));
@@ -11,8 +12,10 @@ $employee = maas_puantaj_employee($employeeId);
 if (!$employee) { http_response_code(404); exit('Personel bulunamadı.'); }
 
 $entries = maas_puantaj_entries($employeeId, $period);
-$summary = maas_puantaj_summary($employeeId, $period);
+$summary = maas_aylik_kayit_effective_summary($employeeId, $period);
 $basis = maas_puantaj_salary_basis($employeeId, $period);
+$record = maas_aylik_kayit_record($employeeId, $period);
+$monthlySummary = $record && (int)($record['attendance_override_enabled'] ?? 0) === 1;
 $statuses = maas_puantaj_statuses();
 $days = (int)date('t', strtotime($period . '-01'));
 ?>
@@ -23,7 +26,7 @@ $days = (int)date('t', strtotime($period . '-01'));
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?php echo e($employee['full_name']); ?> - Puantaj <?php echo e(month_label($period)); ?></title>
 <style>
-@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17251d;margin:0;font-size:10.5px}.toolbar{display:flex;justify-content:flex-end;margin-bottom:9px}.toolbar button{border:0;border-radius:8px;padding:9px 14px;background:#16482e;color:#fff;font-weight:700}.head{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;border-bottom:2px solid #16482e;padding-bottom:9px;margin-bottom:10px}.head h1{margin:0 0 4px;font-size:21px}.head p{margin:2px 0}.period{font-size:17px;font-weight:700;color:#16482e}.rule{margin:0 0 9px;padding:7px 9px;border:1px solid #cbd5cd;border-radius:7px;background:#f5f8f6}.table-wrap{overflow:hidden}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #aebcaf;text-align:center;padding:4px 1px}th{background:#edf4ef}.day{font-weight:700}.weekend{background:#f8f1e5}.status{font-size:14px;font-weight:900;line-height:1.05}.status small{font-size:8px;font-weight:700;white-space:nowrap}.summary{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;margin-top:10px}.summary div{border:1px solid #cbd5cd;border-radius:7px;padding:7px}.summary span{display:block;color:#5e6e63;font-size:8.5px}.summary b{display:block;margin-top:3px;font-size:13px}.summary .primary{background:#16482e;color:#fff}.summary .primary span,.summary .primary b{color:#fff}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;margin-top:22px;text-align:center}.signatures div{padding-top:25px;border-top:1px solid #666}@media print{.toolbar{display:none}}
+@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17251d;margin:0;font-size:10.5px}.toolbar{display:flex;justify-content:flex-end;margin-bottom:9px}.toolbar button{border:0;border-radius:8px;padding:9px 14px;background:#16482e;color:#fff;font-weight:700}.head{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;border-bottom:2px solid #16482e;padding-bottom:9px;margin-bottom:10px}.head h1{margin:0 0 4px;font-size:21px}.head p{margin:2px 0}.period{font-size:17px;font-weight:700;color:#16482e}.rule{margin:0 0 9px;padding:7px 9px;border:1px solid #cbd5cd;border-radius:7px;background:#f5f8f6}.monthly-note{margin:-2px 0 9px;padding:7px 9px;border:1px solid #d9bd79;border-radius:7px;background:#fff8e7;color:#725313}.table-wrap{overflow:hidden}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #aebcaf;text-align:center;padding:4px 1px}th{background:#edf4ef}.day{font-weight:700}.weekend{background:#f8f1e5}.status{font-size:14px;font-weight:900;line-height:1.05}.status small{font-size:8px;font-weight:700;white-space:nowrap}.summary{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;margin-top:10px}.summary div{border:1px solid #cbd5cd;border-radius:7px;padding:7px}.summary span{display:block;color:#5e6e63;font-size:8.5px}.summary b{display:block;margin-top:3px;font-size:13px}.summary .primary{background:#16482e;color:#fff}.summary .primary span,.summary .primary b{color:#fff}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;margin-top:22px;text-align:center}.signatures div{padding-top:25px;border-top:1px solid #666}@media print{.toolbar{display:none}}
 </style>
 </head>
 <body>
@@ -33,6 +36,7 @@ $days = (int)date('t', strtotime($period . '-01'));
   <div class="period"><?php echo e(month_label($period)); ?></div>
 </header>
 <div class="rule"><strong>Ücret hesabı:</strong> Aylık maaş ÷ 30 = günlük yevmiye · Günlük yevmiye ÷ 9 = saatlik ücret. Bordro günü: 30 − devamsızlık günü.</div>
+<?php if ($monthlySummary): ?><div class="monthly-note"><strong>Toplu aylık kayıt:</strong> Devamsızlık ve eksik saat toplamı Aylık Maaş Kaydı formundan alınmıştır. Günlerin tarih bazında işaretlenmesi için günlük puantaj kullanılabilir.</div><?php endif; ?>
 <div class="table-wrap">
 <table>
 <thead><tr><?php for($d=1;$d<=$days;$d++): $date=sprintf('%s-%02d',$period,$d); $weekDay=(int)date('N',strtotime($date)); ?><th class="<?php echo $weekDay>=6?'weekend':''; ?>"><span class="day"><?php echo $d; ?></span><br><small><?php echo ['','Pzt','Sal','Çar','Per','Cum','Cmt','Paz'][$weekDay]; ?></small></th><?php endfor; ?></tr></thead>
