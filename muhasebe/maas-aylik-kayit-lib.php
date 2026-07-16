@@ -15,6 +15,34 @@ function maas_aylik_kayit_db_ensure(): void
     maas_avans_db_ensure();
 }
 
+function maas_aylik_kayit_key($value): string
+{
+    $value = mb_strtolower(trim((string)$value), 'UTF-8');
+    $value = strtr($value, [
+        'ı'=>'i','ğ'=>'g','ü'=>'u','ş'=>'s','ö'=>'o','ç'=>'c',
+        'İ'=>'i','Ğ'=>'g','Ü'=>'u','Ş'=>'s','Ö'=>'o','Ç'=>'c',
+    ]);
+    return preg_replace('/[^a-z0-9]+/', '', $value) ?: '';
+}
+
+function maas_aylik_kayit_default_payment_date(string $period): string
+{
+    $period = maas_puantaj_period($period);
+    return date('Y-m-05', strtotime($period . '-01 +1 month'));
+}
+
+function maas_aylik_kayit_default_account_id(): ?int
+{
+    foreach (accounts_for_select(true) as $account) {
+        $key = maas_aylik_kayit_key(($account['name'] ?? '') . ' ' . ($account['bank_name'] ?? ''));
+        if (strpos($key, 'garanti') !== false && strpos($key, 'dumanlar') !== false) {
+            $id = (int)($account['id'] ?? 0);
+            return $id > 0 ? $id : null;
+        }
+    }
+    return null;
+}
+
 function maas_aylik_kayit_record(int $employeeId, string $period): ?array
 {
     $stmt = db()->prepare('SELECT * FROM salary_records WHERE employee_id=? AND period=? ORDER BY id DESC LIMIT 1');
@@ -100,9 +128,30 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
     $paidAmount = min($netPayable, max(0, decimal_from_input($input['paid_amount'] ?? $existingRecord['paid_amount'] ?? 0)));
     $remainingAmount = max(0, round($netPayable - $paidAmount, 2));
     $status = maas_puantaj_calc_status($remainingAmount, $paidAmount);
-    $paymentDate = trim((string)($input['payment_date'] ?? $existingRecord['payment_date'] ?? '')) ?: null;
-    $accountRaw = trim((string)($input['account_id'] ?? $existingRecord['account_id'] ?? ''));
-    $accountId = $accountRaw !== '' ? (int)$accountRaw : null;
+
+    $forcePaymentDefaults = !empty($input['use_salary_payment_defaults']);
+    $defaultPaymentDate = maas_aylik_kayit_default_payment_date($period);
+    $postedPaymentDate = array_key_exists('payment_date', $input) ? trim((string)$input['payment_date']) : '';
+    if ($postedPaymentDate !== '') {
+        $paymentDate = $postedPaymentDate;
+    } elseif ($forcePaymentDefaults || !$existingRecord || empty($existingRecord['payment_date'])) {
+        $paymentDate = $defaultPaymentDate;
+    } else {
+        $paymentDate = (string)$existingRecord['payment_date'];
+    }
+
+    $defaultAccountId = maas_aylik_kayit_default_account_id();
+    if (array_key_exists('account_id', $input)) {
+        $accountRaw = trim((string)$input['account_id']);
+        $accountId = $accountRaw !== '' ? (int)$accountRaw : null;
+    } elseif ($forcePaymentDefaults) {
+        $accountId = $defaultAccountId;
+    } elseif (!empty($existingRecord['account_id'])) {
+        $accountId = (int)$existingRecord['account_id'];
+    } else {
+        $accountId = $defaultAccountId;
+    }
+
     $note = trim((string)($input['note'] ?? $existingRecord['note'] ?? ''));
 
     $pdo = db();
@@ -168,6 +217,8 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
             'missing_hours' => $missingHours,
             'garnishment_amount' => $garnishmentAmount,
             'advance_amount' => $advanceAmount,
+            'payment_date' => $paymentDate,
+            'account_id' => $accountId,
             'daily_rate' => round($dailyRate, 2),
             'hourly_rate' => round($hourlyRate, 2),
             'net_payable' => $netPayable,
@@ -197,6 +248,8 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
         'net_payable' => $netPayable,
         'paid_amount' => $paidAmount,
         'remaining_amount' => $remainingAmount,
+        'payment_date' => $paymentDate,
+        'account_id' => $accountId,
         'status' => $status,
     ];
 }
