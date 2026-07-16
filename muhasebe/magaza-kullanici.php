@@ -154,6 +154,7 @@ if (is_logged_in() && is_salary_only_user()) {
         'maas-puantaj-yazdir.php',
         'maas-bordro-yazdir.php',
         'maas-excel-aktar.php',
+        'maas-aylik-kayit.php',
         'logout.php',
         'index.php',
     ];
