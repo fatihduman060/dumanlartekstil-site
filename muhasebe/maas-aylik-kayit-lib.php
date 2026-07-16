@@ -7,7 +7,9 @@ function maas_aylik_kayit_db_ensure(): void
     ensure_column($pdo, 'salary_records', 'absent_days', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_records', 'missing_hours', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_records', 'manual_deduction_amount', 'REAL NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'salary_records', 'garnishment_amount', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_records', 'attendance_override_enabled', 'INTEGER NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'salary_payroll_details', 'garnishment_amount', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_payroll_details', 'source_mode', "TEXT NOT NULL DEFAULT 'puantaj'");
 }
 
@@ -80,13 +82,14 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
 
     $manualDeductionRaw = $input['deduction_amount'] ?? $input['other_deduction_amount'] ?? $existingPayroll['other_deduction_amount'] ?? $existingRecord['manual_deduction_amount'] ?? 0;
     $manualDeduction = max(0, decimal_from_input($manualDeductionRaw));
+    $garnishmentAmount = max(0, decimal_from_input($input['garnishment_amount'] ?? $existingPayroll['garnishment_amount'] ?? $existingRecord['garnishment_amount'] ?? 0));
     $advanceAmount = max(0, decimal_from_input($input['advance_amount'] ?? $existingPayroll['advance_amount'] ?? $existingRecord['advance_amount'] ?? 0));
     $overtimeAmount = max(0, decimal_from_input($input['overtime_amount'] ?? $existingPayroll['overtime_amount'] ?? 0));
     $bonusAmount = max(0, decimal_from_input($input['bonus_amount'] ?? $existingPayroll['bonus_amount'] ?? 0));
     $otherAddition = max(0, decimal_from_input($input['other_addition_amount'] ?? $existingPayroll['other_addition_amount'] ?? 0));
 
     $grossEarning = round($baseSalary + $overtimeAmount + $bonusAmount + $otherAddition, 2);
-    $totalDeduction = round($absenceDeduction + $hourDeduction + $manualDeduction, 2);
+    $totalDeduction = round($absenceDeduction + $hourDeduction + $manualDeduction + $garnishmentAmount, 2);
     $netPayable = max(0, round($grossEarning - $totalDeduction - $advanceAmount, 2));
     $paidAmount = min($netPayable, max(0, decimal_from_input($input['paid_amount'] ?? $existingRecord['paid_amount'] ?? 0)));
     $remainingAmount = max(0, round($netPayable - $paidAmount, 2));
@@ -101,11 +104,11 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
     try {
         $recordId = (int)($existingRecord['id'] ?? 0);
         if ($recordId > 0) {
-            $pdo->prepare('UPDATE salary_records SET salary_amount=?, advance_amount=?, deduction_amount=?, manual_deduction_amount=?, absent_days=?, missing_hours=?, attendance_override_enabled=?, paid_amount=?, remaining_amount=?, payment_date=?, account_id=?, status=?, note=?, updated_at=? WHERE id=?')
-                ->execute([$grossEarning, $advanceAmount, $totalDeduction, $manualDeduction, $absentDays, $missingHours, $useOverride ? 1 : 0, $paidAmount, $remainingAmount, $paymentDate, $accountId, $status, $note, now(), $recordId]);
+            $pdo->prepare('UPDATE salary_records SET salary_amount=?, advance_amount=?, deduction_amount=?, manual_deduction_amount=?, garnishment_amount=?, absent_days=?, missing_hours=?, attendance_override_enabled=?, paid_amount=?, remaining_amount=?, payment_date=?, account_id=?, status=?, note=?, updated_at=? WHERE id=?')
+                ->execute([$grossEarning, $advanceAmount, $totalDeduction, $manualDeduction, $garnishmentAmount, $absentDays, $missingHours, $useOverride ? 1 : 0, $paidAmount, $remainingAmount, $paymentDate, $accountId, $status, $note, now(), $recordId]);
         } else {
-            $pdo->prepare('INSERT INTO salary_records (employee_id, period, salary_amount, advance_amount, deduction_amount, manual_deduction_amount, absent_days, missing_hours, attendance_override_enabled, paid_amount, remaining_amount, payment_date, account_id, status, note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                ->execute([$employeeId, $period, $grossEarning, $advanceAmount, $totalDeduction, $manualDeduction, $absentDays, $missingHours, $useOverride ? 1 : 0, $paidAmount, $remainingAmount, $paymentDate, $accountId, $status, $note, current_user()['id'] ?? null, now(), now()]);
+            $pdo->prepare('INSERT INTO salary_records (employee_id, period, salary_amount, advance_amount, deduction_amount, manual_deduction_amount, garnishment_amount, absent_days, missing_hours, attendance_override_enabled, paid_amount, remaining_amount, payment_date, account_id, status, note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                ->execute([$employeeId, $period, $grossEarning, $advanceAmount, $totalDeduction, $manualDeduction, $garnishmentAmount, $absentDays, $missingHours, $useOverride ? 1 : 0, $paidAmount, $remainingAmount, $paymentDate, $accountId, $status, $note, current_user()['id'] ?? null, now(), now()]);
             $recordId = (int)$pdo->lastInsertId();
         }
 
@@ -130,6 +133,7 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
             $otherAddition,
             $absenceDeduction,
             $hourDeduction,
+            $garnishmentAmount,
             $manualDeduction,
             $advanceAmount,
             $grossEarning,
@@ -140,12 +144,12 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
         ];
 
         if ($oldDetail) {
-            $pdo->prepare('UPDATE salary_payroll_details SET salary_record_id=?, base_salary=?, paid_days=?, work_days=?, paid_leave_days=?, report_days=?, absent_days=?, weekly_off_days=?, holiday_days=?, overtime_hours=?, missing_hours=?, overtime_amount=?, bonus_amount=?, other_addition_amount=?, absence_deduction_amount=?, hour_deduction_amount=?, other_deduction_amount=?, advance_amount=?, gross_earning=?, net_payable=?, note=?, source_mode=?, updated_at=? WHERE id=?')
+            $pdo->prepare('UPDATE salary_payroll_details SET salary_record_id=?, base_salary=?, paid_days=?, work_days=?, paid_leave_days=?, report_days=?, absent_days=?, weekly_off_days=?, holiday_days=?, overtime_hours=?, missing_hours=?, overtime_amount=?, bonus_amount=?, other_addition_amount=?, absence_deduction_amount=?, hour_deduction_amount=?, garnishment_amount=?, other_deduction_amount=?, advance_amount=?, gross_earning=?, net_payable=?, note=?, source_mode=?, updated_at=? WHERE id=?')
                 ->execute(array_merge($detailValues, [(int)$oldDetail['id']]));
             $payrollId = (int)$oldDetail['id'];
         } else {
-            $pdo->prepare('INSERT INTO salary_payroll_details (employee_id, period, salary_record_id, base_salary, paid_days, work_days, paid_leave_days, report_days, absent_days, weekly_off_days, holiday_days, overtime_hours, missing_hours, overtime_amount, bonus_amount, other_addition_amount, absence_deduction_amount, hour_deduction_amount, other_deduction_amount, advance_amount, gross_earning, net_payable, note, source_mode, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                ->execute(array_merge([$employeeId, $period], array_slice($detailValues, 0, 22), [current_user()['id'] ?? null, now(), now()]));
+            $pdo->prepare('INSERT INTO salary_payroll_details (employee_id, period, salary_record_id, base_salary, paid_days, work_days, paid_leave_days, report_days, absent_days, weekly_off_days, holiday_days, overtime_hours, missing_hours, overtime_amount, bonus_amount, other_addition_amount, absence_deduction_amount, hour_deduction_amount, garnishment_amount, other_deduction_amount, advance_amount, gross_earning, net_payable, note, source_mode, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                ->execute(array_merge([$employeeId, $period], array_slice($detailValues, 0, 23), [current_user()['id'] ?? null, now(), now()]));
             $payrollId = (int)$pdo->lastInsertId();
         }
 
@@ -156,6 +160,7 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
             'base_salary' => $baseSalary,
             'absent_days' => $absentDays,
             'missing_hours' => $missingHours,
+            'garnishment_amount' => $garnishmentAmount,
             'daily_rate' => round($dailyRate, 2),
             'hourly_rate' => round($hourlyRate, 2),
             'net_payable' => $netPayable,
@@ -178,6 +183,7 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
         'missing_hours' => $missingHours,
         'absence_deduction_amount' => $absenceDeduction,
         'hour_deduction_amount' => $hourDeduction,
+        'garnishment_amount' => $garnishmentAmount,
         'manual_deduction_amount' => $manualDeduction,
         'total_deduction_amount' => $totalDeduction,
         'net_payable' => $netPayable,
