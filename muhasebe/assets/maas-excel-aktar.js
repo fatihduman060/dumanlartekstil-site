@@ -8,6 +8,20 @@
   function csrf(){var input=document.querySelector('input[name="csrf_token"]');return input?input.value:'';}
   function currentPeriod(){var p=new URL(location.href).searchParams.get('period');if(/^\d{4}-\d{2}$/.test(p||''))return p;var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
   function message(text,tone){var el=document.getElementById('salaryModuleMessage');if(!el)return;el.textContent=text||'';el.className='salary-module-message '+(tone||'');el.hidden=!text;}
+  function userKey(value){return String(value||'').toLocaleLowerCase('tr-TR').replace(/ı/g,'i').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s').replace(/ö/g,'o').replace(/ç/g,'c').replace(/[^a-z0-9]+/g,'');}
+
+  function applySalaryOnlyShell(){
+    var footer=document.querySelector('.side-footer');
+    var name=footer&&footer.querySelector('strong');
+    if(!name||userKey(name.textContent).indexOf('uzeyir')!==0)return;
+
+    document.body.classList.add('salary-only-user');
+    var nav=document.querySelector('.side-nav');
+    if(nav)nav.innerHTML='<a class="active" href="maaslar.php"><span class="nav-ico">₺</span><span>Maaşlar</span></a>';
+    var role=footer.querySelector('span');if(role)role.textContent='Maaş Kullanıcısı';
+    var brand=document.querySelector('.sidebar .brand');if(brand)brand.setAttribute('href','maaslar.php');
+    var siteLink=document.querySelector('.top-actions .ghost-link');if(siteLink)siteLink.remove();
+  }
 
   function request(method,params){
     var options={method:method,credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}};
@@ -81,8 +95,7 @@
     var print=document.getElementById('attendancePrint');if(print)print.href='maas-puantaj-yazdir.php?employee_id='+state.employeeId+'&period='+encodeURIComponent(state.period);renderAttendanceEditor();renderPayrollSummary(summary);
   }
 
-  function renderAttendanceEditor(){var editor=document.getElementById('attendanceEditor');if(!editor)return;if(!state.selectedDate){editor.innerHTML='<p class="muted">Düzenlemek için bir güne dokun.</p>';return;}var entry=state.entries[state.selectedDate]||{},statuses=state.data.statuses||{};var options='<option value="">Boş / kayıt yok</option>'+Object.keys(statuses).map(function(key){return '<option value="'+key+'" '+(entry.status===key?'selected':'')+'>'+esc(statuses[key].label)+'</option>';}).join('');editor.innerHTML='<span>SEÇİLİ GÜN</span><h3>'+trDate(state.selectedDate)+'</h3><label>Durum<select id="attendanceStatus">'+options+'</select></label><label>Fazla mesai saati<input id="attendanceOvertime" inputmode="decimal" value="'+esc(entry.overtime_hours||'')+'" placeholder="0"></label><label>Açıklama<textarea id="attendanceNote" rows="4">'+esc(entry.note||'')+'</textarea></label><button type="button" class="btn btn-secondary" id="clearSelectedDay">Bu günü temizle</button>';
-  }
+  function renderAttendanceEditor(){var editor=document.getElementById('attendanceEditor');if(!editor)return;if(!state.selectedDate){editor.innerHTML='<p class="muted">Düzenlemek için bir güne dokun.</p>';return;}var entry=state.entries[state.selectedDate]||{},statuses=state.data.statuses||{};var options='<option value="">Boş / kayıt yok</option>'+Object.keys(statuses).map(function(key){return '<option value="'+key+'" '+(entry.status===key?'selected':'')+'>'+esc(statuses[key].label)+'</option>';}).join('');editor.innerHTML='<span>SEÇİLİ GÜN</span><h3>'+trDate(state.selectedDate)+'</h3><label>Durum<select id="attendanceStatus">'+options+'</select></label><label>Fazla mesai saati<input id="attendanceOvertime" inputmode="decimal" value="'+esc(entry.overtime_hours||'')+'" placeholder="0"></label><label>Açıklama<textarea id="attendanceNote" rows="4">'+esc(entry.note||'')+'</textarea></label><button type="button" class="btn btn-secondary" id="clearSelectedDay">Bu günü temizle</button>';}
 
   function updateSelected(){if(!state.selectedDate)return;var status=document.getElementById('attendanceStatus'),overtime=document.getElementById('attendanceOvertime'),note=document.getElementById('attendanceNote');if(!status)return;if(!status.value){delete state.entries[state.selectedDate];}else{state.entries[state.selectedDate]={status:status.value,overtime_hours:Math.max(0,Math.min(24,num(overtime&&overtime.value))),note:note?note.value.trim():''};}renderAttendance();}
 
@@ -119,6 +132,6 @@
     '.payroll-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.payroll-box{border:1px solid #e5dccf;border-radius:17px;padding:16px;background:#fbf7ef;display:grid;gap:11px}.payroll-box h3{margin:0;color:#16482e}.payroll-total{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #d9cdbc;padding-top:12px}.payroll-total strong{font-size:20px;color:#16482e}.payroll-payment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin-top:16px}.payroll-payment .wide{grid-column:1/-1}'+
     '@media(max-width:1050px){.attendance-summary,.payroll-attendance-summary{grid-template-columns:repeat(4,1fr)}.attendance-layout{grid-template-columns:1fr}.attendance-editor{grid-template-columns:repeat(3,1fr)}.attendance-editor>span,.attendance-editor h3,.attendance-editor button{grid-column:1/-1}}@media(max-width:720px){.salary-workspace-head{display:block}.salary-toolbar{margin-top:12px}.attendance-summary,.payroll-attendance-summary{grid-template-columns:repeat(2,1fr)}.attendance-day{min-height:62px;padding:6px}.attendance-day>b{font-size:17px}.payroll-columns,.payroll-payment{grid-template-columns:1fr}.attendance-editor{grid-template-columns:1fr}.attendance-editor>*{grid-column:auto!important}}';document.head.appendChild(st);}
 
-  function init(){if(!/maaslar\.php/i.test(location.pathname))return;var grid=document.querySelector('.salary-grid');if(!grid)return;state.period=currentPeriod();addStyles();createTabs(grid,createExcelCard(grid));bindEvents();}
+  function init(){if(!/maaslar\.php/i.test(location.pathname))return;applySalaryOnlyShell();var grid=document.querySelector('.salary-grid');if(!grid)return;state.period=currentPeriod();addStyles();createTabs(grid,createExcelCard(grid));bindEvents();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
