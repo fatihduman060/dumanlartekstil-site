@@ -35,6 +35,17 @@ try {
     }
     if ($baseSalary <= 0) $baseSalary = (float)($employee['base_salary'] ?? 0);
 
+    $manualDeduction = (float)($payroll['other_deduction_amount'] ?? 0);
+    if ($record) {
+        $storedManual = (float)($record['manual_deduction_amount'] ?? 0);
+        if ($storedManual > 0 || (int)($record['attendance_override_enabled'] ?? 0) === 1) {
+            $manualDeduction = $storedManual;
+        } elseif (!$payroll && (float)($record['deduction_amount'] ?? 0) > 0) {
+            // Yeni alanlar eklenmeden önceki kayıtların Kesinti tutarını koru.
+            $manualDeduction = (float)$record['deduction_amount'];
+        }
+    }
+
     echo json_encode([
         'ok' => true,
         'period' => $period,
@@ -46,7 +57,7 @@ try {
         'hourly_rate' => round(($baseSalary / 30) / 9, 2),
         'absent_days' => (float)($record['absent_days'] ?? $payroll['absent_days'] ?? 0),
         'missing_hours' => (float)($record['missing_hours'] ?? $payroll['missing_hours'] ?? 0),
-        'manual_deduction_amount' => (float)($record['manual_deduction_amount'] ?? $payroll['other_deduction_amount'] ?? 0),
+        'manual_deduction_amount' => $manualDeduction,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(400);
