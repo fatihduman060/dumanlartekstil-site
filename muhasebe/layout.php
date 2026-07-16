@@ -25,15 +25,19 @@ function super_admin_user_ids(): array
 
 function is_super_admin(?int $userId = null): bool
 {
+    $current = current_user();
+    if ($current && is_mustafa_duman_user($current)) {
+        if ($userId === null || $userId === (int)($current['id'] ?? 0)) return true;
+    }
     if ($userId === null) {
-        $u = current_user();
-        $userId = (int)($u['id'] ?? 0);
+        $userId = (int)($current['id'] ?? 0);
     }
     return $userId > 0 && in_array($userId, super_admin_user_ids(), true);
 }
 
 function can_manage_users(): bool
 {
+    if (is_mustafa_duman_user()) return true;
     // İlk kurulumda sistem kilitlenmesin diye hiç süper yönetici yoksa mevcut yöneticiler kullanıcı atayabilir.
     // En az bir süper yönetici tanımlandıktan sonra kullanıcı yönetimi yalnızca süper yöneticiye geçer.
     $ids = super_admin_user_ids();
@@ -75,11 +79,12 @@ function can_access_private_finance_modules(): bool
 {
     $u = current_user();
     if (!$u) return false;
+    if (is_mustafa_duman_user($u)) return true;
 
     $username = strtolower(trim((string)($u['username'] ?? '')));
     if (in_array($username, ['admin', 'fatih'], true)) return true;
 
-    // Fatih hesabı süper yönetici olarak tanımlıysa kullanıcı adı değişse bile yetkisi korunur.
+    // Süper yönetici olarak tanımlanan kullanıcıların özel finans yetkisi korunur.
     return is_super_admin((int)($u['id'] ?? 0));
 }
 
@@ -87,7 +92,7 @@ function require_private_finance_modules(): void
 {
     require_login();
     if (!can_access_private_finance_modules()) {
-        flash('error', 'Bu bölüm yalnızca Fatih ve admin kullanıcılarına açıktır.');
+        flash('error', 'Bu bölüm yalnızca özel finans yetkisi olan kullanıcılara açıktır.');
         redirect('dashboard.php');
     }
 }
@@ -136,6 +141,7 @@ function page_header(string $title, string $active = ''): void
 {
     $u = current_user();
     $storeOnly = is_store_sales_user($u);
+    $fullAdmin = is_admin() || is_mustafa_duman_user($u);
 
     if ($storeOnly) {
         $nav = [
@@ -153,11 +159,16 @@ function page_header(string $title, string $active = ''): void
             $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
         }
 
-        if (is_admin()) {
+        if ($fullAdmin) {
             $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
             $nav[] = ['magaza', 'magaza.php', 'Mağaza', '▥'];
             $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
             $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
+        }
+
+        // Kullanıcı yönetimi bağlantısını menünün görünür bölümünde tut.
+        if (can_manage_users()) {
+            $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
         }
 
         if (can_access_private_finance_modules()) {
@@ -176,12 +187,9 @@ function page_header(string $title, string $active = ''): void
             ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
             ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
         ]);
-        if (is_admin()) {
+        if ($fullAdmin) {
             $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
             $nav[] = ['loglar', 'loglar.php', 'Loglar', '☰'];
-        }
-        if (can_manage_users()) {
-            $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
         }
     }
     ?>
