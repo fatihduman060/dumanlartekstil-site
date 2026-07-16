@@ -20,17 +20,12 @@
     return new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value||0))+' TL';
   }
 
-  function csrf(){
-    var input=document.querySelector('input[name="csrf_token"]');
-    return input?input.value:'';
-  }
-
   function getJson(url,params){
     return fetch(url+'?'+new URLSearchParams(params).toString()+'&_='+Date.now(),{
       credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}
     }).then(function(response){
       return response.json().then(function(data){
-        if(!response.ok||!data.ok) throw new Error(data.error||'Haciz bilgisi yüklenemedi.');
+        if(!response.ok||!data.ok) throw new Error(data.error||'Maaş bilgisi yüklenemedi.');
         return data;
       });
     });
@@ -41,9 +36,34 @@
     return action&&action.closest('form');
   }
 
+  function payrollForm(){return document.getElementById('payrollForm');}
+
+  function appendAutoAdvanceNote(input,text){
+    if(!input) return;
+    input.readOnly=true;
+    input.setAttribute('aria-readonly','true');
+    input.title='Tarihli avans hareketlerinden otomatik hesaplanır.';
+    var label=input.closest('label');
+    if(label&&!label.querySelector('.auto-advance-note')){
+      var small=document.createElement('small');
+      small.className='auto-advance-note';
+      small.textContent=text;
+      label.appendChild(small);
+    }
+  }
+
+  function lockAdvanceFields(){
+    var monthly=monthlyForm();
+    appendAutoAdvanceNote(monthly&&monthly.querySelector('[name="advance_amount"]'),'Aynı ayın tarihli avans hareketleri otomatik toplanır.');
+    var payroll=payrollForm();
+    appendAutoAdvanceNote(payroll&&payroll.querySelector('[name="advance_amount"]'),'Avans hareketlerinden otomatik gelir; buradan değiştirilemez.');
+  }
+
   function ensureMonthlyField(){
     var form=monthlyForm();
-    if(!form||form.querySelector('[name="garnishment_amount"]')) return;
+    if(!form) return;
+    lockAdvanceFields();
+    if(form.querySelector('[name="garnishment_amount"]')) return;
 
     var grid=form.querySelector('.monthly-attendance-grid');
     if(!grid) return;
@@ -68,15 +88,15 @@
     if(note) note.insertAdjacentHTML('beforeend',' <strong>Haciz kesintisi yalnızca net maaştan düşer; bordro günü 30 ise 30 kalır.</strong>');
 
     form.addEventListener('input',function(event){
-      if(event.target.matches('[name="salary_amount"],[name="advance_amount"],[name="deduction_amount"],[name="absent_days"],[name="missing_hours"],[name="garnishment_amount"]')){
+      if(event.target.matches('[name="salary_amount"],[name="deduction_amount"],[name="absent_days"],[name="missing_hours"],[name="garnishment_amount"]')){
         setTimeout(recalculateMonthly,0);
       }
     });
     form.addEventListener('change',function(event){
-      if(event.target.matches('[name="employee_id"],[name="period"]')) setTimeout(loadMonthlyGarnishment,80);
+      if(event.target.matches('[name="employee_id"],[name="period"]')) setTimeout(loadMonthlyData,80);
     });
 
-    loadMonthlyGarnishment();
+    loadMonthlyData();
   }
 
   function recalculateMonthly(){
@@ -102,27 +122,28 @@
     if(netEl) netEl.textContent=fmt(net);
   }
 
-  function loadMonthlyGarnishment(){
+  function loadMonthlyData(){
     var form=monthlyForm();
     if(!form) return;
+    lockAdvanceFields();
     var employee=form.querySelector('[name="employee_id"]');
     var period=form.querySelector('[name="period"]');
     if(!employee||!period||!employee.value) return;
     getJson('maas-aylik-kayit.php',{employee_id:employee.value,period:period.value}).then(function(data){
       monthlyData=data;
-      var input=form.querySelector('[name="garnishment_amount"]');
-      if(input) input.value=Number(data.garnishment_amount||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      var garnishment=form.querySelector('[name="garnishment_amount"]');
+      var advance=form.querySelector('[name="advance_amount"]');
+      if(garnishment) garnishment.value=Number(data.garnishment_amount||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      if(advance) advance.value=Number(data.advance_amount||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
       recalculateMonthly();
-    }).catch(function(){
-      recalculateMonthly();
-    });
+    }).catch(function(){recalculateMonthly();});
   }
-
-  function payrollForm(){return document.getElementById('payrollForm');}
 
   function ensurePayrollField(){
     var form=payrollForm();
-    if(!form||form.querySelector('[name="garnishment_amount"]')) return;
+    if(!form) return;
+    lockAdvanceFields();
+    if(form.querySelector('[name="garnishment_amount"]')) return;
     var other=form.querySelector('[name="other_deduction_amount"]');
     var otherLabel=other&&other.closest('label');
     var label=document.createElement('label');
@@ -153,16 +174,19 @@
     if(netEl) netEl.textContent=fmt(net);
   }
 
-  function loadPayrollGarnishment(){
+  function loadPayrollData(){
     ensurePayrollField();
+    lockAdvanceFields();
     var form=payrollForm();
     var employee=document.getElementById('payrollEmployee');
     var period=document.getElementById('payrollPeriod');
     if(!form||!employee||!period||!employee.value||!period.value) return;
-    getJson('maas-puantaj.php',{employee_id:employee.value,period:period.value}).then(function(data){
+    getJson('maas-aylik-kayit.php',{employee_id:employee.value,period:period.value}).then(function(data){
       var payroll=data.payroll||{};
-      var input=form.querySelector('[name="garnishment_amount"]');
-      if(input) input.value=Number(payroll.garnishment_amount||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      var garnishment=form.querySelector('[name="garnishment_amount"]');
+      var advance=form.querySelector('[name="advance_amount"]');
+      if(garnishment) garnishment.value=Number(data.garnishment_amount||payroll.garnishment_amount||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      if(advance) advance.value=Number(data.advance_amount||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
       setTimeout(recalculatePayroll,0);
     }).catch(function(){setTimeout(recalculatePayroll,0);});
   }
@@ -171,7 +195,7 @@
     if(document.getElementById('salaryGarnishmentStyles')) return;
     var style=document.createElement('style');
     style.id='salaryGarnishmentStyles';
-    style.textContent='.garnishment-field{padding:10px;border:1px solid #d8b866;border-radius:12px;background:#fff8e7!important}.garnishment-field small{display:block;margin-top:2px;color:#765715;font-size:10px;font-weight:700}.monthly-attendance-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important}.monthly-calculation{grid-template-columns:140px 1fr 1fr 1.35fr!important}.monthly-garnishment-preview{background:#fff8e7!important;border-color:#d8b866!important}.monthly-garnishment-preview strong{color:#8a6114!important}@media(max-width:1180px){.monthly-attendance-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.monthly-calculation{grid-template-columns:repeat(2,minmax(0,1fr))!important}.monthly-net{grid-column:1/-1}}@media(max-width:720px){.monthly-attendance-grid,.monthly-calculation{grid-template-columns:1fr!important}.monthly-net{grid-column:auto}}';
+    style.textContent='.garnishment-field{padding:10px;border:1px solid #d8b866;border-radius:12px;background:#fff8e7!important}.garnishment-field small,.auto-advance-note{display:block;margin-top:2px;color:#765715;font-size:10px;font-weight:700}.payroll-form [name="advance_amount"],.salary-form [name="advance_amount"]{background:#eef4ff!important;color:#254f85!important;font-weight:850}.monthly-attendance-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important}.monthly-calculation{grid-template-columns:140px 1fr 1fr 1.35fr!important}.monthly-garnishment-preview{background:#fff8e7!important;border-color:#d8b866!important}.monthly-garnishment-preview strong{color:#8a6114!important}@media(max-width:1180px){.monthly-attendance-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.monthly-calculation{grid-template-columns:repeat(2,minmax(0,1fr))!important}.monthly-net{grid-column:1/-1}}@media(max-width:720px){.monthly-attendance-grid,.monthly-calculation{grid-template-columns:1fr!important}.monthly-net{grid-column:auto}}';
     document.head.appendChild(style);
   }
 
@@ -179,15 +203,16 @@
     addStyles();
     ensureMonthlyField();
     ensurePayrollField();
+    lockAdvanceFields();
 
     document.addEventListener('click',function(event){
       if(event.target.closest('[data-salary-tab="bordro"]')||event.target.id==='payrollReload'){
-        setTimeout(loadPayrollGarnishment,250);
-        setTimeout(loadPayrollGarnishment,700);
+        setTimeout(loadPayrollData,250);
+        setTimeout(loadPayrollData,700);
       }
     });
     document.addEventListener('change',function(event){
-      if(event.target.id==='payrollEmployee'||event.target.id==='payrollPeriod') setTimeout(loadPayrollGarnishment,120);
+      if(event.target.id==='payrollEmployee'||event.target.id==='payrollPeriod') setTimeout(loadPayrollData,120);
     });
   }
 
