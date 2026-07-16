@@ -47,8 +47,13 @@ try {
 
     $advanceTotal = maas_avans_period_total($employeeId, $period);
     $advanceRows = maas_avans_period_rows($period, $employeeId);
+    $defaultPaymentDate = maas_aylik_kayit_default_payment_date($period);
+    $defaultAccountId = maas_aylik_kayit_default_account_id();
+
     if (!$record) $record = [];
     $record['advance_amount'] = $advanceTotal;
+    if (empty($record['payment_date'])) $record['payment_date'] = $defaultPaymentDate;
+    if (empty($record['account_id']) && $defaultAccountId) $record['account_id'] = $defaultAccountId;
 
     echo json_encode([
         'ok' => true,
@@ -73,6 +78,8 @@ try {
                 'note' => (string)($row['note'] ?? ''),
             ];
         }, $advanceRows),
+        'default_payment_date' => $defaultPaymentDate,
+        'default_account_id' => $defaultAccountId,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(400);
