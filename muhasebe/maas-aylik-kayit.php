@@ -41,10 +41,14 @@ try {
         if ($storedManual > 0 || (int)($record['attendance_override_enabled'] ?? 0) === 1) {
             $manualDeduction = $storedManual;
         } elseif (!$payroll && (float)($record['deduction_amount'] ?? 0) > 0) {
-            // Yeni alanlar eklenmeden önceki kayıtların Kesinti tutarını koru.
             $manualDeduction = (float)$record['deduction_amount'];
         }
     }
+
+    $advanceTotal = maas_avans_period_total($employeeId, $period);
+    $advanceRows = maas_avans_period_rows($period, $employeeId);
+    if (!$record) $record = [];
+    $record['advance_amount'] = $advanceTotal;
 
     echo json_encode([
         'ok' => true,
@@ -59,6 +63,16 @@ try {
         'missing_hours' => (float)($record['missing_hours'] ?? $payroll['missing_hours'] ?? 0),
         'garnishment_amount' => (float)($record['garnishment_amount'] ?? $payroll['garnishment_amount'] ?? 0),
         'manual_deduction_amount' => $manualDeduction,
+        'advance_amount' => $advanceTotal,
+        'advance_rows' => array_map(function ($row) {
+            return [
+                'id' => (int)$row['id'],
+                'advance_date' => (string)$row['advance_date'],
+                'amount' => (float)$row['amount'],
+                'account_name' => (string)($row['account_name'] ?? ''),
+                'note' => (string)($row['note'] ?? ''),
+            ];
+        }, $advanceRows),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(400);
