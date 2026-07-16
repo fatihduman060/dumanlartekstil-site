@@ -168,11 +168,6 @@ function page_header(string $title, string $active = ''): void
             $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
         }
 
-        // Kullanıcı yönetimi yalnızca Fatih süper yöneticiye gösterilir.
-        if (can_manage_users()) {
-            $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
-        }
-
         if (can_access_private_finance_modules()) {
             $nav[] = ['cekler', 'cekler.php', 'Çekler', '◈'];
         }
@@ -184,11 +179,16 @@ function page_header(string $title, string $active = ''): void
             $nav[] = ['tahsilat_makbuzu', 'tahsilat-makbuzu.php', 'Tahsilat Makbuzu', '₺'];
         }
 
-        $nav = array_merge($nav, [
-            ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'],
-            ['raporlar', 'raporlar.php', 'Raporlar', '◷'],
-            ['hesabim', 'hesabim.php', 'Hesabım', '⚿'],
-        ]);
+        $nav[] = ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'];
+        $nav[] = ['raporlar', 'raporlar.php', 'Raporlar', '◷'];
+
+        // Kullanıcı yönetimi seyrek kullanıldığı için Raporlar'ın altında tutulur.
+        if (can_manage_users()) {
+            $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
+        }
+
+        $nav[] = ['hesabim', 'hesabim.php', 'Hesabım', '⚿'];
+
         if ($fullAdmin) {
             $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
             $nav[] = ['loglar', 'loglar.php', 'Loglar', '☰'];
