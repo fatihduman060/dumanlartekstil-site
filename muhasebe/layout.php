@@ -285,7 +285,7 @@ function page_footer(): void
   <script src="assets/cari-hareket-kaynak.js?v=6"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
-  <script src="assets/maas-excel-aktar.js?v=2"></script>
+  <script src="assets/maas-excel-aktar.js?v=3"></script>
   <script src="assets/hesap-banka-detay.js?v=1"></script>
   <?php endif; ?>
 </body>
