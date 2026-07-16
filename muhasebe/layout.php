@@ -25,21 +25,16 @@ function super_admin_user_ids(): array
 
 function is_super_admin(?int $userId = null): bool
 {
-    $current = current_user();
-    if ($current && is_mustafa_duman_user($current)) {
-        if ($userId === null || $userId === (int)($current['id'] ?? 0)) return true;
-    }
     if ($userId === null) {
-        $userId = (int)($current['id'] ?? 0);
+        $u = current_user();
+        $userId = (int)($u['id'] ?? 0);
     }
     return $userId > 0 && in_array($userId, super_admin_user_ids(), true);
 }
 
 function can_manage_users(): bool
 {
-    if (is_mustafa_duman_user()) return true;
-    // İlk kurulumda sistem kilitlenmesin diye hiç süper yönetici yoksa mevcut yöneticiler kullanıcı atayabilir.
-    // En az bir süper yönetici tanımlandıktan sonra kullanıcı yönetimi yalnızca süper yöneticiye geçer.
+    // Süper yönetici tanımlandıktan sonra kullanıcı yönetimi yalnızca Fatih'e açıktır.
     $ids = super_admin_user_ids();
     return empty($ids) ? is_admin() : is_super_admin();
 }
@@ -47,9 +42,19 @@ function can_manage_users(): bool
 function set_user_super_admin(int $userId, bool $enabled): void
 {
     if ($userId <= 0) return;
+
+    $stmt = db()->prepare('SELECT id, username, display_name FROM users WHERE id=? LIMIT 1');
+    $stmt->execute([$userId]);
+    $target = $stmt->fetch() ?: null;
+
+    // Süper yönetici yetkisi yalnızca Fatih kullanıcısına verilebilir.
+    if ($enabled && (!$target || !is_fatih_user($target))) {
+        $enabled = false;
+    }
+
     $ids = super_admin_user_ids();
     if ($enabled) {
-        $ids[] = $userId;
+        $ids = [$userId];
     } else {
         $ids = array_values(array_filter($ids, fn($id) => (int)$id !== $userId));
     }
@@ -79,13 +84,10 @@ function can_access_private_finance_modules(): bool
 {
     $u = current_user();
     if (!$u) return false;
-    if (is_mustafa_duman_user($u)) return true;
 
-    $username = strtolower(trim((string)($u['username'] ?? '')));
-    if (in_array($username, ['admin', 'fatih'], true)) return true;
-
-    // Süper yönetici olarak tanımlanan kullanıcıların özel finans yetkisi korunur.
-    return is_super_admin((int)($u['id'] ?? 0));
+    // Yönetici rolü özel finans ekranlarını görür; süper yönetici ayrımı yalnızca
+    // kullanıcı yönetimi gibi en üst düzey işlemler için kullanılır.
+    return is_admin() || is_super_admin((int)($u['id'] ?? 0));
 }
 
 function require_private_finance_modules(): void
@@ -141,7 +143,7 @@ function page_header(string $title, string $active = ''): void
 {
     $u = current_user();
     $storeOnly = is_store_sales_user($u);
-    $fullAdmin = is_admin() || is_mustafa_duman_user($u);
+    $fullAdmin = is_admin();
 
     if ($storeOnly) {
         $nav = [
@@ -166,7 +168,7 @@ function page_header(string $title, string $active = ''): void
             $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
         }
 
-        // Kullanıcı yönetimi bağlantısını menünün görünür bölümünde tut.
+        // Kullanıcı yönetimi yalnızca Fatih süper yöneticiye gösterilir.
         if (can_manage_users()) {
             $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
         }
