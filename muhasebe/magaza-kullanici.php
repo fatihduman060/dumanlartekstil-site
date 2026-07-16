@@ -21,41 +21,66 @@ function is_mustafa_duman_user(?array $user = null): bool
     return $displayKey === 'mustafaduman' || $usernameKey === 'mustafaduman';
 }
 
-function mustafa_duman_tam_yetkiyi_uygula(): void
+function is_fatih_user(?array $user = null): bool
+{
+    $user = $user ?: current_user();
+    if (!$user) return false;
+
+    $usernameKey = magaza_kullanici_anahtari($user['username'] ?? '');
+    $displayKey = magaza_kullanici_anahtari($user['display_name'] ?? '');
+
+    return in_array($usernameKey, ['fatih', 'fatihduman'], true)
+        || in_array($displayKey, ['fatih', 'fatihduman'], true);
+}
+
+function yonetici_yetkilerini_senkronla(): void
 {
     try {
-        $rows = db()->query("SELECT id, username, display_name, role, is_active FROM users ORDER BY id DESC")->fetchAll() ?: [];
-        $target = null;
+        $rows = db()->query("SELECT id, username, display_name, role, is_active FROM users ORDER BY id ASC")->fetchAll() ?: [];
+        $fatihIds = [];
+        $mustafaIds = [];
+
         foreach ($rows as $row) {
-            if (is_mustafa_duman_user($row)) {
-                $target = $row;
-                break;
+            $userId = (int)($row['id'] ?? 0);
+            if ($userId <= 0) continue;
+
+            if (is_fatih_user($row)) {
+                $fatihIds[] = $userId;
+                if (($row['role'] ?? '') !== 'admin' || (int)($row['is_active'] ?? 0) !== 1) {
+                    db()->prepare("UPDATE users SET role='admin', is_active=1, updated_at=? WHERE id=?")
+                        ->execute([now(), $userId]);
+                }
             }
-        }
-        if (!$target) return;
 
-        $userId = (int)($target['id'] ?? 0);
-        if ($userId <= 0) return;
-
-        if (($target['role'] ?? '') !== 'admin' || (int)($target['is_active'] ?? 0) !== 1) {
-            db()->prepare("UPDATE users SET role='admin', is_active=1, updated_at=? WHERE id=?")
-                ->execute([now(), $userId]);
+            if (is_mustafa_duman_user($row)) {
+                $mustafaIds[] = $userId;
+                if (($row['role'] ?? '') !== 'admin' || (int)($row['is_active'] ?? 0) !== 1) {
+                    db()->prepare("UPDATE users SET role='admin', is_active=1, updated_at=? WHERE id=?")
+                        ->execute([now(), $userId]);
+                }
+            }
         }
 
         $raw = setting_get('super_admin_user_ids', '[]') ?: '[]';
-        $ids = json_decode($raw, true);
-        if (!is_array($ids)) $ids = [];
-        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($id) => $id > 0)));
-        if (!in_array($userId, $ids, true)) {
-            $ids[] = $userId;
-            setting_set('super_admin_user_ids', json_encode($ids, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $existingIds = json_decode($raw, true);
+        if (!is_array($existingIds)) $existingIds = [];
+        $existingIds = array_values(array_unique(array_filter(array_map('intval', $existingIds), fn($id) => $id > 0)));
+
+        // Süper yönetici yalnızca Fatih'tir. Fatih hesabı henüz bulunamazsa
+        // mevcut listeyi tamamen silmek yerine Mustafa'yı listeden çıkarmakla yetin.
+        if ($fatihIds) {
+            $superAdminIds = array_values(array_unique($fatihIds));
+        } else {
+            $superAdminIds = array_values(array_filter($existingIds, fn($id) => !in_array((int)$id, $mustafaIds, true)));
         }
+
+        setting_set('super_admin_user_ids', json_encode($superAdminIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     } catch (Throwable $e) {
         // Yetki eşleştirmesi uygulamanın açılmasını engellememeli.
     }
 }
 
-mustafa_duman_tam_yetkiyi_uygula();
+yonetici_yetkilerini_senkronla();
 
 function is_store_sales_user(?array $user = null): bool
 {
