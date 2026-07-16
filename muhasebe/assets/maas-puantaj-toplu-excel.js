@@ -138,9 +138,19 @@
     }
   }
 
+  function loadCollectiveListScript(){
+    if(document.getElementById('salaryCollectiveListScript')) return;
+    var script=document.createElement('script');
+    script.id='salaryCollectiveListScript';
+    script.src='assets/maas-puantaj-toplu-liste.js?v=1';
+    script.defer=true;
+    document.head.appendChild(script);
+  }
+
   function init(){
     ensureButtons();
     applyMonthlyPaymentDefaults(false);
+    loadCollectiveListScript();
 
     document.addEventListener('click',function(event){
       if(event.target.id==='fillSaturdays'){
