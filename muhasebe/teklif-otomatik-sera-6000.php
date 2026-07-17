@@ -11,18 +11,41 @@ function teklif_seratekstil_key($value): string
     return preg_replace('/[^a-z0-9]+/', '', $value) ?: '';
 }
 
+function teklif_seratekstil_offer_is_valid(int $offerId): bool
+{
+    if ($offerId <= 0) return false;
+    try {
+        $stmt = db()->prepare("SELECT o.id
+            FROM offers o
+            JOIN offer_items oi ON oi.offer_id=o.id
+            WHERE o.id=?
+              AND COALESCE(o.is_deleted,0)=0
+              AND ABS(oi.quantity-100)<0.0001
+              AND ABS(oi.unit_price-400)<0.0001
+            LIMIT 1");
+        $stmt->execute([$offerId]);
+        return (int)($stmt->fetchColumn() ?: 0) > 0;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 function teklif_seratekstil_requested_offer(): array
 {
     $settingKey = 'requested_offer_sera_tekstil_6000_100x400_v1';
     $saved = trim((string)setting_get($settingKey, ''));
     if ($saved !== '') {
         $decoded = json_decode($saved, true);
-        return [
-            'created' => false,
-            'existing' => true,
-            'should_open' => false,
-            'offer_id' => (int)($decoded['offer_id'] ?? 0),
-        ];
+        $savedOfferId = (int)($decoded['offer_id'] ?? 0);
+        if (teklif_seratekstil_offer_is_valid($savedOfferId)) {
+            return [
+                'created' => false,
+                'existing' => true,
+                'should_open' => true,
+                'offer_id' => $savedOfferId,
+            ];
+        }
+        setting_set($settingKey, '');
     }
 
     teklif_db_ensure();
