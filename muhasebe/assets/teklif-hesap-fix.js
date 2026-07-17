@@ -53,9 +53,50 @@
     if (vatEl) vatEl.textContent = fmt(vat);
     if (grandEl) grandEl.textContent = fmt(vatBase + vat);
   }
+  function showRequestedOfferError(text){
+    if (!text || document.getElementById('requestedOfferError')) return;
+    var builder = document.querySelector('.offer-builder');
+    if (!builder) return;
+    var box = document.createElement('div');
+    box.id = 'requestedOfferError';
+    box.className = 'alert alert-error';
+    box.textContent = text;
+    builder.insertAdjacentElement('afterbegin', box);
+  }
+  function createRequestedSeraOffer(){
+    var params = new URL(location.href).searchParams;
+    if (params.get('edit')) return;
+    var csrfInput = document.querySelector('#offerForm input[name="csrf_token"], input[name="csrf_token"]');
+    if (!csrfInput || !csrfInput.value) return;
+
+    var body = new URLSearchParams();
+    body.set('csrf_token', csrfInput.value);
+    fetch('teklif-otomatik-sera-6000.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+      },
+      body: body
+    }).then(function(response){
+      return response.json().catch(function(){ return {ok:false,error:'Teklif servisi cevap vermedi.'}; }).then(function(data){
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Teklif oluşturulamadı.');
+        return data;
+      });
+    }).then(function(data){
+      if (data.should_open && Number(data.offer_id || 0) > 0) {
+        location.replace('teklif-ver.php?edit=' + encodeURIComponent(data.offer_id) + '&requested_offer=sera6000');
+      }
+    }).catch(function(error){
+      showRequestedOfferError(error.message);
+    });
+  }
   function init(){
     if (!shouldRun()) return;
     recalc();
+    createRequestedSeraOffer();
     document.addEventListener('input', function(e){
       if (e.target && (e.target.classList.contains('calc') || e.target.id === 'vatRate' || e.target.id === 'discountRate')) setTimeout(recalc, 0);
     });
