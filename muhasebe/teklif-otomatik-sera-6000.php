@@ -20,6 +20,7 @@ function teklif_seratekstil_requested_offer(): array
         return [
             'created' => false,
             'existing' => true,
+            'should_open' => false,
             'offer_id' => (int)($decoded['offer_id'] ?? 0),
         ];
     }
@@ -37,7 +38,7 @@ function teklif_seratekstil_requested_offer(): array
         }
     }
     if (!$cari) {
-        return ['created'=>false, 'existing'=>false, 'offer_id'=>0, 'error'=>'Sera Tekstil cari kaydı bulunamadı.'];
+        return ['created'=>false, 'existing'=>false, 'should_open'=>false, 'offer_id'=>0, 'error'=>'Sera Tekstil cari kaydı bulunamadı.'];
     }
 
     $article = '6000';
@@ -76,7 +77,7 @@ function teklif_seratekstil_requested_offer(): array
     $existingId = (int)($existingStmt->fetchColumn() ?: 0);
     if ($existingId > 0) {
         setting_set($settingKey, json_encode(['offer_id'=>$existingId, 'existing'=>true], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-        return ['created'=>false, 'existing'=>true, 'offer_id'=>$existingId];
+        return ['created'=>false, 'existing'=>true, 'should_open'=>true, 'offer_id'=>$existingId];
     }
 
     $creatorId = null;
@@ -161,9 +162,27 @@ function teklif_seratekstil_requested_offer(): array
         ], $offerNo);
 
         $pdo->commit();
-        return ['created'=>true, 'existing'=>false, 'offer_id'=>$offerId, 'offer_no'=>$offerNo];
+        return ['created'=>true, 'existing'=>false, 'should_open'=>true, 'offer_id'=>$offerId, 'offer_no'=>$offerNo];
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        return ['created'=>false, 'existing'=>false, 'offer_id'=>0, 'error'=>$e->getMessage()];
+        return ['created'=>false, 'existing'=>false, 'should_open'=>false, 'offer_id'=>0, 'error'=>$e->getMessage()];
     }
+}
+
+if (basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) === basename(__FILE__)) {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        require_login();
+        require_write();
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            http_response_code(405);
+            throw new RuntimeException('Bu servis yalnızca POST isteğiyle çalışır.');
+        }
+        require_csrf();
+        echo json_encode(['ok'=>true] + teklif_seratekstil_requested_offer(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Throwable $e) {
+        http_response_code(400);
+        echo json_encode(['ok'=>false, 'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    exit;
 }
