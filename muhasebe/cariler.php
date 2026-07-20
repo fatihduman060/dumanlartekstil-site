@@ -130,64 +130,106 @@ if ($q !== '') {
 }
 $edit = null;
 if (!empty($_GET['edit'])) { $stmt = db()->prepare('SELECT * FROM cariler WHERE id=?'); $stmt->execute([(int)$_GET['edit']]); $edit = $stmt->fetch() ?: null; }
+$modalOpen = $edit !== null || isset($_GET['new']);
 page_header('Cariler', 'cariler');
 ?>
-<section class="form-grid">
-  <article class="panel-card form-card">
-    <div class="card-head"><h3><?php echo $edit ? 'Cari düzenle' : 'Yeni cari'; ?></h3></div>
-    <?php if (can_write()): ?>
-    <form method="post" class="stack-form">
-      <?php echo csrf_field(); ?>
-      <input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id'] ?? 0); ?>">
-      <div class="two-col">
-        <label>Cari tipi<select name="cari_type"><option <?php echo (($edit['cari_type'] ?? '')==='Firma')?'selected':''; ?>>Firma</option><option <?php echo (($edit['cari_type'] ?? '')==='Kişi')?'selected':''; ?>>Kişi</option></select></label>
-        <label>Ad / Ünvan<input name="name" required value="<?php echo e($edit['name'] ?? ''); ?>"></label>
-      </div>
-      <div class="two-col">
-        <label>Yetkili kişi<input name="authorized_person" value="<?php echo e($edit['authorized_person'] ?? ''); ?>"></label>
-        <label>Şehir<input name="city" value="<?php echo e($edit['city'] ?? ''); ?>"></label>
-      </div>
-      <div class="two-col">
-        <label>Vergi / T.C. No<input name="tax_no" value="<?php echo e($edit['tax_no'] ?? ''); ?>"></label>
-        <label>Vergi dairesi<input name="tax_office" value="<?php echo e($edit['tax_office'] ?? ''); ?>"></label>
-      </div>
-      <div class="two-col">
-        <label>Telefon<input name="phone" value="<?php echo e($edit['phone'] ?? ''); ?>"></label>
-        <label>E-posta<input type="email" name="email" value="<?php echo e($edit['email'] ?? ''); ?>"></label>
-      </div>
-      <label>IBAN<input name="iban" value="<?php echo e($edit['iban'] ?? ''); ?>"></label>
-      <label>Adres<textarea name="address" rows="2"><?php echo e($edit['address'] ?? ''); ?></textarea></label>
-      <label>Not<textarea name="notes" rows="2"><?php echo e($edit['notes'] ?? ''); ?></textarea></label>
-      <div class="form-actions"><button class="btn btn-primary" type="submit"><?php echo $edit ? 'Güncelle' : 'Cari ekle'; ?></button><?php if ($edit): ?><a class="btn btn-secondary" href="cariler.php">Vazgeç</a><?php endif; ?></div>
-    </form>
-    <?php else: ?><p class="muted">Görüntüleme yetkisindesiniz. Cari ekleme/düzenleme kapalı.</p><?php endif; ?>
-  </article>
+<style>
+.cari-list-shell{width:100%}.cari-list-head{align-items:center}.cari-head-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.cari-new-btn{white-space:nowrap}.cari-modal{position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(8,25,17,.58);backdrop-filter:blur(5px)}.cari-modal.is-open{display:flex}.cari-modal-card{width:min(820px,100%);max-height:calc(100vh - 48px);overflow:auto;background:#fff;border:1px solid #e5dccf;border-radius:24px;box-shadow:0 28px 90px rgba(5,25,15,.28)}.cari-modal-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.cari-modal-head h3{margin:0;color:#102818}.cari-modal-head p{margin:4px 0 0;color:#776b5c;font-size:12px;font-weight:700}.cari-modal-close{display:inline-grid;place-items:center;width:38px;height:38px;border:0;border-radius:999px;background:#fff;color:#102818;font-size:24px;line-height:1;text-decoration:none;cursor:pointer}.cari-modal-body{padding:20px}.cari-modal-body .stack-form{margin:0}.cari-modal-body .form-actions{position:sticky;bottom:-20px;margin:18px -20px -20px;padding:14px 20px;background:#fff;border-top:1px solid #efe7dc}.cari-modal-open{overflow:hidden}@media(max-width:720px){.cari-modal{padding:10px;align-items:flex-end}.cari-modal-card{max-height:94vh;border-radius:22px 22px 0 0}.cari-modal-body .two-col{grid-template-columns:1fr}.cari-list-head{align-items:flex-start}.cari-head-actions{width:100%}.cari-head-actions .btn{flex:1}}
+</style>
 
-  <article class="panel-card">
-    <div class="card-head"><h3>Cari listesi</h3><a href="export.php?type=cariler">Excel CSV indir</a></div>
-    <form class="filterbar" method="get">
-      <input name="q" placeholder="Cari, yetkili, vergi no, telefon ara..." value="<?php echo e($q); ?>">
-      <select name="type"><option value="">Tümü</option><option value="Firma" <?php echo $type==='Firma'?'selected':''; ?>>Firma</option><option value="Kişi" <?php echo $type==='Kişi'?'selected':''; ?>>Kişi</option></select>
-      <button class="btn btn-secondary" type="submit">Filtrele</button>
-    </form>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Cari</th><th>Yetkili / Şehir</th><th>Vergi</th><th>İletişim</th><th class="right">Net</th><th></th></tr></thead>
-        <tbody>
-        <?php if (!$cariler): ?><tr><td colspan="6" class="empty">Cari bulunamadı.</td></tr><?php endif; ?>
-        <?php foreach ($cariler as $c): $b=cari_balance((int)$c['id']); ?>
-          <tr>
-            <td><a href="cari-detay.php?id=<?php echo e($c['id']); ?>"><strong><?php echo e($c['name']); ?></strong></a><small><?php echo badge($c['cari_type'], 'neutral'); ?></small></td>
-            <td><?php echo e($c['authorized_person'] ?: '-'); ?><small><?php echo e($c['city'] ?: ''); ?></small></td>
-            <td><?php echo e($c['tax_no'] ?: '-'); ?><small><?php echo e($c['tax_office'] ?: ''); ?></small></td>
-            <td><small><?php echo e(trim(($c['phone'] ?: '') . ' ' . ($c['email'] ?: '')) ?: '-'); ?></small></td>
-            <td class="right"><strong class="<?php echo $b['net'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($b['net'])); ?></strong></td>
-            <td class="row-actions"><a href="cariler.php?edit=<?php echo e($c['id']); ?>">Düzenle</a><?php if (can_write()): ?><form method="post" onsubmit="return confirm('Cari silinsin mi? Hareket/çek kayıtları korunur, cari bağı kaldırılır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($c['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></td>
-          </tr>
-        <?php endforeach; ?>
-        </tbody>
-      </table>
+<section class="panel-card cari-list-shell">
+  <div class="card-head cari-list-head">
+    <div><h3>Cari listesi</h3><span><?php echo e(count($cariler)); ?> kayıt</span></div>
+    <div class="cari-head-actions">
+      <a class="btn btn-secondary" href="export.php?type=cariler">Excel CSV indir</a>
+      <?php if (can_write()): ?><a class="btn btn-primary cari-new-btn" href="cariler.php?new=1" data-cari-modal-open>+ Yeni cari</a><?php endif; ?>
+    </div>
+  </div>
+  <form class="filterbar" method="get">
+    <input name="q" placeholder="Cari, yetkili, vergi no, telefon ara..." value="<?php echo e($q); ?>">
+    <select name="type"><option value="">Tümü</option><option value="Firma" <?php echo $type==='Firma'?'selected':''; ?>>Firma</option><option value="Kişi" <?php echo $type==='Kişi'?'selected':''; ?>>Kişi</option></select>
+    <button class="btn btn-secondary" type="submit">Filtrele</button>
+  </form>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Cari</th><th>Yetkili / Şehir</th><th>Vergi</th><th>İletişim</th><th class="right">Net</th><th></th></tr></thead>
+      <tbody>
+      <?php if (!$cariler): ?><tr><td colspan="6" class="empty">Cari bulunamadı.</td></tr><?php endif; ?>
+      <?php foreach ($cariler as $c): $b=cari_balance((int)$c['id']); ?>
+        <tr>
+          <td><a href="cari-detay.php?id=<?php echo e($c['id']); ?>"><strong><?php echo e($c['name']); ?></strong></a><small><?php echo badge($c['cari_type'], 'neutral'); ?></small></td>
+          <td><?php echo e($c['authorized_person'] ?: '-'); ?><small><?php echo e($c['city'] ?: ''); ?></small></td>
+          <td><?php echo e($c['tax_no'] ?: '-'); ?><small><?php echo e($c['tax_office'] ?: ''); ?></small></td>
+          <td><small><?php echo e(trim(($c['phone'] ?: '') . ' ' . ($c['email'] ?: '')) ?: '-'); ?></small></td>
+          <td class="right"><strong class="<?php echo $b['net'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($b['net'])); ?></strong></td>
+          <td class="row-actions"><a href="cariler.php?edit=<?php echo e($c['id']); ?>">Düzenle</a><?php if (can_write()): ?><form method="post" onsubmit="return confirm('Cari silinsin mi? Hareket/çek kayıtları korunur, cari bağı kaldırılır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($c['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<?php if (can_write()): ?>
+<div class="cari-modal<?php echo $modalOpen ? ' is-open' : ''; ?>" id="cariModal" role="dialog" aria-modal="true" aria-labelledby="cariModalTitle" aria-hidden="<?php echo $modalOpen ? 'false' : 'true'; ?>">
+  <article class="cari-modal-card">
+    <header class="cari-modal-head">
+      <div><h3 id="cariModalTitle"><?php echo $edit ? 'Cariyi düzenle' : 'Yeni cari oluştur'; ?></h3><p><?php echo $edit ? 'Cari bilgilerini güncelle.' : 'Yeni firma veya kişi kaydı oluştur.'; ?></p></div>
+      <a class="cari-modal-close" href="cariler.php" data-cari-modal-close aria-label="Pencereyi kapat">×</a>
+    </header>
+    <div class="cari-modal-body">
+      <form method="post" class="stack-form" id="cariForm">
+        <?php echo csrf_field(); ?>
+        <input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id'] ?? 0); ?>">
+        <div class="two-col">
+          <label>Cari tipi<select name="cari_type"><option <?php echo (($edit['cari_type'] ?? '')==='Firma')?'selected':''; ?>>Firma</option><option <?php echo (($edit['cari_type'] ?? '')==='Kişi')?'selected':''; ?>>Kişi</option></select></label>
+          <label>Ad / Ünvan<input name="name" required value="<?php echo e($edit['name'] ?? ''); ?>" autofocus></label>
+        </div>
+        <div class="two-col">
+          <label>Yetkili kişi<input name="authorized_person" value="<?php echo e($edit['authorized_person'] ?? ''); ?>"></label>
+          <label>Şehir<input name="city" value="<?php echo e($edit['city'] ?? ''); ?>"></label>
+        </div>
+        <div class="two-col">
+          <label>Vergi / T.C. No<input name="tax_no" value="<?php echo e($edit['tax_no'] ?? ''); ?>"></label>
+          <label>Vergi dairesi<input name="tax_office" value="<?php echo e($edit['tax_office'] ?? ''); ?>"></label>
+        </div>
+        <div class="two-col">
+          <label>Telefon<input name="phone" value="<?php echo e($edit['phone'] ?? ''); ?>"></label>
+          <label>E-posta<input type="email" name="email" value="<?php echo e($edit['email'] ?? ''); ?>"></label>
+        </div>
+        <label>IBAN<input name="iban" value="<?php echo e($edit['iban'] ?? ''); ?>"></label>
+        <label>Adres<textarea name="address" rows="2"><?php echo e($edit['address'] ?? ''); ?></textarea></label>
+        <label>Not<textarea name="notes" rows="2"><?php echo e($edit['notes'] ?? ''); ?></textarea></label>
+        <div class="form-actions"><button class="btn btn-primary" type="submit"><?php echo $edit ? 'Güncelle' : 'Cari oluştur'; ?></button><a class="btn btn-secondary" href="cariler.php" data-cari-modal-close>Vazgeç</a></div>
+      </form>
     </div>
   </article>
-</section>
+</div>
+<script>
+(function(){
+  var modal=document.getElementById('cariModal');
+  if(!modal) return;
+  function openModal(event){
+    if(event) event.preventDefault();
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden','false');
+    document.body.classList.add('cari-modal-open');
+    window.setTimeout(function(){var input=modal.querySelector('input[name="name"]');if(input) input.focus();},50);
+  }
+  function closeModal(event){
+    if(event) event.preventDefault();
+    if(<?php echo $edit ? 'true' : 'false'; ?>){location.href='cariler.php';return;}
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden','true');
+    document.body.classList.remove('cari-modal-open');
+    if(history.replaceState) history.replaceState({},'', 'cariler.php');
+  }
+  document.querySelectorAll('[data-cari-modal-open]').forEach(function(button){button.addEventListener('click',openModal);});
+  modal.querySelectorAll('[data-cari-modal-close]').forEach(function(button){button.addEventListener('click',closeModal);});
+  modal.addEventListener('click',function(event){if(event.target===modal) closeModal(event);});
+  document.addEventListener('keydown',function(event){if(event.key==='Escape'&&modal.classList.contains('is-open')) closeModal(event);});
+  if(modal.classList.contains('is-open')) document.body.classList.add('cari-modal-open');
+})();
+</script>
+<?php endif; ?>
 <?php page_footer(); ?>
