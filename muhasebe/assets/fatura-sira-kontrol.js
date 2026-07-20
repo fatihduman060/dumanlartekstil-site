@@ -2,189 +2,159 @@
   'use strict';
   if(!/\/faturalar\.php$/i.test(location.pathname)) return;
 
-  function norm(value){
-    return String(value||'').toLocaleUpperCase('tr-TR').replace(/\s+/g,'').trim();
+  var sortDirection='desc';
+  var observer=null;
+  var sortTimer=0;
+
+  function invoiceTable(){
+    var tables=Array.from(document.querySelectorAll('.table-wrap table'));
+    return tables.find(function(table){
+      var first=table.querySelector('thead th');
+      return first&&/TAR[Iİ]H\s*\/\s*NO/i.test(String(first.textContent||''));
+    })||null;
+  }
+
+  function invoiceIdFromRow(row){
+    var input=row.querySelector('form input[name="id"]');
+    if(input&&Number(input.value||0)>0) return Number(input.value);
+    var edit=row.querySelector('a[href*="edit="]');
+    if(edit){
+      try{return Number(new URL(edit.href,location.href).searchParams.get('edit')||0);}catch(error){}
+    }
+    return 0;
+  }
+
+  function dateKeyFromRow(row){
+    var saved=String(row.getAttribute('data-invoice-date')||'').trim();
+    var iso=saved.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(iso) return Number(iso[1])*10000+Number(iso[2])*100+Number(iso[3]);
+
+    var first=row.children&&row.children[0];
+    var text=String(first?first.textContent:'').trim();
+    var tr=text.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    if(tr) return Number(tr[3])*10000+Number(tr[2])*100+Number(tr[1]);
+
+    iso=text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(iso) return Number(iso[1])*10000+Number(iso[2])*100+Number(iso[3]);
+    return 0;
   }
 
   function invoiceNoFromRow(row){
-    var cell=row.children&&row.children[0];
-    if(!cell) return '';
-    var small=cell.querySelector('small');
-    if(!small) return '';
-    return String(small.textContent||'').split('·')[0].trim();
+    var first=row.children&&row.children[0];
+    if(!first) return '';
+    var small=first.querySelector('small');
+    return String(small?small.textContent:'').split('·')[0].trim();
   }
 
-  function invoiceDateFromRow(row){
-    var cell=row.children&&row.children[0];
-    if(!cell) return 0;
-    var strong=cell.querySelector('strong');
-    var text=String(strong?strong.textContent:'').trim();
-    var match=text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    if(!match) return 0;
-    return Number(match[3])*10000+Number(match[2])*100+Number(match[1]);
+  function addDuplicateBadges(table){
+    var rows=Array.from(table.querySelectorAll('tbody tr')).filter(function(row){
+      return row.children.length>1&&!row.querySelector('.empty');
+    });
+    var counts={};
+    rows.forEach(function(row){
+      var key=invoiceNoFromRow(row).toLocaleUpperCase('tr-TR').replace(/\s+/g,'').trim();
+      if(key) counts[key]=(counts[key]||0)+1;
+    });
+    rows.forEach(function(row){
+      var cell=row.children[0];
+      var key=invoiceNoFromRow(row).toLocaleUpperCase('tr-TR').replace(/\s+/g,'').trim();
+      var old=cell&&cell.querySelector('[data-fatura-sira-badge]');
+      if(key&&counts[key]>1){
+        if(!old){
+          old=document.createElement('span');
+          old.setAttribute('data-fatura-sira-badge','1');
+          old.className='fatura-sira-badge is-danger';
+          cell.appendChild(old);
+        }
+        old.textContent='Tekrar ×'+counts[key];
+        row.classList.add('fatura-tekrar-row');
+      }else{
+        if(old) old.remove();
+        row.classList.remove('fatura-tekrar-row');
+      }
+    });
   }
 
-  function fileNameFromRow(row){
-    var cell=row.children&&row.children[5];
-    if(!cell) return '';
-    var link=cell.querySelector('a');
-    return String(link?link.textContent:cell.textContent||'').trim();
-  }
-
-  function invoiceMeta(value){
-    value=norm(value).replace(/\.(PDF|XML|XSLT?)$/i,'');
-    var match=value.match(/^([A-Z]{2,8})(\d{4})(\d+)$/);
-    if(!match){
-      var trailing=value.match(/^(.*?)(\d+)$/);
-      if(!trailing) return null;
-      return {full:value,group:trailing[1],year:'',serialText:trailing[2],serial:BigInt(trailing[2])};
+  function updateHeader(table){
+    var header=table.querySelector('thead th');
+    if(!header) return;
+    var button=header.querySelector('[data-tarih-sirala]');
+    if(!button){
+      header.innerHTML='<button type="button" class="fatura-sirala-button" data-tarih-sirala><span class="label">TARİH / NO</span> <span class="arrow" aria-hidden="true">↓</span></button>';
+      button=header.querySelector('[data-tarih-sirala]');
+      button.addEventListener('click',function(event){
+        event.preventDefault();
+        sortDirection=sortDirection==='desc'?'asc':'desc';
+        sortRows(true);
+      });
     }
-    return {
-      full:value,
-      group:match[1]+match[2],
-      year:match[2],
-      serialText:match[3],
-      serial:BigInt(match[3])
-    };
+    header.setAttribute('aria-sort',sortDirection==='desc'?'descending':'ascending');
+    var arrow=button.querySelector('.arrow');
+    if(arrow) arrow.textContent=sortDirection==='desc'?'↓':'↑';
+    button.title=sortDirection==='desc'?'En yeni fatura üstte':'En eski fatura üstte';
+    button.classList.add('is-active');
   }
 
-  function addBadge(row,text,tone){
-    var cell=row.children&&row.children[0];
-    if(!cell||cell.querySelector('[data-fatura-sira-badge]')) return;
-    var badge=document.createElement('span');
-    badge.setAttribute('data-fatura-sira-badge','1');
-    badge.className='fatura-sira-badge is-'+tone;
-    badge.textContent=text;
-    cell.appendChild(badge);
+  function observe(table){
+    if(observer) observer.disconnect();
+    observer=new MutationObserver(function(mutations){
+      var needsSort=mutations.some(function(mutation){
+        return mutation.type==='childList'||mutation.type==='attributes';
+      });
+      if(!needsSort) return;
+      clearTimeout(sortTimer);
+      sortTimer=setTimeout(function(){sortRows(false);},40);
+    });
+    observer.observe(table,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','data-invoice-date']});
   }
 
-  function compareFileEntries(a,b,direction){
-    var aMeta=a.fileMeta||a.invoiceMeta;
-    var bMeta=b.fileMeta||b.invoiceMeta;
-    var factor=direction==='asc'?1:-1;
-
-    if(aMeta&&bMeta){
-      if(aMeta.group!==bMeta.group) return aMeta.group.localeCompare(bMeta.group,'tr')*factor;
-      if(aMeta.serial>bMeta.serial) return 1*factor;
-      if(aMeta.serial<bMeta.serial) return -1*factor;
-    }else if(aMeta){
-      return -1;
-    }else if(bMeta){
-      return 1;
-    }
-    return a.index-b.index;
-  }
-
-  function compareDateEntries(a,b,direction){
-    var factor=direction==='asc'?1:-1;
-    if(a.dateKey!==b.dateKey) return (a.dateKey-b.dateKey)*factor;
-    return a.index-b.index;
-  }
-
-  function appendSorted(entries,tbody,comparator){
-    entries.slice().sort(comparator).forEach(function(entry){tbody.appendChild(entry.row);});
-  }
-
-  function setup(){
-    var table=document.querySelector('.table-wrap table');
-    if(!table||table.dataset.dateSortReady==='1') return;
+  function sortRows(userTriggered){
+    var table=invoiceTable();
+    if(!table) return;
     var tbody=table.querySelector('tbody');
     if(!tbody) return;
 
-    var rows=Array.from(tbody.querySelectorAll('tr')).filter(function(row){
-      return row.children.length>=8&&!row.querySelector('.empty');
+    var rows=Array.from(tbody.children).filter(function(row){
+      return row.tagName==='TR'&&row.children.length>1&&!row.querySelector('.empty');
     });
-    if(!rows.length) return;
+    if(!rows.length){updateHeader(table);return;}
 
-    table.dataset.dateSortReady='1';
-    var entries=rows.map(function(row,index){
-      var invoiceNo=invoiceNoFromRow(row);
-      var fileName=fileNameFromRow(row);
-      return {
-        row:row,
-        index:index,
-        dateKey:invoiceDateFromRow(row),
-        invoiceNo:invoiceNo,
-        fileName:fileName,
-        key:norm(invoiceNo),
-        invoiceMeta:invoiceMeta(invoiceNo),
-        fileMeta:invoiceMeta(fileName)
-      };
+    if(observer) observer.disconnect();
+
+    var factor=sortDirection==='desc'?-1:1;
+    rows.sort(function(a,b){
+      var dateA=dateKeyFromRow(a);
+      var dateB=dateKeyFromRow(b);
+      if(dateA!==dateB) return (dateA-dateB)*factor;
+      var idA=invoiceIdFromRow(a);
+      var idB=invoiceIdFromRow(b);
+      if(idA!==idB) return (idA-idB)*factor;
+      return 0;
     });
 
-    var headers=table.querySelectorAll('thead th');
-    var dateHeader=headers&&headers.length?headers[0]:null;
-    var fileHeader=headers&&headers.length>5?headers[5]:null;
-    var dateDirection='desc';
-    var fileDirection='desc';
+    var fragment=document.createDocumentFragment();
+    rows.forEach(function(row){fragment.appendChild(row);});
+    tbody.appendChild(fragment);
 
-    function activateDateSort(){
-      appendSorted(entries,tbody,function(a,b){return compareDateEntries(a,b,dateDirection);});
-      if(dateHeader){
-        dateHeader.setAttribute('aria-sort',dateDirection==='desc'?'descending':'ascending');
-        var button=dateHeader.querySelector('[data-tarih-sirala]');
-        if(button){
-          button.classList.add('is-active');
-          button.querySelector('span').textContent=dateDirection==='desc'?'↓':'↑';
-          button.title=dateDirection==='desc'?'En yeni fatura üstte':'En eski fatura üstte';
-        }
-      }
-      if(fileHeader){
-        fileHeader.removeAttribute('aria-sort');
-        var fileButton=fileHeader.querySelector('[data-dosya-sirala]');
-        if(fileButton) fileButton.classList.remove('is-active');
-      }
-    }
+    updateHeader(table);
+    addDuplicateBadges(table);
+    observe(table);
 
-    if(dateHeader&&!dateHeader.querySelector('[data-tarih-sirala]')){
-      dateHeader.innerHTML='<button type="button" class="fatura-sirala-button" data-tarih-sirala title="En yeni fatura üstte">TARİH / NO <span aria-hidden="true">↓</span></button>';
-      dateHeader.addEventListener('click',function(event){
-        var button=event.target.closest('[data-tarih-sirala]');
-        if(!button) return;
-        dateDirection=dateDirection==='desc'?'asc':'desc';
-        activateDateSort();
-      });
-    }
+    if(userTriggered) table.scrollIntoView({block:'nearest'});
+  }
 
-    if(fileHeader&&!fileHeader.querySelector('[data-dosya-sirala]')){
-      fileHeader.innerHTML='<button type="button" class="fatura-sirala-button" data-dosya-sirala title="Dosya numarasına göre sırala">DOSYA <span aria-hidden="true">↕</span></button>';
-      fileHeader.addEventListener('click',function(event){
-        var button=event.target.closest('[data-dosya-sirala]');
-        if(!button) return;
-        appendSorted(entries,tbody,function(a,b){return compareFileEntries(a,b,fileDirection);});
-        fileHeader.setAttribute('aria-sort',fileDirection==='desc'?'descending':'ascending');
-        button.classList.add('is-active');
-        button.querySelector('span').textContent=fileDirection==='desc'?'↓':'↑';
-        button.title=fileDirection==='desc'?'En yüksek dosya numarası üstte':'En düşük dosya numarası üstte';
-        fileDirection=fileDirection==='desc'?'asc':'desc';
-        if(dateHeader){
-          dateHeader.removeAttribute('aria-sort');
-          var dateButton=dateHeader.querySelector('[data-tarih-sirala]');
-          if(dateButton) dateButton.classList.remove('is-active');
-        }
-      });
-    }
-
-    // Sayfa ilk açıldığında her zaman en yeni fatura üstte olur.
-    activateDateSort();
-
-    var counts={};
-    entries.forEach(function(entry){
-      if(!entry.key) return;
-      counts[entry.key]=(counts[entry.key]||0)+1;
-    });
-
-    entries.forEach(function(entry){
-      if(entry.key&&counts[entry.key]>1){
-        addBadge(entry.row,'Tekrar ×'+counts[entry.key],'danger');
-        entry.row.classList.add('fatura-tekrar-row');
-      }
+  function setup(){
+    var table=invoiceTable();
+    if(!table) return;
+    sortRows(false);
+    [100,400,1000,2200,4500].forEach(function(delay){
+      setTimeout(function(){sortRows(false);},delay);
     });
   }
 
   var style=document.createElement('style');
   style.textContent=''
-    +'.fatura-sira-badge{display:inline-flex;margin-top:5px;padding:3px 6px;border-radius:999px;font-size:9px;font-weight:900}.fatura-sira-badge.is-danger{background:#ffe4e1;color:#922f28}.fatura-tekrar-row{box-shadow:inset 4px 0 0 #c94c43}.fatura-sirala-button{appearance:none;border:0;background:transparent;color:inherit;font:inherit;font-weight:900;letter-spacing:inherit;padding:5px 7px;margin:-5px -7px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}.fatura-sirala-button:hover,.fatura-sirala-button.is-active{background:rgba(255,255,255,.16);color:inherit}.fatura-sirala-button span{font-size:13px}';
+    +'.fatura-sira-badge{display:inline-flex;margin-top:5px;padding:3px 6px;border-radius:999px;font-size:9px;font-weight:900}.fatura-sira-badge.is-danger{background:#ffe4e1;color:#922f28}.fatura-tekrar-row{box-shadow:inset 4px 0 0 #c94c43}.fatura-sirala-button{appearance:none;border:0;background:transparent;color:inherit;font:inherit;font-weight:900;letter-spacing:inherit;padding:5px 7px;margin:-5px -7px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}.fatura-sirala-button:hover,.fatura-sirala-button.is-active{background:rgba(255,255,255,.16);color:inherit}.fatura-sirala-button .arrow{font-size:13px}';
   document.head.appendChild(style);
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',setup);
