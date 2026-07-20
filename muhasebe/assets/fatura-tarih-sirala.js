@@ -28,8 +28,26 @@
     }
   }
 
+  function writePendingCariReturn(cariId){
+    cariId=Number(cariId||0);
+    if(cariId<=0) return false;
+    try{
+      sessionStorage.setItem(CARI_RETURN_KEY,JSON.stringify({
+        cari_id:cariId,
+        created_at:Date.now()
+      }));
+      return true;
+    }catch(error){
+      return false;
+    }
+  }
+
   function clearPendingCariReturn(){
     try{sessionStorage.removeItem(CARI_RETURN_KEY);}catch(error){}
+  }
+
+  function cariDetailUrl(cariId){
+    return 'cari-detay.php?id='+encodeURIComponent(String(Number(cariId||0)))+'#hareketler';
   }
 
   function handleCompletedCariReturn(){
@@ -45,7 +63,7 @@
     if(!success) return false;
 
     clearPendingCariReturn();
-    location.replace('cari-detay.php?id='+encodeURIComponent(String(pending.cari_id))+'#hareketler');
+    location.replace(cariDetailUrl(pending.cari_id));
     return true;
   }
 
@@ -82,13 +100,16 @@
     };
   }
 
+  function originCariId(){
+    return Number(new URL(location.href).searchParams.get('cari_id')||0);
+  }
+
   function prepareCariReturn(controls){
     if(!controls||!controls.form||!controls.cari) return;
-    var params=new URL(location.href).searchParams;
-    var originCariId=Number(params.get('cari_id')||0);
-    if(originCariId<=0) return;
+    var sourceCariId=originCariId();
+    if(sourceCariId<=0) return;
 
-    controls.form.setAttribute('data-return-cari-id',String(originCariId));
+    controls.form.setAttribute('data-return-cari-id',String(sourceCariId));
 
     var label=controls.cari.closest('label');
     if(label&&!label.querySelector('[data-cari-return-help]')){
@@ -103,18 +124,61 @@
         clearPendingCariReturn();
         return;
       }
-      var selectedCariId=Number(controls.cari.value||originCariId||0);
+      var selectedCariId=Number(controls.cari.value||sourceCariId||0);
       if(selectedCariId<=0){
         clearPendingCariReturn();
         return;
       }
-      try{
-        sessionStorage.setItem(CARI_RETURN_KEY,JSON.stringify({
-          cari_id:selectedCariId,
-          created_at:Date.now()
-        }));
-      }catch(error){}
+      writePendingCariReturn(selectedCariId);
     },true);
+  }
+
+  function prepareCariCancelReturn(){
+    var sourceCariId=originCariId();
+    if(sourceCariId<=0) return;
+
+    document.querySelectorAll('form').forEach(function(form){
+      var action=form.querySelector('input[name="action"][value="cancel"]');
+      if(!action||form.getAttribute('data-cari-cancel-return')==='1') return;
+      form.setAttribute('data-cari-cancel-return','1');
+
+      form.addEventListener('submit',function(event){
+        // Sayfadaki mevcut onay kutusunda kullanıcı vazgeçtiyse hiçbir işlem yapma.
+        if(event.defaultPrevented||form.getAttribute('data-cari-cancel-sending')==='1') return;
+        event.preventDefault();
+        form.setAttribute('data-cari-cancel-sending','1');
+        writePendingCariReturn(sourceCariId);
+
+        var button=form.querySelector('button[type="submit"],button:not([type])');
+        if(button) button.disabled=true;
+
+        fetch(form.action||location.href,{
+          method:'POST',
+          body:new FormData(form),
+          credentials:'same-origin',
+          cache:'no-store',
+          redirect:'follow'
+        }).then(function(response){
+          if(!response.ok) throw new Error('İptal isteği tamamlanamadı.');
+          return response.text();
+        }).then(function(html){
+          var parsed=new DOMParser().parseFromString(html,'text/html');
+          var error=parsed.querySelector('.alert-error,.alert-danger');
+          if(error){
+            clearPendingCariReturn();
+            form.removeAttribute('data-cari-cancel-sending');
+            if(button) button.disabled=false;
+            window.alert(String(error.textContent||'İşlem iptal edilemedi.').trim());
+            return;
+          }
+          clearPendingCariReturn();
+          location.replace(cariDetailUrl(sourceCariId));
+        }).catch(function(){
+          // Ağ sorunu olursa klasik gönderime dön; bekleyen cari bilgisi dönüşü yine sağlar.
+          form.submit();
+        });
+      });
+    });
   }
 
   function ensureReturnHelp(controls){
@@ -209,6 +273,7 @@
   }
 
   prepareMovementForm();
+  prepareCariCancelReturn();
   prepareFilter();
   relabelReturnRows();
 })();
