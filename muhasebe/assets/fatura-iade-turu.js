@@ -62,9 +62,18 @@
 
   function rowDirection(row){
     var cell=row&&row.cells?row.cells[1]:null;
-    var text=String(cell?cell.textContent:'').toLocaleLowerCase('tr-TR');
-    if(text.indexOf('giden')!==-1) return 'giden';
-    if(text.indexOf('gelen')!==-1) return 'gelen';
+    if(!cell) return '';
+
+    var directionButton=cell.querySelector('[data-fatura-yon-sec][data-current]');
+    if(directionButton){
+      var current=String(directionButton.getAttribute('data-current')||'');
+      if(current==='giden'||current==='gelen') return current;
+    }
+
+    var badge=cell.querySelector('.badge');
+    var text=String(badge?badge.textContent:cell.textContent||'').toLocaleLowerCase('tr-TR');
+    if(text.indexOf('giden fatura')!==-1) return 'giden';
+    if(text.indexOf('gelen fatura')!==-1) return 'gelen';
     return '';
   }
 
