@@ -30,9 +30,19 @@ page_header('Mağaza', 'magaza');
 @media(max-width:700px){
 .magaza-page-shell .dashboard-section-head{order:1}
 .magaza-page-shell .dashboard-section-head p{display:none}
-.magaza-period-filter{order:2;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px}
-.magaza-period-filter input,.magaza-period-filter .btn{margin:0;min-width:0}
-.magaza-period-filter .btn{white-space:nowrap;padding-left:12px;padding-right:12px}
+.magaza-page-shell>*,
+.magaza-page-body,
+.magaza-period-filter,
+.magaza-satis-panel,
+.magaza-mobile-latest,
+.magaza-satis-list,
+.magaza-satis-summary,
+.magaza-satis-form{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.magaza-period-filter{order:2;display:grid;grid-template-columns:minmax(0,1fr) 106px;gap:8px;align-items:center;padding:9px}
+.magaza-period-filter input,.magaza-period-filter .btn{width:100%;max-width:100%;margin:0;min-width:0;box-sizing:border-box}
+.magaza-period-filter .btn{white-space:nowrap;padding-left:10px;padding-right:10px}
+.magaza-satis-list .table-wrap{width:100%;max-width:100%;min-width:0;overflow:hidden}
+.magaza-satis-summary article,.magaza-satis-form label,.magaza-satis-form input{min-width:0;max-width:100%;box-sizing:border-box}
 [data-fatura-alt-kontrol-body]{order:3}
 [data-magaza-odeme-dagilimi-body]{order:4}
 }
