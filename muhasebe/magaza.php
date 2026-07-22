@@ -39,6 +39,6 @@ page_header('Mağaza', 'magaza');
 </style>
 <script src="assets/magaza-odeme-dagilimi.js?v=4"></script>
 <?php if (!is_store_sales_user()): ?>
-<script src="assets/magaza-gunluk-satis.js?v=4"></script>
+<script src="assets/magaza-gunluk-satis.js?v=5"></script>
 <?php endif; ?>
 <?php page_footer(); ?>
