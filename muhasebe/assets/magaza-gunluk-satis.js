@@ -94,6 +94,7 @@
     panel.innerHTML=''
       +'<div class="magaza-satis-head"><div><strong>Mağaza Günlük Satışları</strong><small>Günlük KDV dahil satış toplamını gir; sistem %10 KDV’yi ve matrahı otomatik ayırsın.</small></div><span data-magaza-status></span></div>'
       +'<article class="magaza-mobile-latest" data-magaza-mobile-latest><div class="magaza-mobile-latest-head"><span>Günlük toplam satış</span><strong data-magaza-latest-date>Dağılım yükleniyor…</strong></div><strong class="magaza-mobile-latest-total" data-magaza-latest-total>0,00 TL</strong><div class="magaza-mobile-latest-breakdown"><span>Nakit <strong data-magaza-latest-cash>0,00 TL</strong></span><span>Kart / POS <strong data-magaza-latest-card>0,00 TL</strong></span><span>Veresiye <strong data-magaza-latest-credit>0,00 TL</strong></span></div></article>'
+      +'<div class="magaza-mobile-payment-history" data-magaza-mobile-payment-history></div>'
       +'<div class="magaza-satis-summary"><article><span>Aylık satış</span><strong data-magaza-gross>0,00 TL</strong></article><article><span>Matrah</span><strong data-magaza-subtotal>0,00 TL</strong></article><article><span>%10 hesaplanan KDV</span><strong data-magaza-vat>0,00 TL</strong></article><article><span>Satış günü</span><strong data-magaza-count>0</strong></article></div>'
       +'<form class="magaza-satis-form" data-magaza-form autocomplete="off">'
       +'<label>Tarih<input type="date" name="sale_date" required></label>'
@@ -151,7 +152,8 @@
     panel=panel||document.querySelector('[data-magaza-gunluk-satis]');
     if(!panel) return;
     var card=panel.querySelector('[data-magaza-mobile-latest]');
-    if(!card) return;
+    var history=panel.querySelector('[data-magaza-mobile-payment-history]');
+    if(!card||!history) return;
 
     var rows=Array.from(document.querySelectorAll('[data-magaza-odeme-row]')).sort(function(a,b){
       return String(b.getAttribute('data-date')||'').localeCompare(String(a.getAttribute('data-date')||''));
@@ -170,6 +172,21 @@
     card.querySelector('[data-magaza-latest-cash]').textContent=money(cash);
     card.querySelector('[data-magaza-latest-card]').textContent=money(cardAmount);
     card.querySelector('[data-magaza-latest-credit]').textContent=money(credit);
+
+    history.innerHTML=rows.slice(1).map(function(item){
+      var itemCash=Number(item.getAttribute('data-cash')||0);
+      var itemCard=Number(item.getAttribute('data-card')||0);
+      var itemCredit=Number(item.getAttribute('data-credit')||0);
+      var itemDate=String(item.getAttribute('data-date')||'').split('-').reverse().join('.');
+      return '<article class="magaza-mobile-payment-card">'
+        +'<div class="magaza-mobile-payment-head"><span>Günlük toplam satış</span><strong>'+esc(itemDate)+'</strong></div>'
+        +'<strong class="magaza-mobile-payment-total">'+money(itemCash+itemCard+itemCredit)+'</strong>'
+        +'<div class="magaza-mobile-payment-breakdown">'
+        +'<span>Nakit <strong>'+money(itemCash)+'</strong></span>'
+        +'<span>Kart / POS <strong>'+money(itemCard)+'</strong></span>'
+        +'<span>Veresiye <strong>'+money(itemCredit)+'</strong></span>'
+        +'</div></article>';
+    }).join('');
   }
 
   document.addEventListener('bitke:magaza-odeme-updated',function(){
@@ -278,11 +295,11 @@
     +'.magaza-satis-panel *{pointer-events:auto}'
     +'.magaza-satis-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.magaza-satis-head>div{display:grid;gap:4px}.magaza-satis-head strong{font-size:15px}.magaza-satis-head small{font-size:10px;color:var(--muted)}.magaza-satis-head>span{font-size:10px;color:var(--muted)}.magaza-satis-head>span.is-success{color:var(--success)}.magaza-satis-head>span.is-danger{color:var(--danger)}'
     +'.magaza-satis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.magaza-satis-summary article{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--border);background:#fff;border-radius:12px}.magaza-satis-summary span{font-size:9px;color:var(--muted);font-weight:800}.magaza-satis-summary strong{font-size:13px}'
-    +'.magaza-mobile-latest{display:none}'
+    +'.magaza-mobile-latest,.magaza-mobile-payment-history{display:none}'
     +'.magaza-satis-form{display:grid;grid-template-columns:150px minmax(220px,1fr) minmax(220px,1.2fr) minmax(210px,.9fr) auto;gap:9px;align-items:end}.magaza-satis-form label{display:grid;gap:5px;font-size:10px;font-weight:800}.magaza-satis-form input{width:100%;border:1px solid var(--border);background:#fff;border-radius:10px;padding:9px 10px;user-select:text!important;-webkit-user-select:text!important}.magaza-satis-preview{font-size:10px;color:#6d5018;padding:9px 10px;border-radius:10px;background:#fff2d7}.magaza-satis-form>.btn{white-space:nowrap}'
     +'.magaza-satis-list table{min-width:760px}.magaza-satis-list th,.magaza-satis-list td{font-size:10px;padding:8px}.magaza-row-actions{display:flex;gap:8px}.magaza-row-actions button{border:0;background:transparent;color:var(--accent);font-weight:800;cursor:pointer;padding:0}.magaza-row-actions button:last-child{color:var(--danger)}.magaza-total-row td{border-top:2px solid #d8c6a5;background:#fff6e5;font-size:10px}.magaza-total-row strong{font-size:11px}'
     +'@media(max-width:1100px){.magaza-satis-form{grid-template-columns:1fr 1fr 1fr}.magaza-satis-preview{grid-column:1/3}.magaza-satis-summary{grid-template-columns:1fr 1fr}}'
-    +'@media(max-width:650px){.magaza-satis-panel{gap:10px;padding:12px}.magaza-satis-head{display:none}.magaza-mobile-latest{display:grid;order:2;gap:8px;padding:14px;border:1px solid #d7bd83;border-radius:16px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 12px 26px rgba(15,45,32,.18)}.magaza-mobile-latest.is-empty{opacity:.72}.magaza-mobile-latest-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-latest-head span{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-latest-head strong{font-size:11px}.magaza-mobile-latest-total{font-size:28px;line-height:1.05;color:#fff}.magaza-mobile-latest-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-latest-breakdown span{display:grid;gap:3px;padding:8px 7px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-latest-breakdown strong{font-size:11px;color:#fff}.magaza-satis-list{order:3}.magaza-satis-summary{order:4;grid-template-columns:1fr 1fr}.magaza-satis-form{order:5;grid-template-columns:1fr}.magaza-satis-preview{grid-column:auto}.magaza-satis-list table{min-width:0;width:100%;border-collapse:separate}.magaza-satis-list thead,.magaza-satis-list tfoot{display:none}.magaza-satis-list tbody{display:grid;gap:9px}.magaza-satis-list tr{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:11px;border:1px solid var(--border);border-radius:13px;background:#fff;box-shadow:0 5px 14px rgba(7,27,63,.05)}.magaza-satis-list td{display:grid;gap:3px;padding:0!important;border:0!important;font-size:11px}.magaza-satis-list td:before{content:attr(data-label);font-size:8px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}.magaza-satis-list td:nth-child(5),.magaza-satis-list td:nth-child(6){grid-column:1/-1}.magaza-row-actions{display:flex!important;flex-direction:row;justify-content:flex-end;padding-top:6px!important;border-top:1px solid var(--border)!important}.magaza-row-actions:before{margin-right:auto}}';
+    +'@media(max-width:650px){.magaza-satis-panel{gap:10px;padding:12px}.magaza-satis-head{display:none}.magaza-mobile-latest{display:grid;order:2;gap:8px;padding:14px;border:1px solid #d7bd83;border-radius:16px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 12px 26px rgba(15,45,32,.18)}.magaza-mobile-latest.is-empty{opacity:.72}.magaza-mobile-latest-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-latest-head span{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-latest-head strong{font-size:11px}.magaza-mobile-latest-total{font-size:28px;line-height:1.05;color:#fff}.magaza-mobile-latest-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-latest-breakdown span{display:grid;gap:3px;padding:8px 7px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-latest-breakdown strong{font-size:11px;color:#fff}.magaza-mobile-payment-history{display:grid;order:3;gap:10px}.magaza-mobile-payment-card{display:grid;gap:7px;padding:12px;border:1px solid #d7bd83;border-radius:15px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 8px 18px rgba(15,45,32,.14)}.magaza-mobile-payment-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-payment-head span{font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-payment-head strong{font-size:10px}.magaza-mobile-payment-total{font-size:23px;line-height:1.05;color:#fff}.magaza-mobile-payment-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-payment-breakdown span{display:grid;gap:3px;padding:7px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-payment-breakdown strong{font-size:10px;color:#fff}.magaza-satis-list,.magaza-satis-summary,.magaza-satis-form{display:none!important}}';
   document.head.appendChild(style);
 
   state.period=periodValue();
