@@ -1,9 +1,56 @@
 (function(){
   'use strict';
 
-  // Özel fatura sıralaması devre dışı kalır.
-  // Bu dosya mevcut sayfa yükleme zincirinde bulunduğu için Hareketler ekranındaki
-  // satış iadesi ve cari detayına geri dönüş akışını geriye uyumlu biçimde yönetir.
+  function faturaTarihAnahtari(row){
+    var firstCell=row&&row.cells&&row.cells[0]?row.cells[0]:null;
+    var match=String(firstCell?firstCell.textContent:'').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    if(!match) return 0;
+    return Number(match[3]+match[2]+match[1]);
+  }
+
+  function faturaSatirId(row){
+    var input=row?row.querySelector('input[name="id"]'):null;
+    return input?Number(input.value||0):0;
+  }
+
+  function faturalariYenidenEskiyeSirala(){
+    var tbody=document.querySelector('.table-wrap table tbody');
+    if(!tbody) return;
+    var rows=Array.from(tbody.children).filter(function(row){
+      return row.tagName==='TR'
+        && !row.classList.contains('empty')
+        && !row.hasAttribute('data-fatura-tab-empty');
+    });
+    var sorted=rows.slice().sort(function(a,b){
+      return faturaTarihAnahtari(b)-faturaTarihAnahtari(a)
+        || faturaSatirId(b)-faturaSatirId(a);
+    });
+    var changed=sorted.some(function(row,index){return row!==rows[index];});
+    if(changed) sorted.forEach(function(row){tbody.appendChild(row);});
+  }
+
+  function faturaSiralamayiBaslat(){
+    faturalariYenidenEskiyeSirala();
+    var tbody=document.querySelector('.table-wrap table tbody');
+    if(!tbody) return;
+    var scheduled=false;
+    new MutationObserver(function(){
+      if(scheduled) return;
+      scheduled=true;
+      window.setTimeout(function(){
+        scheduled=false;
+        faturalariYenidenEskiyeSirala();
+      },60);
+    }).observe(tbody,{childList:true});
+  }
+
+  if(/\/faturalar\.php$/i.test(location.pathname)){
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',faturaSiralamayiBaslat);
+    else faturaSiralamayiBaslat();
+    return;
+  }
+
+  // Hareketler ekranındaki satış iadesi ve cari detayına geri dönüş akışını yönetir.
   if(!/\/hareketler\.php$/i.test(location.pathname)) return;
 
   var UI_RETURN_TYPE='iade_ui';
