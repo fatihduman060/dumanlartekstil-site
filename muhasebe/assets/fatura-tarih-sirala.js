@@ -30,18 +30,21 @@
   }
 
   function faturaSiralamayiBaslat(){
-    faturalariYenidenEskiyeSirala();
-    var tbody=document.querySelector('.table-wrap table tbody');
-    if(!tbody) return;
     var scheduled=false;
-    new MutationObserver(function(){
+    function schedule(){
       if(scheduled) return;
       scheduled=true;
       window.setTimeout(function(){
         scheduled=false;
         faturalariYenidenEskiyeSirala();
-      },60);
-    }).observe(tbody,{childList:true});
+      },80);
+    }
+
+    faturalariYenidenEskiyeSirala();
+    new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true});
+    [250,750,1500,3000,5000].forEach(function(delay){
+      window.setTimeout(faturalariYenidenEskiyeSirala,delay);
+    });
   }
 
   if(/\/faturalar\.php$/i.test(location.pathname)){
