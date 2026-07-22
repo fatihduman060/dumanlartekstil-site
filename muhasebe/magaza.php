@@ -37,12 +37,21 @@ page_header('Mağaza', 'magaza');
 .magaza-mobile-latest,
 .magaza-satis-list,
 .magaza-satis-summary,
-.magaza-satis-form{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.magaza-satis-form,
+.magaza-odeme-panel,
+.magaza-odeme-head,
+.magaza-odeme-summary,
+.magaza-onceki-bozuk,
+.magaza-odeme-form,
+.magaza-odeme-list{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 .magaza-period-filter{order:2;display:grid;grid-template-columns:minmax(0,1fr) 106px;gap:8px;align-items:center;padding:9px}
 .magaza-period-filter input,.magaza-period-filter .btn{width:100%;max-width:100%;margin:0;min-width:0;box-sizing:border-box}
 .magaza-period-filter .btn{white-space:nowrap;padding-left:10px;padding-right:10px}
 .magaza-satis-list .table-wrap{width:100%;max-width:100%;min-width:0;overflow:hidden}
-.magaza-satis-summary article,.magaza-satis-form label,.magaza-satis-form input{min-width:0;max-width:100%;box-sizing:border-box}
+.magaza-odeme-panel{overflow:hidden}
+.magaza-odeme-list .table-wrap{width:100%;max-width:100%;min-width:0;overflow:auto}
+.magaza-satis-summary article,.magaza-satis-form label,.magaza-satis-form input,
+.magaza-odeme-summary article,.magaza-odeme-form label,.magaza-odeme-form input{min-width:0;max-width:100%;box-sizing:border-box}
 [data-fatura-alt-kontrol-body]{order:3}
 [data-magaza-odeme-dagilimi-body]{order:4}
 }
