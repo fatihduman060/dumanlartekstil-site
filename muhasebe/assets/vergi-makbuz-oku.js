@@ -188,20 +188,32 @@
     return match[3]+'-'+String(match[2]).padStart(2,'0')+'-'+String(match[1]).padStart(2,'0');
   }
 
+  function allIsoDates(value){
+    var rows=[];
+    var regex=/(\d{1,2})[.\/-](\d{1,2})[.\/-](20\d{2})/g;
+    var match;
+    while((match=regex.exec(String(value||'')))!==null){
+      rows.push(match[3]+'-'+String(match[2]).padStart(2,'0')+'-'+String(match[1]).padStart(2,'0'));
+      if(match.index===regex.lastIndex) regex.lastIndex++;
+    }
+    return rows;
+  }
+
   function linesOf(text){
     return String(text||'').split(/\r?\n/).map(function(line){return line.replace(/\s+/g,' ').trim();}).filter(Boolean);
   }
 
-  function valueNearLabel(lines,labels,extractor){
+  function valueNearLabel(lines,labels,extractor,maxOffset){
     var labelKeys=labels.map(norm);
+    var offsetLimit=Number.isFinite(maxOffset)?maxOffset:2;
     for(var i=0;i<lines.length;i++){
       var line=lines[i];
       var lineKey=norm(line);
       var matched=labelKeys.some(function(label){return lineKey.indexOf(label)!==-1;});
       if(!matched) continue;
-      var candidates=[line,lines[i+1]||'',lines[i+2]||''];
-      for(var j=0;j<candidates.length;j++){
-        var value=extractor(candidates[j],lineKey,j);
+      for(var j=0;j<=offsetLimit;j++){
+        var candidate=lines[i+j]||'';
+        var value=extractor(candidate,lineKey,j);
         if(value!==null&&value!==undefined&&value!=='') return value;
       }
     }
@@ -209,17 +221,21 @@
   }
 
   function detectTaxType(text,lines){
-    var direct=valueNearLabel(lines,['Vergi Türü','Vergi Turu','Beyanname Türü','Beyanname Turu','Tahakkukun Cinsi','Vergi Cinsi'],function(line){
-      var match=String(line).match(/(?:VERG[Iİ]\s*T[ÜU]R[ÜU]|BEYANNAME\s*T[ÜU]R[ÜU]|TAHAKKUKUN\s*C[Iİ]NS[Iİ]|VERG[Iİ]\s*C[Iİ]NS[Iİ])\s*[:\-]?\s*(.{3,80})/i);
+    var key=norm(text);
+    if(key.indexOf('KATMA DEGER VERGISI TEVKIFATI')!==-1) return 'Katma Değer Vergisi Tevkifatı';
+
+    var direct=valueNearLabel(lines,[
+      'Ana Vergi Adı','Ana Vergi Adi','Vergi Türü','Vergi Turu','Beyanname Türü','Beyanname Turu','Tahakkukun Cinsi','Vergi Cinsi'
+    ],function(line){
+      var match=String(line).match(/(?:ANA\s*VERG[Iİ]\s*ADI|VERG[Iİ]\s*T[ÜU]R[ÜU]|BEYANNAME\s*T[ÜU]R[ÜU]|TAHAKKUKUN\s*C[Iİ]NS[Iİ]|VERG[Iİ]\s*C[Iİ]NS[Iİ])\s*[:\-]?\s*(.{3,100})/i);
       return match?match[1].trim():'';
-    });
+    },2);
     if(direct&&norm(direct).length>=3&&!/^\d+$/.test(norm(direct))) return direct.replace(/\s{2,}.*/,'').trim();
 
-    var key=norm(text);
     var types=[
       ['MUHTASAR VE PRIM HIZMET','Muhtasar ve Prim Hizmet Beyannamesi'],
+      ['KATMA DEGER VERGISI TEVKIFATI','Katma Değer Vergisi Tevkifatı'],
       ['KATMA DEGER VERGISI','Katma Değer Vergisi (KDV)'],
-      ['KDV','Katma Değer Vergisi (KDV)'],
       ['KURUMLAR VERGISI','Kurumlar Vergisi'],
       ['GECICI VERGI','Geçici Vergi'],
       ['GELIR VERGISI STOPAJ','Gelir Vergisi Stopajı'],
@@ -231,67 +247,117 @@
       ['BAG KUR','Bağ-Kur Primi'],
       ['KONAKLAMA VERGISI','Konaklama Vergisi'],
       ['BANKA VE SIGORTA MUAMELELERI','BSMV'],
-      ['OZEL TUKETIM VERGISI','Özel Tüketim Vergisi (ÖTV)']
+      ['OZEL TUKETIM VERGISI','Özel Tüketim Vergisi (ÖTV)'],
+      ['KDV','Katma Değer Vergisi (KDV)']
     ];
     for(var i=0;i<types.length;i++) if(key.indexOf(types[i][0])!==-1) return types[i][1];
     return 'Vergi Ödemesi';
   }
 
-  function detectAmount(lines,text){
-    var labels=['Ödenecek Toplam Tutar','Toplam Ödenecek','Ödenecek Tutar','Toplam Borç','Tahakkuk Eden Tutar','Tahakkuk Tutarı','Toplam Tutar','Ödeme Tutarı','Tahsil Edilen Tutar'];
+  function reliableAmountFromTotalLine(lines){
+    for(var i=lines.length-1;i>=0;i--){
+      var key=norm(lines[i]);
+      if(!(key==='TOPLAM'||key.indexOf('TOPLAM ODENECEK')!==-1||key.indexOf('ODENECEK TOPLAM')!==-1)) continue;
+      for(var offset=0;offset<=2;offset++){
+        var amounts=moneyMatches(lines[i+offset]||'').filter(function(item){return item.value>0;});
+        if(amounts.length) return amounts[amounts.length-1].value;
+      }
+    }
+    return null;
+  }
+
+  function detectAmount(lines){
+    var total=reliableAmountFromTotalLine(lines);
+    if(total!==null) return total;
+
+    var labels=[
+      'Ödenecek Toplam Tutar','Toplam Ödenecek','Ödenecek Tutar','Ödenecek Olan','Toplam Borç',
+      'Tahakkuk Eden Tutar','Tahakkuk Tutarı','Toplam Tutar','Ödeme Tutarı','Tahsil Edilen Tutar'
+    ];
     var value=valueNearLabel(lines,labels,function(line){
-      var amounts=moneyMatches(line);
+      var amounts=moneyMatches(line).filter(function(item){return item.value>0;});
       return amounts.length?amounts[amounts.length-1].value:null;
-    });
+    },4);
     if(value!=='') return Number(value);
 
-    var all=moneyMatches(text).map(function(item){return item.value;}).filter(function(amount){return amount>0&&amount<1000000000;});
-    if(!all.length) return null;
-    return Math.max.apply(Math,all);
+    // Güvenli davranış: Matrahı veya başka büyük bir rakamı toplam sanıp yazma.
+    // Etiketli/Toplam satırı bulunamadıysa alan boş kalır ve kullanıcı kontrol eder.
+    return null;
   }
 
   function detectDueDate(lines,text){
-    var value=valueNearLabel(lines,['Vade Tarihi','Son Ödeme Tarihi','Son Odeme Tarihi','Ödeme Vadesi','Odeme Vadesi'],function(line){return isoDate(line);});
+    var value=valueNearLabel(lines,[
+      'Vade Tarihi','Vadesi','Son Ödeme Tarihi','Son Odeme Tarihi','Ödeme Vadesi','Odeme Vadesi'
+    ],function(line){
+      var dates=allIsoDates(line);
+      return dates.length?dates[dates.length-1]:'';
+    },5);
     if(value) return value;
+
     var key=norm(text);
-    var index=Math.max(key.indexOf('VADE TARIHI'),key.indexOf('SON ODEME TARIHI'));
-    if(index>=0) return isoDate(String(text).slice(index,index+120));
+    var labels=['VADE TARIHI','VADESI','SON ODEME TARIHI','ODEME VADESI'];
+    for(var i=0;i<labels.length;i++){
+      var index=key.indexOf(labels[i]);
+      if(index>=0){
+        var date=isoDate(String(text).slice(index,index+260));
+        if(date) return date;
+      }
+    }
     return '';
   }
 
-  function detectPeriod(lines,text){
-    var direct=valueNearLabel(lines,['Vergilendirme Dönemi','Vergilendirme Donemi','Dönem','Donem','Beyanname Dönemi','Beyanname Donemi'],function(line){
-      var range=String(line).match(/\b(\d{1,2}[.\/-]\d{1,2}[.\/-]20\d{2})\s*[-–]\s*(\d{1,2}[.\/-]\d{1,2}[.\/-]20\d{2})\b/);
-      if(range) return range[1]+' - '+range[2];
-      var ym=String(line).match(/\b(20\d{2})[\/-](0?[1-9]|1[0-2])\b/);
-      if(ym) return ym[1]+'/'+String(ym[2]).padStart(2,'0');
-      var my=String(line).match(/\b(0?[1-9]|1[0-2])[\/-](20\d{2})\b/);
-      if(my) return my[2]+'/'+String(my[1]).padStart(2,'0');
-      return '';
-    });
+  function periodFromText(value){
+    var source=String(value||'');
+    var range=source.match(/\b(20\d{2})[\/-](0?[1-9]|1[0-2])\s*[-–]\s*(20\d{2})[\/-](0?[1-9]|1[0-2])\b/);
+    if(range) return range[1]+'/'+String(range[2]).padStart(2,'0')+' - '+range[3]+'/'+String(range[4]).padStart(2,'0');
+    var compact=source.match(/\b(20\d{2})(0[1-9]|1[0-2])(20\d{2})(0[1-9]|1[0-2])\b/);
+    if(compact) return compact[1]+'/'+compact[2]+' - '+compact[3]+'/'+compact[4];
+    var ym=source.match(/\b(20\d{2})[\/-](0?[1-9]|1[0-2])\b/);
+    if(ym) return ym[1]+'/'+String(ym[2]).padStart(2,'0');
+    var my=source.match(/\b(0?[1-9]|1[0-2])[\/-](20\d{2})\b/);
+    if(my) return my[2]+'/'+String(my[1]).padStart(2,'0');
+    return '';
+  }
+
+  function detectPeriod(lines,text,fileName){
+    var direct=valueNearLabel(lines,[
+      'Vergilendirme Dönemi','Vergilendirme Donemi','Beyanname Dönemi','Beyanname Donemi'
+    ],function(line){return periodFromText(line);},5);
     if(direct) return direct;
-    var match=String(text).match(/\b(20\d{2})[\/-](0?[1-9]|1[0-2])\b/);
-    return match?match[1]+'/'+String(match[2]).padStart(2,'0'):'';
+
+    var fromFile=periodFromText(fileName||'');
+    if(fromFile) return fromFile;
+
+    // Genel metindeki ilk tarih/ay kabul tarihinden gelebilir. Sadece açık dönem biçimi varsa kullan.
+    var key=norm(text);
+    var index=Math.max(key.indexOf('VERGILENDIRME DONEMI'),key.indexOf('BEYANNAME DONEMI'));
+    if(index>=0){
+      var nearby=periodFromText(String(text).slice(index,index+260));
+      if(nearby) return nearby;
+    }
+    return '';
   }
 
   function detectDocumentNo(lines){
-    return valueNearLabel(lines,['Tahakkuk Fiş No','Tahakkuk Fis No','Tahakkuk No','Belge No','Alındı No','Alindi No','Makbuz No','Beyanname No'],function(line){
+    return valueNearLabel(lines,[
+      'Tahakkuk Fiş No','Tahakkuk Fis No','Tahakkuk No','Belge No','Alındı No','Alindi No','Makbuz No','Beyanname No'
+    ],function(line){
       var match=String(line).match(/(?:TAHAKKUK\s*F[Iİ]Ş\s*NO|TAHAKKUK\s*NO|BELGE\s*NO|ALINDI\s*NO|MAKBUZ\s*NO|BEYANNAME\s*NO)\s*[:\-]?\s*([A-Z0-9\/-]{5,40})/i);
       return match?match[1].trim():'';
-    });
+    },3);
   }
 
   function formatMoney(value){
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
 
-  function parseDocument(text){
+  function parseDocument(text,fileName){
     var lines=linesOf(text);
     return {
       taxType:detectTaxType(text,lines),
-      amount:detectAmount(lines,text),
+      amount:detectAmount(lines),
       dueDate:detectDueDate(lines,text),
-      period:detectPeriod(lines,text),
+      period:detectPeriod(lines,text,fileName),
       documentNo:detectDocumentNo(lines),
       textLength:norm(text).length
     };
@@ -307,15 +373,24 @@
     return true;
   }
 
+  function clearAutoFields(){
+    if(!form) return;
+    ['tax_type','tax_period','document_no','due_date','amount'].forEach(function(name){
+      var input=form.querySelector('[name="'+name+'"]');
+      if(input) input.value='';
+    });
+  }
+
   if(fileInput){
     fileInput.addEventListener('change',function(){
       var file=fileInput.files&&fileInput.files[0];
       if(!file){setStatus('Belgeyi seçtiğinde okumaya başlayacağım.','');return;}
       if(file.size>10*1024*1024){setStatus('Dosya 10 MB sınırını aşıyor.','danger');return;}
+      clearAutoFields();
       setStatus('Belge hazırlanıyor...','loading');
       readFile(file)
         .then(function(text){
-          var parsed=parseDocument(text);
+          var parsed=parseDocument(text,file.name||'');
           fill('tax_type',parsed.taxType);
           fill('tax_period',parsed.period);
           fill('document_no',parsed.documentNo);
@@ -326,10 +401,10 @@
           if(parsed.taxType) found.push('vergi türü');
           if(parsed.period) found.push('dönem');
           if(parsed.dueDate) found.push('vade');
-          if(parsed.amount!==null) found.push('tutar');
+          if(parsed.amount!==null) found.push('toplam tutar');
           if(parsed.documentNo) found.push('belge no');
           if(parsed.amount===null){
-            setStatus('Belge okundu fakat tutar kesin bulunamadı. Tutarı elle yazıp diğer alanları kontrol et.','warning');
+            setStatus('Belge okundu fakat “TOPLAM / ÖDENECEK” tutarı kesin bulunamadı. Yanlış matrah yazmamak için tutar boş bırakıldı.','warning');
           }else{
             setStatus('Belge okundu: '+found.join(', ')+' bulundu. Kaydetmeden önce bilgileri kontrol et.','success');
           }
