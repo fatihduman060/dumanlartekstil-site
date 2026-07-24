@@ -272,6 +272,7 @@ function page_footer(): void
   <script src="assets/dashboard-acik-cekler.js?v=2"></script>
   <script src="assets/dashboard-vade-hatirlatmalari.js?v=3"></script>
   <script src="assets/vergi-odemeleri-link.js?v=1"></script>
+  <script src="assets/vergi-tahakkuk-v2.js?v=1"></script>
   <script src="assets/fatura-okuma-core.js?v=6"></script>
   <script src="assets/fatura-pdf-oku.js?v=3"></script>
   <script src="assets/fatura-yeni-cari.js?v=2"></script>
