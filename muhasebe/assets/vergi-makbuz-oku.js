@@ -258,30 +258,68 @@
     for(var i=lines.length-1;i>=0;i--){
       var key=norm(lines[i]);
       if(!(key==='TOPLAM'||key.indexOf('TOPLAM ODENECEK')!==-1||key.indexOf('ODENECEK TOPLAM')!==-1)) continue;
-      for(var offset=0;offset<=2;offset++){
-        var amounts=moneyMatches(lines[i+offset]||'').filter(function(item){return item.value>0;});
-        if(amounts.length) return amounts[amounts.length-1].value;
+
+      var sameLine=moneyMatches(lines[i]).filter(function(item){return item.value>0;});
+      if(sameLine.length) return sameLine[sameLine.length-1].value;
+
+      for(var distance=1;distance<=2;distance++){
+        var nearby=[];
+        if(lines[i-distance]) nearby=nearby.concat(moneyMatches(lines[i-distance]));
+        if(lines[i+distance]) nearby=nearby.concat(moneyMatches(lines[i+distance]));
+        nearby=nearby.filter(function(item){return item.value>0;});
+        if(nearby.length===1) return nearby[0].value;
       }
     }
     return null;
+  }
+
+  function sumPayableColumnRows(lines){
+    var headerIndex=-1;
+    for(var i=0;i<lines.length;i++){
+      var key=norm(lines[i]);
+      if(key.indexOf('ODENECEK OLAN')!==-1){headerIndex=i;break;}
+    }
+    if(headerIndex<0) return null;
+
+    var values=[];
+    for(var rowIndex=headerIndex+1;rowIndex<Math.min(lines.length,headerIndex+15);rowIndex++){
+      var row=String(lines[rowIndex]||'');
+      var rowKey=norm(row);
+      if(rowKey.indexOf('TOPLAM')!==-1) break;
+      var amounts=moneyMatches(row).filter(function(item){return item.value>=0;});
+      var hasDate=allIsoDates(row).length>0;
+      if(!amounts.length) continue;
+
+      // Tahakkuk tablosunda son parasal değer “Ödenecek Olan” sütunudur.
+      // Tarihli satırlar kesin veri satırıdır; tarih ayrı parçaya bölünmüşse çoklu tutarlı satırı da kabul et.
+      if(hasDate||amounts.length>=3){
+        var payable=amounts[amounts.length-1].value;
+        if(payable>0) values.push(payable);
+      }
+    }
+
+    if(values.length<2) return null;
+    var sum=Math.round(values.reduce(function(total,value){return total+value;},0)*100)/100;
+    return sum>0?sum:null;
   }
 
   function detectAmount(lines){
     var total=reliableAmountFromTotalLine(lines);
     if(total!==null) return total;
 
+    var columnTotal=sumPayableColumnRows(lines);
+    if(columnTotal!==null) return columnTotal;
+
     var labels=[
-      'Ödenecek Toplam Tutar','Toplam Ödenecek','Ödenecek Tutar','Ödenecek Olan','Toplam Borç',
-      'Tahakkuk Eden Tutar','Tahakkuk Tutarı','Toplam Tutar','Ödeme Tutarı','Tahsil Edilen Tutar'
+      'Ödenecek Toplam Tutar','Toplam Ödenecek','Ödenecek Tutar','Toplam Borç',
+      'Tahakkuk Tutarı','Toplam Tutar','Ödeme Tutarı','Tahsil Edilen Tutar'
     ];
     var value=valueNearLabel(lines,labels,function(line){
       var amounts=moneyMatches(line).filter(function(item){return item.value>0;});
       return amounts.length?amounts[amounts.length-1].value:null;
-    },4);
+    },3);
     if(value!=='') return Number(value);
 
-    // Güvenli davranış: Matrahı veya başka büyük bir rakamı toplam sanıp yazma.
-    // Etiketli/Toplam satırı bulunamadıysa alan boş kalır ve kullanıcı kontrol eder.
     return null;
   }
 
@@ -328,7 +366,6 @@
     var fromFile=periodFromText(fileName||'');
     if(fromFile) return fromFile;
 
-    // Genel metindeki ilk tarih/ay kabul tarihinden gelebilir. Sadece açık dönem biçimi varsa kullan.
     var key=norm(text);
     var index=Math.max(key.indexOf('VERGILENDIRME DONEMI'),key.indexOf('BEYANNAME DONEMI'));
     if(index>=0){
