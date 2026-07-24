@@ -108,6 +108,7 @@ function private_finance_script_names(): array
         'teklif-yazdir.php',
         'tahsilat-makbuzu.php',
         'tahsilat-yazdir.php',
+        'vergi-odemeleri.php',
     ];
 }
 
@@ -159,6 +160,7 @@ function page_header(string $title, string $active = ''): void
 
         if (can_access_private_finance_modules()) {
             $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
+            $nav[] = ['vergi_odemeleri', 'vergi-odemeleri.php', 'Vergi Ödemeleri', '₺'];
         }
 
         if ($fullAdmin) {
@@ -208,7 +210,7 @@ function page_header(string $title, string $active = ''): void
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/muhasebe.css?v=515" />
   <link rel="stylesheet" href="assets/cek-renkleri.css?v=1" />
-  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
+  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"],a[href^="vergi-odemeleri.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
 </head>
 <body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ''; ?>">
   <div class="app-shell">
@@ -269,6 +271,7 @@ function page_footer(): void
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/dashboard-acik-cekler.js?v=2"></script>
   <script src="assets/dashboard-vade-hatirlatmalari.js?v=3"></script>
+  <script src="assets/vergi-odemeleri-link.js?v=1"></script>
   <script src="assets/fatura-okuma-core.js?v=6"></script>
   <script src="assets/fatura-pdf-oku.js?v=3"></script>
   <script src="assets/fatura-yeni-cari.js?v=2"></script>
