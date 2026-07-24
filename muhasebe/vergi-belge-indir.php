@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '/bootstrap.php';
-require_login();
+require_once __DIR__ . '/layout.php';
+require_private_finance_modules();
 
 $id = (int)($_GET['id'] ?? 0);
 $stmt = db()->prepare('SELECT document_path, document_name, document_mime FROM tax_payments WHERE id=? LIMIT 1');
