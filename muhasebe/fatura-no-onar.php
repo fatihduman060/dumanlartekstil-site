@@ -1,5 +1,8 @@
 <?php
 
+// Tek seferlik özel alacak temizliği; alınan/verilen çekler ve bağlı hareketler korunur.
+require_once __DIR__ . '/ozel-alacak-sifirla-v1.php';
+
 function fatura_no_dosya_adindan(?string $fileName): string
 {
     $fileName = strtoupper((string)$fileName);
