@@ -263,6 +263,7 @@ function page_footer(): void
   <?php else: ?>
   <script src="assets/super-admin-role.js?v=2"></script>
   <script src="assets/muhasebe-polish.js?v=1"></script>
+  <script src="assets/loglar-sadelestir.js?v=1"></script>
   <script src="assets/teklif-hesap-fix.js?v=3"></script>
   <script src="assets/teklif-barkod-auto.js?v=1"></script>
   <script src="assets/cek-vade-uyari.js?v=2"></script>
