@@ -4,12 +4,33 @@ require_admin();
 
 $db = db();
 
+function log_text_starts_with(string $value, string $needle): bool
+{
+    if ($needle === '') return true;
+    return substr($value, 0, strlen($needle)) === $needle;
+}
+
+function log_text_ends_with(string $value, string $needle): bool
+{
+    if ($needle === '') return true;
+    if (strlen($needle) > strlen($value)) return false;
+    return substr($value, -strlen($needle)) === $needle;
+}
+
+function log_text_contains(string $value, string $needle): bool
+{
+    return $needle === '' || strpos($value, $needle) !== false;
+}
+
 function log_audit_entity_label(string $type): string
 {
-    return [
+    $labels = [
         'magaza_gunluk_satis' => 'Mağaza Günlük Satışı',
         'magaza_odeme_dagilimi' => 'Mağaza Ödeme Dağılımı',
-    ][$type] ?? audit_entity_label($type);
+        'vergi' => 'Vergi Ödemesi',
+        'belge' => 'Belge',
+    ];
+    return $labels[$type] ?? audit_entity_label($type);
 }
 
 function log_audit_decode(?string $json): ?array
@@ -63,7 +84,7 @@ function log_audit_field_label(string $entityType, string $key): string
     $specs = log_audit_specs($entityType);
     if (isset($specs[$key]['label'])) return $specs[$key]['label'];
 
-    return [
+    $labels = [
         'name' => 'Ad',
         'amount' => 'Tutar',
         'description' => 'Açıklama',
@@ -79,18 +100,19 @@ function log_audit_field_label(string $entityType, string $key): string
         'role' => 'Kullanıcı rolü',
         'is_active' => 'Aktiflik',
         'note' => 'Not',
-    ][$key] ?? ucwords(str_replace('_', ' ', $key));
+    ];
+    return $labels[$key] ?? ucwords(str_replace('_', ' ', $key));
 }
 
 function log_audit_field_type(string $entityType, string $key): string
 {
     $specs = log_audit_specs($entityType);
     if (isset($specs[$key]['type'])) return $specs[$key]['type'];
-    if ($key === 'vat_rate' || str_ends_with($key, '_rate')) return 'percent';
-    if ($key === 'is_active' || str_starts_with($key, 'is_')) return 'boolean';
-    if ($key === 'sale_date' || $key === 'movement_date' || $key === 'due_date' || $key === 'paid_date' || str_ends_with($key, '_date')) return 'date';
-    if (str_ends_with($key, '_at')) return 'datetime';
-    if ($key === 'amount' || str_contains($key, 'amount') || str_contains($key, 'subtotal') || str_contains($key, 'total')) return 'amount';
+    if ($key === 'vat_rate' || log_text_ends_with($key, '_rate')) return 'percent';
+    if ($key === 'is_active' || log_text_starts_with($key, 'is_')) return 'boolean';
+    if (in_array($key, ['sale_date','movement_date','due_date','paid_date'], true) || log_text_ends_with($key, '_date')) return 'date';
+    if (log_text_ends_with($key, '_at')) return 'datetime';
+    if ($key === 'amount' || log_text_contains($key, 'amount') || log_text_contains($key, 'subtotal') || log_text_contains($key, 'total')) return 'amount';
     return 'text';
 }
 
@@ -124,7 +146,9 @@ function log_audit_visible_keys(string $entityType, ?array $before, ?array $afte
     if ($specs) return array_keys($specs);
 
     $keys = array_unique(array_merge(array_keys($before ?? []), array_keys($after ?? [])));
-    return array_values(array_filter($keys, fn($key) => !log_audit_hidden_field((string)$key)));
+    return array_values(array_filter($keys, function ($key) {
+        return !log_audit_hidden_field((string)$key);
+    }));
 }
 
 function log_audit_snapshot(string $entityType, ?string $json, int $limit = 9): array
@@ -190,7 +214,7 @@ $username = trim($_GET['username'] ?? '');
 $q = trim($_GET['q'] ?? '');
 
 $validEntities = [
-    'cari', 'hareket', 'cek', 'ozel_alacak', 'hesap', 'hesap_hareketi', 'kullanici', 'yedek', 'kategori',
+    'cari', 'hareket', 'cek', 'ozel_alacak', 'hesap', 'hesap_hareketi', 'kullanici', 'yedek', 'kategori', 'belge', 'vergi',
     'magaza_gunluk_satis', 'magaza_odeme_dagilimi',
 ];
 $validActions = [
@@ -289,7 +313,17 @@ page_header('Loglar', 'loglar');
       <thead><tr><th>Tarih</th><th>Kullanıcı</th><th>Kayıt</th><th>İşlem</th><th>Ne değişti?</th><th>Önce</th><th>Sonra</th><th>IP</th></tr></thead>
       <tbody>
         <?php if(!$audit): ?><tr><td colspan="8" class="empty">Bu filtreye uygun audit kaydı yok.</td></tr><?php endif; ?>
-        <?php foreach($audit as $a): $changes = log_audit_changes($a); $beforeRows = log_audit_snapshot((string)$a['entity_type'], $a['old_value']); $afterRows = log_audit_snapshot((string)$a['entity_type'], $a['new_value']); ?>
+        <?php foreach($audit as $a):
+          try {
+              $changes = log_audit_changes($a);
+              $beforeRows = log_audit_snapshot((string)$a['entity_type'], $a['old_value']);
+              $afterRows = log_audit_snapshot((string)$a['entity_type'], $a['new_value']);
+          } catch (Throwable $e) {
+              $changes = [];
+              $beforeRows = [];
+              $afterRows = [];
+          }
+        ?>
           <tr>
             <td><?php echo e(tr_datetime($a['created_at'])); ?></td>
             <td><?php echo e($a['username'] ?: '-'); ?></td>
