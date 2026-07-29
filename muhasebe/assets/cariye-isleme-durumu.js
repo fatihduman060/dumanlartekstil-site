@@ -229,27 +229,36 @@
   var ids = Object.keys(rowsById);
   if (!ids.length) return;
 
-  function addRemoveStyles() {
-    if (document.getElementById('cariden-cikar-style')) return;
-    var style = document.createElement('style');
-    style.id = 'cariden-cikar-style';
-    style.textContent = [
-      '.cariden-cikar-form{display:inline-flex!important;margin:0!important}',
-      '.cariden-cikar-btn{border:1px solid #d66b62!important;background:#fff5f3!important;color:#a6352d!important;border-radius:999px!important;padding:7px 10px!important;font-weight:900!important;cursor:pointer!important;white-space:nowrap!important}',
-      '.cariden-cikar-btn:hover{background:#ffe2de!important}',
-      '.cariden-cikar-kaynak{display:block;color:#8a6c68;font-size:10px;font-weight:750;margin-top:4px;max-width:180px}'
-    ].join('');
-    document.head.appendChild(style);
+  function important(el, name, value) {
+    if (el) el.style.setProperty(name, value, 'important');
   }
 
   function buildRemoveButton(movementId, info, row) {
     var actions = row.querySelector('.row-actions') || row.lastElementChild;
     if (!actions || actions.querySelector('.cariden-cikar-form')) return;
 
+    important(actions, 'align-items', 'flex-start');
+    important(actions, 'gap', '5px');
+
+    var wrap = document.createElement('span');
+    wrap.className = 'cariden-cikar-wrap';
+    important(wrap, 'display', 'inline-flex');
+    important(wrap, 'flex-direction', 'column');
+    important(wrap, 'align-items', 'flex-start');
+    important(wrap, 'gap', '1px');
+    important(wrap, 'width', '102px');
+    important(wrap, 'max-width', '102px');
+    important(wrap, 'margin', '0');
+    important(wrap, 'padding', '0');
+
     var form = document.createElement('form');
     form.method = 'post';
     form.action = 'cari-hareket-cariden-cikar.php';
     form.className = 'cariden-cikar-form';
+    important(form, 'display', 'block');
+    important(form, 'margin', '0');
+    important(form, 'padding', '0');
+    important(form, 'line-height', '1');
     form.addEventListener('submit', function (event) {
       var message = 'Bu kayıt cari bakiyeden çıkarılacak. Belge silinmeyecek; hareket iptal geçmişinde saklanacak. Devam edilsin mi?';
       if (!confirm(message)) event.preventDefault();
@@ -273,18 +282,44 @@
     button.type = 'submit';
     button.className = 'cariden-cikar-btn';
     button.textContent = 'Cariden çıkar';
+    important(button, 'min-height', '0');
+    important(button, 'height', '18px');
+    important(button, 'width', 'auto');
+    important(button, 'padding', '1px 5px');
+    important(button, 'margin', '0');
+    important(button, 'border-radius', '5px');
+    important(button, 'font-size', '8px');
+    important(button, 'line-height', '1');
+    important(button, 'font-weight', '800');
+    important(button, 'letter-spacing', '0');
+    important(button, 'box-shadow', 'none');
+    important(button, 'white-space', 'nowrap');
     form.appendChild(button);
-    actions.appendChild(form);
+    wrap.appendChild(form);
 
     if (info.source_label) {
       var note = document.createElement('small');
       note.className = 'cariden-cikar-kaynak';
       note.textContent = info.source_label;
-      actions.appendChild(note);
+      important(note, 'display', 'block');
+      important(note, 'position', 'static');
+      important(note, 'width', '100px');
+      important(note, 'max-width', '100px');
+      important(note, 'margin', '1px 0 0 0');
+      important(note, 'padding', '0');
+      important(note, 'font-size', '7px');
+      important(note, 'line-height', '1.08');
+      important(note, 'font-weight', '600');
+      important(note, 'color', '#8b7774');
+      important(note, 'white-space', 'normal');
+      important(note, 'overflow-wrap', 'anywhere');
+      important(note, 'text-align', 'left');
+      wrap.appendChild(note);
     }
+
+    actions.appendChild(wrap);
   }
 
-  addRemoveStyles();
   fetch('cari-hareket-cariden-cikar.php?ids=' + encodeURIComponent(ids.join(',')), {
     credentials: 'same-origin',
     cache: 'no-store',
