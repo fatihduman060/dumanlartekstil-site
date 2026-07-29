@@ -17,7 +17,6 @@ function dashboard_reminder_money($amount, ?string $currency = 'TL'): string
 
 function dashboard_reminder_bucket(string $dueDate, string $today): string
 {
-    if ($dueDate < $today) return 'overdue';
     if ($dueDate === $today) return 'today';
     return 'week';
 }
@@ -25,7 +24,6 @@ function dashboard_reminder_bucket(string $dueDate, string $today): string
 function dashboard_reminder_due_text(string $dueDate, string $today): string
 {
     $diff = (int)round((strtotime($dueDate) - strtotime($today)) / 86400);
-    if ($diff < 0) return abs($diff) . ' gün gecikti';
     if ($diff === 0) return 'Bugün';
     if ($diff === 1) return 'Yarın';
     return $diff . ' gün kaldı';
@@ -77,11 +75,11 @@ try {
     $today = date('Y-m-d');
     $weekAhead = date('Y-m-d', strtotime('+7 days'));
     $groups = [
-        'overdue' => ['key'=>'overdue', 'label'=>'Geciken', 'tone'=>'danger', 'items'=>[]],
         'today' => ['key'=>'today', 'label'=>'Bugün', 'tone'=>'warning', 'items'=>[]],
         'week' => ['key'=>'week', 'label'=>'7 gün içinde', 'tone'=>'info', 'items'=>[]],
     ];
 
+    // Geçmiş vadeler bu kartta gösterilmez; yalnızca bugün ve önümüzdeki 7 gün listelenir.
     // Çeklerden oluşan bağlı hareketler ayrıca listelenmesin; çek kendi başlığıyla tek kez gösterilsin.
     $movementStmt = db()->prepare("SELECT m.id, m.cari_id, m.movement_type, m.amount, COALESCE(m.currency,'TL') AS currency,
             m.due_date, m.description, c.name AS cari_name
@@ -93,11 +91,12 @@ try {
           AND COALESCE(m.reminder_status,'bekliyor')!='tamamlandi'
           AND m.due_date IS NOT NULL
           AND m.due_date != ''
+          AND m.due_date >= ?
           AND m.due_date <= ?
           AND m.movement_type IN ('alacak','verecek')
         ORDER BY m.due_date ASC, m.id DESC
         LIMIT 200");
-    $movementStmt->execute([$weekAhead]);
+    $movementStmt->execute([$today, $weekAhead]);
     foreach ($movementStmt->fetchAll() as $row) {
         $dueDate = (string)$row['due_date'];
         $incoming = (string)$row['movement_type'] === 'alacak';
@@ -131,10 +130,11 @@ try {
           AND ch.status IN ('bekliyor','bankaya_verildi')
           AND ch.due_date IS NOT NULL
           AND ch.due_date != ''
+          AND ch.due_date >= ?
           AND ch.due_date <= ?
         ORDER BY ch.due_date ASC, ch.id DESC
         LIMIT 200");
-    $checkStmt->execute([$weekAhead]);
+    $checkStmt->execute([$today, $weekAhead]);
     foreach ($checkStmt->fetchAll() as $row) {
         $dueDate = (string)$row['due_date'];
         $incoming = (string)$row['direction'] === 'alinacak';
