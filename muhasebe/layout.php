@@ -265,6 +265,7 @@ function page_footer(): void
   <script src="assets/muhasebe-polish.js?v=1"></script>
   <script src="assets/cariye-isleme-durumu.js?v=1"></script>
   <script src="assets/cariden-cikar-kompakt.js?v=1"></script>
+  <script src="assets/hareket-satis-detay.js?v=1"></script>
   <script src="assets/loglar-sadelestir.js?v=1"></script>
   <script src="assets/teklif-hesap-fix.js?v=3"></script>
   <script src="assets/teklif-barkod-auto.js?v=1"></script>
