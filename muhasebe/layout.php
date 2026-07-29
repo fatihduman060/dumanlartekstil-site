@@ -201,7 +201,7 @@ function page_header(string $title, string $active = ''): void
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
   <title><?php echo e($title); ?> | <?php echo e(APP_NAME); ?></title>
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml" />
@@ -210,6 +210,7 @@ function page_header(string $title, string $active = ''): void
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/muhasebe.css?v=515" />
   <link rel="stylesheet" href="assets/cek-renkleri.css?v=1" />
+  <link rel="stylesheet" href="assets/mobil-panel.css?v=<?php echo (int)(@filemtime(__DIR__ . '/assets/mobil-panel.css') ?: 1); ?>" />
   <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"],a[href^="vergi-odemeleri.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
 </head>
 <body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ''; ?>">
@@ -300,6 +301,7 @@ function page_footer(): void
   <script src="assets/maas-puantaj-toplu-excel.js?v=1"></script>
   <script src="assets/hesap-banka-detay.js?v=1"></script>
   <?php endif; ?>
+  <script src="assets/mobil-panel.js?v=<?php echo (int)(@filemtime(__DIR__ . '/assets/mobil-panel.js') ?: 1); ?>"></script>
 </body>
 </html>
 <?php }
