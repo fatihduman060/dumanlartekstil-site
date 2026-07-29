@@ -5,6 +5,8 @@
 .mobile-barcode-scanner,
 .mobile-cari-trigger,
 .mobile-barcode-button{display:none}
+body.store-sales-user .mobile-bottom-nav,
+body.store-sales-user .mobile-sidebar-backdrop{display:none!important}
 
 @media (max-width:760px){
   :root{--mobile-nav-height:68px}
@@ -75,8 +77,8 @@
 
   .cariden-cikar-wrap{width:auto!important;max-width:none!important;gap:4px!important}
   .cariden-cikar-form{width:100%!important}
-  .cariden-cikar-btn{width:auto!important;min-width:116px!important;height:auto!important;min-height:42px!important;padding:9px 11px!important;border-radius:10px!important;font-size:12px!important;line-height:1.15!important}
-  .cariden-cikar-kaynak{width:auto!important;max-width:220px!important;font-size:10px!important;line-height:1.25!important;margin-top:3px!important}
+  .cariden-cikar-btn{width:auto!important;min-width:116px!important;height:auto!important;min-height:42px!important;padding:9px 11px!important;border-radius:10px!important;font-size:12px!important;line-height:1.15!important;zoom:2.25}
+  .cariden-cikar-kaynak{width:auto!important;max-width:220px!important;font-size:10px!important;line-height:1.25!important;margin-top:3px!important;zoom:1.4}
 
   select.mobile-native-cari-select{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
   .mobile-cari-trigger{display:flex;width:100%;min-height:50px;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:13px;background:#fff;padding:10px 12px;color:var(--text);font:inherit;text-align:left}
