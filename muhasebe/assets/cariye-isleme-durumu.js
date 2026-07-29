@@ -21,18 +21,42 @@
     }
   }
 
-  function submitCari(id, isSync) {
-    if (!id || !csrfToken()) return;
-    var message = isSync
-      ? 'Bağlı cari hareket bulunamadı veya iptal edilmiş. Teklif yeniden cariyle eşitlenecek. Devam edilsin mi?'
-      : 'Bu teklif cariye alacak olarak işlenecek. Devam edilsin mi?';
-    if (!confirm(message)) return;
+  function duplicateStatus(sourceType, id) {
+    return fetch('cari-mukerrer-kontrol.php?source_type=' + encodeURIComponent(sourceType) + '&id=' + encodeURIComponent(id), {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'Accept': 'application/json' }
+    }).then(function (response) {
+      if (!response.ok) throw new Error('Mükerrer kontrolü yapılamadı.');
+      return response.json();
+    });
+  }
 
+  function duplicateMessage(data) {
+    var lines = ['Dikkat: Aynı caride, aynı yönde ve aynı tutarda daha önce cariye işlenmiş belge bulundu.'];
+    (data.duplicates || []).forEach(function (item) {
+      var detail = '• ' + (item.label || 'Belge');
+      if (item.amount) detail += ' — ' + item.amount;
+      if (item.date) detail += ' — ' + item.date;
+      lines.push(detail);
+    });
+    lines.push('');
+    lines.push((data.source_label || 'Bu belge') + ' (' + (data.source_amount || '') + ') yine de cariye işlensin mi?');
+    return lines.join('\n');
+  }
+
+  function postOffer(id, duplicateApproved) {
     var form = document.createElement('form');
     form.method = 'post';
     form.action = 'cariye-isle.php';
     form.style.display = 'none';
-    var values = { csrf_token: csrfToken(), source_type: 'offer', id: id, back: backUrl() };
+    var values = {
+      csrf_token: csrfToken(),
+      source_type: 'offer',
+      id: id,
+      back: backUrl(),
+      confirm_duplicate: duplicateApproved ? '1' : '0'
+    };
     Object.keys(values).forEach(function (key) {
       var input = document.createElement('input');
       input.type = 'hidden';
@@ -42,6 +66,27 @@
     });
     document.body.appendChild(form);
     form.submit();
+  }
+
+  function submitCari(id, isSync) {
+    if (!id || !csrfToken()) return;
+
+    duplicateStatus('offer', id).then(function (data) {
+      if (data && data.has_duplicate) {
+        if (!confirm(duplicateMessage(data))) return;
+        postOffer(id, true);
+        return;
+      }
+
+      var message = isSync
+        ? 'Bağlı cari hareket bulunamadı veya iptal edilmiş. Teklif yeniden cariyle eşitlenecek. Devam edilsin mi?'
+        : 'Bu teklif cariye alacak olarak işlenecek. Devam edilsin mi?';
+      if (!confirm(message)) return;
+      postOffer(id, false);
+    }).catch(function () {
+      if (!confirm('Aynı tutarlı kayıt kontrolü yapılamadı. Yine de cariye işlemek istiyor musun?')) return;
+      postOffer(id, true);
+    });
   }
 
   function addStyles() {
@@ -259,4 +304,62 @@
     .catch(function () {
       // Durum bilgisi alınamazsa güvenlik gereği düğme gösterilmez.
     });
+})();
+
+(function () {
+  var title = document.querySelector('.topbar h1');
+  if (!title || title.textContent.trim() !== 'Faturalar') return;
+
+  function duplicateMessage(data) {
+    var lines = ['Dikkat: Aynı caride, aynı yönde ve aynı tutarda daha önce cariye işlenmiş belge bulundu.'];
+    (data.duplicates || []).forEach(function (item) {
+      var detail = '• ' + (item.label || 'Belge');
+      if (item.amount) detail += ' — ' + item.amount;
+      if (item.date) detail += ' — ' + item.date;
+      lines.push(detail);
+    });
+    lines.push('');
+    lines.push((data.source_label || 'Bu fatura') + ' (' + (data.source_amount || '') + ') yine de cariye işlensin mi?');
+    return lines.join('\n');
+  }
+
+  document.querySelectorAll('form').forEach(function (form) {
+    var actionInput = form.querySelector('input[name="action"][value="post_cari"]');
+    var idInput = form.querySelector('input[name="id"]');
+    if (!actionInput || !idInput) return;
+
+    form.addEventListener('submit', function (event) {
+      if (form.dataset.duplicateApproved === '1') return;
+      event.preventDefault();
+
+      fetch('cari-mukerrer-kontrol.php?source_type=invoice&id=' + encodeURIComponent(idInput.value), {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      }).then(function (response) {
+        if (!response.ok) throw new Error('Mükerrer kontrolü yapılamadı.');
+        return response.json();
+      }).then(function (data) {
+        if (data && data.has_duplicate && !confirm(duplicateMessage(data))) return;
+
+        if (data && data.has_duplicate) {
+          var approved = form.querySelector('input[name="confirm_duplicate"]');
+          if (!approved) {
+            approved = document.createElement('input');
+            approved.type = 'hidden';
+            approved.name = 'confirm_duplicate';
+            form.appendChild(approved);
+          }
+          approved.value = '1';
+        }
+
+        form.dataset.duplicateApproved = '1';
+        form.submit();
+      }).catch(function () {
+        if (!confirm('Aynı tutarlı kayıt kontrolü yapılamadı. Yine de cariye işlemek istiyor musun?')) return;
+        form.dataset.duplicateApproved = '1';
+        form.submit();
+      });
+    });
+  });
 })();
