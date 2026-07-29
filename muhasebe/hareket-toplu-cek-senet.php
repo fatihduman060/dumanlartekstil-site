@@ -26,15 +26,16 @@ if ($cariId <= 0) {
     redirect('hareketler.php');
 }
 
-$numbers = $_POST['document_no'] ?? [];
+$persons = $_POST['item_person'] ?? [];
 $amounts = $_POST['item_amount'] ?? [];
+$cities = $_POST['item_city'] ?? [];
 $dues = $_POST['item_due_date'] ?? [];
-if (!is_array($numbers) || !is_array($amounts) || !is_array($dues)) {
+if (!is_array($persons) || !is_array($amounts) || !is_array($cities) || !is_array($dues)) {
     flash('error', 'Toplu giriş satırları okunamadı.');
     redirect('hareketler.php');
 }
 
-$count = min(24, max(count($numbers), count($amounts), count($dues)));
+$count = min(24, max(count($persons), count($amounts), count($cities), count($dues)));
 if ($count < 1) {
     flash('error', 'En az bir çek veya senet satırı girmelisin.');
     redirect('hareketler.php');
@@ -56,28 +57,33 @@ try {
     $categoryId = (int)($catStmt->fetchColumn() ?: 0);
 
     $movementStmt = $pdo->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, currency, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, check_id, created_by, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?)');
-    $checkStmt = $pdo->prepare('INSERT INTO checks (cari_id, movement_id, direction, status, amount, issue_date, due_date, bank_name, branch_name, check_no, drawer, description, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, NULL, NULL, NULL, ?, ?, ?)');
+    $checkStmt = $pdo->prepare('INSERT INTO checks (cari_id, movement_id, direction, status, amount, issue_date, due_date, bank_name, branch_name, check_no, drawer, description, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, NULL, ?, ?, ?)');
     $linkStmt = $pdo->prepare('UPDATE movements SET check_id=?, updated_at=? WHERE id=?');
 
     $created = 0;
     $total = 0.0;
     $ids = [];
     for ($i = 0; $i < $count; $i++) {
+        $person = trim((string)($persons[$i] ?? ''));
         $amount = decimal_from_input($amounts[$i] ?? '0');
+        $city = trim((string)($cities[$i] ?? ''));
         $due = trim((string)($dues[$i] ?? ''));
-        $no = trim((string)($numbers[$i] ?? ''));
-        if ($amount <= 0 && $due === '' && $no === '') continue;
-        if ($amount <= 0 || $due === '') {
-            throw new RuntimeException(($i + 1) . '. satırda tutar ve vade tarihi zorunludur.');
+
+        if ($person === '' && $amount <= 0 && $city === '' && $due === '') continue;
+        if ($person === '' || $amount <= 0 || $city === '' || $due === '') {
+            throw new RuntimeException(($i + 1) . '. satırda kişi/keşideci adı, tutar, il ve vade tarihi zorunludur.');
         }
 
-        $lineDesc = $label . ($no !== '' ? ' no: ' . $no : '') . ($description !== '' ? ' / ' . $description : '');
+        $lineParts = [$label, 'Kişi: ' . $person, 'İl: ' . $city];
+        if ($description !== '') $lineParts[] = $description;
+        $lineDesc = implode(' / ', $lineParts);
         $now = now();
         $userId = current_user()['id'] ?? null;
+
         $movementStmt->execute([$cariId, $categoryId ?: null, $movementType, $amount, 'TL', $movementDate, $due, $method, $lineDesc, $docType, $userId, $now, $now]);
         $movementId = (int)$pdo->lastInsertId();
 
-        $checkStmt->execute([$cariId, $movementId, $direction, 'bekliyor', $amount, $movementDate, $due, $instrument === 'senet' ? 'Senet' : null, $no !== '' ? $no : null, $lineDesc, $userId, $now, $now]);
+        $checkStmt->execute([$cariId, $movementId, $direction, 'bekliyor', $amount, $movementDate, $due, $instrument === 'senet' ? 'Senet' : null, $city, $person, $lineDesc, $userId, $now, $now]);
         $checkId = (int)$pdo->lastInsertId();
         $linkStmt->execute([$checkId, $now, $movementId]);
 
