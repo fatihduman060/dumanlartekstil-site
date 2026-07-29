@@ -5,39 +5,96 @@
   var section = document.getElementById('hareketler');
   if (!section) return;
 
-  function addStyles() {
-    if (document.getElementById('cariden-cikar-kompakt-style')) return;
-    var style = document.createElement('style');
-    style.id = 'cariden-cikar-kompakt-style';
-    style.textContent = [
-      '#hareketler .row-actions{align-items:flex-start!important;gap:5px!important}',
-      '#hareketler .cariden-cikar-wrap{display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;max-width:132px;vertical-align:top}',
-      '#hareketler .cariden-cikar-wrap .cariden-cikar-form{display:block!important;margin:0!important;line-height:1!important}',
-      '#hareketler .cariden-cikar-wrap .cariden-cikar-btn{min-height:0!important;height:auto!important;padding:3px 6px!important;border-radius:7px!important;font-size:9px!important;line-height:1.05!important;font-weight:800!important;letter-spacing:0!important;box-shadow:none!important}',
-      '#hareketler .cariden-cikar-wrap .cariden-cikar-kaynak{display:block!important;margin:0!important;padding:0!important;max-width:126px!important;font-size:8px!important;line-height:1.18!important;font-weight:650!important;color:#8b7774!important;white-space:normal!important;overflow-wrap:anywhere!important}',
-      '@media(max-width:700px){#hareketler .cariden-cikar-wrap{max-width:112px}#hareketler .cariden-cikar-wrap .cariden-cikar-kaynak{max-width:108px!important}}'
-    ].join('');
-    document.head.appendChild(style);
+  function important(el, name, value) {
+    if (el) el.style.setProperty(name, value, 'important');
   }
 
-  function compact() {
-    section.querySelectorAll('.cariden-cikar-form').forEach(function (form) {
-      if (form.parentElement && form.parentElement.classList.contains('cariden-cikar-wrap')) return;
+  function forceCompact(form) {
+    if (!form) return;
 
-      var note = form.nextElementSibling;
+    var wrap = form.parentElement && form.parentElement.classList.contains('cariden-cikar-wrap')
+      ? form.parentElement
+      : null;
+    var note = null;
+
+    if (wrap) {
+      note = wrap.querySelector('.cariden-cikar-kaynak');
+    } else {
+      note = form.nextElementSibling;
       if (!note || !note.classList.contains('cariden-cikar-kaynak')) note = null;
 
-      var wrap = document.createElement('span');
+      wrap = document.createElement('span');
       wrap.className = 'cariden-cikar-wrap';
       form.parentNode.insertBefore(wrap, form);
       wrap.appendChild(form);
       if (note) wrap.appendChild(note);
-    });
+    }
+
+    var actions = wrap.closest('.row-actions');
+    if (actions) {
+      important(actions, 'align-items', 'flex-start');
+      important(actions, 'gap', '5px');
+    }
+
+    important(wrap, 'display', 'inline-flex');
+    important(wrap, 'flex-direction', 'column');
+    important(wrap, 'align-items', 'flex-start');
+    important(wrap, 'gap', '1px');
+    important(wrap, 'width', '102px');
+    important(wrap, 'max-width', '102px');
+    important(wrap, 'vertical-align', 'top');
+    important(wrap, 'margin', '0');
+    important(wrap, 'padding', '0');
+
+    important(form, 'display', 'block');
+    important(form, 'margin', '0');
+    important(form, 'padding', '0');
+    important(form, 'line-height', '1');
+    important(form, 'width', 'auto');
+
+    var button = form.querySelector('.cariden-cikar-btn');
+    if (button) {
+      important(button, 'min-height', '0');
+      important(button, 'height', '18px');
+      important(button, 'width', 'auto');
+      important(button, 'padding', '1px 5px');
+      important(button, 'margin', '0');
+      important(button, 'border-radius', '5px');
+      important(button, 'font-size', '8px');
+      important(button, 'line-height', '1');
+      important(button, 'font-weight', '800');
+      important(button, 'letter-spacing', '0');
+      important(button, 'box-shadow', 'none');
+      important(button, 'white-space', 'nowrap');
+    }
+
+    note = note || wrap.querySelector('.cariden-cikar-kaynak');
+    if (note) {
+      important(note, 'display', 'block');
+      important(note, 'position', 'static');
+      important(note, 'width', '100px');
+      important(note, 'max-width', '100px');
+      important(note, 'margin', '1px 0 0 0');
+      important(note, 'padding', '0');
+      important(note, 'font-size', '7px');
+      important(note, 'line-height', '1.08');
+      important(note, 'font-weight', '600');
+      important(note, 'color', '#8b7774');
+      important(note, 'white-space', 'normal');
+      important(note, 'overflow-wrap', 'anywhere');
+      important(note, 'text-align', 'left');
+    }
   }
 
-  addStyles();
-  compact();
+  function compactAll() {
+    section.querySelectorAll('.cariden-cikar-form').forEach(forceCompact);
+  }
 
-  var observer = new MutationObserver(function () { compact(); });
+  compactAll();
+  [0, 50, 150, 400, 900, 1600].forEach(function (delay) {
+    window.setTimeout(compactAll, delay);
+  });
+
+  var observer = new MutationObserver(function () { compactAll(); });
   observer.observe(section, { childList: true, subtree: true });
 })();
