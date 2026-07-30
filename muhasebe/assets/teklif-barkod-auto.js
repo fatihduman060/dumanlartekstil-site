@@ -65,7 +65,7 @@
 
   function rowOf(el){ return el && el.closest ? el.closest('tr') : null; }
 
-  function fillOfferRow(row, forceNormalizeBarcode){
+  function fillOfferRow(row){
     if (!row) return;
     var barcode = row.querySelector('.product-barcode');
     var name = row.querySelector('.product-name');
@@ -81,7 +81,7 @@
   }
 
   function fillAllOfferRows(){
-    document.querySelectorAll('#offerRows tbody tr').forEach(function(row){ fillOfferRow(row, false); });
+    document.querySelectorAll('#offerRows tbody tr').forEach(function(row){ fillOfferRow(row); });
   }
 
   function initOffer(){
@@ -92,31 +92,25 @@
 
     table.addEventListener('input', function(e){
       if (!e.target) return;
-      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type')) {
-        fillOfferRow(rowOf(e.target), false);
-      }
+      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type')) fillOfferRow(rowOf(e.target));
     });
-
     table.addEventListener('change', function(e){
       if (!e.target) return;
-      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type')) fillOfferRow(rowOf(e.target), false);
-      if (e.target.classList.contains('product-barcode')) fillOfferRow(rowOf(e.target), true);
+      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type') || e.target.classList.contains('product-barcode')) fillOfferRow(rowOf(e.target));
     });
-
     table.addEventListener('blur', function(e){
-      if (e.target && e.target.classList.contains('product-barcode')) fillOfferRow(rowOf(e.target), true);
+      if (e.target && e.target.classList.contains('product-barcode')) fillOfferRow(rowOf(e.target));
     }, true);
 
     var form = document.getElementById('offerForm');
     if (form) form.addEventListener('submit', fillAllOfferRows);
-
     setTimeout(fillAllOfferRows, 100);
     setTimeout(fillAllOfferRows, 700);
   }
 
   function saleRowOf(el){ return el && el.closest ? el.closest('.satis-item-row') : null; }
 
-  function fillSaleRow(row, forceNormalizeBarcode){
+  function fillSaleRow(row){
     if (!row) return;
     var barcode = row.querySelector('[data-barcode]');
     var name = row.querySelector('[data-name]');
@@ -128,13 +122,11 @@
       barcode.value = next;
       barcode.setAttribute('data-auto-ean13', '1');
       markAutoFilled(barcode);
-    } else if (forceNormalizeBarcode && current) {
-      barcode.value = next || current;
     }
   }
 
   function fillAllSaleRows(){
-    document.querySelectorAll('.satis-item-row').forEach(function(row){ fillSaleRow(row, false); });
+    document.querySelectorAll('.satis-item-row').forEach(function(row){ fillSaleRow(row); });
   }
 
   function initMovementSale(){
@@ -142,23 +134,30 @@
     ensureStyle();
 
     document.addEventListener('input', function(e){
-      if (!e.target) return;
-      if (e.target.matches && e.target.matches('.satis-item-row [data-name]')) {
-        fillSaleRow(saleRowOf(e.target), false);
+      if (!e.target || !e.target.matches) return;
+      if (e.target.matches('.satis-item-row [data-barcode]')) {
+        e.target.removeAttribute('data-auto-ean13');
       }
     });
 
     document.addEventListener('change', function(e){
+      if (!e.target || !e.target.matches || !e.target.matches('.satis-item-row [data-name]')) return;
+      var row = saleRowOf(e.target);
+      var barcode = row ? row.querySelector('[data-barcode]') : null;
+      if (barcode && barcode.getAttribute('data-auto-ean13') === '1') {
+        barcode.value = '';
+        barcode.removeAttribute('data-auto-ean13');
+      }
+    }, true);
+
+    document.addEventListener('change', function(e){
       if (!e.target || !e.target.matches) return;
-      if (e.target.matches('.satis-item-row [data-name]')) fillSaleRow(saleRowOf(e.target), false);
-      if (e.target.matches('.satis-item-row [data-barcode]')) fillSaleRow(saleRowOf(e.target), true);
+      if (e.target.matches('.satis-item-row [data-name],.satis-item-row [data-barcode]')) fillSaleRow(saleRowOf(e.target));
     });
 
     document.addEventListener('blur', function(e){
       if (!e.target || !e.target.matches) return;
-      if (e.target.matches('.satis-item-row [data-name],.satis-item-row [data-barcode]')) {
-        fillSaleRow(saleRowOf(e.target), e.target.matches('[data-barcode]'));
-      }
+      if (e.target.matches('.satis-item-row [data-name],.satis-item-row [data-barcode]')) fillSaleRow(saleRowOf(e.target));
     }, true);
 
     document.addEventListener('click', function(e){
@@ -169,8 +168,8 @@
       mutations.forEach(function(mutation){
         Array.prototype.forEach.call(mutation.addedNodes || [], function(node){
           if (!node || node.nodeType !== 1) return;
-          if (node.matches && node.matches('.satis-item-row')) fillSaleRow(node, false);
-          if (node.querySelectorAll) node.querySelectorAll('.satis-item-row').forEach(function(row){ fillSaleRow(row, false); });
+          if (node.matches && node.matches('.satis-item-row')) fillSaleRow(node);
+          if (node.querySelectorAll) node.querySelectorAll('.satis-item-row').forEach(function(row){ fillSaleRow(row); });
         });
       });
     });
