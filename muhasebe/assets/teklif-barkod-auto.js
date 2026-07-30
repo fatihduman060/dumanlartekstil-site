@@ -164,17 +164,6 @@
       if (e.target && e.target.closest && e.target.closest('[data-apply]')) fillAllSaleRows();
     }, true);
 
-    var observer = new MutationObserver(function(mutations){
-      mutations.forEach(function(mutation){
-        Array.prototype.forEach.call(mutation.addedNodes || [], function(node){
-          if (!node || node.nodeType !== 1) return;
-          if (node.matches && node.matches('.satis-item-row')) fillSaleRow(node);
-          if (node.querySelectorAll) node.querySelectorAll('.satis-item-row').forEach(function(row){ fillSaleRow(row); });
-        });
-      });
-    });
-    observer.observe(document.body, {childList:true, subtree:true});
-
     setTimeout(fillAllSaleRows, 200);
     setTimeout(fillAllSaleRows, 900);
   }
@@ -294,7 +283,7 @@
     labelSaleModal();
   }
 
-  var observer = new MutationObserver(enhanceSaleDetails);
-  observer.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['class']});
-  [0,100,300,700,1400].forEach(function(delay){ window.setTimeout(enhanceSaleDetails, delay); });
+  [0,150,400,900,1600,2600].forEach(function(delay){
+    window.setTimeout(enhanceSaleDetails, delay);
+  });
 })();
