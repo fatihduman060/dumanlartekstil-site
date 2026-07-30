@@ -34,17 +34,9 @@
     var items = [
       { href: 'dashboard.php', label: 'Genel', icon: '⌂' },
       { href: 'cariler.php', label: 'Cariler', icon: '◎' },
-      { href: 'hareketler.php', label: 'Hareketler', icon: '↕' }
+      { href: 'magaza.php', label: 'Mağaza', icon: '▥' },
+      { href: 'teklif-ver.php', label: 'Teklif', icon: '✎' }
     ];
-
-    var fourth = findLink('faturalar.php')
-      ? { href: 'faturalar.php', label: 'Faturalar', icon: '▤' }
-      : (findLink('teklif-ver.php')
-        ? { href: 'teklif-ver.php', label: 'Teklif', icon: '✎' }
-        : (findLink('hesaplar.php')
-          ? { href: 'hesaplar.php', label: 'Kasa', icon: '▣' }
-          : { href: 'magaza.php', label: 'Mağaza', icon: '▥' }));
-    items.push(fourth);
 
     var nav = document.createElement('nav');
     nav.className = 'mobile-bottom-nav';
