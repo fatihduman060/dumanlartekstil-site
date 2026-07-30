@@ -49,9 +49,23 @@
     return article ? barcodeFromArticle(article) : text;
   }
 
+  function markAutoFilled(input){
+    if (!input) return;
+    input.classList.add('barcode-auto-filled');
+    setTimeout(function(){ input.classList.remove('barcode-auto-filled'); }, 1200);
+  }
+
+  function ensureStyle(){
+    if (document.getElementById('barcode-auto-style')) return;
+    var style = document.createElement('style');
+    style.id = 'barcode-auto-style';
+    style.textContent = '.barcode-auto-filled{background:#eef8f1!important;border-color:#49a568!important;transition:background .2s ease,border-color .2s ease}';
+    document.head.appendChild(style);
+  }
+
   function rowOf(el){ return el && el.closest ? el.closest('tr') : null; }
 
-  function fillRow(row, forceNormalizeBarcode){
+  function fillOfferRow(row, forceNormalizeBarcode){
     if (!row) return;
     var barcode = row.querySelector('.product-barcode');
     var name = row.querySelector('.product-name');
@@ -59,59 +73,123 @@
     if (!barcode) return;
 
     var current = String(barcode.value || '').trim();
-    var productName = name ? name.value : '';
-    var productType = type ? type.value : '';
-    var next = '';
-
-    if (current || forceNormalizeBarcode) {
-      next = normalizeBarcode(current, productName, productType);
-    } else {
-      next = normalizeBarcode('', productName, productType);
-    }
-
+    var next = normalizeBarcode(current, name ? name.value : '', type ? type.value : '');
     if (next && next !== current) {
       barcode.value = next;
-      barcode.classList.add('barcode-auto-filled');
-      setTimeout(function(){ barcode.classList.remove('barcode-auto-filled'); }, 1200);
+      markAutoFilled(barcode);
     }
   }
 
-  function fillAll(){
-    document.querySelectorAll('#offerRows tbody tr').forEach(function(row){ fillRow(row, false); });
+  function fillAllOfferRows(){
+    document.querySelectorAll('#offerRows tbody tr').forEach(function(row){ fillOfferRow(row, false); });
   }
 
-  function init(){
+  function initOffer(){
     if (!/teklif-ver\.php/i.test(location.pathname)) return;
     var table = document.getElementById('offerRows');
     if (!table) return;
-
-    var style = document.createElement('style');
-    style.textContent = '.barcode-auto-filled{background:#eef8f1!important;border-color:#49a568!important;transition:background .2s ease,border-color .2s ease}';
-    document.head.appendChild(style);
+    ensureStyle();
 
     table.addEventListener('input', function(e){
       if (!e.target) return;
       if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type')) {
-        fillRow(rowOf(e.target), false);
+        fillOfferRow(rowOf(e.target), false);
       }
     });
 
     table.addEventListener('change', function(e){
       if (!e.target) return;
-      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type')) fillRow(rowOf(e.target), false);
-      if (e.target.classList.contains('product-barcode')) fillRow(rowOf(e.target), true);
+      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type')) fillOfferRow(rowOf(e.target), false);
+      if (e.target.classList.contains('product-barcode')) fillOfferRow(rowOf(e.target), true);
     });
 
     table.addEventListener('blur', function(e){
-      if (e.target && e.target.classList.contains('product-barcode')) fillRow(rowOf(e.target), true);
+      if (e.target && e.target.classList.contains('product-barcode')) fillOfferRow(rowOf(e.target), true);
     }, true);
 
     var form = document.getElementById('offerForm');
-    if (form) form.addEventListener('submit', fillAll);
+    if (form) form.addEventListener('submit', fillAllOfferRows);
 
-    setTimeout(fillAll, 100);
-    setTimeout(fillAll, 700);
+    setTimeout(fillAllOfferRows, 100);
+    setTimeout(fillAllOfferRows, 700);
   }
+
+  function saleRowOf(el){ return el && el.closest ? el.closest('.satis-item-row') : null; }
+
+  function fillSaleRow(row, forceNormalizeBarcode){
+    if (!row) return;
+    var barcode = row.querySelector('[data-barcode]');
+    var name = row.querySelector('[data-name]');
+    if (!barcode || !name) return;
+
+    var current = String(barcode.value || '').trim();
+    var next = normalizeBarcode(current, name.value || '', '');
+    if (next && next !== current) {
+      barcode.value = next;
+      barcode.setAttribute('data-auto-ean13', '1');
+      markAutoFilled(barcode);
+    } else if (forceNormalizeBarcode && current) {
+      barcode.value = next || current;
+    }
+  }
+
+  function fillAllSaleRows(){
+    document.querySelectorAll('.satis-item-row').forEach(function(row){ fillSaleRow(row, false); });
+  }
+
+  function initMovementSale(){
+    if (!/hareketler\.php/i.test(location.pathname)) return;
+    ensureStyle();
+
+    document.addEventListener('input', function(e){
+      if (!e.target) return;
+      if (e.target.matches && e.target.matches('.satis-item-row [data-name]')) {
+        fillSaleRow(saleRowOf(e.target), false);
+      }
+    });
+
+    document.addEventListener('change', function(e){
+      if (!e.target || !e.target.matches) return;
+      if (e.target.matches('.satis-item-row [data-name]')) fillSaleRow(saleRowOf(e.target), false);
+      if (e.target.matches('.satis-item-row [data-barcode]')) fillSaleRow(saleRowOf(e.target), true);
+    });
+
+    document.addEventListener('blur', function(e){
+      if (!e.target || !e.target.matches) return;
+      if (e.target.matches('.satis-item-row [data-name],.satis-item-row [data-barcode]')) {
+        fillSaleRow(saleRowOf(e.target), e.target.matches('[data-barcode]'));
+      }
+    }, true);
+
+    document.addEventListener('click', function(e){
+      if (e.target && e.target.closest && e.target.closest('[data-apply]')) fillAllSaleRows();
+    }, true);
+
+    var observer = new MutationObserver(function(mutations){
+      mutations.forEach(function(mutation){
+        Array.prototype.forEach.call(mutation.addedNodes || [], function(node){
+          if (!node || node.nodeType !== 1) return;
+          if (node.matches && node.matches('.satis-item-row')) fillSaleRow(node, false);
+          if (node.querySelectorAll) node.querySelectorAll('.satis-item-row').forEach(function(row){ fillSaleRow(row, false); });
+        });
+      });
+    });
+    observer.observe(document.body, {childList:true, subtree:true});
+
+    setTimeout(fillAllSaleRows, 200);
+    setTimeout(fillAllSaleRows, 900);
+  }
+
+  function init(){
+    initOffer();
+    initMovementSale();
+  }
+
+  window.DUMANLAR_EAN13 = {
+    prefix: PREFIX,
+    fromArticle: barcodeFromArticle,
+    normalize: normalizeBarcode
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
