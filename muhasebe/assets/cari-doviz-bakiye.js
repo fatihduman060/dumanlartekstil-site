@@ -62,6 +62,15 @@
     if (payableNote) payableNote.textContent = 'Tüm alacak, tahsilat, borç ve ödemeler mahsup edildi';
   }
 
+  function loadCariSaleViewer(){
+    if (!/cari-detay\.php/i.test(location.pathname)) return;
+    if (document.querySelector('script[data-cari-satis-viewer]')) return;
+    var script = document.createElement('script');
+    script.src = 'assets/cari-satis-detay-goruntule.js?v=1251bd8c';
+    script.setAttribute('data-cari-satis-viewer', '1');
+    document.head.appendChild(script);
+  }
+
   function init(){
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
@@ -80,6 +89,7 @@
         .catch(function(){});
     }
     normalizeCariDetailCards();
+    loadCariSaleViewer();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
