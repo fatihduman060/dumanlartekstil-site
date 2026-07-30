@@ -193,3 +193,108 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
+
+(function(){
+  if (!/hareketler\.php/i.test(location.pathname)) return;
+
+  function ensureSaleDetailStyle(){
+    if (document.getElementById('satis-list-click-style')) return;
+    var style = document.createElement('style');
+    style.id = 'satis-list-click-style';
+    style.textContent = [
+      '.satis-list-clickable{cursor:pointer;position:relative;border-radius:9px;transition:background .15s ease,box-shadow .15s ease}',
+      '.satis-list-clickable:hover,.satis-list-clickable:focus{background:#f1f8f3!important;box-shadow:inset 0 0 0 1px #abd0b6;outline:none}',
+      '.satis-list-clickable .satis-list-chip{cursor:pointer;border:1px solid #b9d9c3;padding:5px 9px}',
+      '.satis-list-clickable .satis-list-view{font-size:11px;font-weight:900}',
+      '.satis-view-only .satis-field input:disabled{opacity:1!important;color:#1e2c23!important;-webkit-text-fill-color:#1e2c23!important;background:#f7faf7!important}',
+      '.satis-view-only .satis-field [data-qty],.satis-view-only .satis-field [data-price],.satis-view-only .satis-field [data-line-total]{font-weight:900!important}',
+      '.satis-view-only .satis-calculation{margin-top:14px}',
+      '@media(max-width:760px){.satis-list-clickable{padding-right:8px!important}.satis-list-clickable .satis-list-chip{display:inline-flex;font-size:11px;padding:7px 9px}}'
+    ].join('');
+    document.head.appendChild(style);
+  }
+
+  function labelSaleModal(){
+    var modal = document.querySelector('.satis-modal');
+    if (!modal) return;
+
+    var head = modal.querySelectorAll('.satis-head-row span');
+    if (head.length > 5) {
+      head[3].textContent = 'Miktar (DZ)';
+      head[4].textContent = 'Birim fiyat / DZ';
+      head[5].textContent = 'Satır toplamı';
+    }
+
+    modal.querySelectorAll('.satis-item-row').forEach(function(row){
+      var labels = row.querySelectorAll('.satis-field label');
+      if (labels.length > 4) {
+        labels[2].textContent = 'Miktar (DZ)';
+        labels[3].textContent = 'Birim fiyat / DZ';
+        labels[4].textContent = 'Satır toplamı';
+      }
+    });
+
+    var toolbar = modal.querySelector('[data-toolbar-text]');
+    var closeAction = modal.querySelector('.satis-cancel');
+    if (modal.classList.contains('satis-view-only')) {
+      if (toolbar) toolbar.textContent = 'Satış kalemleri · Miktarlar düzine (DZ) olarak gösterilir';
+      if (closeAction) closeAction.textContent = 'Kapat';
+    } else {
+      if (toolbar) toolbar.textContent = 'Satış kalemleri';
+      if (closeAction) closeAction.textContent = 'Vazgeç';
+    }
+  }
+
+  function openSaleDetail(view){
+    if (!view) return;
+    view.click();
+    window.setTimeout(labelSaleModal, 30);
+    window.setTimeout(labelSaleModal, 180);
+  }
+
+  function decorateSaleView(view){
+    if (!view || view.getAttribute('data-cell-click-ready') === '1') return;
+    var cell = view.closest('td');
+    if (!cell) return;
+
+    view.setAttribute('data-cell-click-ready', '1');
+    view.textContent = 'Ayrıntıyı aç';
+    view.title = 'Ürün, düzine, birim fiyat ve toplamları göster';
+
+    var chip = cell.querySelector('.satis-list-chip');
+    if (chip) {
+      var countText = String(chip.textContent || '').match(/\d+/);
+      chip.textContent = (countText ? countText[0] + ' kalem' : 'Satış detayı') + ' · ürünleri gör';
+    }
+
+    cell.classList.add('satis-list-clickable');
+    cell.setAttribute('role', 'button');
+    cell.setAttribute('tabindex', '0');
+    cell.setAttribute('aria-label', 'Detaylı satışın ürünlerini, miktarlarını ve fiyatlarını aç');
+    cell.title = 'Tıkla: ürün, düzine, birim fiyat ve toplamları gör';
+
+    cell.addEventListener('click', function(event){
+      if (event.target && event.target.closest && event.target.closest('a,button,input,select,textarea')) return;
+      openSaleDetail(view);
+    });
+    cell.addEventListener('keydown', function(event){
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openSaleDetail(view);
+    });
+    view.addEventListener('click', function(){
+      window.setTimeout(labelSaleModal, 30);
+      window.setTimeout(labelSaleModal, 180);
+    });
+  }
+
+  function enhanceSaleDetails(){
+    ensureSaleDetailStyle();
+    document.querySelectorAll('.satis-list-view').forEach(decorateSaleView);
+    labelSaleModal();
+  }
+
+  var observer = new MutationObserver(enhanceSaleDetails);
+  observer.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['class']});
+  [0,100,300,700,1400].forEach(function(delay){ window.setTimeout(enhanceSaleDetails, delay); });
+})();
