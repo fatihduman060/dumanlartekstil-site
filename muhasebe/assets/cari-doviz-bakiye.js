@@ -148,32 +148,41 @@
     document.head.appendChild(script);
   }
 
-  function init(){
-    addProductionMenu();
-    addCardStatementMenu();
-    reorderMenu();
-
-    if (/cariler\.php/i.test(location.pathname)) {
-      fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
-        .then(function(r){ return r.json(); })
-        .then(function(data){
-          if (!data || !data.ok || !data.balances) return;
-          document.querySelectorAll('a[href^="cari-detay.php?id="]').forEach(function(link){
-            var match = String(link.getAttribute('href') || '').match(/id=(\d+)/);
-            if (!match) return;
-            var tr = link.closest('tr');
-            if (!tr) return;
-            var cell = tr.querySelector('td.right');
-            updateCell(cell, data.balances[match[1]] || [{currency:'TL', net:0}]);
-          });
-        })
-        .catch(function(){});
-    }
-    normalizeCariDetailCards();
-    loadCariSaleViewer();
-    loadProductionQuickEntry();
+  function showMenu(){
+    if (document.body) document.body.classList.add('menu-ready');
   }
 
+  function init(){
+    try {
+      addProductionMenu();
+      addCardStatementMenu();
+      reorderMenu();
+
+      if (/cariler\.php/i.test(location.pathname)) {
+        fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if (!data || !data.ok || !data.balances) return;
+            document.querySelectorAll('a[href^="cari-detay.php?id="]').forEach(function(link){
+              var match = String(link.getAttribute('href') || '').match(/id=(\d+)/);
+              if (!match) return;
+              var tr = link.closest('tr');
+              if (!tr) return;
+              var cell = tr.querySelector('td.right');
+              updateCell(cell, data.balances[match[1]] || [{currency:'TL', net:0}]);
+            });
+          })
+          .catch(function(){});
+      }
+      normalizeCariDetailCards();
+      loadCariSaleViewer();
+      loadProductionQuickEntry();
+    } finally {
+      showMenu();
+    }
+  }
+
+  window.setTimeout(showMenu, 1500);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
