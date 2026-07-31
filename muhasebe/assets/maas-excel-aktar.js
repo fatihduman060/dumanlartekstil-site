@@ -17,8 +17,6 @@
     var name=footer&&footer.querySelector('strong');
     if(!name||userKey(name.textContent).indexOf('uzeyir')!==0)return;
     document.body.classList.add('salary-only-user');
-    var nav=document.querySelector('.side-nav');
-    if(nav)nav.innerHTML='<a class="active" href="maaslar.php"><span class="nav-ico">₺</span><span>Maaşlar</span></a>';
     var role=footer.querySelector('span');if(role)role.textContent='Maaş Kullanıcısı';
     var brand=document.querySelector('.sidebar .brand');if(brand)brand.setAttribute('href','maaslar.php');
     var siteLink=document.querySelector('.top-actions .ghost-link');if(siteLink)siteLink.remove();

@@ -34,11 +34,6 @@
     +'<div class="store-sales-only-body" data-fatura-alt-kontrol-body></div>';
   main.appendChild(section);
 
-  var nav=document.querySelector('.side-nav');
-  if(nav){
-    nav.innerHTML='<a class="active" href="faturalar.php"><span class="nav-ico">▤</span><span>Faturalar</span></a>';
-  }
-
   var brand=document.querySelector('.sidebar .brand');
   if(brand) brand.setAttribute('href','faturalar.php');
 

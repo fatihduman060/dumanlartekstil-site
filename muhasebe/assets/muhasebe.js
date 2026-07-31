@@ -170,20 +170,9 @@ document.addEventListener('change', function (event) {
   }, true);
 })();
 
-// Kesin yüklenen ana JS içinden ek muhasebe menü/bağlantı iyileştirmeleri.
-(function addExtraAccountingLinks() {
+// Çek ekranına ek belge bağlantısı ekle.
+(function addExtraCheckLinks() {
   const title = document.querySelector('.topbar h1')?.textContent.trim() || '';
-  const nav = document.querySelector('.side-nav');
-
-  if (nav && !nav.querySelector('a[href="sirket-evraklari.php"]')) {
-    const docsLink = nav.querySelector('a[href="belgeler.php"]');
-    const link = document.createElement('a');
-    link.href = 'sirket-evraklari.php';
-    if (title === 'Şirket Evrakları') link.className = 'active';
-    link.innerHTML = '<span class="nav-ico">▧</span><span>Şirket Evrakları</span>';
-    if (docsLink) docsLink.insertAdjacentElement('afterend', link);
-    else nav.appendChild(link);
-  }
 
   if (title === 'Çekler') {
     document.querySelectorAll('.row-actions a[href^="cekler.php?edit="]').forEach((editLink) => {

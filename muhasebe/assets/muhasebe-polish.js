@@ -23,17 +23,6 @@
   var slug = map[title] || title.toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]+/g, '-').replace(/^-+|-+$/g, '');
   if (slug) document.body.classList.add('panel-' + slug);
 
-  var nav = document.querySelector('.side-nav');
-  if (nav && !nav.querySelector('a[href="sirket-evraklari.php"]')) {
-    var docsLink = nav.querySelector('a[href="belgeler.php"]');
-    var link = document.createElement('a');
-    link.href = 'sirket-evraklari.php';
-    if (slug === 'sirket-evraklari') link.className = 'active';
-    link.innerHTML = '<span class="nav-ico">▧</span><span>Şirket Evrakları</span>';
-    if (docsLink) docsLink.insertAdjacentElement('afterend', link);
-    else nav.appendChild(link);
-  }
-
   if (slug && slug !== 'genel-bakis') {
     document.querySelectorAll('.table-wrap table').forEach(function (table) {
       var headers = Array.prototype.slice.call(table.querySelectorAll('thead th')).map(function (th) {

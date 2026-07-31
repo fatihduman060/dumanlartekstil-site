@@ -151,36 +151,23 @@ function page_header(string $title, string $active = ''): void
             ['magaza', 'magaza.php', 'Mağaza', '▤'],
         ];
     } else {
-        $nav = [
-            ['dashboard', 'dashboard.php', 'Genel Bakış', '⌂'],
-            ['cariler', 'cariler.php', 'Cariler', '◎'],
-            ['ozel_alacaklar', 'ozel-alacaklar.php', 'Özel Alacak', '◆'],
-            ['hareketler', 'hareketler.php', 'Hareketler', '↕'],
-        ];
-
-        if (can_access_private_finance_modules()) {
-            $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa/Banka', '▣'];
-            $nav[] = ['vergi_odemeleri', 'vergi-odemeleri.php', 'Vergi Ödemeleri', '₺'];
-        }
-
-        if ($fullAdmin) {
-            $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
-            $nav[] = ['magaza', 'magaza.php', 'Mağaza', '▥'];
-            $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
-            $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
-        }
-
-        if (can_access_private_finance_modules()) {
-            $nav[] = ['cekler', 'cekler.php', 'Çekler', '◈'];
-        }
-
+        $nav = [['dashboard', 'dashboard.php', 'Genel Bakış', '⌂']];
+        $nav[] = ['cariler', 'cariler.php', 'Cariler', '◎'];
+        if ($fullAdmin) $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
+        if (can_access_private_finance_modules()) $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa / Banka', '▣'];
+        if (can_write()) $nav[] = ['uretim_takibi', 'uretim-takibi.php', 'Üretim Takibi', '⚙'];
+        if ($fullAdmin) $nav[] = ['magaza', 'magaza.php', 'Mağaza', '▥'];
+        if (can_access_private_finance_modules()) $nav[] = ['vergi_odemeleri', 'vergi-odemeleri.php', 'Vergi Ödemeleri', '₺'];
+        if (can_access_private_finance_modules()) $nav[] = ['kart_ekstre', 'kart-ekstre-takibi.php', 'Kart Ekstre Takibi', '▧'];
+        if ($fullAdmin) $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
+        if (can_access_private_finance_modules()) $nav[] = ['cekler', 'cekler.php', 'Çekler', '◈'];
+        if ($fullAdmin) $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
+        if (can_access_private_finance_modules()) $nav[] = ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'];
+        if (can_access_private_finance_modules()) $nav[] = ['tahsilat_makbuzu', 'tahsilat-makbuzu.php', 'Tahsilat Makbuzu', '₺'];
+        $nav[] = ['sirket_evraklari', 'sirket-evraklari.php', 'Şirket Evrakları', '▧'];
+        $nav[] = ['ozel_alacaklar', 'ozel-alacaklar.php', 'Özel Alacak', '◆'];
+        $nav[] = ['hareketler', 'hareketler.php', 'Hareketler', '↕'];
         $nav[] = ['belgeler', 'belgeler.php', 'Belgeler', '▤'];
-
-        if (can_access_private_finance_modules()) {
-            $nav[] = ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'];
-            $nav[] = ['tahsilat_makbuzu', 'tahsilat-makbuzu.php', 'Tahsilat Makbuzu', '₺'];
-        }
-
         $nav[] = ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'];
         $nav[] = ['raporlar', 'raporlar.php', 'Raporlar', '◷'];
 
@@ -257,13 +244,13 @@ function page_footer(): void
     </main>
   </div>
   <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_COMPANY_TAX_NO = <?php echo json_encode(preg_replace('/\D+/', '', (string)setting_get('company_tax_no', '3140036788')) ?: '3140036788', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_PRIVATE_FINANCE_ACCESS = <?php echo can_access_private_finance_modules() ? 'true' : 'false'; ?>; window.BITKE_STORE_SALES_ONLY = <?php echo $storeOnly ? 'true' : 'false'; ?>;</script>
-  <script src="assets/muhasebe.js?v=516"></script>
+  <script src="assets/muhasebe.js?v=517"></script>
   <?php if ($storeOnly): ?>
-  <script src="assets/magaza-kullanici-ekrani.js?v=1"></script>
+  <script src="assets/magaza-kullanici-ekrani.js?v=2"></script>
   <script src="assets/magaza-gunluk-satis.js?v=8"></script>
   <?php else: ?>
   <script src="assets/super-admin-role.js?v=2"></script>
-  <script src="assets/muhasebe-polish.js?v=1"></script>
+  <script src="assets/muhasebe-polish.js?v=2"></script>
   <script src="assets/cariye-isleme-durumu.js?v=1"></script>
   <script src="assets/cariden-cikar-kompakt.js?v=1"></script>
   <script src="assets/hareket-satis-detay.js?v=1"></script>
@@ -271,7 +258,7 @@ function page_footer(): void
   <script src="assets/teklif-hesap-fix.js?v=3"></script>
   <script src="assets/teklif-barkod-auto.js?v=1"></script>
   <script src="assets/cek-vade-uyari.js?v=2"></script>
-  <script src="assets/cari-doviz-bakiye.js?v=1"></script>
+  <script src="assets/cari-doviz-bakiye.js?v=2"></script>
   <script src="assets/dashboard-cari-pozisyon.js?v=3"></script>
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/dashboard-acik-cekler.js?v=2"></script>
@@ -296,7 +283,7 @@ function page_footer(): void
   <script src="assets/cari-hareket-kaynak.js?v=6"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
-  <script src="assets/maas-excel-aktar.js?v=4"></script>
+  <script src="assets/maas-excel-aktar.js?v=5"></script>
   <script src="assets/maas-haciz.js?v=2"></script>
   <script src="assets/maas-puantaj-toplu-excel.js?v=1"></script>
   <script src="assets/hesap-banka-detay.js?v=1"></script>

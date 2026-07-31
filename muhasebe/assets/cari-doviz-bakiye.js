@@ -67,19 +67,6 @@
     document.head.appendChild(script);
   }
 
-  function addMenuLink(href, label, icon, afterHref){
-    var nav = document.querySelector('.side-nav');
-    if (!nav || nav.querySelector('a[href="' + href + '"]')) return;
-    var link = document.createElement('a');
-    link.href = href;
-    link.innerHTML = '<span class="nav-ico">' + icon + '</span><span>' + label + '</span>';
-    if (location.pathname.slice(-href.length) === href) link.className = 'active';
-
-    var anchor = afterHref ? nav.querySelector('a[href="' + afterHref + '"]') : null;
-    if (anchor) anchor.insertAdjacentElement('afterend', link);
-    else nav.appendChild(link);
-  }
-
   function loadProductionQuickEntry(){
     if (!/uretim-takibi\.php/i.test(location.pathname)) return;
     if (document.querySelector('script[data-production-quick-entry]')) return;
@@ -97,11 +84,6 @@
   }
 
   function init(){
-    // Menü artık sayfa açıldıktan sonra komple yeniden sıralanmıyor.
-    // Yalnızca eksik iki bağlantı, mevcut menüyü taşımadan uygun konuma ekleniyor.
-    addMenuLink('uretim-takibi.php', 'Üretim Takibi', '⚙', 'hesaplar.php');
-    addMenuLink('kart-ekstre-takibi.php', 'Kart Ekstre Takibi', '💳', 'vergi-odemeleri.php');
-
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
         .then(function(r){ return r.json(); })
