@@ -79,6 +79,22 @@
     else nav.appendChild(link);
   }
 
+  function addCardStatementMenu(){
+    var nav = document.querySelector('.side-nav');
+    if (!nav || nav.querySelector('a[href="kart-ekstreleri.php"]')) return;
+    var link = document.createElement('a');
+    link.href = 'kart-ekstreleri.php';
+    link.innerHTML = '<span class="nav-ico">▣</span><span>Kart Ekstre Takibi</span>';
+    if (/kart-ekstreleri\.php/i.test(location.pathname)) link.className = 'active';
+    var accounts = nav.querySelector('a[href="hesaplar.php"]');
+    if (accounts) accounts.insertAdjacentElement('afterend', link);
+    else {
+      var movements = nav.querySelector('a[href="hareketler.php"]');
+      if (movements) movements.insertAdjacentElement('afterend', link);
+      else nav.appendChild(link);
+    }
+  }
+
   function loadProductionQuickEntry(){
     if (!/uretim-takibi\.php/i.test(location.pathname)) return;
     if (document.querySelector('script[data-production-quick-entry]')) return;
@@ -97,6 +113,7 @@
 
   function init(){
     addProductionMenu();
+    addCardStatementMenu();
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
         .then(function(r){ return r.json(); })
