@@ -83,6 +83,15 @@
     else nav.appendChild(link);
   }
 
+  function loadProductionQuickEntry(){
+    if (!/uretim-takibi\.php/i.test(location.pathname)) return;
+    if (document.querySelector('script[data-production-quick-entry]')) return;
+    var script = document.createElement('script');
+    script.src = 'assets/uretim-hizli-giris.js?v=94dccb01';
+    script.setAttribute('data-production-quick-entry', '1');
+    document.head.appendChild(script);
+  }
+
   function init(){
     addProductionMenu();
     if (/cariler\.php/i.test(location.pathname)) {
@@ -103,6 +112,7 @@
     }
     normalizeCariDetailCards();
     loadCariSaleViewer();
+    loadProductionQuickEntry();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
