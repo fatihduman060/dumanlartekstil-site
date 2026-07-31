@@ -37,9 +37,9 @@ function uretim_shift_ensure(): void
 uretim_shift_ensure();
 $date = trim((string)($_POST['production_date'] ?? date('Y-m-d')));
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = date('Y-m-d');
+$shift = uretim_shift_code((string)($_POST['shift_code'] ?? 'gunduz'));
 $rows = is_array($_POST['shift_rows'] ?? null) ? $_POST['shift_rows'] : [];
 $pdo = db();
-$saved = 0;
 
 try {
     $pdo->beginTransaction();
@@ -47,29 +47,28 @@ try {
     $insert = $pdo->prepare('INSERT INTO production_group_shift_entries (production_date,shift_code,group_code,produced_dozen,defective_qty,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)');
     $update = $pdo->prepare('UPDATE production_group_shift_entries SET produced_dozen=?, defective_qty=?, updated_at=? WHERE id=?');
 
-    foreach (['gunduz','gece'] as $shift) {
-        $shiftRows = is_array($rows[$shift] ?? null) ? $rows[$shift] : [];
-        foreach (['A','B','C','D','E'] as $group) {
-            $row = is_array($shiftRows[$group] ?? null) ? $shiftRows[$group] : [];
-            $dozen = max(0, decimal_from_input($row['produced_dozen'] ?? 0));
-            $defectiveRaw = preg_replace('/\D+/', '', (string)($row['defective_qty'] ?? '0')) ?: '0';
-            $defective = max(0, (int)$defectiveRaw);
-            $find->execute([$date, uretim_shift_code($shift), uretim_shift_group($group)]);
-            $id = (int)($find->fetchColumn() ?: 0);
-            if ($id > 0) {
-                $update->execute([$dozen, $defective, now(), $id]);
-            } else {
-                $insert->execute([$date, $shift, $group, $dozen, $defective, current_user()['id'] ?? null, now(), now()]);
-            }
-            $saved++;
+    foreach (['A','B','C','D','E'] as $group) {
+        $row = is_array($rows[$group] ?? null) ? $rows[$group] : [];
+        $dozen = max(0, decimal_from_input($row['produced_dozen'] ?? 0));
+        $defectiveRaw = preg_replace('/\D+/', '', (string)($row['defective_qty'] ?? '0')) ?: '0';
+        $defective = max(0, (int)$defectiveRaw);
+        $groupCode = uretim_shift_group($group);
+
+        $find->execute([$date, $shift, $groupCode]);
+        $id = (int)($find->fetchColumn() ?: 0);
+        if ($id > 0) {
+            $update->execute([$dozen, $defective, now(), $id]);
+        } else {
+            $insert->execute([$date, $shift, $groupCode, $dozen, $defective, current_user()['id'] ?? null, now(), now()]);
         }
     }
 
     $pdo->commit();
-    flash('success', date('d.m.Y', strtotime($date)) . ' gündüz ve gece vardiyası üretimleri kaydedildi.');
+    $shiftName = $shift === 'gece' ? 'Gece vardiyası' : 'Gündüz vardiyası';
+    flash('success', date('d.m.Y', strtotime($date)) . ' ' . $shiftName . ' üretimi kaydedildi.');
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    flash('error', 'Günlük üretim kaydedilemedi: ' . $e->getMessage());
+    flash('error', 'Vardiya üretimi kaydedilemedi: ' . $e->getMessage());
 }
 
 redirect('uretim-takibi.php?date=' . urlencode($date));
