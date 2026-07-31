@@ -13,14 +13,12 @@
     return query || new Date().toISOString().slice(0,10);
   }
 
-  function addButton(card, shift, title){
-    if (!card || card.querySelector('[data-save-one-shift]')) return;
-    var wrap = document.createElement('div');
-    wrap.className = 'shift-card-save';
-    wrap.innerHTML = '<button type="button" data-save-one-shift="'+shift+'">'+title+'</button>';
-    card.appendChild(wrap);
-
-    wrap.querySelector('button').addEventListener('click', function(){
+  function bindButton(card, shift, title){
+    if (!card) return;
+    var button = card.querySelector('[data-save-one-shift="'+shift+'"]');
+    if (!button || button.getAttribute('data-bound') === '1') return;
+    button.setAttribute('data-bound','1');
+    button.addEventListener('click', function(){
       var button = this;
       var body = new URLSearchParams();
       body.set('csrf_token', csrf());
@@ -60,18 +58,8 @@
       return;
     }
 
-    var oldSave = section.querySelector('.shift-save');
-    if (oldSave) oldSave.style.display = 'none';
-
-    addButton(section.querySelector('[data-shift="gunduz"]'), 'gunduz', 'Gündüz Vardiyasını Kaydet');
-    addButton(section.querySelector('[data-shift="gece"]'), 'gece', 'Gece Vardiyasını Kaydet');
-
-    if (!document.querySelector('style[data-shift-save-style]')) {
-      var style = document.createElement('style');
-      style.setAttribute('data-shift-save-style','1');
-      style.textContent = '.shift-card-save{padding:14px}.shift-card-save button{width:100%;border:0;border-radius:11px;background:#173f29;color:#fff;padding:12px 16px;font-weight:900;cursor:pointer}.shift-card-save button:disabled{opacity:.65;cursor:wait}@media(max-width:600px){.shift-card-save{padding:10px}.shift-card-save button{min-height:48px}}';
-      document.head.appendChild(style);
-    }
+    bindButton(section.querySelector('[data-shift="gunduz"]'), 'gunduz', 'Gündüz Vardiyasını Kaydet');
+    bindButton(section.querySelector('[data-shift="gece"]'), 'gece', 'Gece Vardiyasını Kaydet');
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
