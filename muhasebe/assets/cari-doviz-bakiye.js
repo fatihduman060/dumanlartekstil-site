@@ -32,19 +32,16 @@
     if (!grid) return;
     var cards = grid.querySelectorAll(':scope > .stat-card');
     if (cards.length < 3) return;
-
     var balanceStrong = cards[0].querySelector('strong');
     var net = parseMoney(balanceStrong ? balanceStrong.textContent : '0');
     var receivable = Math.max(net, 0);
     var payable = Math.max(-net, 0);
-
     var receivableLabel = cards[1].querySelector('span');
     var receivableStrong = cards[1].querySelector('strong');
     var receivableNote = cards[1].querySelector('small');
     var payableLabel = cards[2].querySelector('span');
     var payableStrong = cards[2].querySelector('strong');
     var payableNote = cards[2].querySelector('small');
-
     if (receivableLabel) receivableLabel.textContent = 'Kalan net alacak';
     if (receivableStrong) {
       receivableStrong.textContent = formatAmount(receivable, 'TL');
@@ -52,7 +49,6 @@
       receivableStrong.classList.add('text-success');
     }
     if (receivableNote) receivableNote.textContent = 'Tüm alacak, tahsilat, borç ve ödemeler mahsup edildi';
-
     if (payableLabel) payableLabel.textContent = 'Kalan net borç';
     if (payableStrong) {
       payableStrong.textContent = formatAmount(payable, 'TL');
@@ -87,7 +83,7 @@
     if (!/uretim-takibi\.php/i.test(location.pathname)) return;
     if (document.querySelector('script[data-production-quick-entry]')) return;
     var script = document.createElement('script');
-    script.src = 'assets/uretim-hizli-giris.js?v=94dccb01';
+    script.src = 'assets/uretim-hizli-giris.js?v=cc73082a';
     script.setAttribute('data-production-quick-entry', '1');
     document.head.appendChild(script);
   }
