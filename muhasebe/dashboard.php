@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
 require_login();
 
 function dashboard_cashflow_periods(): array
@@ -142,6 +143,12 @@ function dashboard_cashflow_rows(string $period): array
 }
 
 $today = date('Y-m-d');
+try {
+    magaza_odeme_dagilim_tablosunu_hazirla();
+    magaza_odeme_dagilim_vadesi_gelenleri_isle($today);
+} catch (Throwable $e) {
+    // Özet ekranı mağaza senkronizasyonu aksasa da açılmaya devam etsin.
+}
 $monthStart = date('Y-m-01');
 $monthEnd = date('Y-m-t');
 $weekAhead = date('Y-m-d', strtotime('+7 days'));
@@ -256,32 +263,15 @@ if (!$lastBackup) {
 }
 page_header('Genel Bakış', 'dashboard');
 ?>
+<style>
+.vade-hatirlatma-kutu{margin:0 0 18px;background:linear-gradient(135deg,#fffaf3,#fff);border:1px solid var(--border);box-shadow:var(--shadow);border-radius:20px;padding:16px}.vade-hatirlatma-baslik{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin-bottom:12px}.vade-hatirlatma-baslik>div{display:grid;gap:3px}.vade-hatirlatma-baslik strong{font-size:17px}.vade-hatirlatma-baslik small{color:var(--muted);font-size:12px}.vade-hatirlatma-baslik>b{padding:7px 10px;border-radius:999px;background:#efe8dd;color:#544b3d;font-size:12px}.vade-hatirlatma-ikon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#fff4dc;font-size:19px}.vade-hatirlatma-temiz{margin:0;padding:14px;border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:14px;font-size:12px;font-weight:800}
+.cari-net-scan{margin-top:16px;padding:18px;border:1px solid #d9e7dd;border-radius:18px;background:#fbfdfb}.cari-net-scan-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.cari-net-scan-head h3{margin:3px 0 4px;color:#173c27}.cari-net-scan-head p{margin:0;color:#66736b;font-size:13px}.cari-net-scan-count{display:inline-flex;padding:6px 9px;border-radius:999px;background:#fff1d5;color:#805500;font-size:11px;font-weight:900;white-space:nowrap}@media(max-width:820px){.cari-net-scan-head{display:block}.cari-net-scan-count{margin-top:8px}}@media(max-width:640px){.vade-hatirlatma-baslik{grid-template-columns:auto 1fr}.vade-hatirlatma-baslik>b{grid-column:1/-1;justify-self:start}}
+</style>
 
-<section class="hero-card">
-  <div>
-    <span class="status-pill"><?php echo e(APP_VERSION); ?> aktif · kasa/banka + gelişmiş takip</span>
-    <h2>Alacak, verecek, çek vadesi ve raporlar tek ekranda.</h2>
-    <p>Bu panel iç takip amaçlıdır. Resmi muhasebe/e-fatura yerine geçmez; günlük cari, çek, belge ve kasa takibini düzenli tutmak için tasarlandı.</p>
-  </div>
-  <div class="hero-actions">
-    <?php if (can_write()): ?>
-      <a class="btn btn-primary" href="hareketler.php">Hareket ekle</a>
-      <a class="btn btn-secondary" href="cekler.php">Çek ekle</a>
-      <a class="btn btn-secondary" href="cariler.php">Cari ekle</a>
-    <?php endif; ?>
-  </div>
+<section id="dashboardVadeHatirlatmalari" class="vade-hatirlatma-kutu">
+  <div class="vade-hatirlatma-baslik"><span class="vade-hatirlatma-ikon">🔔</span><div><strong>Vade Hatırlatmaları</strong><small>Çek, vadeli alacak ve ödeme kayıtlarını buradan doğrudan aç.</small></div><b>Yükleniyor</b></div>
+  <div class="vade-hatirlatma-temiz">Vade kayıtları hazırlanıyor…</div>
 </section>
-
-<?php if (is_admin()): ?>
-<section class="backup-mini-strip <?php echo e($backupStatusClass); ?>">
-  <div>
-    <span><?php echo e($backupStatusIcon); ?> Yedek durumu</span>
-    <strong><?php echo e($backupStatusLabel); ?></strong>
-    <small><?php echo e($backupStatusDetail); ?><?php echo $lastBackupFile ? ' · ' . e($lastBackupFile) : ''; ?></small>
-  </div>
-  <a href="yedekler.php">Yedekler →</a>
-</section>
-<?php endif; ?>
 
 <section class="quick-grid mobile-focus">
   <?php if (can_write()): ?>
@@ -305,6 +295,10 @@ page_header('Genel Bakış', 'dashboard');
     <article class="stat-card status"><span>Genel durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small>Net alacak - net verecek</small></article>
   </div>
   <p class="calc-note"><strong>Genel durum</strong> = net alacak - net verecek. Pozitifse genel olarak alacaklı, negatifse borçlu görünürsün.</p>
+  <div id="cariNetTaramaPanel" class="cari-net-scan">
+    <div class="cari-net-scan-head"><div><small>CANLI CARİ TARAMASI</small><h3>Karşılıklı alacak ve borcu bulunan cariler</h3><p>Satış ve alış hareketleri aynı caride mahsup edilerek gerçek net durum gösterilir.</p></div><span class="cari-net-scan-count" data-count>Hazırlanıyor…</span></div>
+    <div data-content><p class="muted">Cari kayıtları hazırlanıyor…</p></div>
+  </div>
 </section>
 
 <section class="dashboard-section">
@@ -320,6 +314,8 @@ page_header('Genel Bakış', 'dashboard');
     <article class="stat-card soft"><span>Kasa toplamı</span><strong><?php echo e(money($accountSummary['kasa'])); ?></strong><small>Nakit hesapları</small></article>
     <article class="stat-card soft"><span>Banka toplamı</span><strong><?php echo e(money($accountSummary['banka'])); ?></strong><small>Banka hesapları</small></article>
     <article class="stat-card soft"><span>Aktif hesap</span><strong><?php echo e($accountSummary['active']); ?></strong><small>Kasa/banka/POS</small></article>
+    <article id="dashboardMagazaNakitCard" class="stat-card soft"><span>Mağazadan gelen nakit</span><strong>Yükleniyor…</strong><small>Bu ayın mağaza nakit toplamı</small></article>
+    <article id="dashboardMagazaPosCard" class="stat-card soft"><span>Mağazadan gelen POS / kart</span><strong>Yükleniyor…</strong><small>Bu ayın mağaza kart toplamı</small></article>
   </div>
   <p class="calc-note"><strong>Bu ay nakit neti</strong> = gelir + tahsilat - gider - ödeme. Çek ve çek devir kayıtları hariçtir; cari bakiyeden ayrı gerçek para giriş/çıkışını gösterir.</p>
 </section>

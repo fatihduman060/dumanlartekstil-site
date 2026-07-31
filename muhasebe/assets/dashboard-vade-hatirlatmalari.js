@@ -8,13 +8,6 @@
     });
   }
 
-  function removeTopBlocks(){
-    var hero=document.querySelector('.hero-card');
-    if(hero) hero.remove();
-    var backup=document.querySelector('.backup-mini-strip');
-    if(backup) backup.remove();
-  }
-
   function itemHtml(item){
     var description=item.description
       ? '<span class="vade-hatirlatma-aciklama">'+esc(item.description)+'</span>'
@@ -50,10 +43,6 @@
   function render(data){
     if(!data||!data.ok) return;
     csrfToken=String(data.csrf_token||'');
-    removeTopBlocks();
-    var old=document.getElementById('dashboardVadeHatirlatmalari');
-    if(old) old.remove();
-
     var groups=Array.isArray(data.groups)?data.groups:[];
     var firstOpen=-1;
     groups.some(function(group,index){
@@ -62,16 +51,12 @@
     });
 
     var total=Number(data.count||0);
-    var section=document.createElement('section');
-    section.id='dashboardVadeHatirlatmalari';
-    section.className='vade-hatirlatma-kutu';
+    var section=document.getElementById('dashboardVadeHatirlatmalari');
+    if(!section) return;
     section.innerHTML='<div class="vade-hatirlatma-baslik"><span class="vade-hatirlatma-ikon">🔔</span><div><strong>Vade Hatırlatmaları</strong><small>Çek, vadeli alacak ve ödeme kayıtlarını buradan doğrudan aç.</small></div><b>'+total+' kayıt</b></div>'
       +(total
         ? '<div class="vade-hatirlatma-gruplar">'+groups.map(function(group,index){return groupHtml(group,index===firstOpen);}).join('')+'</div>'
         : '<div class="vade-hatirlatma-temiz">✅ Yaklaşan veya geciken vade bulunmuyor.</div>');
-
-    var anchor=document.querySelector('.quick-grid.mobile-focus')||document.querySelector('.dashboard-section');
-    if(anchor) anchor.insertAdjacentElement('beforebegin',section);
   }
 
   function load(){
@@ -135,7 +120,6 @@
 
   function run(){
     if(!/dashboard\.php/i.test(location.pathname)) return;
-    removeTopBlocks();
     addStyles();
     load();
   }

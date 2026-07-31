@@ -83,12 +83,8 @@
   }
 
   function scanPanel(){
-    var old=document.getElementById('cariNetTaramaPanel');if(old)return old;
     scanStyle();
-    var section=cariSection();if(!section)return null;
-    var box=document.createElement('div');box.id='cariNetTaramaPanel';box.className='cari-net-scan';
-    box.innerHTML='<div class="cari-net-scan-head"><div><small>CANLI CARİ TARAMASI</small><h3>Karşılıklı alacak ve borcu bulunan cariler</h3><p>Satış ve alış hareketleri silinmez; aynı caride birbirinden mahsup edilerek gerçek net durum gösterilir.</p></div><span class="cari-net-scan-count" data-count>Taranıyor…</span></div><div data-content><p class="muted">Canlı kayıtlar taranıyor…</p></div>';
-    section.appendChild(box);return box;
+    return document.getElementById('cariNetTaramaPanel');
   }
 
   function renderScan(data){
@@ -130,16 +126,10 @@
       .catch(function(error){var box=scanPanel();if(!box)return;box.querySelector('[data-count]').textContent='Tarama hatası';box.querySelector('[data-content]').innerHTML='<p class="text-danger">'+esc(error.message||'Cari taraması yapılamadı.')+'</p>';});
   }
 
-  function cashFlowStats(){
-    var section=Array.from(document.querySelectorAll('.dashboard-section')).find(function(item){return norm(item.textContent||'').indexOf('para akisi ve hesaplar')!==-1;});
-    return section?section.querySelector('.stats-grid'):null;
-  }
   function ensureStoreCards(){
-    var stats=cashFlowStats();if(!stats)return null;
     var cash=document.getElementById('dashboardMagazaNakitCard');
-    if(!cash){cash=Array.from(stats.querySelectorAll('.stat-card')).find(function(card){var label=card.querySelector('span');return label&&norm(label.textContent)==='aktif hesap';})||document.createElement('article');cash.id='dashboardMagazaNakitCard';cash.className='stat-card soft';cash.innerHTML='<span>Mağazadan gelen nakit</span><strong>Yükleniyor...</strong><small>Bu ayın mağaza nakit toplamı</small>';if(!cash.parentNode)stats.appendChild(cash);}
     var pos=document.getElementById('dashboardMagazaPosCard');
-    if(!pos){pos=document.createElement('article');pos.id='dashboardMagazaPosCard';pos.className='stat-card soft';pos.innerHTML='<span>Mağazadan gelen POS / kart</span><strong>Yükleniyor...</strong><small>Bu ayın mağaza kart toplamı</small>';cash.insertAdjacentElement('afterend',pos);}
+    if(!cash||!pos)return null;
     return {cash:cash,pos:pos};
   }
   function renderStoreCards(data){
@@ -152,7 +142,6 @@
     ensureStoreCards();
     fetch('dashboard-magaza-tahsilat.php?_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(response){return response.json();}).then(function(data){
       if(!data||!data.ok)throw new Error(data&&data.error?data.error:'Mağaza özeti yüklenemedi.');
-      var processed=Number(data.processed_due_count||0);if(processed>0){var fingerprint=String(data.cutoff_date||'')+'|'+String(data.latest_settlement_date||'')+'|'+String(data.settled_pos_total||0),key='dashboard-magaza-pos-yenileme';try{if(sessionStorage.getItem(key)!==fingerprint){sessionStorage.setItem(key,fingerprint);location.reload();return;}}catch(error){}}
       renderStoreCards(data);
     }).catch(function(error){var cards=ensureStoreCards();if(!cards)return;cards.cash.querySelector('strong').textContent='—';cards.pos.querySelector('strong').textContent='—';cards.cash.querySelector('small').textContent=error.message||'Mağaza özeti yüklenemedi';cards.pos.querySelector('small').textContent=error.message||'Mağaza özeti yüklenemedi';});
   }
