@@ -83,7 +83,7 @@
     if (!/uretim-takibi\.php/i.test(location.pathname)) return;
     if (document.querySelector('script[data-production-quick-entry]')) return;
     var script = document.createElement('script');
-    script.src = 'assets/uretim-hizli-giris.js?v=cc73082a';
+    script.src = 'assets/uretim-hizli-giris.js?v=b36cedd5';
     script.setAttribute('data-production-quick-entry', '1');
     document.head.appendChild(script);
   }
