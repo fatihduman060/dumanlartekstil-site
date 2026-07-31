@@ -67,22 +67,6 @@
     document.head.appendChild(script);
   }
 
-  function loadProductionQuickEntry(){
-    if (!/uretim-takibi\.php/i.test(location.pathname)) return;
-    if (document.querySelector('script[data-production-quick-entry]')) return;
-    var script = document.createElement('script');
-    script.src = 'assets/uretim-hizli-giris.js?v=b36cedd5';
-    script.setAttribute('data-production-quick-entry', '1');
-    script.onload = function(){
-      if (document.querySelector('script[data-shift-separate-save]')) return;
-      var separate = document.createElement('script');
-      separate.src = 'assets/uretim-vardiya-ayri-kaydet.js?v=d1aa9fdf';
-      separate.setAttribute('data-shift-separate-save', '1');
-      document.head.appendChild(separate);
-    };
-    document.head.appendChild(script);
-  }
-
   function init(){
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
@@ -101,7 +85,6 @@
     }
     normalizeCariDetailCards();
     loadCariSaleViewer();
-    loadProductionQuickEntry();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
