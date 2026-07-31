@@ -71,7 +71,20 @@
     document.head.appendChild(script);
   }
 
+  function addProductionMenu(){
+    var nav = document.querySelector('.side-nav');
+    if (!nav || nav.querySelector('a[href="uretim-takibi.php"]')) return;
+    var link = document.createElement('a');
+    link.href = 'uretim-takibi.php';
+    link.innerHTML = '<span class="nav-ico">⚙</span><span>Üretim Takibi</span>';
+    if (/uretim-takibi\.php/i.test(location.pathname)) link.className = 'active';
+    var store = nav.querySelector('a[href="magaza.php"]');
+    if (store) store.insertAdjacentElement('afterend', link);
+    else nav.appendChild(link);
+  }
+
   function init(){
+    addProductionMenu();
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
         .then(function(r){ return r.json(); })
