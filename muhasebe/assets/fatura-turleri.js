@@ -127,19 +127,25 @@
 
   function ensureFilter(){
     var form=document.querySelector('.panel-card .filterbar');
-    if(!form||form.querySelector('[data-fatura-tur-filter]')) return;
-    var select=document.createElement('select');
-    select.name='invoice_type';
-    select.setAttribute('data-fatura-tur-filter','1');
-    select.innerHTML='<option value="">Tüm fatura türleri</option>'+
-      Object.keys(state.categories).map(function(key){return '<option value="'+esc(key)+'">'+esc(state.categories[key])+'</option>';}).join('')+
-      '<option value="satis">Satış faturası</option>'+
-      '<option value="belirsiz">Türü belirlenmemiş</option>';
+    if(!form) return;
+    var select=form.querySelector('[data-fatura-tur-filter]');
+    if(!select){
+      select=document.createElement('select');
+      select.name='invoice_type';
+      select.setAttribute('data-fatura-tur-filter','1');
+      select.innerHTML='<option value="">Tüm fatura türleri</option>'+
+        Object.keys(state.categories).map(function(key){return '<option value="'+esc(key)+'">'+esc(state.categories[key])+'</option>';}).join('')+
+        '<option value="satis">Satış faturası</option>'+
+        '<option value="belirsiz">Türü belirlenmemiş</option>';
+      var direction=form.querySelector('select[name="direction"]');
+      if(direction) direction.insertAdjacentElement('afterend',select); else form.appendChild(select);
+    }
     var fromUrl=new URLSearchParams(location.search).get('invoice_type')||'';
     if(Array.from(select.options).some(function(option){return option.value===fromUrl;})) select.value=fromUrl;
-    var direction=form.querySelector('select[name="direction"]');
-    if(direction) direction.insertAdjacentElement('afterend',select); else form.appendChild(select);
-    select.addEventListener('change',applyFilter);
+    if(select.getAttribute('data-fatura-filter-bound')!=='1'){
+      select.setAttribute('data-fatura-filter-bound','1');
+      select.addEventListener('change',applyFilter);
+    }
   }
 
   function applyFilter(){

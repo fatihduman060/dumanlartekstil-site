@@ -40,6 +40,15 @@ ensure_column(db(), 'invoices', 'issuer_parser_version', 'TEXT');
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(invoice_date)");
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_cari ON invoices(cari_id)");
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_movement ON invoices(cari_movement_id)");
+db()->exec("CREATE TABLE IF NOT EXISTS invoice_expense_types (
+    invoice_id INTEGER PRIMARY KEY,
+    category TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_by INTEGER,
+    created_at TEXT,
+    updated_by INTEGER,
+    updated_at TEXT
+)");
 
 function fatura_yonleri(): array
 {
@@ -52,6 +61,16 @@ function fatura_yonleri(): array
 function fatura_para_birimleri(): array
 {
     return ['TL'=>'TL', 'USD'=>'USD', 'EUR'=>'EUR'];
+}
+
+function fatura_tur_etiketleri(): array
+{
+    return [
+        'iplik'=>'İplik / Hammadde', 'iade'=>'İade Faturası', 'telefon'=>'Telefon / İnternet',
+        'elektrik'=>'Elektrik', 'dogalgaz'=>'Doğalgaz', 'kargo'=>'Kargo / Nakliye',
+        'akaryakit'=>'Akaryakıt', 'bakim'=>'Makine / Bakım', 'ambalaj'=>'Ambalaj',
+        'personel'=>'Personel Gideri', 'ofis'=>'Ofis / Genel Gider', 'diger'=>'Diğer',
+    ];
 }
 
 function fatura_para_birimi($value): string
@@ -338,11 +357,13 @@ $summaryStmt = db()->prepare("SELECT
     COALESCE(SUM(CASE WHEN direction='gelen' AND currency='TL' THEN vat_amount ELSE 0 END),0) AS incoming_vat,
     COALESCE(SUM(CASE WHEN direction='giden' AND currency='TL' THEN vat_amount ELSE 0 END),0) AS outgoing_vat,
     COALESCE(SUM(CASE WHEN currency='TL' THEN total_amount ELSE 0 END),0) AS total_tl,
+    COALESCE(SUM(CASE WHEN direction='gelen' THEN 1 ELSE 0 END),0) AS incoming_count,
+    COALESCE(SUM(CASE WHEN direction='giden' THEN 1 ELSE 0 END),0) AS outgoing_count,
     COUNT(*) AS invoice_count
     FROM invoices
     WHERE COALESCE(is_cancelled,0)=0 AND invoice_date BETWEEN ? AND ?");
 $summaryStmt->execute([$periodStart, $periodEnd]);
-$summary = $summaryStmt->fetch() ?: ['incoming_vat'=>0,'outgoing_vat'=>0,'total_tl'=>0,'invoice_count'=>0];
+$summary = $summaryStmt->fetch() ?: ['incoming_vat'=>0,'outgoing_vat'=>0,'total_tl'=>0,'incoming_count'=>0,'outgoing_count'=>0,'invoice_count'=>0];
 $incomingVat = (float)$summary['incoming_vat'];
 $outgoingVat = (float)$summary['outgoing_vat'];
 $vatNet = $outgoingVat - $incomingVat;
@@ -350,7 +371,8 @@ $vatNetLabel = $vatNet > 0.009 ? 'Tahmini ödenecek KDV' : ($vatNet < -0.009 ? '
 $vatNetTone = $vatNet > 0.009 ? 'text-danger' : 'text-success';
 
 $q = trim((string)($_GET['q'] ?? ''));
-$directionFilter = trim((string)($_GET['direction'] ?? ''));
+$directionFilter = trim((string)($_GET['direction'] ?? 'giden'));
+if (!isset(fatura_yonleri()[$directionFilter])) $directionFilter = 'giden';
 $includeCancelled = isset($_GET['include_cancelled']);
 $where = ['i.invoice_date BETWEEN ? AND ?'];
 $params = [$periodStart, $periodEnd];
@@ -363,19 +385,45 @@ if ($q !== '') {
     $where[] = '(i.invoice_no LIKE ? OR i.description LIKE ? OR i.document_name LIKE ? OR i.issuer_name LIKE ? OR c.name LIKE ?)';
     array_push($params, "%$q%", "%$q%", "%$q%", "%$q%", "%$q%");
 }
-$sql = "SELECT i.*, c.name AS cari_name, m.is_cancelled AS movement_cancelled
+$sql = "SELECT i.*, c.name AS cari_name, m.is_cancelled AS movement_cancelled,
+        COALESCE(t.category,'') AS expense_category, COALESCE(t.source,'') AS expense_category_source
     FROM invoices i
     LEFT JOIN cariler c ON c.id=i.cari_id
     LEFT JOIN movements m ON m.id=i.cari_movement_id
+    LEFT JOIN invoice_expense_types t ON t.invoice_id=i.id
     WHERE " . implode(' AND ', $where) . "
     ORDER BY i.invoice_date DESC, i.id DESC
     LIMIT 500";
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
+$invoiceTypeLabels = fatura_tur_etiketleri();
+$directionUrl = function (string $target) use ($period, $q, $includeCancelled): string {
+    $query = ['period'=>$period, 'direction'=>$target];
+    if ($q !== '') $query['q'] = $q;
+    if ($includeCancelled) $query['include_cancelled'] = '1';
+    return 'faturalar.php?' . http_build_query($query);
+};
+$listOnly = empty($edit);
 
 page_header('Faturalar', 'faturalar');
 ?>
+<style>
+.form-grid.fatura-list-only{display:block!important;grid-template-columns:minmax(0,1fr)!important;width:100%}
+.fatura-list-only>.panel-card{width:100%;max-width:none;margin:0}.fatura-entry-source[hidden]{display:none!important}
+.fatura-list-only .table-wrap{width:100%;overflow:auto}.fatura-list-only table{width:100%;min-width:1120px}
+.fatura-direction-tabs{display:flex;gap:8px;margin:0 0 12px;padding:7px;border:1px solid #e5dccf;border-radius:16px;background:#fff}
+.fatura-direction-tabs a{flex:1;display:grid;gap:3px;text-align:center;text-decoration:none;border-radius:12px;padding:11px 14px;background:#fbf6ed;color:#16482e}
+.fatura-direction-tabs a.active{background:#c49a4f;color:#102818}.fatura-direction-tabs strong{font-size:13px}.fatura-direction-tabs small{font-size:9px;font-weight:700;opacity:.72}
+.fatura-entry-open{margin-left:auto;white-space:nowrap}
+.kdv-devir-panel{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(420px,1.6fr);gap:14px;align-items:end;margin:14px 0 16px;padding:14px 16px;border:1px solid #d8c6a5;background:linear-gradient(135deg,#fff7e8,#fff);border-radius:16px}.kdv-devir-copy{display:grid;gap:4px}.kdv-devir-copy small{font-size:11px;color:var(--muted)}.kdv-devir-form{display:grid;grid-template-columns:150px minmax(220px,1fr) auto;gap:9px;align-items:end}.kdv-devir-form label{display:grid;gap:5px;font-size:11px;font-weight:800}.kdv-devir-form input{width:100%;border:1px solid var(--border);background:#fff;border-radius:11px;padding:10px 11px}.kdv-devir-status{grid-column:1/-1;margin:0;font-size:11px;color:var(--muted)}
+.fatura-tur-auto-status{display:flex;gap:10px;align-items:center;flex-wrap:wrap;min-height:38px;margin:10px 0 12px;padding:10px 12px;border:1px solid #c8d8ea;background:#f1f7ff;border-radius:12px;font-size:10px}.fatura-tur-summary{min-height:58px;margin:12px 0 14px;padding:13px 14px;border:1px solid #d9e3dc;background:#f7fbf8;border-radius:15px;display:grid;gap:10px}.fatura-tur-summary-head{display:grid;gap:3px}.fatura-tur-summary-head small{font-size:10px;color:var(--muted)}
+.fatura-alt-kontroller{display:grid;gap:12px;margin-top:18px;padding:16px}.fatura-alt-kontrol-body{display:grid;gap:12px}
+.fatura-yon-cell{display:grid;gap:4px;justify-items:start}.fatura-yon-cell button{border:0;background:transparent;padding:0;color:#7b6745;font-size:9px;font-weight:850;text-decoration:underline;cursor:pointer}.fatura-cari-sec-btn{border:1px dashed #c9a96e;background:#fff9ee;color:#51452f;border-radius:11px;padding:8px 10px;display:grid;gap:2px;text-align:left;cursor:pointer;min-width:120px}
+@media(max-width:980px){.kdv-devir-panel{grid-template-columns:1fr}.kdv-devir-form{grid-template-columns:1fr 1fr}}
+@media(max-width:720px){.fatura-direction-tabs{display:grid}.fatura-list-only table{min-width:980px}}
+@media(max-width:640px){.kdv-devir-form{grid-template-columns:1fr}}
+</style>
 <section class="dashboard-section">
   <div class="dashboard-section-head">
     <div><span>Fatura ve KDV Takibi</span><h3><?php echo e(date('m.Y', strtotime($periodStart))); ?> dönemi</h3></div>
@@ -383,19 +431,28 @@ page_header('Faturalar', 'faturalar');
   </div>
   <form class="filterbar" method="get">
     <input type="month" name="period" value="<?php echo e($period); ?>">
+    <input type="hidden" name="direction" value="<?php echo e($directionFilter); ?>">
     <button class="btn btn-secondary" type="submit">Dönemi göster</button>
+    <a class="btn btn-primary" href="fatura-toplu-yukle.php" data-toplu-fatura-link>Toplu PDF yükle</a>
   </form>
+  <div id="kdvDevirPanel" class="kdv-devir-panel">
+    <div class="kdv-devir-copy"><strong>Önceki dönemden devreden KDV</strong><small>Önceki dönemden devreden tutarı bu dönem için kaydet.</small></div>
+    <form class="kdv-devir-form" data-kdv-devir-form><input type="hidden" name="period" value="<?php echo e($period); ?>"><label>Tutar<input type="text" inputmode="decimal" name="amount" placeholder="0,00"></label><label>Not<input type="text" name="note" placeholder="Örn: Önceki ay beyannamesinden devir"></label><button type="submit" class="btn btn-secondary">KDV devrini kaydet</button></form>
+    <p class="kdv-devir-status" data-kdv-devir-status>Bilgiler hazırlanıyor…</p>
+  </div>
   <div class="stats-grid four section-stats">
     <article class="stat-card soft"><span>İndirilecek KDV</span><strong class="text-success"><?php echo e(fatura_para($incomingVat)); ?></strong><small>Gelen faturaların KDV'si</small></article>
     <article class="stat-card soft"><span>Hesaplanan KDV</span><strong class="text-danger"><?php echo e(fatura_para($outgoingVat)); ?></strong><small>Giden faturaların KDV'si</small></article>
+    <article id="kdvDevirCard" class="stat-card soft"><span>Önceki dönemden devir</span><strong>0,00 TL</strong><small>Manuel girilen KDV devri</small></article>
     <article class="stat-card status"><span>KDV durumu</span><strong class="<?php echo e($vatNetTone); ?>"><?php echo e(fatura_para(abs($vatNet))); ?></strong><small><?php echo e($vatNetLabel); ?></small></article>
     <article class="stat-card soft"><span>Fatura toplamı</span><strong><?php echo e(fatura_para($summary['total_tl'])); ?></strong><small><?php echo e((string)$summary['invoice_count']); ?> kayıt · yalnızca TL</small></article>
+    <article id="magazaGunlukRaporCard" class="stat-card soft"><span>Mağaza günlük rapor</span><strong>0,00 TL</strong><small>Z raporu KDV toplamı hazırlanıyor</small></article>
   </div>
   <p class="calc-note"><strong>KDV durumu</strong> = hesaplanan KDV - indirilecek KDV. Tevkifat, istisna, iade ve önceki dönem devri bu ilk taslakta hesaba katılmaz.</p>
 </section>
 
-<section class="form-grid">
-  <article class="panel-card form-card">
+<section class="form-grid<?php echo $listOnly ? ' fatura-list-only' : ''; ?>">
+  <article class="panel-card form-card<?php echo $listOnly ? ' fatura-entry-source' : ''; ?>"<?php echo $listOnly ? ' hidden aria-hidden="true"' : ''; ?>>
     <div class="card-head"><h3><?php echo $edit ? 'Fatura düzenle' : 'Yeni fatura'; ?></h3></div>
     <?php if (can_write()): ?>
     <form method="post" enctype="multipart/form-data" class="stack-form" id="invoiceForm">
@@ -463,35 +520,46 @@ page_header('Faturalar', 'faturalar');
   </article>
 
   <article class="panel-card">
-    <div class="card-head"><h3>Fatura listesi</h3><span><?php echo e(count($rows)); ?> kayıt</span></div>
+    <div class="card-head"><h3>Fatura listesi</h3><span><?php echo e(count($rows)); ?> kayıt</span><?php if ($listOnly && can_write()): ?><button type="button" class="btn btn-primary fatura-entry-open" data-fatura-entry-open>+ Fatura Girişi</button><?php endif; ?></div>
+    <nav class="fatura-direction-tabs" data-fatura-direction-tabs aria-label="Fatura yönü">
+      <a href="<?php echo e($directionUrl('giden')); ?>" class="<?php echo $directionFilter === 'giden' ? 'active' : ''; ?>"><strong>Giden Fatura</strong><small>Bizim kestiğimiz faturalar · <?php echo e((string)$summary['outgoing_count']); ?> kayıt</small></a>
+      <a href="<?php echo e($directionUrl('gelen')); ?>" class="<?php echo $directionFilter === 'gelen' ? 'active' : ''; ?>"><strong>Gelen Fatura</strong><small>Bize kesilen faturalar · <?php echo e((string)$summary['incoming_count']); ?> kayıt</small></a>
+    </nav>
     <form class="filterbar multi" method="get">
       <input type="hidden" name="period" value="<?php echo e($period); ?>">
       <input name="q" placeholder="Fatura no, gönderen, cari veya açıklama ara" value="<?php echo e($q); ?>">
       <select name="direction">
-        <option value="">Gelen + giden</option>
         <?php foreach(fatura_yonleri() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo $directionFilter===$key?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?>
+      </select>
+      <select name="invoice_type" data-fatura-tur-filter>
+        <option value="">Tüm fatura türleri</option>
+        <?php foreach($invoiceTypeLabels as $key=>$label): ?><option value="<?php echo e($key); ?>"><?php echo e($label); ?></option><?php endforeach; ?>
+        <option value="satis">Satış faturası</option><option value="belirsiz">Türü belirlenmemiş</option>
       </select>
       <label class="check tiny"><input type="checkbox" name="include_cancelled" value="1" <?php echo $includeCancelled?'checked':''; ?>> İptalleri göster</label>
       <button class="btn btn-secondary" type="submit">Filtrele</button>
     </form>
+    <div class="fatura-tur-auto-status is-loading" data-fatura-tur-auto-status><strong>Otomatik fatura bilgisi</strong><span>Fatura türü ve gönderen firma bilgileri hazırlanıyor…</span></div>
+    <section class="fatura-tur-summary" data-fatura-tur-summary><div class="fatura-tur-summary-head"><strong>Aylık gelen fatura dağılımı</strong><small>Fatura türleri hazırlanıyor…</small></div></section>
 
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Tarih / No</th><th>Yön</th><th>Cari</th><th>Matrah / KDV</th><th class="right">Toplam</th><th>Dosya</th><th>Cari durumu</th><th></th></tr></thead>
+        <thead><tr><th>Tarih / No</th><th>Yön</th><th>Cari</th><th data-fatura-tur-head>Fatura türü</th><th>Matrah / KDV</th><th class="right">Toplam</th><th>Dosya</th><th>Cari durumu</th><th></th></tr></thead>
         <tbody>
-          <?php if(!$rows): ?><tr><td colspan="8" class="empty">Bu dönemde fatura bulunamadı.</td></tr><?php endif; ?>
+          <?php if(!$rows): ?><tr><td colspan="9" class="empty">Bu dönemde <?php echo $directionFilter === 'gelen' ? 'gelen' : 'giden'; ?> fatura bulunamadı.</td></tr><?php endif; ?>
           <?php foreach($rows as $r): $cancelled=(int)($r['is_cancelled'] ?? 0)===1; $meta=fatura_yonleri()[$r['direction']] ?? fatura_yonleri()['gelen']; ?>
           <tr class="<?php echo $cancelled?'row-cancelled':''; ?>">
             <td><strong><?php echo e(tr_date($r['invoice_date'])); ?></strong><small><?php echo e($r['invoice_no'] ?: 'Fatura #' . $r['id']); ?><?php echo $r['due_date'] ? ' · Vade: ' . e(tr_date($r['due_date'])) : ''; ?></small></td>
-            <td><?php echo $cancelled ? badge('İptal','neutral') : badge($meta['label'], $meta['tone']); ?></td>
+            <td><?php if ($cancelled || !can_write()): ?><?php echo $cancelled ? badge('İptal','neutral') : badge($meta['label'], $meta['tone']); ?><?php else: $targetDirection=$r['direction']==='giden'?'gelen':'giden'; ?><div class="fatura-yon-cell"><?php echo badge($meta['label'], $meta['tone']); ?><button type="button" data-fatura-yon-sec="<?php echo e($r['id']); ?>" data-current="<?php echo e($r['direction']); ?>" data-target="<?php echo e($targetDirection); ?>"><?php echo $targetDirection === 'giden' ? 'Giden yap' : 'Gelen yap'; ?></button></div><?php endif; ?></td>
             <td>
-              <?php echo $r['cari_id'] ? '<a href="cari-detay.php?id='.e($r['cari_id']).'">'.e($r['cari_name']).'</a>' : '<span class="muted">Cari yok</span>'; ?>
+              <?php if ($r['cari_id']): ?><a href="cari-detay.php?id=<?php echo e($r['cari_id']); ?>"><?php echo e($r['cari_name']); ?></a><?php elseif (!$cancelled && can_write()): ?><button type="button" class="fatura-cari-sec-btn" data-fatura-cari-sec="<?php echo e($r['id']); ?>"><strong>Cari yok</strong><small>Seç veya otomatik oluştur</small></button><?php else: ?><span class="muted">Cari yok</span><?php endif; ?>
               <?php if ($r['direction'] === 'gelen' && trim((string)($r['issuer_name'] ?? '')) !== ''): ?>
                 <small class="fatura-issuer-line"><strong>Gönderen:</strong> <?php echo e($r['issuer_name']); ?></small>
               <?php elseif ($r['direction'] === 'gelen' && fatura_muhtelif_cari_mi($r['cari_name'] ?? '')): ?>
                 <small class="fatura-issuer-line muted">Gönderen henüz okunmadı</small>
               <?php endif; ?>
             </td>
+            <td data-fatura-tur-cell="<?php echo e($r['id']); ?>"><?php if ($r['direction'] === 'giden'): ?><span class="fatura-tur-static">Satış</span><small>Giden fatura</small><?php elseif (!empty($r['expense_category']) && isset($invoiceTypeLabels[$r['expense_category']])): ?><span class="fatura-tur-auto-loading"><?php echo e($invoiceTypeLabels[$r['expense_category']]); ?></span><?php else: ?><span class="fatura-tur-auto-loading">Hazırlanıyor…</span><?php endif; ?></td>
             <td><?php echo e(fatura_para($r['subtotal'], $r['currency'])); ?><small>KDV: <?php echo e(fatura_para($r['vat_amount'], $r['currency'])); ?></small></td>
             <td class="right"><strong><?php echo e(fatura_para($r['total_amount'], $r['currency'])); ?></strong></td>
             <td><?php if($r['document_path']): ?><a href="fatura-indir.php?id=<?php echo e($r['id']); ?>" target="_blank"><?php echo e($r['document_name'] ?: 'Faturayı aç'); ?></a><?php else: ?>-<?php endif; ?></td>
@@ -506,7 +574,7 @@ page_header('Faturalar', 'faturalar');
             </td>
             <td class="row-actions">
               <?php if(!$cancelled && can_write()): ?>
-                <a href="faturalar.php?period=<?php echo e($period); ?>&edit=<?php echo e($r['id']); ?>">Düzenle</a>
+                <a href="faturalar.php?period=<?php echo e($period); ?>&direction=<?php echo e($directionFilter); ?>&edit=<?php echo e($r['id']); ?>">Düzenle</a>
                 <form method="post">
                   <?php echo csrf_field(); ?><input type="hidden" name="action" value="post_cari"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>">
                   <button><?php echo !empty($r['cari_movement_id']) && (int)($r['movement_cancelled'] ?? 0)===0 ? 'Cariyi güncelle' : 'Cariye işle'; ?></button>
@@ -523,6 +591,10 @@ page_header('Faturalar', 'faturalar');
       </table>
     </div>
   </article>
+</section>
+<section class="panel-card fatura-alt-kontroller" data-fatura-alt-kontroller>
+  <div class="card-head"><div><h3>Fatura araçları</h3><small>Masraf fişleri ve seyrek kullanılan yardımcı işlemler</small></div></div>
+  <div class="fatura-alt-kontrol-body" data-fatura-alt-kontrol-body><div class="toplu-yon-duzelt-panel" data-toplu-yon-panel hidden><div><strong>Son toplu yükleme yön kontrolü</strong><small data-toplu-yon-ozet>Kontrol ediliyor…</small></div><div class="toplu-yon-actions"><button type="button" class="btn btn-secondary" data-toplu-yon="giden">Tamamını giden yap</button><button type="button" class="btn btn-secondary" data-toplu-yon="gelen">Tamamını gelen yap</button></div></div></div>
 </section>
 
 <script>

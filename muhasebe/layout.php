@@ -272,16 +272,16 @@ function page_footer(): void
   <script src="assets/fatura-pdf-oku.js?v=3"></script>
   <script src="assets/fatura-yeni-cari.js?v=2"></script>
   <script src="assets/fatura-kdv-devir.js?v=1"></script>
-  <script src="assets/fatura-toplu-link.js?v=8"></script>
+  <script src="assets/fatura-toplu-link.js?v=9"></script>
   <script src="assets/fatura-toplu-yukle.js?v=4"></script>
   <script src="assets/fatura-no-onar.js?v=2"></script>
-  <script src="assets/fatura-tarih-sirala.js?v=3"></script>
+  <script src="assets/fatura-tarih-sirala.js?v=4"></script>
   <script src="assets/fatura-cari-sec.js?v=3"></script>
   <script src="assets/fatura-cari-okuma-duzelt.js?v=4"></script>
   <script src="assets/fatura-yon-sec.js?v=1"></script>
-  <script src="assets/fatura-turleri.js?v=3"></script>
+  <script src="assets/fatura-turleri.js?v=4"></script>
   <script src="assets/fatura-tur-otomatik.js?v=3"></script>
-  <script src="assets/fatura-iade-turu.js?v=9"></script>
+  <script src="assets/fatura-iade-turu.js?v=10"></script>
   <script src="assets/nakliye-gider-modu.js?v=1"></script>
   <script src="assets/cari-hareket-kaynak.js?v=6"></script>
   <script src="assets/cek-liste-toplam.js?v=1"></script>

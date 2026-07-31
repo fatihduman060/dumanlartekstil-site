@@ -3,7 +3,6 @@
 
   var params=new URLSearchParams(location.search);
   var editId=Number(params.get('edit')||0);
-  var serverDirection=params.get('direction')||'';
 
   function qs(selector,root){return (root||document).querySelector(selector);}
   function qsa(selector,root){return Array.from((root||document).querySelectorAll(selector));}
@@ -80,14 +79,6 @@
     try{sessionStorage.setItem('faturaAktifYon',direction);}catch(error){}
   }
 
-  if((serverDirection==='giden'||serverDirection==='gelen')&&editId<=0){
-    saveActiveDirection(serverDirection);
-    params.delete('direction');
-    var clean=params.toString();
-    location.replace(location.pathname+(clean?'?'+clean:''));
-    return;
-  }
-
   function setupEntryModal(){
     if(editId>0) return;
     var formCard=qs('.form-grid > .form-card');
@@ -100,12 +91,15 @@
     if(!listCard) return;
 
     var head=qs('.card-head',listCard);
-    var openButton=document.createElement('button');
-    openButton.type='button';
-    openButton.className='btn btn-primary fatura-entry-open';
-    openButton.setAttribute('data-fatura-entry-open','1');
-    openButton.textContent='+ Fatura Girişi';
-    if(head) head.appendChild(openButton); else listCard.insertAdjacentElement('afterbegin',openButton);
+    var openButton=qs('[data-fatura-entry-open]',listCard);
+    if(!openButton){
+      openButton=document.createElement('button');
+      openButton.type='button';
+      openButton.className='btn btn-primary fatura-entry-open';
+      openButton.setAttribute('data-fatura-entry-open','1');
+      openButton.textContent='+ Fatura Girişi';
+      if(head) head.appendChild(openButton); else listCard.insertAdjacentElement('afterbegin',openButton);
+    }
 
     var overlay=document.createElement('div');
     overlay.className='fatura-entry-overlay';
@@ -287,8 +281,7 @@
   function start(){
     addStyle();
     setupEntryModal();
-    setupDirectionTabs();
   }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){window.setTimeout(start,250);});
-  else window.setTimeout(start,250);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start);
+  else start();
 })();

@@ -45,7 +45,6 @@
       if(String(item.category||'')==='iade') iadeIds[Number(item.id||0)]=true;
     });
     applyAll();
-    scheduleSort();
   }
 
   function rowDateValue(row){
@@ -232,16 +231,7 @@
     +'@media(max-width:720px){.fatura-alt-kontroller{padding:12px}.fatura-alt-period-form{align-items:stretch}}';
   document.head.appendChild(style);
 
-  var observer=new MutationObserver(function(){
-    applyAll();
-    scheduleSort();
-    moveAuxiliaryControls();
-  });
-  observer.observe(document.documentElement,{childList:true,subtree:true});
-
   applyAll();
-  scheduleSort();
-  moveAuxiliaryControls();
   loadExpenseReceipts();
 
   fetch('fatura-tur.php?period='+encodeURIComponent(periodValue())+'&_='+Date.now(),{
@@ -249,5 +239,5 @@
   })
     .then(function(response){return response.json();})
     .then(function(data){if(data&&data.ok) applyPayload(data);})
-    .catch(function(){applyAll();scheduleSort();moveAuxiliaryControls();});
+    .catch(function(){applyAll();});
 })();

@@ -48,8 +48,7 @@
   }
 
   if(/\/faturalar\.php$/i.test(location.pathname)){
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',faturaSiralamayiBaslat);
-    else faturaSiralamayiBaslat();
+    // Fatura sırası ilk PHP yanıtında sabitlenir; açılıştan sonra satır taşıma.
     return;
   }
 

@@ -5,17 +5,7 @@
   var editId=Number(params.get('edit')||0);
   var formGrid=document.querySelector('.form-grid');
 
-  // Normal fatura listesindeyken tekli fatura formunu sayfada yer kaplamayacak şekilde gizle.
-  // Ayrı fatura giriş penceresi bu kartı gerektiğinde açar; ?edit=ID görünümünde form normal kalır.
-  if(formGrid&&editId<=0){
-    var formCard=formGrid.querySelector('.form-card');
-    if(formCard){
-      formCard.classList.add('fatura-entry-source');
-      formCard.hidden=true;
-      formCard.setAttribute('aria-hidden','true');
-    }
-    formGrid.classList.add('fatura-list-only');
-  }
+  // Liste/form yerleşimi ilk PHP yanıtında hazırlanır; burada sonradan değiştirilmez.
 
   var section=document.querySelector('.dashboard-section');
   if(!section) return;
@@ -30,12 +20,16 @@
     if(filter) filter.appendChild(link); else section.appendChild(link);
   }
 
-  var panel=document.createElement('div');
-  panel.className='toplu-yon-duzelt-panel';
-  panel.hidden=true;
-  panel.innerHTML='<div><strong>Son toplu yükleme yön kontrolü</strong><small data-toplu-yon-ozet>Kontrol ediliyor...</small></div>'
-    +'<div class="toplu-yon-actions"><button type="button" class="btn btn-secondary" data-toplu-yon="giden">Tamamını giden yap</button><button type="button" class="btn btn-secondary" data-toplu-yon="gelen">Tamamını gelen yap</button></div>';
-  if(filter) filter.insertAdjacentElement('afterend',panel); else section.appendChild(panel);
+  var panel=document.querySelector('[data-toplu-yon-panel]');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.className='toplu-yon-duzelt-panel';
+    panel.setAttribute('data-toplu-yon-panel','1');
+    panel.hidden=true;
+    panel.innerHTML='<div><strong>Son toplu yükleme yön kontrolü</strong><small data-toplu-yon-ozet>Kontrol ediliyor...</small></div>'
+      +'<div class="toplu-yon-actions"><button type="button" class="btn btn-secondary" data-toplu-yon="giden">Tamamını giden yap</button><button type="button" class="btn btn-secondary" data-toplu-yon="gelen">Tamamını gelen yap</button></div>';
+    if(filter) filter.insertAdjacentElement('afterend',panel); else section.appendChild(panel);
+  }
 
   var state={batch:'',csrf:'',count:0};
   var summary=panel.querySelector('[data-toplu-yon-ozet]');
@@ -89,7 +83,7 @@
   function loadSplitView(){
     if(document.querySelector('script[data-fatura-iki-kolon-loader]')) return;
     var script=document.createElement('script');
-    script.src='assets/fatura-iki-kolon.js?v=4&_='+Date.now();
+    script.src='assets/fatura-iki-kolon.js?v=5';
     script.setAttribute('data-fatura-iki-kolon-loader','1');
     document.body.appendChild(script);
   }
