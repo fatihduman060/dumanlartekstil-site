@@ -11,6 +11,12 @@ function kart_ekstre_cards(): array
             'bank_name' => 'Garanti BBVA',
             'aliases' => ['Garanti Fatih', 'Garanti Bankası Fatih', 'Garanti Fatih Duman'],
         ],
+        'garanti_1018' => [
+            'name' => 'Garanti Bankası Kredi Kartı •••• 1018',
+            'account_name' => 'Garanti Bankası Fatih Duman',
+            'bank_name' => 'Garanti BBVA',
+            'aliases' => ['Garanti Fatih', 'Garanti Bankası Fatih', 'Garanti Fatih Duman'],
+        ],
         'isbank_3833' => [
             'name' => 'İş Bankası Kredi Kartı •••• 3833',
             'account_name' => 'İş Bankası Fatih Duman',
