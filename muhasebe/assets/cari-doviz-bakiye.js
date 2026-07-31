@@ -85,6 +85,13 @@
     var script = document.createElement('script');
     script.src = 'assets/uretim-hizli-giris.js?v=b36cedd5';
     script.setAttribute('data-production-quick-entry', '1');
+    script.onload = function(){
+      if (document.querySelector('script[data-shift-separate-save]')) return;
+      var separate = document.createElement('script');
+      separate.src = 'assets/uretim-vardiya-ayri-kaydet.js?v=d1aa9fdf';
+      separate.setAttribute('data-shift-separate-save', '1');
+      document.head.appendChild(separate);
+    };
     document.head.appendChild(script);
   }
 
