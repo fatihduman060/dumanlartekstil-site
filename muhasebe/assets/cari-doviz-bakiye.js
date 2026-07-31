@@ -74,25 +74,62 @@
     link.href = 'uretim-takibi.php';
     link.innerHTML = '<span class="nav-ico">⚙</span><span>Üretim Takibi</span>';
     if (/uretim-takibi\.php/i.test(location.pathname)) link.className = 'active';
-    var store = nav.querySelector('a[href="magaza.php"]');
-    if (store) store.insertAdjacentElement('afterend', link);
-    else nav.appendChild(link);
+    nav.appendChild(link);
   }
 
   function addCardStatementMenu(){
     var nav = document.querySelector('.side-nav');
-    if (!nav || nav.querySelector('a[href="kart-ekstreleri.php"]')) return;
+    if (!nav || nav.querySelector('a[href="kart-ekstre-takibi.php"]')) return;
     var link = document.createElement('a');
-    link.href = 'kart-ekstreleri.php';
-    link.innerHTML = '<span class="nav-ico">▣</span><span>Kart Ekstre Takibi</span>';
-    if (/kart-ekstreleri\.php/i.test(location.pathname)) link.className = 'active';
-    var accounts = nav.querySelector('a[href="hesaplar.php"]');
-    if (accounts) accounts.insertAdjacentElement('afterend', link);
-    else {
-      var movements = nav.querySelector('a[href="hareketler.php"]');
-      if (movements) movements.insertAdjacentElement('afterend', link);
-      else nav.appendChild(link);
-    }
+    link.href = 'kart-ekstre-takibi.php';
+    link.innerHTML = '<span class="nav-ico">💳</span><span>Kart Ekstre Takibi</span>';
+    if (/kart-ekstre-takibi\.php/i.test(location.pathname)) link.className = 'active';
+    nav.appendChild(link);
+  }
+
+  function reorderMenu(){
+    var nav = document.querySelector('.side-nav');
+    if (!nav) return;
+
+    var order = [
+      'dashboard.php',
+      'cariler.php',
+      'faturalar.php',
+      'hesaplar.php',
+      'uretim-takibi.php',
+      'magaza.php',
+      'vergi-odemeleri.php',
+      'kart-ekstre-takibi.php',
+      'maaslar.php',
+      'cekler.php',
+      'hesap-dokumleri.php',
+      'teklif-ver.php',
+      'tahsilat-makbuzu.php',
+      'sirket-evraklari.php',
+      'ozel-alacaklar.php',
+      'hareketler.php',
+      'belgeler.php',
+      'kategoriler.php',
+      'raporlar.php',
+      'kullanicilar.php'
+    ];
+
+    var links = Array.prototype.slice.call(nav.querySelectorAll(':scope > a'));
+    var used = [];
+
+    order.forEach(function(href){
+      var link = links.find(function(item){
+        return String(item.getAttribute('href') || '').split('?')[0] === href;
+      });
+      if (link) {
+        nav.appendChild(link);
+        used.push(link);
+      }
+    });
+
+    links.forEach(function(link){
+      if (used.indexOf(link) === -1) nav.appendChild(link);
+    });
   }
 
   function loadProductionQuickEntry(){
@@ -114,6 +151,8 @@
   function init(){
     addProductionMenu();
     addCardStatementMenu();
+    reorderMenu();
+
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
         .then(function(r){ return r.json(); })
