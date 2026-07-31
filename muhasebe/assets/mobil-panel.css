@@ -1,4 +1,7 @@
 /* Dumanlar Muhasebe - mobil panel katmanı */
+/* Menü JavaScript ile tamamlanana kadar eski sırası görünmesin. */
+.side-nav{visibility:hidden}
+body.menu-ready .side-nav{visibility:visible}
 /* Cari mahsup hesabı arka planda çalışır; tamamlanan canlı tarama listesi gösterilmez. */
 #cariNetTaramaPanel{display:none!important}
 .mobile-bottom-nav,
