@@ -7,10 +7,16 @@ require_once __DIR__ . '/maas-avans-lib.php';
 require_salary_access();
 maas_aylik_kayit_db_ensure();
 maas_avans_db_ensure();
+ensure_column(db(), 'salary_employees', 'exit_date', 'TEXT');
+ensure_column(db(), 'salary_employees', 'exit_reason', 'TEXT');
 
 $period = maas_puantaj_period((string)($_GET['period'] ?? date('Y-m')));
 $daysInMonth = (int)date('t', strtotime($period . '-01'));
-$employees = db()->query("SELECT * FROM salary_employees WHERE is_active=1 ORDER BY full_name ASC")->fetchAll() ?: [];
+$includeInactive = isset($_GET['include_inactive']) && (string)$_GET['include_inactive'] === '1';
+$employeeSql = $includeInactive
+    ? 'SELECT * FROM salary_employees ORDER BY is_active DESC, full_name ASC'
+    : 'SELECT * FROM salary_employees WHERE is_active=1 ORDER BY full_name ASC';
+$employees = db()->query($employeeSql)->fetchAll() ?: [];
 $statusMap = maas_puantaj_statuses();
 
 function maas_toplu_excel_xml($value): string
@@ -59,7 +65,8 @@ function maas_toplu_excel_rows(string $period, int $daysInMonth, array $employee
     $headers = array_merge($headers, [
         'Bordro Günü', 'Devamsızlık', 'Eksik Saat', 'Fazla Mesai', 'Çalıştı', 'İzinli', 'Raporlu',
         'Hafta Tatili', 'Resmî Tatil', 'Aylık Maaş', 'Günlük Yevmiye', 'Saatlik Ücret',
-        'Avans Toplamı', 'Haciz Kesintisi', 'Diğer Kesinti', 'Net Ödenecek', 'Kayıt Kaynağı', 'Açıklama'
+        'Avans Toplamı', 'Haciz Kesintisi', 'Diğer Kesinti', 'Net Ödenecek', 'Kayıt Kaynağı', 'Açıklama',
+        'Personel Durumu', 'İşe Başlama', 'Çıkış Tarihi', 'Çıkış Nedeni', 'Telefon'
     ]);
 
     $rows = [];
@@ -130,6 +137,11 @@ function maas_toplu_excel_rows(string $period, int $daysInMonth, array $employee
             $netPayable,
             $source,
             (string)($payroll['note'] ?? $record['note'] ?? ''),
+            (int)($employee['is_active'] ?? 0) === 1 ? 'Aktif' : 'Çıkış yaptı',
+            (string)($employee['start_date'] ?? ''),
+            (string)($employee['exit_date'] ?? ''),
+            (string)($employee['exit_reason'] ?? ''),
+            (string)($employee['phone'] ?? ''),
         ]);
         $rows[] = [
             'values' => $row,
@@ -140,10 +152,10 @@ function maas_toplu_excel_rows(string $period, int $daysInMonth, array $employee
     return [$headers, $rows];
 }
 
-function maas_toplu_excel_csv(string $period, array $headers, array $rows): void
+function maas_toplu_excel_csv(string $period, array $headers, array $rows, bool $includeInactive): void
 {
     while (ob_get_level()) ob_end_clean();
-    $filename = 'toplu-puantaj-' . $period . '.csv';
+    $filename = ($includeInactive ? 'tum-personel-maas-puantaj-' : 'toplu-puantaj-') . $period . '.csv';
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     echo "\xEF\xBB\xBF";
@@ -157,12 +169,12 @@ function maas_toplu_excel_csv(string $period, array $headers, array $rows): void
 [$headers, $rows] = maas_toplu_excel_rows($period, $daysInMonth, $employees, $statusMap);
 
 if (!class_exists('ZipArchive')) {
-    maas_toplu_excel_csv($period, $headers, $rows);
+    maas_toplu_excel_csv($period, $headers, $rows, $includeInactive);
 }
 
 $lastCol = maas_toplu_excel_col(count($headers));
 $lastRow = 4 + count($rows);
-$title = month_label($period) . ' Toplu Puantaj Cetveli';
+$title = month_label($period) . ($includeInactive ? ' Tüm Personel Maaş ve Puantaj Listesi' : ' Toplu Puantaj Cetveli');
 $subtitle = 'Kodlar: Ç=Çalıştı, G=Gelmedi, İ=İzinli, R=Raporlu, H=Hafta tatili, T=Resmî tatil. -1,0s eksik saat; +1,0s fazla mesai.';
 
 $sheetRows = [];
@@ -203,10 +215,13 @@ foreach ($rows as $rowIndex => $rowData) {
         $summaryStart = 6 + $daysInMonth;
         $moneyStart = $summaryStart + 9;
         $moneyEnd = $moneyStart + 6;
+        $personnelInfoStart = count($headers) - 4;
         if ($col >= $moneyStart && $col <= $moneyEnd) {
             $cells .= maas_toplu_excel_number_cell($col, $excelRow, $value, 8);
         } elseif ($col >= $summaryStart && $col < $moneyStart) {
             $cells .= maas_toplu_excel_number_cell($col, $excelRow, $value, 7);
+        } elseif ($col >= $personnelInfoStart) {
+            $cells .= maas_toplu_excel_text_cell($col, $excelRow, $value, 5);
         } elseif (is_numeric($value) && $col > 5) {
             $cells .= maas_toplu_excel_number_cell($col, $excelRow, $value, 7);
         } elseif ($col === 5) {
@@ -228,6 +243,7 @@ $colsXml = '<cols>'
     . '<col min="' . (15 + $daysInMonth) . '" max="' . (21 + $daysInMonth) . '" width="17" customWidth="1"/>'
     . '<col min="' . (22 + $daysInMonth) . '" max="' . (22 + $daysInMonth) . '" width="22" customWidth="1"/>'
     . '<col min="' . (23 + $daysInMonth) . '" max="' . (23 + $daysInMonth) . '" width="30" customWidth="1"/>'
+    . '<col min="' . (24 + $daysInMonth) . '" max="' . (28 + $daysInMonth) . '" width="18" customWidth="1"/>'
     . '</cols>';
 
 $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -330,7 +346,7 @@ $appXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 $tmp = tempnam(sys_get_temp_dir(), 'puantaj_xlsx_');
 $zip = new ZipArchive();
 if ($zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-    maas_toplu_excel_csv($period, $headers, $rows);
+    maas_toplu_excel_csv($period, $headers, $rows, $includeInactive);
 }
 $zip->addFromString('[Content_Types].xml', $contentTypes);
 $zip->addFromString('_rels/.rels', $rootRels);
@@ -343,7 +359,7 @@ $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
 $zip->close();
 
 while (ob_get_level()) ob_end_clean();
-$filename = 'toplu-puantaj-' . $period . '.xlsx';
+$filename = ($includeInactive ? 'tum-personel-maas-puantaj-' : 'toplu-puantaj-') . $period . '.xlsx';
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 header('Content-Disposition: attachment; filename="' . $filename . '"');
 header('Content-Length: ' . filesize($tmp));

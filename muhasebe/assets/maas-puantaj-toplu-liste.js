@@ -186,6 +186,7 @@
 
   function init(){
     ensureLists();
+    if(typeof window.revealSalaryPage==='function') window.revealSalaryPage();
     setTimeout(function(){loadLists(currentPeriod(),true);},180);
 
     document.addEventListener('click',function(event){

@@ -62,8 +62,8 @@
     var link=document.getElementById('attendanceBulkExcel');
     if(!link) return;
     var period=currentPeriod();
-    link.href='maas-puantaj-toplu-excel.php?period='+encodeURIComponent(period);
-    link.title=period+' dönemindeki bütün aktif personelin puantajını Excel olarak indir';
+    link.href='maas-puantaj-toplu-excel.php?period='+encodeURIComponent(period)+'&include_inactive=1';
+    link.title=period+' dönemindeki aktif ve çıkış yapan bütün personeli Excel olarak indir';
   }
 
   function ensureExcelButton(){
@@ -74,7 +74,7 @@
       link=document.createElement('a');
       link.id='attendanceBulkExcel';
       link.className='attendance-bulk-excel';
-      link.textContent='Toplu Excel indir';
+      link.textContent='Tüm personeli Excel indir';
       link.setAttribute('download','');
       actions.appendChild(link);
     }
@@ -138,19 +138,9 @@
     }
   }
 
-  function loadCollectiveListScript(){
-    if(document.getElementById('salaryCollectiveListScript')) return;
-    var script=document.createElement('script');
-    script.id='salaryCollectiveListScript';
-    script.src='assets/maas-puantaj-toplu-liste.js?v=1';
-    script.defer=true;
-    document.head.appendChild(script);
-  }
-
   function init(){
     ensureButtons();
     applyMonthlyPaymentDefaults(false);
-    loadCollectiveListScript();
 
     document.addEventListener('click',function(event){
       if(event.target.id==='fillSaturdays'){

@@ -48,6 +48,8 @@ function salary_db_ensure(): void
     ensure_column($pdo, 'salary_records', 'deduction_amount', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_records', 'remaining_amount', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_records', 'account_transaction_id', 'INTEGER');
+    ensure_column($pdo, 'salary_employees', 'exit_date', 'TEXT');
+    ensure_column($pdo, 'salary_employees', 'exit_reason', 'TEXT');
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_salary_records_period ON salary_records(period)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_salary_records_employee ON salary_records(employee_id)");
 }
@@ -155,21 +157,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'start_date' => $_POST['start_date'] ?: null,
             'base_salary' => decimal_from_input($_POST['base_salary'] ?? '0'),
             'is_active' => isset($_POST['is_active']) ? 1 : 0,
+            'exit_date' => !empty($_POST['exit_date']) ? (string)$_POST['exit_date'] : null,
+            'exit_reason' => trim((string)($_POST['exit_reason'] ?? '')),
             'note' => trim($_POST['note'] ?? ''),
         ];
+        if ($payload['is_active'] === 1) {
+            $payload['exit_date'] = null;
+            $payload['exit_reason'] = '';
+        } elseif (!$payload['exit_date']) {
+            $payload['exit_date'] = date('Y-m-d');
+        }
         if ($payload['full_name'] === '') { flash('error', 'Personel adı zorunlu.'); redirect('maaslar.php'); }
         if ($id > 0) {
             $old = db()->prepare('SELECT * FROM salary_employees WHERE id=?'); $old->execute([$id]); $oldRow = $old->fetch();
-            db()->prepare('UPDATE salary_employees SET full_name=:full_name, department=:department, position=:position, phone=:phone, start_date=:start_date, base_salary=:base_salary, is_active=:is_active, note=:note, updated_at=:updated_at WHERE id=:id')
+            db()->prepare('UPDATE salary_employees SET full_name=:full_name, department=:department, position=:position, phone=:phone, start_date=:start_date, base_salary=:base_salary, is_active=:is_active, exit_date=:exit_date, exit_reason=:exit_reason, note=:note, updated_at=:updated_at WHERE id=:id')
                 ->execute($payload + ['updated_at'=>now(), 'id'=>$id]);
             audit_action('maas_personel', $id, 'guncellendi', $oldRow, $payload, $payload['full_name']);
             flash('success', 'Personel güncellendi.');
         } else {
-            db()->prepare('INSERT INTO salary_employees (full_name, department, position, phone, start_date, base_salary, is_active, note, created_by, created_at, updated_at) VALUES (:full_name,:department,:position,:phone,:start_date,:base_salary,:is_active,:note,:created_by,:created_at,:updated_at)')
+            db()->prepare('INSERT INTO salary_employees (full_name, department, position, phone, start_date, base_salary, is_active, exit_date, exit_reason, note, created_by, created_at, updated_at) VALUES (:full_name,:department,:position,:phone,:start_date,:base_salary,:is_active,:exit_date,:exit_reason,:note,:created_by,:created_at,:updated_at)')
                 ->execute($payload + ['created_by'=>current_user()['id'] ?? null, 'created_at'=>now(), 'updated_at'=>now()]);
             $newId = (int)db()->lastInsertId();
             audit_action('maas_personel', $newId, 'eklendi', null, $payload, $payload['full_name']);
             flash('success', 'Personel eklendi.');
+        }
+        redirect('maaslar.php');
+    }
+
+    if ($action === 'deactivate_employee') {
+        $id = (int)($_POST['id'] ?? 0);
+        $exitDate = trim((string)($_POST['exit_date'] ?? date('Y-m-d')));
+        $exitReason = trim((string)($_POST['exit_reason'] ?? ''));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $exitDate)) $exitDate = date('Y-m-d');
+        $stmt = db()->prepare('SELECT * FROM salary_employees WHERE id=?');
+        $stmt->execute([$id]);
+        $oldRow = $stmt->fetch() ?: null;
+        if ($oldRow) {
+            db()->prepare('UPDATE salary_employees SET is_active=0, exit_date=?, exit_reason=?, updated_at=? WHERE id=?')
+                ->execute([$exitDate, $exitReason, now(), $id]);
+            $newRow = $oldRow;
+            $newRow['is_active'] = 0; $newRow['exit_date'] = $exitDate; $newRow['exit_reason'] = $exitReason;
+            audit_action('maas_personel', $id, 'cikis_yapti', $oldRow, $newRow, (string)$oldRow['full_name']);
+            flash('success', $oldRow['full_name'] . ' çıkış yaptı olarak işaretlendi. Geçmiş maaş ve puantaj kayıtları korundu.');
+        }
+        redirect('maaslar.php?employee_view=inactive');
+    }
+
+    if ($action === 'reactivate_employee') {
+        $id = (int)($_POST['id'] ?? 0);
+        $stmt = db()->prepare('SELECT * FROM salary_employees WHERE id=?');
+        $stmt->execute([$id]);
+        $oldRow = $stmt->fetch() ?: null;
+        if ($oldRow) {
+            db()->prepare('UPDATE salary_employees SET is_active=1, exit_date=NULL, exit_reason=NULL, updated_at=? WHERE id=?')->execute([now(), $id]);
+            audit_action('maas_personel', $id, 'yeniden_aktif', $oldRow, ['is_active'=>1], (string)$oldRow['full_name']);
+            flash('success', $oldRow['full_name'] . ' yeniden aktif personele alındı.');
         }
         redirect('maaslar.php');
     }
@@ -205,10 +247,13 @@ $period = trim($_GET['period'] ?? date('Y-m'));
 if (!preg_match('/^\d{4}-\d{2}$/', $period)) $period = date('Y-m');
 $status = trim($_GET['status'] ?? '');
 $employeeFilter = (int)($_GET['employee_id'] ?? 0);
+$employeeView = (string)($_GET['employee_view'] ?? '') === 'inactive' ? 'inactive' : 'active';
 
 $employees = db()->query('SELECT * FROM salary_employees ORDER BY is_active DESC, full_name ASC')->fetchAll();
 $accounts = accounts_for_select(true);
 $activeEmployees = array_values(array_filter($employees, fn($e) => (int)($e['is_active'] ?? 0) === 1));
+$inactiveEmployees = array_values(array_filter($employees, fn($e) => (int)($e['is_active'] ?? 0) === 0));
+$visibleEmployees = $employeeView === 'inactive' ? $inactiveEmployees : $activeEmployees;
 
 $editEmployee = null;
 if (!empty($_GET['edit_employee'])) { $stmt=db()->prepare('SELECT * FROM salary_employees WHERE id=?'); $stmt->execute([(int)$_GET['edit_employee']]); $editEmployee=$stmt->fetch() ?: null; }
@@ -233,8 +278,13 @@ page_header('Maaşlar', 'maaslar');
 <style>
 .salary-grid{display:grid;gap:16px;max-width:1500px;margin:0 auto}.salary-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.salary-hero h2{margin:4px 0 6px;color:#fff;font-size:clamp(24px,3vw,36px)}.salary-hero p{margin:0;color:#e9f5ed}.salary-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.salary-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.salary-summary article{background:#fff;border:1px solid #e5dccf;border-radius:18px;padding:15px 16px;box-shadow:0 12px 30px rgba(7,27,63,.06)}.salary-summary span{font-size:11px;color:#8a6a26;font-weight:950;text-transform:uppercase}.salary-summary strong{display:block;margin-top:7px;color:#102818;font-size:22px}.salary-columns{display:grid;grid-template-columns:380px 1fr;gap:16px}.salary-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.salary-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.salary-card-head h3{margin:0;color:#102818}.salary-card-head span{color:#8a6a26;font-size:12px;font-weight:900}.salary-body{padding:16px 18px}.salary-form{display:grid;gap:11px}.salary-form label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.salary-form input,.salary-form select,.salary-form textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.salary-form input[readonly]{background:#f2f0ea;color:#5f665f}.salary-form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.salary-form label small{color:#776b5c;font-size:10px;font-weight:650}.salary-filter{display:grid;grid-template-columns:150px 1fr 160px auto;gap:8px;padding:12px 14px;border-bottom:1px solid #e5dccf}.salary-filter input,.salary-filter select,.salary-filter button{min-height:38px;border:1px solid #e5dccf;border-radius:999px;padding:7px 11px;background:#fff;color:#102818;font-weight:800}.salary-table-wrap{overflow:auto}.salary-table{width:100%;min-width:1050px;border-collapse:separate;border-spacing:0}.salary-table th{background:#16482e;color:#fff;text-align:left;padding:11px 12px;font-size:11px;text-transform:uppercase}.salary-table td{padding:12px;border-bottom:1px solid #e5dccf;vertical-align:top;font-size:13px}.salary-table b{display:block;color:#102818}.salary-table small{display:block;color:#776b5c;margin-top:3px}.salary-table tfoot td{background:#102818;color:#fff;font-weight:900}.salary-actions{display:flex;gap:6px;flex-wrap:wrap}.salary-actions a,.salary-actions button{border:1px solid #e5dccf;border-radius:999px;padding:6px 10px;background:#fff;color:#102818;text-decoration:none;font-size:12px;font-weight:900}.salary-actions button.danger{color:#b64242}.text-right{text-align:right}.salary-person-list{display:grid;gap:8px}.salary-person{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid #e5dccf;border-radius:14px;background:#fff}.salary-person strong{color:#102818}.salary-person small{display:block;color:#776b5c}.salary-person a{text-decoration:none;font-weight:900;color:#16482e}.salary-advance-card{grid-column:1/-1;border-color:#d8bd7d}.salary-advance-card .salary-card-head{background:#fff8e7}.advance-layout{display:grid;grid-template-columns:390px minmax(0,1fr);gap:16px}.advance-info{margin:0;padding:10px 12px;border-radius:12px;background:#edf5ef;color:#16482e;font-size:11px}.advance-table{min-width:760px}.advance-amount{color:#8a6114;font-size:15px}@media(max-width:1180px){.salary-columns{grid-template-columns:1fr}.salary-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.salary-filter{grid-template-columns:1fr 1fr}.advance-layout{grid-template-columns:1fr}}@media(max-width:700px){.salary-hero{display:block}.salary-summary{grid-template-columns:1fr}.salary-form .two,.salary-filter{grid-template-columns:1fr}}
 </style>
-<div class="salary-grid">
-  <section class="salary-hero"><div><span>PERSONEL MAAŞ TAKİBİ</span><h2>Maaş, avans ve ödeme durumunu takip et.</h2><p>Avanslar tarihli ayrı hareket olarak girilir; aynı ayın bordrosuna otomatik düşer.</p></div><div><strong><?php echo e(month_label($period)); ?></strong></div></section>
+<style>
+.salary-grid.salary-pending{visibility:hidden;height:0;overflow:hidden}.salary-page-loading{display:grid;place-items:center;min-height:220px;border:1px solid #e5dccf;border-radius:22px;background:#fff;color:#16482e;font-weight:900}.salary-hero-tools{display:grid;gap:9px;justify-items:end}.salary-excel-link{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 13px;border-radius:999px;background:#fff;color:#16482e;text-decoration:none;font-size:12px;font-weight:950}.salary-person-tabs{display:flex;gap:7px;margin:10px 0 13px}.salary-person-tabs a{padding:7px 11px;border:1px solid #e5dccf;border-radius:999px;color:#16482e;text-decoration:none;font-size:12px;font-weight:900}.salary-person-tabs a.active{background:#16482e;color:#fff;border-color:#16482e}.salary-person-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.salary-person-actions>a,.salary-person-actions button{border:1px solid #e5dccf;border-radius:999px;padding:6px 9px;background:#fff;color:#16482e;text-decoration:none;font-size:11px;font-weight:900}.salary-person-actions button.exit{color:#a33f35}.salary-exit-form{display:flex;gap:5px;align-items:center;flex-wrap:wrap;grid-column:1/-1;padding-top:8px;border-top:1px dashed #e5dccf}.salary-exit-form input{min-height:34px;border:1px solid #e5dccf;border-radius:10px;padding:6px 8px;font-size:11px}.salary-exit-form input[type=date]{width:132px}.salary-exit-form input[type=text]{flex:1;min-width:130px}.salary-exited{background:#faf8f4}.salary-exited-label{color:#a33f35;font-weight:900}.salary-person-empty{margin:0;color:#776b5c}@media(max-width:700px){.salary-hero-tools{justify-items:start;margin-top:14px}.salary-person{grid-template-columns:1fr}.salary-person-actions{justify-content:flex-start}.salary-exit-form input{width:100%!important}}
+</style>
+<div class="salary-page-loading" id="salaryPageLoading">Maaş ve personel ekranı hazırlanıyor…</div>
+<noscript><style>.salary-page-loading{display:none}.salary-grid.salary-pending{visibility:visible;height:auto;overflow:visible}</style></noscript>
+<div class="salary-grid salary-pending">
+  <section class="salary-hero"><div><span>PERSONEL MAAŞ TAKİBİ</span><h2>Maaş, avans ve ödeme durumunu takip et.</h2><p>Avanslar tarihli ayrı hareket olarak girilir; aynı ayın bordrosuna otomatik düşer.</p></div><div class="salary-hero-tools"><strong><?php echo e(month_label($period)); ?></strong><a class="salary-excel-link" href="maas-puantaj-toplu-excel.php?period=<?php echo e(urlencode($period)); ?>&amp;include_inactive=1" download>Tüm personeli Excel indir</a></div></section>
   <section class="salary-summary">
     <article><span>Personel</span><strong><?php echo count($activeEmployees); ?></strong></article>
     <article><span>Bu ay maaş</span><strong><?php echo e(money($sumSalary)); ?></strong></article>
@@ -267,11 +317,18 @@ page_header('Maaşlar', 'maaslar');
         <div class="two"><label>Bölüm<input name="department" value="<?php echo e($editEmployee['department'] ?? ''); ?>"></label><label>Görev<input name="position" value="<?php echo e($editEmployee['position'] ?? ''); ?>"></label></div>
         <div class="two"><label>Telefon<input name="phone" value="<?php echo e($editEmployee['phone'] ?? ''); ?>"></label><label>Başlama tarihi<input type="date" name="start_date" value="<?php echo e($editEmployee['start_date'] ?? ''); ?>"></label></div>
         <label>Varsayılan maaş<input name="base_salary" value="<?php echo e(isset($editEmployee['base_salary']) ? number_format((float)$editEmployee['base_salary'], 2, ',', '.') : ''); ?>" placeholder="0,00"></label>
+        <?php if($editEmployee && (int)($editEmployee['is_active'] ?? 1) === 0): ?><div class="two"><label>Çıkış tarihi<input type="date" name="exit_date" value="<?php echo e($editEmployee['exit_date'] ?? ''); ?>"></label><label>Çıkış nedeni<input name="exit_reason" value="<?php echo e($editEmployee['exit_reason'] ?? ''); ?>"></label></div><?php endif; ?>
         <label>Not<textarea name="note" rows="2"><?php echo e($editEmployee['note'] ?? ''); ?></textarea></label>
         <label class="check"><input type="checkbox" name="is_active" <?php echo !isset($editEmployee['is_active']) || (int)$editEmployee['is_active']===1 ? 'checked' : ''; ?>> Aktif personel</label>
         <button class="btn btn-primary">Kaydet</button>
       </form></div>
-      <div class="salary-body" style="border-top:1px solid #e5dccf"><h3>Personel listesi</h3><div class="salary-person-list"><?php foreach($employees as $emp): ?><div class="salary-person"><div><strong><?php echo e($emp['full_name']); ?></strong><small><?php echo e(trim(($emp['department'] ?? '') . ' ' . ($emp['position'] ?? '')) ?: '-'); ?> · <?php echo e(money($emp['base_salary'] ?? 0)); ?></small></div><a href="maaslar.php?edit_employee=<?php echo e($emp['id']); ?>">Düzenle</a></div><?php endforeach; ?><?php if(!$employees): ?><p class="muted">Henüz personel yok.</p><?php endif; ?></div></div>
+      <div class="salary-body" style="border-top:1px solid #e5dccf"><h3>Personel listesi</h3>
+        <nav class="salary-person-tabs"><a class="<?php echo $employeeView === 'active' ? 'active' : ''; ?>" href="maaslar.php">Aktif (<?php echo count($activeEmployees); ?>)</a><a class="<?php echo $employeeView === 'inactive' ? 'active' : ''; ?>" href="maaslar.php?employee_view=inactive">Çıkış yapanlar (<?php echo count($inactiveEmployees); ?>)</a></nav>
+        <div class="salary-person-list">
+          <?php foreach($visibleEmployees as $emp): ?><div class="salary-person <?php echo (int)$emp['is_active'] === 0 ? 'salary-exited' : ''; ?>"><div><strong><?php echo e($emp['full_name']); ?></strong><small><?php echo e(trim(($emp['department'] ?? '') . ' ' . ($emp['position'] ?? '')) ?: '-'); ?> · <?php echo e(money($emp['base_salary'] ?? 0)); ?></small><?php if((int)$emp['is_active'] === 0): ?><small class="salary-exited-label">Çıkış yaptı<?php echo !empty($emp['exit_date']) ? ' · '.e(tr_date($emp['exit_date'])) : ''; ?><?php echo !empty($emp['exit_reason']) ? ' · '.e($emp['exit_reason']) : ''; ?></small><?php endif; ?></div><div class="salary-person-actions"><a href="maaslar.php?employee_view=<?php echo e($employeeView); ?>&amp;edit_employee=<?php echo e($emp['id']); ?>">Düzenle</a><?php if((int)$emp['is_active'] === 0): ?><form method="post" onsubmit="return confirm('Personel yeniden aktif listeye alınsın mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="reactivate_employee"><input type="hidden" name="id" value="<?php echo e($emp['id']); ?>"><button>Aktife al</button></form><?php endif; ?></div><?php if((int)$emp['is_active'] === 1): ?><form class="salary-exit-form" method="post" onsubmit="return confirm('Personel çıkış yaptı olarak pasife alınsın mı? Geçmiş maaş kayıtları korunacaktır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="deactivate_employee"><input type="hidden" name="id" value="<?php echo e($emp['id']); ?>"><input type="date" name="exit_date" value="<?php echo e(date('Y-m-d')); ?>" required><input type="text" name="exit_reason" placeholder="Çıkış nedeni (isteğe bağlı)"><button class="exit">Çıkış yaptı</button></form><?php endif; ?></div><?php endforeach; ?>
+          <?php if(!$visibleEmployees): ?><p class="salary-person-empty"><?php echo $employeeView === 'inactive' ? 'Henüz çıkış yapan personel yok.' : 'Henüz aktif personel yok.'; ?></p><?php endif; ?>
+        </div>
+      </div>
     </div>
     <div class="salary-card">
       <div class="salary-card-head"><h3><?php echo $editSalary ? 'Maaş kaydı düzenle' : 'Aylık maaş kaydı'; ?></h3><?php if($editSalary): ?><a class="btn btn-secondary" href="maaslar.php?period=<?php echo e($period); ?>">Yeni kayıt</a><?php endif; ?></div>
