@@ -41,6 +41,12 @@ function kart_ekstre_cards(): array
             'bank_name' => 'Kuveyt Türk Katılım Bankası',
             'aliases' => ['Kuveyt Fatih', 'Kuveyt Türk Fatih', 'Kuveyt Fatih Duman'],
         ],
+        'vakif_1125' => [
+            'name' => 'VakıfBank Kredi Kartı •••• 1125',
+            'account_name' => 'VakıfBank Fatih Duman',
+            'bank_name' => 'VakıfBank',
+            'aliases' => ['VakıfBank Fatih', 'Vakıf Fatih', 'Vakıf Fatih Duman'],
+        ],
     ];
 }
 
@@ -125,10 +131,10 @@ function kart_ekstre_next_period(string $period): string
     return date('Y-m', strtotime($period . '-01 +1 month'));
 }
 
-function kart_ekstre_find_or_create_account(array $card): int
+function kart_ekstre_find_account(array $card): int
 {
     $names = array_merge([(string)$card['account_name']], $card['aliases'] ?? []);
-    $stmt = db()->prepare('SELECT id FROM accounts WHERE name=? LIMIT 1');
+    $stmt = db()->prepare("SELECT id FROM accounts WHERE name=? AND account_type='banka' LIMIT 1");
     foreach ($names as $name) {
         $stmt->execute([$name]);
         $id = (int)($stmt->fetchColumn() ?: 0);
@@ -137,12 +143,25 @@ function kart_ekstre_find_or_create_account(array $card): int
 
     $stmt = db()->prepare("SELECT id FROM accounts WHERE account_type='banka' AND bank_name=? AND name LIKE ? ORDER BY is_active DESC, id ASC LIMIT 1");
     $stmt->execute([(string)$card['bank_name'], '%Fatih%']);
-    $id = (int)($stmt->fetchColumn() ?: 0);
+    return (int)($stmt->fetchColumn() ?: 0);
+}
+
+function kart_ekstre_find_or_create_account(array $card): int
+{
+    $id = kart_ekstre_find_account($card);
     if ($id > 0) return $id;
 
     db()->prepare('INSERT INTO accounts (account_type, name, iban, bank_name, opening_balance, is_active, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
         ->execute(['banka', (string)$card['account_name'], '', (string)$card['bank_name'], 0, 1, 'Kart ekstresi ödemeleri için otomatik oluşturuldu.', now(), now()]);
     return (int)db()->lastInsertId();
+}
+
+function kart_ekstre_manual_account(int $accountId): int
+{
+    if ($accountId <= 0) return 0;
+    $stmt = db()->prepare("SELECT id FROM accounts WHERE id=? AND account_type='banka' AND is_active=1 LIMIT 1");
+    $stmt->execute([$accountId]);
+    return (int)($stmt->fetchColumn() ?: 0);
 }
 
 function kart_ekstre_payment_description(array $row): string
@@ -203,6 +222,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     if ($action === 'mark_paid') {
         $id = (int)($_POST['id'] ?? 0);
         $paidDate = trim((string)($_POST['paid_date'] ?? date('Y-m-d')));
+        $requestedAccountId = (int)($_POST['payment_account_id'] ?? 0);
         if ($id <= 0 || !kart_ekstre_valid_date($paidDate)) {
             flash('error', 'Ödeme tarihini kontrol et.');
             redirect('kart-ekstre-takibi.php');
@@ -223,7 +243,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
         db()->beginTransaction();
         try {
-            $accountId = kart_ekstre_find_or_create_account($cards[$cardKey]);
+            if ($requestedAccountId > 0) {
+                $accountId = kart_ekstre_manual_account($requestedAccountId);
+                if ($accountId <= 0) throw new RuntimeException('Seçilen banka hesabı aktif değil veya bulunamadı.');
+            } else {
+                $accountId = kart_ekstre_find_or_create_account($cards[$cardKey]);
+            }
+
             db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
                 ->execute([$accountId, 'out', (float)$row['amount'], $paidDate, 'card_statement', $id, kart_ekstre_payment_description($row), current_user()['id'] ?? null, now()]);
             $transactionId = (int)db()->lastInsertId();
@@ -231,7 +257,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 ->execute([$paidDate, $accountId, $transactionId, now(), $id]);
             audit_action('kart_ekstresi', $id, 'odendi', $row, ['paid_date'=>$paidDate,'account_id'=>$accountId,'transaction_id'=>$transactionId], (string)$row['card_name']);
             db()->commit();
-            flash('success', 'Ekstre ödendi. Tutar bağlı banka hesabından otomatik düşüldü.');
+            flash('success', 'Ekstre ödendi. Tutar seçilen banka hesabından otomatik düşüldü.');
         } catch (Throwable $e) {
             if (db()->inTransaction()) db()->rollBack();
             flash('error', 'Ekstre ödemesi kaydedilemedi: ' . $e->getMessage());
@@ -259,7 +285,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 ->execute([$reversalId, now(), $id]);
             audit_action('kart_ekstresi', $id, 'odeme_geri_alindi', $row, ['reversal_transaction_id'=>$reversalId], (string)$row['card_name']);
             db()->commit();
-            flash('success', 'Ödeme geri alındı. Banka hesabına aynı tutarda iade hareketi işlendi; geçmiş kayıt korundu.');
+            flash('success', 'Ödeme geri alındı. Ödemenin çıktığı hesaba aynı tutarda iade hareketi işlendi.');
         } catch (Throwable $e) {
             if (db()->inTransaction()) db()->rollBack();
             flash('error', 'Ödeme geri alınamadı: ' . $e->getMessage());
@@ -285,12 +311,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 }
 
 $nextPeriods = [];
+$defaultAccountIds = [];
 foreach ($cards as $key => $card) {
     $stmt = db()->prepare("SELECT statement_period FROM card_statements WHERE card_key=? AND status<>'iptal' AND statement_period GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' ORDER BY statement_period DESC LIMIT 1");
     $stmt->execute([$key]);
     $lastPeriod = (string)($stmt->fetchColumn() ?: '');
     $nextPeriods[$key] = $lastPeriod !== '' ? kart_ekstre_next_period($lastPeriod) : date('Y-m');
+    $defaultAccountIds[$key] = kart_ekstre_find_account($card);
 }
+
+$bankAccounts = db()->query("SELECT id, name, bank_name FROM accounts WHERE account_type='banka' AND is_active=1 ORDER BY bank_name ASC, name ASC, id ASC")->fetchAll();
 
 $editId = (int)($_GET['edit'] ?? 0);
 $editRow = null;
@@ -327,7 +357,7 @@ page_header('Kart Ekstre Takibi', 'kart_ekstre');
   <div>
     <span class="status-pill">KART EKSTRE TAKİBİ</span>
     <h2>Sabit kartların ekstrelerini ve banka ödemelerini tek yerde takip et.</h2>
-    <p>Kartı seçip yalnızca tutar ve son ödeme tarihini gir. Dönem otomatik gelir; istersen değiştirebilirsin.</p>
+    <p>Kartı seçip tutarı gir. Ödeme hesabı varsayılan gelir; gerekirse başka banka hesabını seçebilirsin.</p>
   </div>
 </section>
 
@@ -394,6 +424,8 @@ page_header('Kart Ekstre Takibi', 'kart_ekstre');
             elseif ($days === 0) $rowStyle = 'background:#fff1df';
             elseif ($days <= 5) $rowStyle = 'background:#fff9df';
         }
+        $rowCardKey = (string)($row['card_key'] ?? '');
+        $defaultAccountId = (int)($defaultAccountIds[$rowCardKey] ?? 0);
       ?>
         <tr style="<?php echo e($rowStyle); ?>">
           <td><strong><?php echo e($row['card_name']); ?></strong></td>
@@ -405,15 +437,26 @@ page_header('Kart Ekstre Takibi', 'kart_ekstre');
             elseif ($row['status'] === 'iptal') echo badge('İptal', 'danger');
             else echo badge('Bekliyor', 'warning');
           ?></td>
-          <td><?php echo e($row['payment_account_name'] ?: '—'); ?></td>
+          <td>
+            <?php if (can_write() && $row['status'] === 'bekliyor'): ?>
+              <select name="payment_account_id" form="pay-form-<?php echo e((string)$row['id']); ?>" style="min-width:190px">
+                <option value="0"<?php echo $defaultAccountId <= 0 ? ' selected' : ''; ?>>Otomatik: <?php echo e($cards[$rowCardKey]['account_name'] ?? 'Varsayılan hesap'); ?></option>
+                <?php foreach ($bankAccounts as $account): ?>
+                  <option value="<?php echo e((string)$account['id']); ?>"<?php echo $defaultAccountId === (int)$account['id'] ? ' selected' : ''; ?>><?php echo e($account['name']); ?></option>
+                <?php endforeach; ?>
+              </select>
+            <?php else: ?>
+              <?php echo e($row['payment_account_name'] ?: '—'); ?>
+            <?php endif; ?>
+          </td>
           <td><?php echo e($row['note'] ?: '—'); ?></td>
           <td><div class="row-actions">
             <?php if (can_write() && $row['status'] === 'bekliyor'): ?>
               <a href="?edit=<?php echo e((string)$row['id']); ?>">Düzenle</a>
-              <form method="post" style="display:inline" onsubmit="return confirm('Bu ekstre ödendi olarak işaretlensin ve bağlı banka hesabından düşülsün mü?')"><?php echo csrf_field(); ?><input type="hidden" name="action" value="mark_paid"><input type="hidden" name="id" value="<?php echo e((string)$row['id']); ?>"><input type="hidden" name="paid_date" value="<?php echo e(date('Y-m-d')); ?>"><button type="submit">Ödendi</button></form>
+              <form id="pay-form-<?php echo e((string)$row['id']); ?>" method="post" style="display:inline" onsubmit="return confirm('Bu ekstre ödendi olarak işaretlensin ve seçilen banka hesabından düşülsün mü?')"><?php echo csrf_field(); ?><input type="hidden" name="action" value="mark_paid"><input type="hidden" name="id" value="<?php echo e((string)$row['id']); ?>"><input type="hidden" name="paid_date" value="<?php echo e(date('Y-m-d')); ?>"><button type="submit">Ödendi</button></form>
               <form method="post" style="display:inline" onsubmit="return confirm('Bu bekleyen ekstre iptal edilsin mi? Kayıt silinmeyecek.')"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e((string)$row['id']); ?>"><button type="submit">İptal</button></form>
             <?php elseif (can_write() && $row['status'] === 'odendi'): ?>
-              <form method="post" style="display:inline" onsubmit="return confirm('Ödeme geri alınsın ve banka hesabına iade hareketi işlensin mi?')"><?php echo csrf_field(); ?><input type="hidden" name="action" value="undo_paid"><input type="hidden" name="id" value="<?php echo e((string)$row['id']); ?>"><button type="submit">Geri al</button></form>
+              <form method="post" style="display:inline" onsubmit="return confirm('Ödeme geri alınsın ve ödemenin çıktığı hesaba iade hareketi işlensin mi?')"><?php echo csrf_field(); ?><input type="hidden" name="action" value="undo_paid"><input type="hidden" name="id" value="<?php echo e((string)$row['id']); ?>"><button type="submit">Geri al</button></form>
             <?php else: ?>—<?php endif; ?>
           </div></td>
         </tr>
