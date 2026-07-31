@@ -104,6 +104,9 @@ function private_finance_script_names(): array
     return [
         'hesaplar.php',
         'cekler.php',
+        'cek-senet-arsivi.php',
+        'cek-senet-belge-goruntule.php',
+        'cek-ek-belge.php',
         'teklif-ver.php',
         'teklif-yazdir.php',
         'tahsilat-makbuzu.php',

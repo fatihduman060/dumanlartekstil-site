@@ -293,7 +293,7 @@ page_header('Çekler', 'cekler');
 <div class="checks-v2">
   <section class="checks-hero">
     <div><span>BİTKE ÇEK TAKİBİ</span><h2><?php echo $direction === 'verilecek' ? 'Verilen çekleri takip et.' : 'Alınan çekleri takip et.'; ?></h2><p>Çek bankası karşı tarafın çek defteri bankasıdır. Tahsil bankası ise bizim seçtiğimiz banka hesabıdır; otomatik tahsil sadece o hesaba yatar.</p></div>
-    <div class="checks-actions"><a href="#cek-form"><?php echo $edit ? 'Düzenlemeye git' : 'Yeni çek ekle'; ?></a></div>
+    <div class="checks-actions"><a href="cek-senet-arsivi.php">Çek / Senet Arşivi</a><a href="#cek-form"><?php echo $edit ? 'Düzenlemeye git' : 'Yeni çek ekle'; ?></a></div>
   </section>
 
   <section class="checks-summary">
@@ -306,6 +306,7 @@ page_header('Çekler', 'cekler');
   <nav class="check-direction-tabs">
     <a class="<?php echo $direction === 'alinacak' ? 'active' : ''; ?>" href="cekler.php?direction=alinacak">Alınan Çekler<small>Müşteriden aldığımız çekler</small></a>
     <a class="<?php echo $direction === 'verilecek' ? 'active' : ''; ?>" href="cekler.php?direction=verilecek">Verilen Çekler<small>Bizim yazdığımız/verdiğimiz çekler</small></a>
+    <a href="cek-senet-arsivi.php">Çek / Senet Arşivi<small>Ön, arka ve ek belgeler</small></a>
   </nav>
 
   <section class="check-list-card">

@@ -25,6 +25,13 @@ function sirket_evrak_tip_label(?string $key): string
     $types = sirket_evrak_tipleri();
     return $types[$key ?: ''] ?? ($key ?: '-');
 }
+function sirket_evraki_cek_senet_belgesi_mi(array $row): bool
+{
+    $type = (string)($row['document_type'] ?? '');
+    $description = (string)($row['description'] ?? '');
+    return preg_match('/^Çek #\d+ \| /u', $description) === 1
+        || in_array($type, ['cek_on_gorseli','cek_arka_gorseli','cek_gorseli','senet_gorseli','tahsil_dekontu','odeme_dekontu','ciro_belgesi','iade_belgesi','protesto_belgesi'], true);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_write();
@@ -44,6 +51,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = db()->prepare('SELECT * FROM standalone_documents WHERE id=?');
             $stmt->execute([$id]);
             $oldRow = $stmt->fetch() ?: null;
+            if ($oldRow && sirket_evraki_cek_senet_belgesi_mi($oldRow)) {
+                flash('error', 'Çek ve senet belgeleri Çek / Senet Arşivi bölümünden yönetilir.');
+                redirect('cek-senet-arsivi.php');
+            }
             $oldDoc = $oldRow ? ['path'=>$oldRow['document_path'] ?? null, 'name'=>$oldRow['document_name'] ?? null, 'mime'=>$oldRow['document_mime'] ?? null] : null;
         }
         try {
@@ -79,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = db()->prepare('SELECT * FROM standalone_documents WHERE id=?');
         $stmt->execute([$id]);
         $row = $stmt->fetch();
-        if ($row) {
+        if ($row && !sirket_evraki_cek_senet_belgesi_mi($row)) {
             if (!empty($row['document_path'])) {
                 $path = UPLOAD_DIR . '/' . $row['document_path'];
                 if (is_file($path)) @unlink($path);
@@ -99,10 +110,13 @@ if (!empty($_GET['edit'])) {
     $stmt = db()->prepare('SELECT * FROM standalone_documents WHERE id=?');
     $stmt->execute([(int)$_GET['edit']]);
     $edit = $stmt->fetch() ?: null;
+    if ($edit && sirket_evraki_cek_senet_belgesi_mi($edit)) {
+        redirect('cek-senet-arsivi.php');
+    }
 }
 $q = trim($_GET['q'] ?? '');
 $type = trim($_GET['document_type'] ?? '');
-$where = ['sd.document_path IS NOT NULL', "sd.document_path != ''"];
+$where = ['sd.document_path IS NOT NULL', "sd.document_path != ''", "COALESCE(sd.description,'') NOT LIKE 'Çek #% | %'", "COALESCE(sd.document_type,'') NOT IN ('cek_on_gorseli','cek_arka_gorseli','cek_gorseli','senet_gorseli','tahsil_dekontu','odeme_dekontu','ciro_belgesi','iade_belgesi','protesto_belgesi')"];
 $params = [];
 if ($q !== '') { $where[] = '(sd.description LIKE ? OR sd.document_name LIKE ? OR c.name LIKE ?)'; array_push($params, "%$q%", "%$q%", "%$q%"); }
 if ($type !== '') { $where[] = 'sd.document_type=?'; $params[] = $type; }
@@ -116,7 +130,7 @@ page_header('Şirket Evrakları', 'sirket_evraklari');
     <h2>Vergi levhası, imza sirküsü, faaliyet belgesi ve sözleşmeleri tek yerde tut.</h2>
     <p>Bu alan cari hareketlerini, çekleri ve dashboard toplamlarını etkilemez; sadece evrak arşivi olarak çalışır.</p>
   </div>
-  <div class="hero-actions"><a class="btn btn-secondary" href="belgeler.php?kind=standalone">Tüm serbest belgeler</a></div>
+  <div class="hero-actions"><?php if(can_access_private_finance_modules()): ?><a class="btn btn-secondary" href="cek-senet-arsivi.php">Çek / Senet Arşivi</a><?php endif; ?><a class="btn btn-secondary" href="belgeler.php?kind=standalone">Tüm serbest belgeler</a></div>
 </section>
 
 <section class="form-grid">

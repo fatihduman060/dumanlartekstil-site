@@ -7,6 +7,7 @@ function cek_ek_belge_tipleri(): array
     return [
         'cek_on_gorseli' => 'Çek ön görseli',
         'cek_arka_gorseli' => 'Çek arka görseli',
+        'senet_gorseli' => 'Senet görseli',
         'tahsil_dekontu' => 'Tahsil dekontu',
         'odeme_dekontu' => 'Ödeme dekontu',
         'ciro_belgesi' => 'Ciro belgesi',
@@ -30,6 +31,8 @@ $stmt = db()->prepare('SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN
 $stmt->execute([$checkId]);
 $check = $stmt->fetch();
 if (!$check) { flash('error', 'Çek bulunamadı.'); redirect('cekler.php'); }
+$instrumentLabel = strcasecmp(trim((string)($check['bank_name'] ?? '')), 'Senet') === 0 ? 'Senet' : 'Çek';
+$instrumentLower = $instrumentLabel === 'Senet' ? 'senet' : 'çek';
 $prefix = cek_ek_belge_prefix($checkId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -82,12 +85,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $stmt = db()->prepare('SELECT * FROM standalone_documents WHERE description LIKE ? ORDER BY document_date DESC, id DESC');
 $stmt->execute([$prefix . '%']);
 $docs = $stmt->fetchAll();
-page_header('Çek Ek Belgeleri', 'cekler');
+page_header($instrumentLabel . ' Ek Belgeleri', 'cekler');
 ?>
 <section class="hero-card">
   <div>
-    <span class="status-pill">Çek dosya kartı</span>
-    <h2><?php echo e(($check['bank_name'] ?: 'Banka yok') . ' / ' . ($check['check_no'] ?: ('Çek #' . $checkId))); ?></h2>
+    <span class="status-pill"><?php echo e($instrumentLabel); ?> dosya kartı</span>
+    <h2><?php echo e(($check['bank_name'] ?: 'Banka yok') . ' / ' . ($check['check_no'] ?: ($instrumentLabel . ' #' . $checkId))); ?></h2>
     <p><?php echo e($check['cari_name'] ?: 'Cari seçilmedi'); ?> · Vade: <?php echo e(tr_date($check['due_date'])); ?> · Tutar: <?php echo e(money($check['amount'])); ?></p>
   </div>
   <div class="hero-actions"><a class="btn btn-secondary" href="cekler.php">Çeklere dön</a><a class="btn btn-secondary" href="cekler.php?edit=<?php echo e($checkId); ?>">Çeki düzenle</a></div>
@@ -108,7 +111,7 @@ page_header('Çek Ek Belgeleri', 'cekler');
   </article>
 
   <article class="panel-card">
-    <div class="card-head"><h3>Bu çeke ait ek belgeler</h3><span><?php echo e(count($docs)); ?> dosya</span></div>
+    <div class="card-head"><h3>Bu <?php echo e($instrumentLower); ?> kaydına ait ek belgeler</h3><span><?php echo e(count($docs)); ?> dosya</span></div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Tarih</th><th>Belge tipi</th><th>Açıklama</th><th>Dosya</th><th></th></tr></thead>
