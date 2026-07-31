@@ -67,27 +67,17 @@
     document.head.appendChild(script);
   }
 
-  function addMenuLink(href, label, icon){
+  function addMenuLink(href, label, icon, afterHref){
     var nav = document.querySelector('.side-nav');
     if (!nav || nav.querySelector('a[href="' + href + '"]')) return;
     var link = document.createElement('a');
     link.href = href;
     link.innerHTML = '<span class="nav-ico">' + icon + '</span><span>' + label + '</span>';
     if (location.pathname.slice(-href.length) === href) link.className = 'active';
-    nav.appendChild(link);
-  }
 
-  function reorderMenu(){
-    var nav = document.querySelector('.side-nav');
-    if (!nav) return;
-    var order = ['dashboard.php','cariler.php','faturalar.php','hesaplar.php','uretim-takibi.php','magaza.php','vergi-odemeleri.php','kart-ekstre-takibi.php','maaslar.php','cekler.php','hesap-dokumleri.php','teklif-ver.php','tahsilat-makbuzu.php','sirket-evraklari.php','ozel-alacaklar.php','hareketler.php','belgeler.php','kategoriler.php','raporlar.php','kullanicilar.php'];
-    var links = Array.prototype.slice.call(nav.querySelectorAll(':scope > a'));
-    var used = [];
-    order.forEach(function(href){
-      var link = links.find(function(item){ return String(item.getAttribute('href') || '').split('?')[0] === href; });
-      if (link) { nav.appendChild(link); used.push(link); }
-    });
-    links.forEach(function(link){ if (used.indexOf(link) === -1) nav.appendChild(link); });
+    var anchor = afterHref ? nav.querySelector('a[href="' + afterHref + '"]') : null;
+    if (anchor) anchor.insertAdjacentElement('afterend', link);
+    else nav.appendChild(link);
   }
 
   function loadProductionQuickEntry(){
@@ -107,9 +97,10 @@
   }
 
   function init(){
-    addMenuLink('uretim-takibi.php', 'Üretim Takibi', '⚙');
-    addMenuLink('kart-ekstre-takibi.php', 'Kart Ekstre Takibi', '💳');
-    reorderMenu();
+    // Menü artık sayfa açıldıktan sonra komple yeniden sıralanmıyor.
+    // Yalnızca eksik iki bağlantı, mevcut menüyü taşımadan uygun konuma ekleniyor.
+    addMenuLink('uretim-takibi.php', 'Üretim Takibi', '⚙', 'hesaplar.php');
+    addMenuLink('kart-ekstre-takibi.php', 'Kart Ekstre Takibi', '💳', 'vergi-odemeleri.php');
 
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
