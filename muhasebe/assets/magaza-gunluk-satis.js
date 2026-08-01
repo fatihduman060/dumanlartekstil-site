@@ -92,13 +92,13 @@
     panel.className='magaza-satis-panel';
     panel.setAttribute('data-magaza-gunluk-satis','1');
     panel.innerHTML=''
-      +'<div class="magaza-satis-head"><div><strong>Mağaza Günlük Satışları</strong><small>Günlük KDV dahil satış toplamını gir; sistem %10 KDV’yi ve matrahı otomatik ayırsın.</small></div><span data-magaza-status></span></div>'
+      +'<div class="magaza-satis-head"><div><strong>Mağaza Günlük Z Raporu</strong><small>Her günün Z raporundaki KDV dahil toplamı gir; sistem %10 KDV’yi ve matrahı otomatik ayırsın.</small></div><span data-magaza-status></span></div>'
       +'<article class="magaza-mobile-latest" data-magaza-mobile-latest><div class="magaza-mobile-latest-head"><span>Günlük toplam satış</span><strong data-magaza-latest-date>Dağılım yükleniyor…</strong></div><strong class="magaza-mobile-latest-total" data-magaza-latest-total>0,00 TL</strong><div class="magaza-mobile-latest-breakdown"><span>Nakit <strong data-magaza-latest-cash>0,00 TL</strong></span><span>Kart / POS <strong data-magaza-latest-card>0,00 TL</strong></span><span>Veresiye <strong data-magaza-latest-credit>0,00 TL</strong></span></div><div class="magaza-mobile-latest-collections"><span>Nakit tahsilat <strong data-magaza-latest-cash-collection>0,00 TL</strong></span><span>Kart tahsilat <strong data-magaza-latest-card-collection>0,00 TL</strong></span></div></article>'
       +'<div class="magaza-mobile-payment-history" data-magaza-mobile-payment-history></div>'
-      +'<div class="magaza-satis-summary"><article><span>Aylık satış</span><strong data-magaza-gross>0,00 TL</strong></article><article><span>Matrah</span><strong data-magaza-subtotal>0,00 TL</strong></article><article><span>%10 hesaplanan KDV</span><strong data-magaza-vat>0,00 TL</strong></article><article><span>Satış günü</span><strong data-magaza-count>0</strong></article></div>'
+      +'<div class="magaza-satis-summary"><article><span>Aylık Z raporu toplamı</span><strong data-magaza-gross>0,00 TL</strong></article><article><span>Matrah</span><strong data-magaza-subtotal>0,00 TL</strong></article><article><span>%10 hesaplanan KDV</span><strong data-magaza-vat>0,00 TL</strong></article><article><span>Satış günü</span><strong data-magaza-count>0</strong></article></div>'
       +'<form class="magaza-satis-form" data-magaza-form autocomplete="off">'
       +'<label>Tarih<input type="date" name="sale_date" required></label>'
-      +'<label>KDV dahil günlük satış<input type="text" inputmode="decimal" name="gross_amount" required placeholder="Örn: 40.000,00"></label>'
+      +'<label>KDV dahil günlük Z raporu<input type="text" inputmode="decimal" name="gross_amount" required placeholder="Örn: 40.000,00"></label>'
       +'<label class="magaza-satis-note">Not<input type="text" name="note" maxlength="250" placeholder="İsteğe bağlı, örn: Gün sonu Z raporu"></label>'
       +'<div class="magaza-satis-preview" data-magaza-preview>Matrah: 0,00 TL · %10 KDV: 0,00 TL</div>'
       +'<button type="submit" class="btn btn-primary" data-magaza-save>Günü kaydet</button>'
