@@ -27,6 +27,21 @@ function kdv_onceki_period(string $period): string
     return date('Y-m', strtotime($period . '-01 -1 month'));
 }
 
+function kdv_manuel_kayit_gecerli_mi(?array $carry): bool
+{
+    if (!$carry) return false;
+
+    $amount = (float)($carry['amount'] ?? 0);
+    $note = trim((string)($carry['note'] ?? ''));
+    $createdAt = trim((string)($carry['created_at'] ?? ''));
+    $updatedAt = trim((string)($carry['updated_at'] ?? ''));
+
+    // Önceki sürümlerde oluşmuş, hiçbir kullanıcı işlemi taşımayan boş 0 TL satırları
+    // otomatik devri engellememelidir. Kullanıcı tarafından kaydedilmiş 0 TL kayıt ise
+    // created_at / updated_at bilgisi sayesinde geçerli manuel düzeltme olarak korunur.
+    return abs($amount) >= 0.005 || $note !== '' || $createdAt !== '' || $updatedAt !== '';
+}
+
 function kdv_devir_summary(string $period, int $depth = 0): array
 {
     $periodStart = $period . '-01';
@@ -56,7 +71,7 @@ function kdv_devir_summary(string $period, int $depth = 0): array
     $storeSalesVat = (float)($storeSummary['vat'] ?? 0);
     $outgoingVat = $invoiceOutgoingVat + $storeSalesVat;
 
-    $stmt = db()->prepare('SELECT amount, note, updated_at FROM vat_carryovers WHERE period=?');
+    $stmt = db()->prepare('SELECT amount, note, created_at, updated_at FROM vat_carryovers WHERE period=?');
     $stmt->execute([$period]);
     $carry = $stmt->fetch() ?: null;
 
@@ -64,16 +79,19 @@ function kdv_devir_summary(string $period, int $depth = 0): array
     $carryoverSource = 'none';
     $carryoverNote = '';
     $carryoverUpdatedAt = '';
+    $previousPeriod = kdv_onceki_period($period);
+    $previousNet = 0.0;
+    $previousLabel = '';
 
-    if ($carry) {
+    if (kdv_manuel_kayit_gecerli_mi($carry)) {
         $carryover = (float)($carry['amount'] ?? 0);
         $carryoverSource = 'manual';
         $carryoverNote = (string)($carry['note'] ?? '');
-        $carryoverUpdatedAt = (string)($carry['updated_at'] ?? '');
+        $carryoverUpdatedAt = (string)($carry['updated_at'] ?: ($carry['created_at'] ?? ''));
     } elseif ($depth < 120) {
-        $previousPeriod = kdv_onceki_period($period);
         $previousSummary = kdv_devir_summary($previousPeriod, $depth + 1);
         $previousNet = (float)($previousSummary['net'] ?? 0);
+        $previousLabel = (string)($previousSummary['net_label'] ?? '');
         if ($previousNet < -0.009) {
             $carryover = abs($previousNet);
             $carryoverSource = 'automatic';
@@ -102,6 +120,9 @@ function kdv_devir_summary(string $period, int $depth = 0): array
         'carryover_source' => $carryoverSource,
         'note' => $carryoverNote,
         'updated_at' => $carryoverUpdatedAt,
+        'previous_period' => $previousPeriod,
+        'previous_net' => $previousNet,
+        'previous_net_label' => $previousLabel,
         'net' => $net,
         'net_abs' => abs($net),
         'net_label' => $label,
