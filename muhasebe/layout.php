@@ -87,7 +87,7 @@ function can_access_private_finance_modules(): bool
 
     // Yönetici rolü özel finans ekranlarını görür; süper yönetici ayrımı yalnızca
     // kullanıcı yönetimi gibi en üst düzey işlemler için kullanılır.
-    return is_admin() || is_super_admin((int)($u['id'] ?? 0));
+    return is_admin() || is_super_admin((int)($u['id'] ?? 0)) || is_murat_limited_user($u);
 }
 
 function require_private_finance_modules(): void
@@ -147,11 +147,18 @@ function page_header(string $title, string $active = ''): void
 {
     $u = current_user();
     $storeOnly = is_store_sales_user($u);
+    $muratLimited = is_murat_limited_user($u);
     $fullAdmin = is_admin();
 
     if ($storeOnly) {
         $nav = [
             ['magaza', 'magaza.php', 'Mağaza', '▤'],
+        ];
+    } elseif ($muratLimited) {
+        $nav = [
+            ['faturalar', 'faturalar.php', 'Faturalar', '▤'],
+            ['sirket_evraklari', 'sirket-evraklari.php', 'Şirket Evrakları', '▧'],
+            ['vergi_odemeleri', 'vergi-odemeleri.php', 'Vergi Ödemeleri', '₺'],
         ];
     } else {
         $nav = [['dashboard', 'dashboard.php', 'Genel Bakış', '⌂']];
@@ -201,12 +208,12 @@ function page_header(string $title, string $active = ''): void
   <link rel="stylesheet" href="assets/muhasebe.css?v=515" />
   <link rel="stylesheet" href="assets/cek-renkleri.css?v=1" />
   <link rel="stylesheet" href="assets/mobil-panel.css?v=<?php echo (int)(@filemtime(__DIR__ . '/assets/mobil-panel.css') ?: 1); ?>" />
-  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"],a[href^="vergi-odemeleri.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
+  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"],a[href^="vergi-odemeleri.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?><?php if ($muratLimited): ?>body.murat-limited-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
 </head>
-<body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ''; ?>">
+<body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ($muratLimited ? ' murat-limited-user' : ''); ?>">
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="<?php echo $storeOnly ? 'magaza.php' : 'dashboard.php'; ?>" aria-label="Dumanlar Muhasebe">
+      <a class="brand" href="<?php echo $storeOnly ? 'magaza.php' : ($muratLimited ? 'faturalar.php' : 'dashboard.php'); ?>" aria-label="Dumanlar Muhasebe">
         <img src="assets/dumanlar-logo-arkaplansiz.png?v=1" alt="Dumanlar" />
         <span>Muhasebe <small><?php echo e(APP_VERSION); ?></small></span>
       </a>
@@ -219,7 +226,7 @@ function page_header(string $title, string $active = ''): void
         <?php endforeach; ?>
       </nav>
       <div class="side-footer">
-        <span><?php echo $storeOnly ? 'Mağaza Kullanıcısı' : (is_super_admin() ? 'Süper Yönetici' : e(role_label($u['role'] ?? 'viewer'))); ?></span>
+        <span><?php echo $storeOnly ? 'Mağaza Kullanıcısı' : ($muratLimited ? 'Fatura / Evrak / Vergi' : (is_super_admin() ? 'Süper Yönetici' : e(role_label($u['role'] ?? 'viewer')))); ?></span>
         <strong><?php echo e($u['display_name'] ?? 'Kullanıcı'); ?></strong>
       </div>
     </aside>
