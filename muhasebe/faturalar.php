@@ -356,14 +356,23 @@ $periodEnd = date('Y-m-t', strtotime($periodStart));
 $summaryStmt = db()->prepare("SELECT
     COALESCE(SUM(CASE WHEN direction='gelen' AND currency='TL' THEN vat_amount ELSE 0 END),0) AS incoming_vat,
     COALESCE(SUM(CASE WHEN direction='giden' AND currency='TL' THEN vat_amount ELSE 0 END),0) AS outgoing_vat,
-    COALESCE(SUM(CASE WHEN currency='TL' THEN total_amount ELSE 0 END),0) AS total_tl,
+    COALESCE(SUM(CASE WHEN direction='giden' AND currency='TL' THEN total_amount ELSE 0 END),0) AS outgoing_total_tl,
     COALESCE(SUM(CASE WHEN direction='gelen' THEN 1 ELSE 0 END),0) AS incoming_count,
     COALESCE(SUM(CASE WHEN direction='giden' THEN 1 ELSE 0 END),0) AS outgoing_count,
-    COUNT(*) AS invoice_count
+    COALESCE(SUM(CASE WHEN direction='giden' AND currency='TL' THEN 1 ELSE 0 END),0) AS outgoing_tl_count
     FROM invoices
     WHERE COALESCE(is_cancelled,0)=0 AND invoice_date BETWEEN ? AND ?");
 $summaryStmt->execute([$periodStart, $periodEnd]);
-$summary = $summaryStmt->fetch() ?: ['incoming_vat'=>0,'outgoing_vat'=>0,'total_tl'=>0,'incoming_count'=>0,'outgoing_count'=>0,'invoice_count'=>0];
+$summary = $summaryStmt->fetch() ?: ['incoming_vat'=>0,'outgoing_vat'=>0,'outgoing_total_tl'=>0,'incoming_count'=>0,'outgoing_count'=>0,'outgoing_tl_count'=>0];
+
+$periodYear = substr($period, 0, 4);
+$yearStart = $periodYear . '-01-01';
+$yearEnd = $periodYear . '-12-31';
+$yearOutgoingStmt = db()->prepare("SELECT COALESCE(SUM(total_amount),0) AS total_tl, COUNT(*) AS invoice_count
+    FROM invoices
+    WHERE COALESCE(is_cancelled,0)=0 AND direction='giden' AND currency='TL' AND invoice_date BETWEEN ? AND ?");
+$yearOutgoingStmt->execute([$yearStart, $yearEnd]);
+$yearOutgoing = $yearOutgoingStmt->fetch() ?: ['total_tl'=>0,'invoice_count'=>0];
 $invoiceSeriesYear = (int)date('Y');
 $invoiceSeriesPrefix = 'DMN' . $invoiceSeriesYear;
 $invoiceSeriesStmt = db()->prepare("SELECT invoice_no FROM invoices WHERE direction='giden' AND invoice_no IS NOT NULL AND UPPER(invoice_no) LIKE ?");
@@ -461,7 +470,8 @@ page_header('Faturalar', 'faturalar');
     <article class="stat-card status"><span>KDV durumu</span><strong class="<?php echo e($vatNetTone); ?>"><?php echo e(fatura_para(abs($vatNet))); ?></strong><small><?php echo e($vatNetLabel); ?></small></article>
     <article id="magazaGunlukRaporCard" class="stat-card soft"><span>Mağaza günlük rapor</span><strong>0,00 TL</strong><small>Z raporu KDV toplamı hazırlanıyor</small></article>
     <article class="stat-card soft fatura-next-number-card"><span>Sıradaki giden fatura</span><strong><?php echo e($nextOutgoingInvoiceNo); ?></strong><small><?php echo $lastOutgoingInvoiceNo !== '' ? 'Son fatura: ' . e($lastOutgoingInvoiceNo) : e((string)$invoiceSeriesYear) . ' serisinde kayıt yok'; ?></small></article>
-    <article class="stat-card soft"><span>Fatura toplamı</span><strong><?php echo e(fatura_para($summary['total_tl'])); ?></strong><small><?php echo e((string)$summary['invoice_count']); ?> kayıt · yalnızca TL</small></article>
+    <article class="stat-card soft"><span>Aylık giden fatura toplamı</span><strong><?php echo e(fatura_para($summary['outgoing_total_tl'])); ?></strong><small><?php echo e(date('m.Y', strtotime($periodStart))); ?> · <?php echo e((string)$summary['outgoing_tl_count']); ?> giden fatura</small></article>
+    <article class="stat-card soft"><span>Yıllık giden fatura toplamı</span><strong><?php echo e(fatura_para($yearOutgoing['total_tl'])); ?></strong><small><?php echo e($periodYear); ?> yılı · <?php echo e((string)$yearOutgoing['invoice_count']); ?> giden fatura</small></article>
   </div>
   <p class="calc-note"><strong>KDV durumu</strong> = hesaplanan KDV - indirilecek KDV. Tevkifat, istisna, iade ve önceki dönem devri bu ilk taslakta hesaba katılmaz.</p>
 </section>
