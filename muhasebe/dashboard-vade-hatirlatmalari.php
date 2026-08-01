@@ -64,6 +64,22 @@ function dashboard_reminder_card_default_account_id(string $cardKey): int
         $id = (int)($stmt->fetchColumn() ?: 0);
         if ($id > 0) return $id;
     }
+
+    $bankNames = [
+        'garanti_9029' => 'Garanti BBVA',
+        'garanti_1018' => 'Garanti BBVA',
+        'isbank_3833' => 'Türkiye İş Bankası',
+        'ziraat_7754' => 'T.C. Ziraat Bankası',
+        'ziraat_4091' => 'T.C. Ziraat Bankası',
+        'kuveyt_4357' => 'Kuveyt Türk Katılım Bankası',
+        'vakif_1125' => 'VakıfBank',
+    ];
+    $bankName = $bankNames[$cardKey] ?? '';
+    if ($bankName !== '') {
+        $stmt = db()->prepare("SELECT id FROM accounts WHERE account_type='banka' AND is_active=1 AND bank_name=? AND name LIKE ? ORDER BY id ASC LIMIT 1");
+        $stmt->execute([$bankName, '%Fatih%']);
+        return (int)($stmt->fetchColumn() ?: 0);
+    }
     return 0;
 }
 
