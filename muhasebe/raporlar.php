@@ -27,11 +27,43 @@ $storeYearProfit = round($storeYearSales * $storeProfitMargin, 2);
 
 $tradeYearStart = $storeReportYear . '-01-01';
 $tradeYearEnd = $storeReportYear . '-12-31';
-$tradeYearCari = dashboard_totals($tradeYearStart, $tradeYearEnd);
+ensure_column(db(), 'movements', 'currency', "TEXT NOT NULL DEFAULT 'TL'");
+$tradeYearCariStmt = db()->prepare("SELECT cari_id, COALESCE(currency,'TL') AS currency,
+    COALESCE(SUM(CASE WHEN movement_type='alacak' THEN amount ELSE 0 END),0) AS alacak,
+    COALESCE(SUM(CASE WHEN movement_type='tahsilat' THEN amount ELSE 0 END),0) AS tahsilat,
+    COALESCE(SUM(CASE WHEN movement_type='verecek' THEN amount ELSE 0 END),0) AS verecek,
+    COALESCE(SUM(CASE WHEN movement_type='odeme' THEN amount ELSE 0 END),0) AS odeme
+    FROM movements
+    WHERE COALESCE(is_cancelled,0)=0 AND cari_id IS NOT NULL AND movement_date BETWEEN ? AND ?
+    GROUP BY cari_id, COALESCE(currency,'TL')");
+$tradeYearCariStmt->execute([$tradeYearStart, $tradeYearEnd]);
+$tradeYearCariTotals = [
+    'TL' => ['receivable'=>0.0, 'payable'=>0.0],
+    'USD' => ['receivable'=>0.0, 'payable'=>0.0],
+    'EUR' => ['receivable'=>0.0, 'payable'=>0.0],
+];
+foreach ($tradeYearCariStmt->fetchAll() as $tradeYearCariRow) {
+    $tradeYearCurrency = strtoupper(trim((string)($tradeYearCariRow['currency'] ?? 'TL')));
+    if (!isset($tradeYearCariTotals[$tradeYearCurrency])) $tradeYearCurrency = 'TL';
+    $tradeYearCariNet =
+        ((float)$tradeYearCariRow['alacak'] - (float)$tradeYearCariRow['tahsilat'])
+        - ((float)$tradeYearCariRow['verecek'] - (float)$tradeYearCariRow['odeme']);
+    if ($tradeYearCariNet > 0.004) {
+        $tradeYearCariTotals[$tradeYearCurrency]['receivable'] += $tradeYearCariNet;
+    } elseif ($tradeYearCariNet < -0.004) {
+        $tradeYearCariTotals[$tradeYearCurrency]['payable'] += abs($tradeYearCariNet);
+    }
+}
+foreach ($tradeYearCariTotals as &$tradeYearCurrencyTotal) {
+    $tradeYearCurrencyTotal['receivable'] = round((float)$tradeYearCurrencyTotal['receivable'], 2);
+    $tradeYearCurrencyTotal['payable'] = round((float)$tradeYearCurrencyTotal['payable'], 2);
+}
+unset($tradeYearCurrencyTotal);
+
 $tradeYearChecks = check_totals($tradeYearStart, $tradeYearEnd, true);
-$tradeYearNetReceivable = (float)($tradeYearCari['net_alacak'] ?? 0);
+$tradeYearNetReceivable = (float)$tradeYearCariTotals['TL']['receivable'];
 $tradeYearIncomingChecks = (float)($tradeYearChecks['alinacak'] ?? 0);
-$tradeYearNetPayable = (float)($tradeYearCari['net_verecek'] ?? 0);
+$tradeYearNetPayable = (float)$tradeYearCariTotals['TL']['payable'];
 $tradeYearOutgoingChecks = (float)($tradeYearChecks['verilecek'] ?? 0);
 $tradeYearIncomeTotal = $tradeYearNetReceivable + $tradeYearIncomingChecks;
 $tradeYearDebtTotal = $tradeYearNetPayable + $tradeYearOutgoingChecks;
@@ -105,7 +137,7 @@ page_header('Raporlar', 'raporlar');
   <div class="card-head">
     <div>
       <h3><?php echo e($storeReportYear); ?> yıllık satış ve borç dengesi</h3>
-      <small>Net cari bakiyeler ve çek takip kayıtlarından hesaplanır.</small>
+      <small>Her carinin alacak ve borcu kendi içinde mahsup edilir; TL bakiyesi çeklerle hesaplanır.</small>
     </div>
     <span>Yıllık hesap</span>
   </div>
@@ -113,7 +145,7 @@ page_header('Raporlar', 'raporlar');
     <article class="stat-card soft">
       <span>Net cari alacağı</span>
       <strong><?php echo e(money($tradeYearNetReceivable)); ?></strong>
-      <small>Alacak - tahsilat</small>
+      <small>Her cari kendi içinde mahsup edildi</small>
     </article>
     <article class="stat-card soft">
       <span>Alınan çekler</span>
@@ -123,7 +155,7 @@ page_header('Raporlar', 'raporlar');
     <article class="stat-card soft">
       <span>Net cari borcu</span>
       <strong><?php echo e(money($tradeYearNetPayable)); ?></strong>
-      <small>Borç - ödeme</small>
+      <small>Her cari kendi içinde mahsup edildi</small>
     </article>
     <article class="stat-card soft">
       <span>Verilen çekler</span>
@@ -148,7 +180,7 @@ page_header('Raporlar', 'raporlar');
       <small>Toplam gelir değeri - toplam borç değeri</small>
     </article>
   </section>
-  <p class="calc-note report-calc-note"><strong>Formül:</strong> (Net cari alacağı + alınan çekler) - (Net cari borcu + verilen çekler).</p>
+  <p class="calc-note report-calc-note"><strong>Formül:</strong> (Net cari alacağı + alınan çekler) - (Net cari borcu + verilen çekler). Cari bakiyelerinde aldı-verdi mahsuplaşması uygulanır; USD ve EUR tutarları TL toplamına karıştırılmaz.</p>
 </section>
 
 <section class="stats-grid five report-block report-position-grid">
