@@ -253,3 +253,80 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
         'status' => $status,
     ];
 }
+
+
+function maas_manual_aylik_toplam_db_ensure(): void
+{
+    db()->exec("CREATE TABLE IF NOT EXISTS salary_manual_monthly_totals (
+        period TEXT PRIMARY KEY,
+        amount REAL NOT NULL DEFAULT 0,
+        updated_by INTEGER,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(updated_by) REFERENCES users(id) ON DELETE SET NULL
+    )");
+}
+
+function maas_manual_aylik_toplam_kaydet(string $period, ?float $amount): void
+{
+    $period = maas_puantaj_period($period);
+    maas_manual_aylik_toplam_db_ensure();
+    $pdo = db();
+
+    if ($amount === null) {
+        $pdo->prepare('DELETE FROM salary_manual_monthly_totals WHERE period=?')->execute([$period]);
+        return;
+    }
+
+    $amount = max(0, round($amount, 2));
+    $userId = current_user()['id'] ?? null;
+    $updatedAt = now();
+    $update = $pdo->prepare('UPDATE salary_manual_monthly_totals SET amount=?, updated_by=?, updated_at=? WHERE period=?');
+    $update->execute([$amount, $userId, $updatedAt, $period]);
+    if ($update->rowCount() === 0) {
+        $pdo->prepare('INSERT INTO salary_manual_monthly_totals (period, amount, updated_by, updated_at) VALUES (?, ?, ?, ?)')
+            ->execute([$period, $amount, $userId, $updatedAt]);
+    }
+}
+
+function maas_yillik_odenen_ozeti(string $year): array
+{
+    if (!preg_match('/^\\d{4}$/', $year)) $year = date('Y');
+    maas_manual_aylik_toplam_db_ensure();
+
+    $manual = [];
+    $stmt = db()->prepare('SELECT period, amount FROM salary_manual_monthly_totals WHERE period BETWEEN ? AND ?');
+    $stmt->execute([$year . '-01', $year . '-12']);
+    foreach ($stmt->fetchAll() as $row) {
+        $manual[(string)$row['period']] = (float)$row['amount'];
+    }
+
+    $detailed = [];
+    try {
+        $stmt = db()->prepare('SELECT period, COALESCE(SUM(paid_amount),0) AS total FROM salary_records WHERE period BETWEEN ? AND ? GROUP BY period');
+        $stmt->execute([$year . '-01', $year . '-12']);
+        foreach ($stmt->fetchAll() as $row) {
+            $detailed[(string)$row['period']] = (float)$row['total'];
+        }
+    } catch (Throwable $e) {
+        $detailed = [];
+    }
+
+    $months = [];
+    $total = 0.0;
+    for ($month = 1; $month <= 12; $month++) {
+        $period = sprintf('%s-%02d', $year, $month);
+        $hasManual = array_key_exists($period, $manual);
+        $amount = $hasManual ? $manual[$period] : ($detailed[$period] ?? 0.0);
+        $amount = round((float)$amount, 2);
+        $months[$period] = [
+            'period' => $period,
+            'amount' => $amount,
+            'manual_amount' => $hasManual ? round((float)$manual[$period], 2) : null,
+            'detailed_amount' => round((float)($detailed[$period] ?? 0.0), 2),
+            'source' => $hasManual ? 'manual' : 'detailed',
+        ];
+        $total += $amount;
+    }
+
+    return ['year' => $year, 'months' => $months, 'total' => round($total, 2)];
+}
