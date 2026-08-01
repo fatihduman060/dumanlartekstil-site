@@ -22,7 +22,12 @@ function kdv_devir_period(string $value): string
     return preg_match('/^\d{4}-\d{2}$/', $value) ? $value : date('Y-m');
 }
 
-function kdv_devir_summary(string $period): array
+function kdv_onceki_period(string $period): string
+{
+    return date('Y-m', strtotime($period . '-01 -1 month'));
+}
+
+function kdv_devir_summary(string $period, int $depth = 0): array
 {
     $periodStart = $period . '-01';
     $periodEnd = date('Y-m-t', strtotime($periodStart));
@@ -53,8 +58,28 @@ function kdv_devir_summary(string $period): array
 
     $stmt = db()->prepare('SELECT amount, note, updated_at FROM vat_carryovers WHERE period=?');
     $stmt->execute([$period]);
-    $carry = $stmt->fetch() ?: [];
-    $carryover = (float)($carry['amount'] ?? 0);
+    $carry = $stmt->fetch() ?: null;
+
+    $carryover = 0.0;
+    $carryoverSource = 'none';
+    $carryoverNote = '';
+    $carryoverUpdatedAt = '';
+
+    if ($carry) {
+        $carryover = (float)($carry['amount'] ?? 0);
+        $carryoverSource = 'manual';
+        $carryoverNote = (string)($carry['note'] ?? '');
+        $carryoverUpdatedAt = (string)($carry['updated_at'] ?? '');
+    } elseif ($depth < 120) {
+        $previousPeriod = kdv_onceki_period($period);
+        $previousSummary = kdv_devir_summary($previousPeriod, $depth + 1);
+        $previousNet = (float)($previousSummary['net'] ?? 0);
+        if ($previousNet < -0.009) {
+            $carryover = abs($previousNet);
+            $carryoverSource = 'automatic';
+            $carryoverNote = date('m.Y', strtotime($previousPeriod . '-01')) . ' döneminden otomatik devir';
+        }
+    }
 
     $net = $outgoingVat - $incomingVat - $carryover;
     $label = $net > 0.009
@@ -74,8 +99,9 @@ function kdv_devir_summary(string $period): array
         'store_sales_gross' => (float)($storeSummary['gross'] ?? 0),
         'store_sales_count' => (int)($storeSummary['count'] ?? 0),
         'carryover' => $carryover,
-        'note' => (string)($carry['note'] ?? ''),
-        'updated_at' => (string)($carry['updated_at'] ?? ''),
+        'carryover_source' => $carryoverSource,
+        'note' => $carryoverNote,
+        'updated_at' => $carryoverUpdatedAt,
         'net' => $net,
         'net_abs' => abs($net),
         'net_label' => $label,
