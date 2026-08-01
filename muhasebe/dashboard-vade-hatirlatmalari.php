@@ -47,12 +47,12 @@ function dashboard_reminder_account(int $accountId, bool $bankOnly = false): ?ar
 function dashboard_reminder_card_default_account_id(string $cardKey): int
 {
     $accountNames = [
-        'garanti_9029' => ['Garanti Bankası Fatih Duman', 'Garanti Fatih', 'Garanti Bankası Fatih', 'Garanti Fatih Duman'],
-        'garanti_1018' => ['Garanti Bankası Fatih Duman', 'Garanti Fatih', 'Garanti Bankası Fatih', 'Garanti Fatih Duman'],
+        'garanti_9029' => ['Garanti Bankası Fatih Duman', 'Garanti Fatih', 'Garanti Bankası Fatih', 'Garanti Fatih Duman', 'GARANTİ FATİH DUMAN'],
+        'garanti_1018' => ['Garanti Bankası Fatih Duman', 'Garanti Fatih', 'Garanti Bankası Fatih', 'Garanti Fatih Duman', 'GARANTİ FATİH DUMAN'],
         'isbank_3833' => ['İş Bankası Fatih Duman', 'İş Bankası Fatih', 'İşbank Fatih', 'İşbank Fatih Duman'],
         'ziraat_7754' => ['Ziraat Bankası Fatih Duman', 'Ziraat Fatih', 'Ziraat Bankası Fatih', 'Ziraat Fatih Duman'],
         'ziraat_4091' => ['Ziraat Bankası Fatih Duman', 'Ziraat Fatih', 'Ziraat Bankası Fatih', 'Ziraat Fatih Duman'],
-        'kuveyt_4357' => ['Kuveyt Türk Fatih Duman', 'Kuveyt Fatih', 'Kuveyt Türk Fatih', 'Kuveyt Fatih Duman'],
+        'kuveyt_4357' => ['Kuveyt Türk Fatih Duman', 'Kuveyt Fatih', 'Kuveyt Türk Fatih', 'Kuveyt Fatih Duman', 'KUVEYT FATİH DUMAN'],
         'vakif_1125' => ['VakıfBank Fatih Duman', 'VakıfBank Fatih', 'Vakıf Fatih', 'Vakıf Fatih Duman'],
     ];
     $names = $accountNames[$cardKey] ?? [];
