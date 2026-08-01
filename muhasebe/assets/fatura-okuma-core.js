@@ -328,8 +328,16 @@
       });
     }
     for(var i=0;i<positions.length;i++){
-      var sellerDistance=nearestMarker(text,positions[i],seller,320);
-      var buyerDistance=nearestMarker(text,positions[i],buyer,320);
+      var sellerDistance=Infinity;
+      var buyerDistance=Infinity;
+      seller.forEach(function(marker){
+        var index=text.lastIndexOf(marker,positions[i]);
+        if(index>=Math.max(0,positions[i]-320)) sellerDistance=Math.min(sellerDistance,positions[i]-index);
+      });
+      buyer.forEach(function(marker){
+        var index=text.lastIndexOf(marker,positions[i]);
+        if(index>=Math.max(0,positions[i]-320)) buyerDistance=Math.min(buyerDistance,positions[i]-index);
+      });
       if(sellerDistance<buyerDistance) return 'giden';
       if(buyerDistance<sellerDistance) return 'gelen';
     }
