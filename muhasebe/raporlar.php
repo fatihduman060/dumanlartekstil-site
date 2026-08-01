@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
-require_once __DIR__ . '/magaza-satis-lib.php';
+require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
 require_login();
 $start = $_GET['start'] ?? date('Y-m-01');
 $end = $_GET['end'] ?? date('Y-m-t');
@@ -17,10 +17,10 @@ $storeReportMonth = preg_match('/^\d{4}-\d{2}$/', substr((string)$start, 0, 7))
 $storeReportYear = preg_match('/^\d{4}$/', substr((string)$start, 0, 4))
     ? substr((string)$start, 0, 4)
     : date('Y');
-$storeMonthSummary = magaza_satis_ozeti($storeReportMonth);
-$storeMonthSales = (float)($storeMonthSummary['gross'] ?? 0);
+$storeMonthSummary = magaza_odeme_dagilim_ozeti($storeReportMonth);
+$storeMonthSales = (float)($storeMonthSummary['daily_total'] ?? 0);
 $storeMonthProfit = round($storeMonthSales * $storeProfitMargin, 2);
-$storeYearStmt = db()->prepare("SELECT COALESCE(SUM(gross_amount),0) FROM store_daily_sales WHERE sale_date BETWEEN ? AND ?");
+$storeYearStmt = db()->prepare("SELECT COALESCE(SUM(daily_total),0) FROM store_daily_payment_breakdown WHERE sale_date BETWEEN ? AND ?");
 $storeYearStmt->execute([$storeReportYear . '-01-01', $storeReportYear . '-12-31']);
 $storeYearSales = (float)($storeYearStmt->fetchColumn() ?: 0);
 $storeYearProfit = round($storeYearSales * $storeProfitMargin, 2);
@@ -60,7 +60,7 @@ page_header('Raporlar', 'raporlar');
   <div class="card-head">
     <div>
       <h3>Mağaza kârlılığı</h3>
-      <small>Mağaza günlük satışlarından otomatik hesaplanır.</small>
+      <small>Günlük Satış Dağılımı kayıtlarından otomatik hesaplanır.</small>
     </div>
     <span>%20 kâr marjı</span>
   </div>
@@ -68,7 +68,7 @@ page_header('Raporlar', 'raporlar');
     <article class="stat-card soft">
       <span><?php echo e(month_label($storeReportMonth)); ?> mağaza satışı</span>
       <strong><?php echo e(money($storeMonthSales)); ?></strong>
-      <small>KDV dahil aylık toplam</small>
+      <small>Nakit + kart + veresiye satış</small>
     </article>
     <article class="stat-card status report-hero-stat">
       <span><?php echo e(month_label($storeReportMonth)); ?> mağaza kârı</span>
@@ -78,7 +78,7 @@ page_header('Raporlar', 'raporlar');
     <article class="stat-card soft">
       <span><?php echo e($storeReportYear); ?> mağaza satışı</span>
       <strong><?php echo e(money($storeYearSales)); ?></strong>
-      <small>KDV dahil yıllık toplam</small>
+      <small>Nakit + kart + veresiye satış</small>
     </article>
     <article class="stat-card status">
       <span><?php echo e($storeReportYear); ?> mağaza kârı</span>
@@ -86,7 +86,7 @@ page_header('Raporlar', 'raporlar');
       <small><?php echo e(money($storeYearSales)); ?> × %20</small>
     </article>
   </section>
-  <p class="calc-note report-calc-note"><strong>Formül:</strong> Mağaza kârı = KDV dahil mağaza satış toplamı × %20.</p>
+  <p class="calc-note report-calc-note"><strong>Formül:</strong> Mağaza kârı = Günlük Satış Dağılımı genel toplamı × %20.</p>
 </section>
 
 <section class="stats-grid five report-block report-position-grid">
