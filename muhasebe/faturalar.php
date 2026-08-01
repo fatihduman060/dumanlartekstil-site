@@ -364,6 +364,19 @@ $summaryStmt = db()->prepare("SELECT
     WHERE COALESCE(is_cancelled,0)=0 AND invoice_date BETWEEN ? AND ?");
 $summaryStmt->execute([$periodStart, $periodEnd]);
 $summary = $summaryStmt->fetch() ?: ['incoming_vat'=>0,'outgoing_vat'=>0,'total_tl'=>0,'incoming_count'=>0,'outgoing_count'=>0,'invoice_count'=>0];
+$invoiceSeriesYear = (int)date('Y');
+$invoiceSeriesPrefix = 'DMN' . $invoiceSeriesYear;
+$invoiceSeriesStmt = db()->prepare("SELECT invoice_no FROM invoices WHERE direction='giden' AND invoice_no IS NOT NULL AND UPPER(invoice_no) LIKE ?");
+$invoiceSeriesStmt->execute([$invoiceSeriesPrefix . '%']);
+$lastInvoiceSequence = 0;
+foreach ($invoiceSeriesStmt->fetchAll(PDO::FETCH_COLUMN) as $invoiceNumber) {
+    $invoiceNumberKey = preg_replace('/[^A-Z0-9]/', '', strtoupper((string)$invoiceNumber));
+    if (preg_match('/^' . preg_quote($invoiceSeriesPrefix, '/') . '(\d{1,9})$/', $invoiceNumberKey, $matches)) {
+        $lastInvoiceSequence = max($lastInvoiceSequence, (int)$matches[1]);
+    }
+}
+$lastOutgoingInvoiceNo = $lastInvoiceSequence > 0 ? $invoiceSeriesPrefix . str_pad((string)$lastInvoiceSequence, 9, '0', STR_PAD_LEFT) : '';
+$nextOutgoingInvoiceNo = $invoiceSeriesPrefix . str_pad((string)($lastInvoiceSequence + 1), 9, '0', STR_PAD_LEFT);
 $incomingVat = (float)$summary['incoming_vat'];
 $outgoingVat = (float)$summary['outgoing_vat'];
 $vatNet = $outgoingVat - $incomingVat;
@@ -420,9 +433,10 @@ page_header('Faturalar', 'faturalar');
 .fatura-tur-auto-status{display:flex;gap:10px;align-items:center;flex-wrap:wrap;min-height:38px;margin:10px 0 12px;padding:10px 12px;border:1px solid #c8d8ea;background:#f1f7ff;border-radius:12px;font-size:10px}.fatura-tur-summary{min-height:58px;margin:12px 0 14px;padding:13px 14px;border:1px solid #d9e3dc;background:#f7fbf8;border-radius:15px;display:grid;gap:10px}.fatura-tur-summary-head{display:grid;gap:3px}.fatura-tur-summary-head small{font-size:10px;color:var(--muted)}
 .fatura-alt-kontroller{display:grid;gap:12px;margin-top:18px;padding:16px}.fatura-alt-kontrol-body{display:grid;gap:12px}
 .fatura-yon-cell{display:grid;gap:4px;justify-items:start}.fatura-yon-cell button{border:0;background:transparent;padding:0;color:#7b6745;font-size:9px;font-weight:850;text-decoration:underline;cursor:pointer}.fatura-cari-sec-btn{border:1px dashed #c9a96e;background:#fff9ee;color:#51452f;border-radius:11px;padding:8px 10px;display:grid;gap:2px;text-align:left;cursor:pointer;min-width:120px}
+.fatura-store-next-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}.fatura-store-next-card>div{min-width:0}.fatura-next-number{padding-left:14px;border-left:1px solid var(--border)}.fatura-next-number strong{font-size:18px!important;letter-spacing:0!important}.fatura-next-number small{white-space:normal}
 @media(max-width:980px){.kdv-devir-panel{grid-template-columns:1fr}.kdv-devir-form{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){.fatura-direction-tabs{display:grid}.fatura-list-only table{min-width:980px}}
-@media(max-width:640px){.kdv-devir-form{grid-template-columns:1fr}}
+@media(max-width:640px){.kdv-devir-form{grid-template-columns:1fr}.fatura-store-next-card{grid-template-columns:1fr}.fatura-next-number{padding:12px 0 0;border-left:0;border-top:1px solid var(--border)}}
 </style>
 <section class="dashboard-section">
   <div class="dashboard-section-head">
@@ -446,7 +460,7 @@ page_header('Faturalar', 'faturalar');
     <article id="kdvDevirCard" class="stat-card soft"><span>Önceki dönemden devir</span><strong>0,00 TL</strong><small>Manuel girilen KDV devri</small></article>
     <article class="stat-card status"><span>KDV durumu</span><strong class="<?php echo e($vatNetTone); ?>"><?php echo e(fatura_para(abs($vatNet))); ?></strong><small><?php echo e($vatNetLabel); ?></small></article>
     <article class="stat-card soft"><span>Fatura toplamı</span><strong><?php echo e(fatura_para($summary['total_tl'])); ?></strong><small><?php echo e((string)$summary['invoice_count']); ?> kayıt · yalnızca TL</small></article>
-    <article id="magazaGunlukRaporCard" class="stat-card soft"><span>Mağaza günlük rapor</span><strong>0,00 TL</strong><small>Z raporu KDV toplamı hazırlanıyor</small></article>
+    <article id="magazaGunlukRaporCard" class="stat-card soft fatura-store-next-card"><div><span>Mağaza günlük rapor</span><strong>0,00 TL</strong><small>Z raporu KDV toplamı hazırlanıyor</small></div><div class="fatura-next-number"><span>Sıradaki giden fatura</span><strong><?php echo e($nextOutgoingInvoiceNo); ?></strong><small><?php echo $lastOutgoingInvoiceNo !== '' ? 'Son fatura: ' . e($lastOutgoingInvoiceNo) : e((string)$invoiceSeriesYear) . ' serisinde kayıt yok'; ?></small></div></article>
   </div>
   <p class="calc-note"><strong>KDV durumu</strong> = hesaplanan KDV - indirilecek KDV. Tevkifat, istisna, iade ve önceki dönem devri bu ilk taslakta hesaba katılmaz.</p>
 </section>
