@@ -212,7 +212,7 @@ page_header('Vergi Ödemeleri', 'vergi_odemeleri');
     <h2>Vergi makbuzlarını yükle, tutarı kontrol et ve ödemeyi bankadan düş.</h2>
     <p>Belge seçildiğinde vergi türü, dönem, vade ve tutar otomatik okunmaya çalışılır. Kaydetmeden önce bilgileri kontrol et.</p>
   </div>
-  <div class="hero-actions"><a class="btn btn-secondary" href="dashboard.php">Genel bakışa dön</a></div>
+  <div class="hero-actions"><?php if(!is_murat_limited_user()): ?><a class="btn btn-secondary" href="dashboard.php">Genel bakışa dön</a><?php endif; ?></div>
 </section>
 
 <section class="stats-grid four section-stats vergi-summary">
@@ -279,7 +279,7 @@ page_header('Vergi Ödemeleri', 'vergi_odemeleri');
               </form>
               <form method="post" onsubmit="return confirm('Bekleyen vergi kaydı silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($row['id']); ?>"><button type="submit">Sil</button></form>
             <?php elseif (!empty($row['movement_id'])): ?>
-              <a href="hareketler.php?edit=<?php echo e($row['movement_id']); ?>">Gider hareketi</a>
+              <?php if(!is_murat_limited_user()): ?><a href="hareketler.php?edit=<?php echo e($row['movement_id']); ?>">Gider hareketi</a><?php endif; ?>
             <?php else: ?><span class="muted">Kayıt tamamlandı</span><?php endif; ?>
           </td>
         </tr>
