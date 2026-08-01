@@ -130,7 +130,7 @@ page_header('Şirket Evrakları', 'sirket_evraklari');
     <h2>Vergi levhası, imza sirküsü, faaliyet belgesi ve sözleşmeleri tek yerde tut.</h2>
     <p>Bu alan cari hareketlerini, çekleri ve dashboard toplamlarını etkilemez; sadece evrak arşivi olarak çalışır.</p>
   </div>
-  <div class="hero-actions"><?php if(can_access_private_finance_modules()): ?><a class="btn btn-secondary" href="cek-senet-arsivi.php">Çek / Senet Arşivi</a><?php endif; ?><a class="btn btn-secondary" href="belgeler.php?kind=standalone">Tüm serbest belgeler</a></div>
+  <div class="hero-actions"><?php if(can_access_private_finance_modules() && !is_murat_limited_user()): ?><a class="btn btn-secondary" href="cek-senet-arsivi.php">Çek / Senet Arşivi</a><?php endif; ?><?php if(!is_murat_limited_user()): ?><a class="btn btn-secondary" href="belgeler.php?kind=standalone">Tüm serbest belgeler</a><?php endif; ?></div>
 </section>
 
 <section class="form-grid">
