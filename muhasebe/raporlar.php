@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
+require_once __DIR__ . '/maas-aylik-kayit-lib.php';
 require_login();
 $start = $_GET['start'] ?? date('Y-m-01');
 $end = $_GET['end'] ?? date('Y-m-t');
@@ -24,6 +25,8 @@ $storeYearStmt = db()->prepare("SELECT COALESCE(SUM(daily_total),0) FROM store_d
 $storeYearStmt->execute([$storeReportYear . '-01-01', $storeReportYear . '-12-31']);
 $storeYearSales = (float)($storeYearStmt->fetchColumn() ?: 0);
 $storeYearProfit = round($storeYearSales * $storeProfitMargin, 2);
+$salaryAnnualSummary = maas_yillik_odenen_ozeti($storeReportYear);
+$salaryMonthNames = [1=>'Ocak',2=>'Şubat',3=>'Mart',4=>'Nisan',5=>'Mayıs',6=>'Haziran',7=>'Temmuz',8=>'Ağustos',9=>'Eylül',10=>'Ekim',11=>'Kasım',12=>'Aralık'];
 
 $tradeYearStart = $storeReportYear . '-01-01';
 $tradeYearEnd = $storeReportYear . '-12-31';
@@ -131,6 +134,25 @@ page_header('Raporlar', 'raporlar');
     </article>
   </section>
   <p class="calc-note report-calc-note"><strong>Formül:</strong> Mağaza kârı = Günlük Satış Dağılımı genel toplamı × %20.</p>
+</section>
+
+<section class="panel-card report-block annual-salary-report">
+  <div class="card-head">
+    <div>
+      <h3><?php echo e($storeReportYear); ?> yıllık ödenen maaşlar</h3>
+      <small>Manuel aylık toplam varsa o kullanılır; yoksa personel maaş kayıtlarındaki ödenen tutar alınır.</small>
+    </div>
+    <span>Yıllık toplam: <?php echo e(money($salaryAnnualSummary['total'])); ?></span>
+  </div>
+  <section class="stats-grid four">
+    <?php foreach ($salaryAnnualSummary['months'] as $salaryMonth): $salaryMonthNumber=(int)substr($salaryMonth['period'],5,2); ?>
+    <article class="stat-card <?php echo $salaryMonth['source']==='manual'?'status':'soft'; ?>">
+      <span><?php echo e($salaryMonthNames[$salaryMonthNumber]); ?></span>
+      <strong><?php echo e(money($salaryMonth['amount'])); ?></strong>
+      <small><?php echo $salaryMonth['source']==='manual'?'Manuel aylık toplam':'Personel maaş kayıtları'; ?></small>
+    </article>
+    <?php endforeach; ?>
+  </section>
 </section>
 
 <section class="panel-card report-block annual-trade-report">
