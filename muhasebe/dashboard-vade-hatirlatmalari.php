@@ -108,7 +108,8 @@ try {
                 if (strtoupper((string)($movement['currency'] ?? 'TL')) !== 'TL') {
                     throw new RuntimeException('Dövizli vadeler otomatik kapatılamaz; Hareketler ekranından işlem yapmalısın.');
                 }
-                if ((string)($movement['reminder_status'] ?? 'bekliyor') === 'tamamlandi') {
+                if ((string)($movement['reminder_status'] ?? 'bekliyor') === 'tamamlandi'
+                    && (int)($movement['reminder_settlement_movement_id'] ?? 0) > 0) {
                     echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                     exit;
                 }
@@ -248,7 +249,10 @@ try {
         WHERE COALESCE(m.is_cancelled,0)=0
           AND COALESCE(m.is_check_adjustment,0)=0
           AND COALESCE(m.check_id,0)=0
-          AND COALESCE(m.reminder_status,'bekliyor')!='tamamlandi'
+          AND (
+              COALESCE(m.reminder_status,'bekliyor')!='tamamlandi'
+              OR COALESCE(m.reminder_settlement_movement_id,0)=0
+          )
           AND m.due_date IS NOT NULL
           AND m.due_date != ''
           AND m.due_date <= ?
