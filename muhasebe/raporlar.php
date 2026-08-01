@@ -24,6 +24,18 @@ $storeYearStmt = db()->prepare("SELECT COALESCE(SUM(daily_total),0) FROM store_d
 $storeYearStmt->execute([$storeReportYear . '-01-01', $storeReportYear . '-12-31']);
 $storeYearSales = (float)($storeYearStmt->fetchColumn() ?: 0);
 $storeYearProfit = round($storeYearSales * $storeProfitMargin, 2);
+
+$tradeYearStart = $storeReportYear . '-01-01';
+$tradeYearEnd = $storeReportYear . '-12-31';
+$tradeYearCari = dashboard_totals($tradeYearStart, $tradeYearEnd);
+$tradeYearChecks = check_totals($tradeYearStart, $tradeYearEnd, true);
+$tradeYearNetReceivable = (float)($tradeYearCari['net_alacak'] ?? 0);
+$tradeYearIncomingChecks = (float)($tradeYearChecks['alinacak'] ?? 0);
+$tradeYearNetPayable = (float)($tradeYearCari['net_verecek'] ?? 0);
+$tradeYearOutgoingChecks = (float)($tradeYearChecks['verilecek'] ?? 0);
+$tradeYearIncomeTotal = $tradeYearNetReceivable + $tradeYearIncomingChecks;
+$tradeYearDebtTotal = $tradeYearNetPayable + $tradeYearOutgoingChecks;
+$tradeYearSalesResult = $tradeYearIncomeTotal - $tradeYearDebtTotal;
 $checkTotalsRange = check_totals($start, $end, false);
 $stmt = db()->prepare("SELECT cat.name, cat.type, SUM(m.amount) AS total FROM movements m LEFT JOIN categories cat ON cat.id=m.category_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? GROUP BY cat.id ORDER BY total DESC");
 $stmt->execute([$start,$end]); $categoryTotals = $stmt->fetchAll();
@@ -87,6 +99,56 @@ page_header('Raporlar', 'raporlar');
     </article>
   </section>
   <p class="calc-note report-calc-note"><strong>Formül:</strong> Mağaza kârı = Günlük Satış Dağılımı genel toplamı × %20.</p>
+</section>
+
+<section class="panel-card report-block annual-trade-report">
+  <div class="card-head">
+    <div>
+      <h3><?php echo e($storeReportYear); ?> yıllık satış ve borç dengesi</h3>
+      <small>Net cari bakiyeler ve çek takip kayıtlarından hesaplanır.</small>
+    </div>
+    <span>Yıllık hesap</span>
+  </div>
+  <section class="stats-grid four">
+    <article class="stat-card soft">
+      <span>Net cari alacağı</span>
+      <strong><?php echo e(money($tradeYearNetReceivable)); ?></strong>
+      <small>Alacak - tahsilat</small>
+    </article>
+    <article class="stat-card soft">
+      <span>Alınan çekler</span>
+      <strong><?php echo e(money($tradeYearIncomingChecks)); ?></strong>
+      <small><?php echo e((string)($tradeYearChecks['alinacak_count'] ?? 0)); ?> adet</small>
+    </article>
+    <article class="stat-card soft">
+      <span>Net cari borcu</span>
+      <strong><?php echo e(money($tradeYearNetPayable)); ?></strong>
+      <small>Borç - ödeme</small>
+    </article>
+    <article class="stat-card soft">
+      <span>Verilen çekler</span>
+      <strong><?php echo e(money($tradeYearOutgoingChecks)); ?></strong>
+      <small><?php echo e((string)($tradeYearChecks['verilecek_count'] ?? 0)); ?> adet</small>
+    </article>
+  </section>
+  <section class="stats-grid three">
+    <article class="stat-card">
+      <span>Toplam gelir değeri</span>
+      <strong class="text-success"><?php echo e(money($tradeYearIncomeTotal)); ?></strong>
+      <small>Net cari alacağı + alınan çekler</small>
+    </article>
+    <article class="stat-card">
+      <span>Toplam borç değeri</span>
+      <strong class="text-danger"><?php echo e(money($tradeYearDebtTotal)); ?></strong>
+      <small>Net cari borcu + verilen çekler</small>
+    </article>
+    <article class="stat-card status report-hero-stat">
+      <span>Toplam yıllık satış sonucu</span>
+      <strong class="<?php echo $tradeYearSalesResult>=0?'text-success':'text-danger'; ?>"><?php echo e(money($tradeYearSalesResult)); ?></strong>
+      <small>Toplam gelir değeri - toplam borç değeri</small>
+    </article>
+  </section>
+  <p class="calc-note report-calc-note"><strong>Formül:</strong> (Net cari alacağı + alınan çekler) - (Net cari borcu + verilen çekler).</p>
 </section>
 
 <section class="stats-grid five report-block report-position-grid">
