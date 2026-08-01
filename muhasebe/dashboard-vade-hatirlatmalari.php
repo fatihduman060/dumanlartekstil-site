@@ -5,6 +5,8 @@ require_login();
 ensure_column(db(), 'movements', 'reminder_status', "TEXT NOT NULL DEFAULT 'bekliyor'");
 ensure_column(db(), 'movements', 'reminder_completed_at', 'TEXT');
 ensure_column(db(), 'movements', 'reminder_completed_by', 'INTEGER');
+ensure_column(db(), 'movements', 'reminder_settlement_movement_id', 'INTEGER');
+ensure_column(db(), 'checks', 'reminder_settlement_movement_id', 'INTEGER');
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -17,6 +19,7 @@ function dashboard_reminder_money($amount, ?string $currency = 'TL'): string
 
 function dashboard_reminder_bucket(string $dueDate, string $today): string
 {
+    if ($dueDate < $today) return 'overdue';
     if ($dueDate === $today) return 'today';
     return 'week';
 }
@@ -24,9 +27,58 @@ function dashboard_reminder_bucket(string $dueDate, string $today): string
 function dashboard_reminder_due_text(string $dueDate, string $today): string
 {
     $diff = (int)round((strtotime($dueDate) - strtotime($today)) / 86400);
+    if ($diff < 0) return abs($diff) . ' gün gecikti';
     if ($diff === 0) return 'Bugün';
     if ($diff === 1) return 'Yarın';
     return $diff . ' gün kaldı';
+}
+
+function dashboard_reminder_account(int $accountId, bool $bankOnly = false): ?array
+{
+    if ($accountId <= 0) return null;
+    $sql = "SELECT * FROM accounts WHERE id=? AND is_active=1";
+    if ($bankOnly) $sql .= " AND account_type='banka'";
+    $stmt = db()->prepare($sql . ' LIMIT 1');
+    $stmt->execute([$accountId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function dashboard_reminder_create_settlement(array $source, string $movementType, int $accountId, string $description, ?int $checkId = null): int
+{
+    $currency = strtoupper(trim((string)($source['currency'] ?? 'TL')));
+    if ($currency !== 'TL') {
+        throw new RuntimeException('Dövizli vadeler kasa/banka hesabına otomatik işlenemez. Hareketler ekranından kapatmalısın.');
+    }
+    db()->prepare("INSERT INTO movements (
+        cari_id, category_id, account_id, movement_type, amount, currency, movement_date, due_date,
+        payment_method, description, document_type, check_id, created_by, created_at, updated_at
+    ) VALUES (?, NULL, ?, ?, ?, 'TL', ?, NULL, ?, ?, NULL, ?, ?, ?, ?)")
+        ->execute([
+            !empty($source['cari_id']) ? (int)$source['cari_id'] : null,
+            $accountId,
+            $movementType,
+            (float)$source['amount'],
+            date('Y-m-d'),
+            $checkId ? ($movementType === 'tahsilat' ? 'Çek tahsilatı' : 'Çek ödemesi') : 'Vade kapatma',
+            $description,
+            $checkId ?: null,
+            current_user()['id'] ?? null,
+            now(),
+            now(),
+        ]);
+    $settlementId = (int)db()->lastInsertId();
+    sync_movement_account_transaction($settlementId);
+    return $settlementId;
+}
+
+function dashboard_reminder_cancel_settlement(int $settlementId, string $reason): void
+{
+    if ($settlementId <= 0) return;
+    db()->prepare("UPDATE movements SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=?
+        WHERE id=? AND COALESCE(is_cancelled,0)=0")
+        ->execute([now(), current_user()['id'] ?? null, $reason, now(), $settlementId]);
+    sync_movement_account_transaction($settlementId);
 }
 
 try {
@@ -37,37 +89,144 @@ try {
         $action = (string)($_POST['action'] ?? '');
         $source = (string)($_POST['source'] ?? '');
         $id = (int)($_POST['id'] ?? 0);
-
-        if ($source !== 'movement' || $id <= 0 || !in_array($action, ['complete', 'reopen'], true)) {
+        $accountId = (int)($_POST['account_id'] ?? 0);
+        if ($id <= 0 || !in_array($source, ['movement','check'], true) || !in_array($action, ['complete','reopen'], true)) {
             throw new RuntimeException('Vade durumu güncellenemedi.');
         }
 
-        $stmt = db()->prepare("SELECT * FROM movements WHERE id=? AND COALESCE(is_cancelled,0)=0 AND movement_type IN ('alacak','verecek')");
-        $stmt->execute([$id]);
-        $movement = $stmt->fetch();
-        if (!$movement) throw new RuntimeException('Vadeli hareket bulunamadı.');
+        if ($source === 'movement') {
+            $stmt = db()->prepare("SELECT * FROM movements WHERE id=? AND COALESCE(is_cancelled,0)=0 AND movement_type IN ('alacak','verecek')");
+            $stmt->execute([$id]);
+            $movement = $stmt->fetch();
+            if (!$movement) throw new RuntimeException('Vadeli hareket bulunamadı.');
 
-        $incoming = (string)$movement['movement_type'] === 'alacak';
-        if ($action === 'complete') {
-            $completedAt = now();
-            $completedBy = current_user()['id'] ?? null;
-            db()->prepare("UPDATE movements SET reminder_status='tamamlandi', reminder_completed_at=?, reminder_completed_by=?, updated_at=? WHERE id=?")
-                ->execute([$completedAt, $completedBy, now(), $id]);
+            $incoming = (string)$movement['movement_type'] === 'alacak';
             $label = $incoming ? 'Alındı' : 'Ödendi';
-            log_action('Vade hatırlatması kapatıldı', '#' . $id . ' ' . $label);
-            audit_action('hareket', $id, 'vade_tamamlandi', $movement, [
-                'reminder_status'=>'tamamlandi',
-                'reminder_completed_at'=>$completedAt,
-                'reminder_completed_by'=>$completedBy,
-            ], $label);
-            echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($action === 'complete') {
+                $account = dashboard_reminder_account($accountId);
+                if (!$account) throw new RuntimeException('Aktif bir kasa veya banka hesabı seçmelisin.');
+                if (strtoupper((string)($movement['currency'] ?? 'TL')) !== 'TL') {
+                    throw new RuntimeException('Dövizli vadeler otomatik kapatılamaz; Hareketler ekranından işlem yapmalısın.');
+                }
+                if ((string)($movement['reminder_status'] ?? 'bekliyor') === 'tamamlandi') {
+                    echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    exit;
+                }
+
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    $description = 'Vade kapatma #' . $id;
+                    if (trim((string)($movement['description'] ?? '')) !== '') $description .= ' / ' . trim((string)$movement['description']);
+                    $settlementType = $incoming ? 'tahsilat' : 'odeme';
+                    $settlementId = dashboard_reminder_create_settlement($movement, $settlementType, (int)$account['id'], $description);
+                    $completedAt = now();
+                    $completedBy = current_user()['id'] ?? null;
+                    $pdo->prepare("UPDATE movements SET reminder_status='tamamlandi', reminder_completed_at=?, reminder_completed_by=?,
+                            reminder_settlement_movement_id=?, updated_at=? WHERE id=?")
+                        ->execute([$completedAt, $completedBy, $settlementId, now(), $id]);
+                    $pdo->commit();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    throw $e;
+                }
+
+                log_action('Vade ödemesi kaydedildi', '#' . $id . ' ' . $label . ' / ' . (string)$account['name']);
+                audit_action('hareket', $id, 'vade_tamamlandi', $movement, [
+                    'reminder_status'=>'tamamlandi',
+                    'reminder_settlement_movement_id'=>$settlementId,
+                    'account_id'=>(int)$account['id'],
+                ], $label);
+                echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+
+            $settlementId = (int)($movement['reminder_settlement_movement_id'] ?? 0);
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                dashboard_reminder_cancel_settlement($settlementId, 'Vade hatırlatması yeniden açıldı');
+                $pdo->prepare("UPDATE movements SET reminder_status='bekliyor', reminder_completed_at=NULL, reminder_completed_by=NULL,
+                        reminder_settlement_movement_id=NULL, updated_at=? WHERE id=?")
+                    ->execute([now(), $id]);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
+            log_action('Vade hatırlatması yeniden açıldı', '#' . $id);
+            audit_action('hareket', $id, 'vade_yeniden_acildi', $movement, ['reminder_status'=>'bekliyor'], 'Bekliyor');
+            echo json_encode(['ok'=>true, 'status'=>'bekliyor', 'label'=>'Bekliyor'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
         }
 
-        db()->prepare("UPDATE movements SET reminder_status='bekliyor', reminder_completed_at=NULL, reminder_completed_by=NULL, updated_at=? WHERE id=?")
-            ->execute([now(), $id]);
-        log_action('Vade hatırlatması yeniden açıldı', '#' . $id);
-        audit_action('hareket', $id, 'vade_yeniden_acildi', $movement, ['reminder_status'=>'bekliyor'], 'Bekliyor');
+        $stmt = db()->prepare("SELECT * FROM checks WHERE id=? AND COALESCE(is_cancelled,0)=0");
+        $stmt->execute([$id]);
+        $check = $stmt->fetch();
+        if (!$check) throw new RuntimeException('Çek bulunamadı.');
+
+        $incoming = (string)$check['direction'] === 'alinacak';
+        $label = $incoming ? 'Tahsil edildi' : 'Ödendi';
+        if ($action === 'complete') {
+            $account = dashboard_reminder_account($accountId, true);
+            if (!$account) throw new RuntimeException('Çek işlemi için aktif bir banka hesabı seçmelisin.');
+            $doneStatus = $incoming ? 'tahsil_edildi' : 'odendi';
+            if ((string)$check['status'] === $doneStatus) {
+                echo json_encode(['ok'=>true, 'status'=>$doneStatus, 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+            if (!in_array((string)$check['status'], ['bekliyor','bankaya_verildi'], true)) {
+                throw new RuntimeException('Bu çek açık durumda değil; Çekler ekranından kontrol etmelisin.');
+            }
+
+            $checkSource = $check;
+            $checkSource['currency'] = 'TL';
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                $description = ($incoming ? 'Çek tahsilatı' : 'Çek ödemesi') . ' #' . $id;
+                if (trim((string)($check['check_no'] ?? '')) !== '') $description .= ' / No: ' . trim((string)$check['check_no']);
+                $settlementId = dashboard_reminder_create_settlement(
+                    $checkSource,
+                    $incoming ? 'tahsilat' : 'odeme',
+                    (int)$account['id'],
+                    $description,
+                    $id
+                );
+                $pdo->prepare("UPDATE checks SET status=?, account_id=?, closed_at=?, reminder_settlement_movement_id=?, updated_at=? WHERE id=?")
+                    ->execute([$doneStatus, (int)$account['id'], date('Y-m-d'), $settlementId, now(), $id]);
+                sync_check_to_movement($id);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
+
+            log_action('Çek vadesi kapatıldı', '#' . $id . ' ' . $label . ' / ' . (string)$account['name']);
+            audit_action('cek', $id, 'vade_tamamlandi', $check, [
+                'status'=>$doneStatus,
+                'account_id'=>(int)$account['id'],
+                'reminder_settlement_movement_id'=>$settlementId,
+            ], $label);
+            echo json_encode(['ok'=>true, 'status'=>$doneStatus, 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        $settlementId = (int)($check['reminder_settlement_movement_id'] ?? 0);
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            dashboard_reminder_cancel_settlement($settlementId, 'Çek vadesi yeniden açıldı');
+            $pdo->prepare("UPDATE checks SET status='bekliyor', closed_at=NULL, reminder_settlement_movement_id=NULL, updated_at=? WHERE id=?")
+                ->execute([now(), $id]);
+            sync_check_to_movement($id);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+        log_action('Çek vadesi yeniden açıldı', '#' . $id);
+        audit_action('cek', $id, 'vade_yeniden_acildi', $check, ['status'=>'bekliyor'], 'Bekliyor');
         echo json_encode(['ok'=>true, 'status'=>'bekliyor', 'label'=>'Bekliyor'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
@@ -75,11 +234,12 @@ try {
     $today = date('Y-m-d');
     $weekAhead = date('Y-m-d', strtotime('+7 days'));
     $groups = [
+        'overdue' => ['key'=>'overdue', 'label'=>'Vadesi geçmiş', 'tone'=>'danger', 'items'=>[]],
         'today' => ['key'=>'today', 'label'=>'Bugün', 'tone'=>'warning', 'items'=>[]],
         'week' => ['key'=>'week', 'label'=>'7 gün içinde', 'tone'=>'info', 'items'=>[]],
     ];
 
-    // Geçmiş vadeler bu kartta gösterilmez; yalnızca bugün ve önümüzdeki 7 gün listelenir.
+    // Kapanmayan geçmiş vadeler, ödendi/tahsil edildi denene kadar listede kalır.
     // Çeklerden oluşan bağlı hareketler ayrıca listelenmesin; çek kendi başlığıyla tek kez gösterilsin.
     $movementStmt = db()->prepare("SELECT m.id, m.cari_id, m.movement_type, m.amount, COALESCE(m.currency,'TL') AS currency,
             m.due_date, m.description, c.name AS cari_name
@@ -91,12 +251,11 @@ try {
           AND COALESCE(m.reminder_status,'bekliyor')!='tamamlandi'
           AND m.due_date IS NOT NULL
           AND m.due_date != ''
-          AND m.due_date >= ?
           AND m.due_date <= ?
           AND m.movement_type IN ('alacak','verecek')
         ORDER BY m.due_date ASC, m.id DESC
         LIMIT 200");
-    $movementStmt->execute([$today, $weekAhead]);
+    $movementStmt->execute([$weekAhead]);
     foreach ($movementStmt->fetchAll() as $row) {
         $dueDate = (string)$row['due_date'];
         $incoming = (string)$row['movement_type'] === 'alacak';
@@ -116,13 +275,15 @@ try {
             'due_text' => tr_date($dueDate),
             'state_text' => dashboard_reminder_due_text($dueDate, $today),
             'status_text' => 'Bekliyor',
-            'can_complete' => can_write(),
+            'can_complete' => can_write() && strtoupper((string)$row['currency']) === 'TL',
             'complete_label' => $incoming ? 'Alındı' : 'Ödendi',
+            'account_scope' => 'all',
+            'default_account_id' => '',
             'url' => 'hareketler.php?edit=' . (int)$row['id'],
         ];
     }
 
-    $checkStmt = db()->prepare("SELECT ch.id, ch.cari_id, ch.direction, ch.status, ch.amount, ch.due_date, ch.bank_name,
+    $checkStmt = db()->prepare("SELECT ch.id, ch.cari_id, ch.account_id, ch.direction, ch.status, ch.amount, ch.due_date, ch.bank_name,
             ch.check_no, ch.drawer, ch.description, c.name AS cari_name
         FROM checks ch
         LEFT JOIN cariler c ON c.id=ch.cari_id
@@ -130,11 +291,10 @@ try {
           AND ch.status IN ('bekliyor','bankaya_verildi')
           AND ch.due_date IS NOT NULL
           AND ch.due_date != ''
-          AND ch.due_date >= ?
           AND ch.due_date <= ?
         ORDER BY ch.due_date ASC, ch.id DESC
         LIMIT 200");
-    $checkStmt->execute([$today, $weekAhead]);
+    $checkStmt->execute([$weekAhead]);
     foreach ($checkStmt->fetchAll() as $row) {
         $dueDate = (string)$row['due_date'];
         $incoming = (string)$row['direction'] === 'alinacak';
@@ -159,8 +319,10 @@ try {
             'due_text' => tr_date($dueDate),
             'state_text' => dashboard_reminder_due_text($dueDate, $today),
             'status_text' => (string)$row['status'] === 'bankaya_verildi' ? 'Bankaya verildi' : 'Bekliyor',
-            'can_complete' => false,
-            'complete_label' => '',
+            'can_complete' => can_write(),
+            'complete_label' => $incoming ? 'Tahsil edildi' : 'Ödendi',
+            'account_scope' => 'bank',
+            'default_account_id' => !empty($row['account_id']) ? (int)$row['account_id'] : '',
             'url' => 'cekler.php?direction=' . urlencode((string)$row['direction']) . '&edit=' . (int)$row['id'] . '#cek-form',
         ];
     }
@@ -185,6 +347,14 @@ try {
         'week_ahead' => $weekAhead,
         'count' => $totalCount,
         'csrf_token' => csrf_token(),
+        'accounts' => array_values(array_map(function(array $account): array {
+            return [
+                'id'=>(int)$account['id'],
+                'name'=>(string)$account['name'],
+                'bank_name'=>(string)($account['bank_name'] ?? ''),
+                'account_type'=>(string)($account['account_type'] ?? ''),
+            ];
+        }, accounts_for_select(true))),
         'groups' => array_values($groups),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
