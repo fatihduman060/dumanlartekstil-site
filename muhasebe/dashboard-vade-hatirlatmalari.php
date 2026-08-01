@@ -44,6 +44,29 @@ function dashboard_reminder_account(int $accountId, bool $bankOnly = false): ?ar
     return $row ?: null;
 }
 
+function dashboard_reminder_card_default_account_id(string $cardKey): int
+{
+    $accountNames = [
+        'garanti_9029' => ['Garanti Bankası Fatih Duman', 'Garanti Fatih', 'Garanti Bankası Fatih', 'Garanti Fatih Duman'],
+        'garanti_1018' => ['Garanti Bankası Fatih Duman', 'Garanti Fatih', 'Garanti Bankası Fatih', 'Garanti Fatih Duman'],
+        'isbank_3833' => ['İş Bankası Fatih Duman', 'İş Bankası Fatih', 'İşbank Fatih', 'İşbank Fatih Duman'],
+        'ziraat_7754' => ['Ziraat Bankası Fatih Duman', 'Ziraat Fatih', 'Ziraat Bankası Fatih', 'Ziraat Fatih Duman'],
+        'ziraat_4091' => ['Ziraat Bankası Fatih Duman', 'Ziraat Fatih', 'Ziraat Bankası Fatih', 'Ziraat Fatih Duman'],
+        'kuveyt_4357' => ['Kuveyt Türk Fatih Duman', 'Kuveyt Fatih', 'Kuveyt Türk Fatih', 'Kuveyt Fatih Duman'],
+        'vakif_1125' => ['VakıfBank Fatih Duman', 'VakıfBank Fatih', 'Vakıf Fatih', 'Vakıf Fatih Duman'],
+    ];
+    $names = $accountNames[$cardKey] ?? [];
+    if (!$names) return 0;
+
+    $stmt = db()->prepare("SELECT id FROM accounts WHERE name=? AND account_type='banka' AND is_active=1 LIMIT 1");
+    foreach ($names as $name) {
+        $stmt->execute([$name]);
+        $id = (int)($stmt->fetchColumn() ?: 0);
+        if ($id > 0) return $id;
+    }
+    return 0;
+}
+
 function dashboard_reminder_create_settlement(array $source, string $movementType, int $accountId, string $description, ?int $checkId = null): int
 {
     $currency = strtoupper(trim((string)($source['currency'] ?? 'TL')));
@@ -90,7 +113,7 @@ try {
         $source = (string)($_POST['source'] ?? '');
         $id = (int)($_POST['id'] ?? 0);
         $accountId = (int)($_POST['account_id'] ?? 0);
-        if ($id <= 0 || !in_array($source, ['movement','check'], true) || !in_array($action, ['complete','reopen'], true)) {
+        if ($id <= 0 || !in_array($source, ['movement','check','card_statement'], true) || !in_array($action, ['complete','reopen'], true)) {
             throw new RuntimeException('Vade durumu güncellenemedi.');
         }
 
@@ -158,6 +181,61 @@ try {
             log_action('Vade hatırlatması yeniden açıldı', '#' . $id);
             audit_action('hareket', $id, 'vade_yeniden_acildi', $movement, ['reminder_status'=>'bekliyor'], 'Bekliyor');
             echo json_encode(['ok'=>true, 'status'=>'bekliyor', 'label'=>'Bekliyor'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        if ($source === 'card_statement') {
+            if ($action !== 'complete') throw new RuntimeException('Kart ekstresi bu ekrandan yeniden açılamaz.');
+
+            $stmt = db()->prepare("SELECT * FROM card_statements WHERE id=? LIMIT 1");
+            $stmt->execute([$id]);
+            $statement = $stmt->fetch();
+            if (!$statement) throw new RuntimeException('Kart ekstresi bulunamadı.');
+            if ((string)$statement['status'] === 'odendi') {
+                echo json_encode(['ok'=>true, 'status'=>'odendi', 'label'=>'Ödendi'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+            if ((string)$statement['status'] !== 'bekliyor') {
+                throw new RuntimeException('Bu kart ekstresi bekleyen durumda değil.');
+            }
+
+            $account = dashboard_reminder_account($accountId, true);
+            if (!$account) throw new RuntimeException('Kart ekstresi için aktif bir banka hesabı seçmelisin.');
+
+            $paidDate = date('Y-m-d');
+            $description = (string)$statement['card_name'] . ' / ' . (string)$statement['statement_period'] . ' ekstre ödemesi';
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                $pdo->prepare("INSERT INTO account_transactions
+                    (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
+                    VALUES (?, 'out', ?, ?, 'card_statement', ?, ?, ?, ?)")
+                    ->execute([
+                        (int)$account['id'],
+                        (float)$statement['amount'],
+                        $paidDate,
+                        $id,
+                        $description,
+                        current_user()['id'] ?? null,
+                        now(),
+                    ]);
+                $transactionId = (int)$pdo->lastInsertId();
+                $pdo->prepare("UPDATE card_statements SET status='odendi', paid_date=?, payment_account_id=?,
+                        payment_transaction_id=?, reversal_transaction_id=NULL, updated_at=? WHERE id=?")
+                    ->execute([$paidDate, (int)$account['id'], $transactionId, now(), $id]);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
+
+            log_action('Kart ekstresi vadesi kapatıldı', '#' . $id . ' Ödendi / ' . (string)$account['name']);
+            audit_action('kart_ekstresi', $id, 'odendi', $statement, [
+                'paid_date'=>$paidDate,
+                'account_id'=>(int)$account['id'],
+                'transaction_id'=>$transactionId,
+            ], (string)$statement['card_name']);
+            echo json_encode(['ok'=>true, 'status'=>'odendi', 'label'=>'Ödendi'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
         }
 
@@ -285,6 +363,51 @@ try {
             'default_account_id' => '',
             'url' => 'hareketler.php?edit=' . (int)$row['id'],
         ];
+    }
+
+    // Bekleyen kredi kartı ekstreleri de son ödeme tarihine göre aynı vade akışında gösterilir.
+    $cardTableExists = (bool)db()->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_statements' LIMIT 1")->fetchColumn();
+    if ($cardTableExists) {
+        $cardStmt = db()->prepare("SELECT id, card_key, card_name, statement_period, amount, due_date, note
+            FROM card_statements
+            WHERE status='bekliyor'
+              AND due_date IS NOT NULL
+              AND due_date != ''
+              AND due_date <= ?
+            ORDER BY due_date ASC, id DESC
+            LIMIT 200");
+        $cardStmt->execute([$weekAhead]);
+        foreach ($cardStmt->fetchAll() as $row) {
+            $dueDate = (string)$row['due_date'];
+            $bucket = dashboard_reminder_bucket($dueDate, $today);
+            $periodText = trim((string)($row['statement_period'] ?? ''));
+            $noteText = trim((string)($row['note'] ?? ''));
+            $description = trim(implode(' · ', array_filter([
+                $periodText !== '' ? $periodText . ' dönemi' : '',
+                $noteText,
+            ])));
+            $groups[$bucket]['items'][] = [
+                'source' => 'card_statement',
+                'id' => (int)$row['id'],
+                'kind' => 'Kredi kartı ekstresi',
+                'direction' => 'outgoing',
+                'tone' => 'danger',
+                'cari_name' => (string)$row['card_name'],
+                'description' => $description,
+                'amount' => (float)$row['amount'],
+                'currency' => 'TL',
+                'amount_text' => dashboard_reminder_money($row['amount'], 'TL'),
+                'due_date' => $dueDate,
+                'due_text' => tr_date($dueDate),
+                'state_text' => dashboard_reminder_due_text($dueDate, $today),
+                'status_text' => 'Bekliyor',
+                'can_complete' => can_write(),
+                'complete_label' => 'Ödendi',
+                'account_scope' => 'bank',
+                'default_account_id' => dashboard_reminder_card_default_account_id((string)($row['card_key'] ?? '')),
+                'url' => 'kart-ekstre-takibi.php?edit=' . (int)$row['id'],
+            ];
+        }
     }
 
     $checkStmt = db()->prepare("SELECT ch.id, ch.cari_id, ch.account_id, ch.direction, ch.status, ch.amount, ch.due_date, ch.bank_name,
