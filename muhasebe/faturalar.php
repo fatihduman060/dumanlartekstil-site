@@ -443,6 +443,7 @@ page_header('Faturalar', 'faturalar');
 .fatura-alt-kontroller{display:grid;gap:12px;margin-top:18px;padding:16px}.fatura-alt-kontrol-body{display:grid;gap:12px}
 .fatura-yon-cell{display:grid;gap:4px;justify-items:start}.fatura-yon-cell button{border:0;background:transparent;padding:0;color:#7b6745;font-size:9px;font-weight:850;text-decoration:underline;cursor:pointer}.fatura-cari-sec-btn{border:1px dashed #c9a96e;background:#fff9ee;color:#51452f;border-radius:11px;padding:8px 10px;display:grid;gap:2px;text-align:left;cursor:pointer;min-width:120px}
 .fatura-next-number-card strong{font-size:18px!important;letter-spacing:0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fatura-alt-kontroller .masraf-fisi-form>.btn{grid-column:1/-1;width:100%;min-width:0;min-height:46px;white-space:normal!important;line-height:1.25}
 @media(max-width:980px){.kdv-devir-panel{grid-template-columns:1fr}.kdv-devir-form{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){.fatura-direction-tabs{display:grid}.fatura-list-only table{min-width:980px}}
 @media(max-width:640px){.kdv-devir-form{grid-template-columns:1fr}}
