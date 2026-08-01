@@ -309,7 +309,10 @@
     return best;
   }
 
-  function detectDirection(fullText,companyTaxNo){
+  function detectDirection(fullText,companyTaxNo,invoiceNo){
+    var invoiceNoKey=cleanInvoiceNo(invoiceNo||'');
+    if(/^DMN20\d{2}\d{5,20}$/.test(invoiceNoKey)) return 'giden';
+
     var text=norm(fullText);
     var seller=['SATICI','SELLER','TEDARIKCI'];
     var buyer=['ALICI','SAYIN','MUSTERI','BUYER'];
@@ -329,6 +332,15 @@
       var buyerDistance=nearestMarker(text,positions[i],buyer,320);
       if(sellerDistance<buyerDistance) return 'giden';
       if(buyerDistance<sellerDistance) return 'gelen';
+    }
+
+    var firstBuyer=Infinity;
+    buyer.forEach(function(marker){
+      var index=text.indexOf(marker);
+      if(index>=0) firstBuyer=Math.min(firstBuyer,index);
+    });
+    for(var p=0;p<positions.length;p++){
+      if(positions[p]<text.length*0.30&&positions[p]<firstBuyer) return 'giden';
     }
     return '';
   }
@@ -603,7 +615,8 @@
     var fullText=lines.join('\n');
     var chars=norm(fullText).replace(/\s/g,'').length;
     var needsOcr=lines.length<5||chars<80;
-    var detectedDirection=detectDirection(fullText,opts.companyTaxNo||'');
+    var noResult=findInvoiceNo(lines,opts.fileName||'');
+    var detectedDirection=detectDirection(fullText,opts.companyTaxNo||'',noResult.value);
     var issuer=extractIssuer(lines,{
       direction:opts.direction||detectedDirection,
       companyTaxNo:opts.companyTaxNo||'',
@@ -612,7 +625,6 @@
     var critical=[];
     var warnings=[];
 
-    var noResult=findInvoiceNo(lines,opts.fileName||'');
     var dateResult=findInvoiceDate(lines);
     var gross=findAmount(lines,['Mal Hizmet Toplam Tutarı','Mal/Hizmet Toplam Tutarı','Brüt Toplam']);
     var discount=findAmount(lines,['Toplam İskonto','İskonto Toplamı','İskonto Tutarı','Toplam İndirim','İndirim Toplamı']);
