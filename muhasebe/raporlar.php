@@ -251,6 +251,27 @@ $cardTotal = ($cardTable && $cardAmount && $cardDate) ? ym_safe_sum($pdo, $cardT
 $dataSets['Kart ekstreleri'] = $cardTotal !== null;
 if ($cardTotal === null) $missingItems[] = 'Kart Analizi: kart ekstresi tablosu veya tutar/tarih alanı eksik.';
 
+/* SGK / SSK ve vergiler */
+$taxTable = ym_first_table($pdo, array('tax_payments', 'vergi_odemeleri'));
+$taxColumns = $taxTable ? ym_columns($pdo, $taxTable) : array();
+$taxReady = $taxTable
+    && isset($taxColumns['tax_type'])
+    && isset($taxColumns['amount'])
+    && isset($taxColumns['status'])
+    && isset($taxColumns['due_date'])
+    && isset($taxColumns['paid_date']);
+$pendingSgk = $paidSgk = $pendingTaxes = $paidTaxes = null;
+if ($taxReady) {
+    $sgkWhere = "(LOWER(COALESCE(\"tax_type\",'')) LIKE '%sgk%' OR LOWER(COALESCE(\"tax_type\",'')) LIKE '%ssk%' OR LOWER(COALESCE(\"tax_type\",'')) LIKE '%sosyal güvenlik%')";
+    $otherTaxWhere = 'NOT ' . $sgkWhere;
+    $pendingSgk = ym_safe_sum($pdo, $taxTable, 'amount', 'due_date', $yearStart, $yearEnd, '"status"=? AND ' . $sgkWhere, array('bekliyor'));
+    $paidSgk = ym_safe_sum($pdo, $taxTable, 'amount', 'paid_date', $yearStart, $yearEnd, '"status"=? AND ' . $sgkWhere, array('odendi'));
+    $pendingTaxes = ym_safe_sum($pdo, $taxTable, 'amount', 'due_date', $yearStart, $yearEnd, '"status"=? AND ' . $otherTaxWhere, array('bekliyor'));
+    $paidTaxes = ym_safe_sum($pdo, $taxTable, 'amount', 'paid_date', $yearStart, $yearEnd, '"status"=? AND ' . $otherTaxWhere, array('odendi'));
+}
+$dataSets['SGK / SSK ve vergiler'] = $taxReady;
+if (!$taxReady) $missingItems[] = 'SGK / SSK ve Vergiler: vergi ödeme tablosu veya tür, tutar, durum ve tarih alanları eksik.';
+
 $readyCount = 0;
 foreach ($dataSets as $isReady) if ($isReady) $readyCount++;
 $readiness = count($dataSets) ? (int)round(($readyCount / count($dataSets)) * 100) : 0;
@@ -266,6 +287,7 @@ $srcInvoices = $invoiceTable ?: 'fatura tablosu bulunamadı';
 $srcProduction = $productionTable ?: 'üretim tablosu bulunamadı';
 $srcStock = $stockTable ?: 'stok tablosu bulunamadı';
 $srcCards = $cardTable ?: 'kart ekstresi tablosu bulunamadı';
+$srcTaxes = $taxTable ?: 'vergi ödeme tablosu bulunamadı';
 
 page_header('Dumanlar A.Ş. Yönetim Merkezi', 'raporlar');
 ?>
@@ -323,6 +345,13 @@ ym_render_section('Banka Analizi', 'Aktif banka hesaplarının açılış ve har
 ym_render_section('Kart Analizi', 'Kart ekstrelerinin seçili yıl toplam görünümü.', array(
     ym_metric('Kart ekstre toplamı', $cardTotal, $srcCards, 'Kart ekstresi tutar veya tarih alanı eksik.', 'danger')
 ), 'Kart ekstreleri');
+
+ym_render_section('SGK / SSK ve Vergiler', 'Vergi Ödemeleri kayıtlarından seçili yılın bekleyen ve ödenen yükümlülükleri. SGK, SSK ve sosyal güvenlik kayıtları diğer vergilerden ayrı gösterilir.', array(
+    ym_metric('Bekleyen SGK / SSK', $pendingSgk, $srcTaxes, 'Vergi türü, tutar, durum veya vade alanı eksik.', 'danger'),
+    ym_metric('Ödenen SGK / SSK', $paidSgk, $srcTaxes, 'Vergi türü, tutar, durum veya ödeme tarihi alanı eksik.', 'success'),
+    ym_metric('Bekleyen diğer vergiler', $pendingTaxes, $srcTaxes, 'Vergi türü, tutar, durum veya vade alanı eksik.', 'danger'),
+    ym_metric('Ödenen diğer vergiler', $paidTaxes, $srcTaxes, 'Vergi türü, tutar, durum veya ödeme tarihi alanı eksik.', 'success')
+), 'Vergi Ödemeleri');
 
 ym_render_section('Karlılık Analizi', 'İlk aşamada fatura satış toplamı eksi fatura alış toplamı; genel giderler henüz dahil değildir.', array(
     ym_metric('Brüt ticari fark', $grossProfit, $srcInvoices, 'Satış ve alış faturaları birlikte okunamıyor.', $grossProfit !== null && $grossProfit < 0 ? 'danger' : 'success')
