@@ -268,7 +268,7 @@ page_header('Genel Bakış', 'dashboard');
 .cari-net-scan{margin-top:16px;padding:18px;border:1px solid #d9e7dd;border-radius:18px;background:#fbfdfb}.cari-net-scan-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.cari-net-scan-head h3{margin:3px 0 4px;color:#173c27}.cari-net-scan-head p{margin:0;color:#66736b;font-size:13px}.cari-net-scan-count{display:inline-flex;padding:6px 9px;border-radius:999px;background:#fff1d5;color:#805500;font-size:11px;font-weight:900;white-space:nowrap}@media(max-width:820px){.cari-net-scan-head{display:block}.cari-net-scan-count{margin-top:8px}}@media(max-width:640px){.vade-hatirlatma-baslik{grid-template-columns:auto 1fr}.vade-hatirlatma-baslik>b{grid-column:1/-1;justify-self:start}}
 </style>
 
-<section id="dashboardVadeHatirlatmalari" class="vade-hatirlatma-kutu">
+<section id="dashboardVadeHatirlatmalari" class="vade-hatirlatma-kutu" aria-live="polite">
   <div class="vade-hatirlatma-baslik"><span class="vade-hatirlatma-ikon">🔔</span><div><strong>Vade Hatırlatmaları</strong><small>Kapanmayan geçmiş vadeler burada kalır; hesap seçip tahsilat veya ödeme olarak kapat.</small></div><b>Yükleniyor</b></div>
   <div class="vade-hatirlatma-temiz">Vade kayıtları hazırlanıyor…</div>
 </section>
