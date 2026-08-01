@@ -403,6 +403,39 @@ function is_admin(): bool { return user_role() === 'admin'; }
 function require_write(): void { require_login(); if (!can_write()) { flash('error','Bu işlem için düzenleme yetkiniz yok.'); redirect('dashboard.php'); } }
 function require_admin(): void { require_login(); if (!is_admin()) { flash('error','Bu sayfa yalnızca yönetici içindir.'); redirect('dashboard.php'); } }
 
+function is_murat_limited_user(?array $user = null): bool
+{
+    $user = $user ?: current_user();
+    if (!$user) return false;
+    $username = strtolower(trim((string)($user['username'] ?? '')));
+    $displayName = strtoupper(trim((string)($user['display_name'] ?? '')));
+    return $username === 'murat' || $displayName === 'MURAT BOLAT';
+}
+
+function murat_limited_route_allowed(string $script): bool
+{
+    if (in_array($script, [
+        'index.php',
+        'logout.php',
+        'faturalar.php',
+        'sirket-evraklari.php',
+        'serbest-belge-indir.php',
+        'vergi-odemeleri.php',
+        'vergi-belge-indir.php',
+    ], true)) return true;
+    return strpos($script, 'fatura-') === 0;
+}
+
+function enforce_murat_limited_route(): void
+{
+    if (!is_logged_in() || !is_murat_limited_user()) return;
+    $script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    if (murat_limited_route_allowed($script)) return;
+    redirect('faturalar.php');
+}
+
+enforce_murat_limited_route();
+
 function client_ip(): string
 {
     $raw = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
