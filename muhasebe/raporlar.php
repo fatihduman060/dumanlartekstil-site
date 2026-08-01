@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/magaza-satis-lib.php';
 require_login();
 $start = $_GET['start'] ?? date('Y-m-01');
 $end = $_GET['end'] ?? date('Y-m-t');
@@ -8,6 +9,21 @@ $reportCashIn = (float)$totals['gelir'] + (float)$totals['tahsilat'];
 $reportCashOut = (float)$totals['gider'] + (float)$totals['odeme'];
 $reportCashNet = $reportCashIn - $reportCashOut;
 $reportNetPosition = (float)$totals['net_alacak'] - (float)$totals['net_verecek'];
+
+$storeProfitMargin = 0.20;
+$storeReportMonth = preg_match('/^\d{4}-\d{2}$/', substr((string)$start, 0, 7))
+    ? substr((string)$start, 0, 7)
+    : date('Y-m');
+$storeReportYear = preg_match('/^\d{4}$/', substr((string)$start, 0, 4))
+    ? substr((string)$start, 0, 4)
+    : date('Y');
+$storeMonthSummary = magaza_satis_ozeti($storeReportMonth);
+$storeMonthSales = (float)($storeMonthSummary['gross'] ?? 0);
+$storeMonthProfit = round($storeMonthSales * $storeProfitMargin, 2);
+$storeYearStmt = db()->prepare("SELECT COALESCE(SUM(gross_amount),0) FROM store_daily_sales WHERE sale_date BETWEEN ? AND ?");
+$storeYearStmt->execute([$storeReportYear . '-01-01', $storeReportYear . '-12-31']);
+$storeYearSales = (float)($storeYearStmt->fetchColumn() ?: 0);
+$storeYearProfit = round($storeYearSales * $storeProfitMargin, 2);
 $checkTotalsRange = check_totals($start, $end, false);
 $stmt = db()->prepare("SELECT cat.name, cat.type, SUM(m.amount) AS total FROM movements m LEFT JOIN categories cat ON cat.id=m.category_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? GROUP BY cat.id ORDER BY total DESC");
 $stmt->execute([$start,$end]); $categoryTotals = $stmt->fetchAll();
@@ -38,6 +54,39 @@ page_header('Raporlar', 'raporlar');
 
 <section class="panel-card report-controls <?php echo $print?'print-hide':''; ?>">
   <form class="filterbar" method="get" action="cari-ekstre.php" target="_blank"><select name="id" required><option value="">Cari seçerek ekstre aç</option><?php foreach($cariler as $c): ?><option value="<?php echo e($c['id']); ?>"><?php echo e($c['name']); ?></option><?php endforeach; ?></select><input type="date" name="start" value="<?php echo e($start); ?>"><input type="date" name="end" value="<?php echo e($end); ?>"><button class="btn btn-primary">Cari ekstresi / PDF</button></form>
+</section>
+
+<section class="panel-card report-block store-profit-report">
+  <div class="card-head">
+    <div>
+      <h3>Mağaza kârlılığı</h3>
+      <small>Mağaza günlük satışlarından otomatik hesaplanır.</small>
+    </div>
+    <span>%20 kâr marjı</span>
+  </div>
+  <section class="stats-grid four">
+    <article class="stat-card soft">
+      <span><?php echo e(month_label($storeReportMonth)); ?> mağaza satışı</span>
+      <strong><?php echo e(money($storeMonthSales)); ?></strong>
+      <small>KDV dahil aylık toplam</small>
+    </article>
+    <article class="stat-card status report-hero-stat">
+      <span><?php echo e(month_label($storeReportMonth)); ?> mağaza kârı</span>
+      <strong class="text-success"><?php echo e(money($storeMonthProfit)); ?></strong>
+      <small><?php echo e(money($storeMonthSales)); ?> × %20</small>
+    </article>
+    <article class="stat-card soft">
+      <span><?php echo e($storeReportYear); ?> mağaza satışı</span>
+      <strong><?php echo e(money($storeYearSales)); ?></strong>
+      <small>KDV dahil yıllık toplam</small>
+    </article>
+    <article class="stat-card status">
+      <span><?php echo e($storeReportYear); ?> mağaza kârı</span>
+      <strong class="text-success"><?php echo e(money($storeYearProfit)); ?></strong>
+      <small><?php echo e(money($storeYearSales)); ?> × %20</small>
+    </article>
+  </section>
+  <p class="calc-note report-calc-note"><strong>Formül:</strong> Mağaza kârı = KDV dahil mağaza satış toplamı × %20.</p>
 </section>
 
 <section class="stats-grid five report-block report-position-grid">
