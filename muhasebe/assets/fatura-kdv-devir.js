@@ -12,12 +12,6 @@
   var loading=false;
   var csrfToken='';
 
-  function esc(value){
-    return String(value==null?'':value).replace(/[&<>\"]/g,function(char){
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[char];
-    });
-  }
-
   function money(value){
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
   }
@@ -34,12 +28,12 @@
       panel.id='kdvDevirPanel';
       panel.className='kdv-devir-panel';
       panel.innerHTML=''
-        +'<div class="kdv-devir-copy"><strong>Önceki dönemden devreden KDV</strong><small>Örneğin Haziran’dan Temmuz’a devreden tutarı, Temmuz dönemi açıkken buraya yaz.</small></div>'
+        +'<div class="kdv-devir-copy"><strong>Önceki dönemden devreden KDV</strong><small>Önceki ayın kalan KDV’si otomatik gelir. Yalnızca özel bir düzeltme gerekiyorsa tutarı manuel kaydet.</small></div>'
         +'<form class="kdv-devir-form" data-kdv-devir-form>'
         +'<input type="hidden" name="period">'
         +'<label>Tutar<input type="text" inputmode="decimal" name="amount" placeholder="0,00"></label>'
-        +'<label>Not<input type="text" name="note" placeholder="Örn: Haziran 2026 beyannamesinden devir"></label>'
-        +'<button type="submit" class="btn btn-secondary">KDV devrini kaydet</button>'
+        +'<label>Not<input type="text" name="note" placeholder="İsteğe bağlı manuel düzeltme notu"></label>'
+        +'<button type="submit" class="btn btn-secondary">Manuel devri kaydet</button>'
         +'</form>'
         +'<p class="kdv-devir-status" data-kdv-devir-status></p>';
       stats.insertAdjacentElement('beforebegin',panel);
@@ -50,7 +44,7 @@
       carryCard=document.createElement('article');
       carryCard.id='kdvDevirCard';
       carryCard.className='stat-card soft';
-      carryCard.innerHTML='<span>Önceki dönemden devir</span><strong>0,00 TL</strong><small>Manuel girilen KDV devri</small>';
+      carryCard.innerHTML='<span>Önceki dönemden devir</span><strong>0,00 TL</strong><small>Otomatik hesaplanıyor</small>';
       var statusCard=stats.children[2]||null;
       if(statusCard) stats.insertBefore(carryCard,statusCard); else stats.appendChild(carryCard);
     }
@@ -114,12 +108,18 @@
     var form=panel.querySelector('[data-kdv-devir-form]');
     form.querySelector('[name="period"]').value=data.period||periodInput.value;
     form.querySelector('[name="amount"]').value=Number(data.carryover||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
-    form.querySelector('[name="note"]').value=data.note||'';
+    form.querySelector('[name="note"]').value=data.carryover_source==='manual'?(data.note||''):'';
 
     var carryCard=document.getElementById('kdvDevirCard');
     if(carryCard){
       carryCard.querySelector('strong').textContent=money(data.carryover);
-      carryCard.querySelector('small').textContent=data.note ? data.note : 'Manuel girilen KDV devri';
+      if(data.carryover_source==='automatic'){
+        carryCard.querySelector('small').textContent=data.note||'Önceki aydan otomatik devir';
+      }else if(data.carryover_source==='manual'){
+        carryCard.querySelector('small').textContent=data.note||'Manuel KDV devri';
+      }else{
+        carryCard.querySelector('small').textContent='Önceki aydan devreden KDV yok';
+      }
     }
 
     renderStoreCard(data,'');
@@ -141,10 +141,12 @@
       note.innerHTML='<strong>KDV durumu</strong> = faturalardaki hesaplanan KDV + mağaza Z raporu KDV - indirilecek KDV - önceki dönemden devreden KDV. Tevkifat, istisna ve iade bu taslakta ayrıca hesaplanmaz.';
     }
 
-    if(data.updated_at){
-      setStatus('Bu dönem için KDV devri kaydedildi.','success');
+    if(data.carryover_source==='automatic'){
+      setStatus((data.note||'Önceki dönemden otomatik devir')+' uygulandı: '+money(data.carryover)+'.','success');
+    }else if(data.carryover_source==='manual'){
+      setStatus('Bu dönem için manuel KDV devri kullanılıyor: '+money(data.carryover)+'.','success');
     }else{
-      setStatus('Bu dönem için henüz manuel KDV devri girilmedi.','neutral');
+      setStatus('Önceki dönemden devreden KDV bulunamadı.','neutral');
     }
   }
 
@@ -183,7 +185,7 @@
         if(!data.ok) throw new Error(data.error||'KDV devri kaydedilemedi.');
         render(data);
         loadStoreLatestDate(data);
-        setStatus('KDV devri kaydedildi ve dönem hesabına eklendi.','success');
+        setStatus('Manuel KDV devri kaydedildi ve dönem hesabına uygulandı.','success');
       })
       .catch(function(error){setStatus(error.message||'KDV devri kaydedilemedi.','danger');})
       .finally(function(){button.disabled=false;button.textContent=oldText;});
