@@ -1,255 +1,352 @@
 <?php
 require_once __DIR__ . '/layout.php';
-require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
-require_once __DIR__ . '/maas-aylik-kayit-lib.php';
 require_login();
-$start = $_GET['start'] ?? date('Y-m-01');
-$end = $_GET['end'] ?? date('Y-m-t');
-$totals = dashboard_totals($start, $end);
-$reportCashIn = (float)$totals['gelir'] + (float)$totals['tahsilat'];
-$reportCashOut = (float)$totals['gider'] + (float)$totals['odeme'];
-$reportCashNet = $reportCashIn - $reportCashOut;
-$reportNetPosition = (float)$totals['net_alacak'] - (float)$totals['net_verecek'];
 
-$storeProfitMargin = 0.20;
-$storeReportMonth = preg_match('/^\d{4}-\d{2}$/', substr((string)$start, 0, 7))
-    ? substr((string)$start, 0, 7)
-    : date('Y-m');
-$storeReportYear = preg_match('/^\d{4}$/', substr((string)$start, 0, 4))
-    ? substr((string)$start, 0, 4)
-    : date('Y');
-$storeMonthSummary = magaza_odeme_dagilim_ozeti($storeReportMonth);
-$storeMonthSales = (float)($storeMonthSummary['daily_total'] ?? 0);
-$storeMonthProfit = round($storeMonthSales * $storeProfitMargin, 2);
-$storeYearStmt = db()->prepare("SELECT COALESCE(SUM(daily_total),0) FROM store_daily_payment_breakdown WHERE sale_date BETWEEN ? AND ?");
-$storeYearStmt->execute([$storeReportYear . '-01-01', $storeReportYear . '-12-31']);
-$storeYearSales = (float)($storeYearStmt->fetchColumn() ?: 0);
-$storeYearProfit = round($storeYearSales * $storeProfitMargin, 2);
-$salaryAnnualSummary = maas_yillik_odenen_ozeti($storeReportYear);
-$salaryMonthNames = [1=>'Ocak',2=>'Şubat',3=>'Mart',4=>'Nisan',5=>'Mayıs',6=>'Haziran',7=>'Temmuz',8=>'Ağustos',9=>'Eylül',10=>'Ekim',11=>'Kasım',12=>'Aralık'];
+/*
+ * Dumanlar A.Ş. Yönetim Merkezi
+ * Bu sayfa yalnızca mevcut SQLite tablolarını okur. INSERT/UPDATE/DELETE/DDL içermez.
+ * Farklı kurulum sürümlerinde tablo veya alan bulunmadığında kart hata vermek yerine
+ * veri kaynağını ve eksik olan parçayı açıkça gösterir.
+ */
 
-$tradeYearStart = $storeReportYear . '-01-01';
-$tradeYearEnd = $storeReportYear . '-12-31';
-ensure_column(db(), 'movements', 'currency', "TEXT NOT NULL DEFAULT 'TL'");
-$tradeYearCariStmt = db()->prepare("SELECT cari_id, COALESCE(currency,'TL') AS currency,
-    COALESCE(SUM(CASE WHEN movement_type='alacak' THEN amount ELSE 0 END),0) AS alacak,
-    COALESCE(SUM(CASE WHEN movement_type='tahsilat' THEN amount ELSE 0 END),0) AS tahsilat,
-    COALESCE(SUM(CASE WHEN movement_type='verecek' THEN amount ELSE 0 END),0) AS verecek,
-    COALESCE(SUM(CASE WHEN movement_type='odeme' THEN amount ELSE 0 END),0) AS odeme
-    FROM movements
-    WHERE COALESCE(is_cancelled,0)=0 AND cari_id IS NOT NULL AND movement_date BETWEEN ? AND ?
-    GROUP BY cari_id, COALESCE(currency,'TL')");
-$tradeYearCariStmt->execute([$tradeYearStart, $tradeYearEnd]);
-$tradeYearCariTotals = [
-    'TL' => ['receivable'=>0.0, 'payable'=>0.0],
-    'USD' => ['receivable'=>0.0, 'payable'=>0.0],
-    'EUR' => ['receivable'=>0.0, 'payable'=>0.0],
-];
-foreach ($tradeYearCariStmt->fetchAll() as $tradeYearCariRow) {
-    $tradeYearCurrency = strtoupper(trim((string)($tradeYearCariRow['currency'] ?? 'TL')));
-    if (!isset($tradeYearCariTotals[$tradeYearCurrency])) $tradeYearCurrency = 'TL';
-    $tradeYearCariNet =
-        ((float)$tradeYearCariRow['alacak'] - (float)$tradeYearCariRow['tahsilat'])
-        - ((float)$tradeYearCariRow['verecek'] - (float)$tradeYearCariRow['odeme']);
-    if ($tradeYearCariNet > 0.004) {
-        $tradeYearCariTotals[$tradeYearCurrency]['receivable'] += $tradeYearCariNet;
-    } elseif ($tradeYearCariNet < -0.004) {
-        $tradeYearCariTotals[$tradeYearCurrency]['payable'] += abs($tradeYearCariNet);
+function ym_ident($name)
+{
+    return preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string)$name) ? '"' . $name . '"' : null;
+}
+
+function ym_tables(PDO $pdo)
+{
+    static $tables = null;
+    if ($tables !== null) return $tables;
+    $tables = array();
+    try {
+        $rows = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")->fetchAll();
+        foreach ($rows as $row) $tables[(string)$row['name']] = true;
+    } catch (Throwable $e) {
+        $tables = array();
+    }
+    return $tables;
+}
+
+function ym_columns(PDO $pdo, $table)
+{
+    static $cache = array();
+    if (isset($cache[$table])) return $cache[$table];
+    $cache[$table] = array();
+    $ident = ym_ident($table);
+    if ($ident === null || !isset(ym_tables($pdo)[$table])) return $cache[$table];
+    try {
+        $rows = $pdo->query('PRAGMA table_info(' . $ident . ')')->fetchAll();
+        foreach ($rows as $row) $cache[$table][(string)$row['name']] = true;
+    } catch (Throwable $e) {
+        $cache[$table] = array();
+    }
+    return $cache[$table];
+}
+
+function ym_first_table(PDO $pdo, $candidates)
+{
+    $tables = ym_tables($pdo);
+    foreach ($candidates as $candidate) if (isset($tables[$candidate])) return $candidate;
+    return null;
+}
+
+function ym_first_column($columns, $candidates)
+{
+    foreach ($candidates as $candidate) if (isset($columns[$candidate])) return $candidate;
+    return null;
+}
+
+function ym_safe_sum(PDO $pdo, $table, $amountColumn, $dateColumn, $start, $end, $whereSql, $params)
+{
+    $tableIdent = ym_ident($table);
+    $amountIdent = ym_ident($amountColumn);
+    $dateIdent = $dateColumn ? ym_ident($dateColumn) : null;
+    if ($tableIdent === null || $amountIdent === null || ($dateColumn && $dateIdent === null)) return null;
+    $sql = 'SELECT COALESCE(SUM(CAST(' . $amountIdent . ' AS REAL)),0) FROM ' . $tableIdent;
+    $parts = array();
+    $queryParams = array();
+    if ($dateColumn) {
+        $parts[] = $dateIdent . ' BETWEEN ? AND ?';
+        $queryParams[] = $start;
+        $queryParams[] = $end;
+    }
+    if ($whereSql !== '') {
+        $parts[] = '(' . $whereSql . ')';
+        foreach ($params as $param) $queryParams[] = $param;
+    }
+    if ($parts) $sql .= ' WHERE ' . implode(' AND ', $parts);
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($queryParams);
+        return (float)$stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return null;
     }
 }
-foreach ($tradeYearCariTotals as &$tradeYearCurrencyTotal) {
-    $tradeYearCurrencyTotal['receivable'] = round((float)$tradeYearCurrencyTotal['receivable'], 2);
-    $tradeYearCurrencyTotal['payable'] = round((float)$tradeYearCurrencyTotal['payable'], 2);
+
+function ym_metric($label, $value, $source, $missing, $tone)
+{
+    return array('label'=>$label, 'value'=>$value, 'source'=>$source, 'missing'=>$missing, 'tone'=>$tone);
 }
-unset($tradeYearCurrencyTotal);
 
-$tradeYearChecks = check_totals($tradeYearStart, $tradeYearEnd, true);
-$tradeYearNetReceivable = (float)$tradeYearCariTotals['TL']['receivable'];
-$tradeYearIncomingChecks = (float)($tradeYearChecks['alinacak'] ?? 0);
-$tradeYearNetPayable = (float)$tradeYearCariTotals['TL']['payable'];
-$tradeYearOutgoingChecks = (float)($tradeYearChecks['verilecek'] ?? 0);
-$tradeYearIncomeTotal = $tradeYearNetReceivable + $tradeYearIncomingChecks;
-$tradeYearDebtTotal = $tradeYearNetPayable + $tradeYearOutgoingChecks;
-$tradeYearSalesResult = $tradeYearIncomeTotal - $tradeYearDebtTotal;
-$checkTotalsRange = check_totals($start, $end, false);
-$stmt = db()->prepare("SELECT cat.name, cat.type, SUM(m.amount) AS total FROM movements m LEFT JOIN categories cat ON cat.id=m.category_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? GROUP BY cat.id ORDER BY total DESC");
-$stmt->execute([$start,$end]); $categoryTotals = $stmt->fetchAll();
-$stmt = db()->prepare("SELECT strftime('%Y-%m', movement_date) AS month, movement_type, SUM(amount) AS total FROM movements WHERE COALESCE(is_cancelled,0)=0 AND movement_date BETWEEN ? AND ? GROUP BY month, movement_type ORDER BY month ASC");
-$stmt->execute([$start,$end]); $monthly = $stmt->fetchAll();
-$stmt = db()->prepare("SELECT c.id,c.name,
- SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END) AS alacak,
- SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END) AS tahsilat,
- SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END) AS verecek,
- SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END) AS odeme
- FROM cariler c JOIN movements m ON m.cari_id=c.id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? GROUP BY c.id ORDER BY ABS((alacak-tahsilat)-(verecek-odeme)) DESC LIMIT 20");
-$stmt->execute([$start,$end]); $cariTotals=$stmt->fetchAll();
-$stmt = db()->prepare("SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.due_date BETWEEN ? AND ? ORDER BY ch.due_date ASC LIMIT 30");
-$stmt->execute([$start,$end]); $checks=$stmt->fetchAll();
-$accountSummary = account_summary();
-$privateSummary = private_receivable_totals(['start'=>$start, 'end'=>$end]);
-$accountRows = accounts_for_select(false);
-$acctStmt = db()->prepare("SELECT at.*, a.name AS account_name, a.account_type FROM account_transactions at JOIN accounts a ON a.id=at.account_id WHERE at.transaction_date BETWEEN ? AND ? ORDER BY at.transaction_date DESC, at.id DESC LIMIT 50");
-$acctStmt->execute([$start,$end]); $accountTransactions = $acctStmt->fetchAll();
-$cariler = cariler_for_select();
-$print = isset($_GET['print']);
-page_header('Raporlar', 'raporlar');
+function ym_money_or_missing($value)
+{
+    return $value === null ? 'Eksik veri' : money((float)$value);
+}
+
+function ym_render_card($metric)
+{
+    $ready = $metric['value'] !== null;
+    $tone = $ready ? $metric['tone'] : 'missing';
+    ?>
+    <article class="ym-card ym-<?php echo e($tone); ?>">
+      <span class="ym-card-label"><?php echo e($metric['label']); ?></span>
+      <strong><?php echo e(ym_money_or_missing($metric['value'])); ?></strong>
+      <small><b>Bağlı veri:</b> <?php echo e($metric['source']); ?></small>
+      <small class="ym-state"><b><?php echo $ready ? 'Durum:' : 'Eksik:'; ?></b> <?php echo e($ready ? 'Veri güvenle okunuyor' : $metric['missing']); ?></small>
+    </article>
+    <?php
+}
+
+function ym_render_section($title, $description, $metrics, $tag)
+{
+    ?>
+    <section class="panel-card ym-section">
+      <div class="card-head ym-section-head"><div><h3><?php echo e($title); ?></h3><p><?php echo e($description); ?></p></div><span><?php echo e($tag); ?></span></div>
+      <div class="ym-card-grid"><?php foreach ($metrics as $metric) ym_render_card($metric); ?></div>
+    </section>
+    <?php
+}
+
+$pdo = db();
+$currentYear = (int)date('Y');
+$year = isset($_GET['year']) ? (int)$_GET['year'] : $currentYear;
+if ($year < 2000 || $year > 2100) $year = $currentYear;
+$yearStart = sprintf('%04d-01-01', $year);
+$yearEnd = sprintf('%04d-12-31', $year);
+
+$missingItems = array();
+$dataSets = array();
+
+/* Cari ve temel finans hareketleri */
+$movementTable = ym_first_table($pdo, array('movements', 'cari_hareketleri', 'cari_movements'));
+$movementColumns = $movementTable ? ym_columns($pdo, $movementTable) : array();
+$movementAmount = ym_first_column($movementColumns, array('amount', 'tutar', 'total'));
+$movementDate = ym_first_column($movementColumns, array('movement_date', 'tarih', 'date', 'created_at'));
+$movementType = ym_first_column($movementColumns, array('movement_type', 'hareket_turu', 'type'));
+$movementReady = $movementTable && $movementAmount && $movementDate && $movementType;
+$dataSets['Cari hareketleri'] = $movementReady;
+$receivable = $payable = $collection = $payment = null;
+if ($movementReady) {
+    $typeIdent = ym_ident($movementType);
+    $cancelSql = isset($movementColumns['is_cancelled']) ? 'COALESCE("is_cancelled",0)=0 AND ' : '';
+    $receivable = ym_safe_sum($pdo, $movementTable, $movementAmount, $movementDate, $yearStart, $yearEnd, $cancelSql . $typeIdent . '=?', array('alacak'));
+    $payable = ym_safe_sum($pdo, $movementTable, $movementAmount, $movementDate, $yearStart, $yearEnd, $cancelSql . $typeIdent . '=?', array('verecek'));
+    $collection = ym_safe_sum($pdo, $movementTable, $movementAmount, $movementDate, $yearStart, $yearEnd, $cancelSql . $typeIdent . '=?', array('tahsilat'));
+    $payment = ym_safe_sum($pdo, $movementTable, $movementAmount, $movementDate, $yearStart, $yearEnd, $cancelSql . $typeIdent . '=?', array('odeme'));
+} else {
+    $missingItems[] = 'Cari Analizi: hareket tablosu ile tutar, tarih ve hareket türü alanları birlikte bulunamadı.';
+}
+$netReceivable = ($receivable === null || $collection === null) ? null : max(0, $receivable - $collection);
+$netPayable = ($payable === null || $payment === null) ? null : max(0, $payable - $payment);
+
+/* Kasa ve banka */
+$accountTable = ym_first_table($pdo, array('accounts', 'hesaplar'));
+$transactionTable = ym_first_table($pdo, array('account_transactions', 'hesap_hareketleri'));
+$accountColumns = $accountTable ? ym_columns($pdo, $accountTable) : array();
+$transactionColumns = $transactionTable ? ym_columns($pdo, $transactionTable) : array();
+$accountsReady = $accountTable && isset($accountColumns['id']) && isset($accountColumns['account_type']) && isset($accountColumns['opening_balance']);
+$transactionsReady = $transactionTable && isset($transactionColumns['account_id']) && isset($transactionColumns['direction']) && isset($transactionColumns['amount']);
+$cashTotal = $bankTotal = null;
+if ($accountsReady) {
+    try {
+        $activeSql = isset($accountColumns['is_active']) ? ' AND COALESCE(a."is_active",1)=1' : '';
+        $join = '';
+        $balance = 'CAST(a."opening_balance" AS REAL)';
+        if ($transactionsReady) {
+            $join = ' LEFT JOIN ' . ym_ident($transactionTable) . ' t ON t."account_id"=a."id"';
+            $balance .= '+COALESCE(SUM(CASE WHEN t."direction"=\'in\' THEN CAST(t."amount" AS REAL) WHEN t."direction"=\'out\' THEN -CAST(t."amount" AS REAL) ELSE 0 END),0)';
+        }
+        $sql = 'SELECT a."account_type" AS type, COALESCE(SUM(balance),0) total FROM (SELECT a."id",a."account_type",(' . $balance . ') balance FROM ' . ym_ident($accountTable) . ' a' . $join . ' WHERE 1=1' . $activeSql . ' GROUP BY a."id") a GROUP BY a."account_type"';
+        foreach ($pdo->query($sql)->fetchAll() as $row) {
+            if ($row['type'] === 'kasa') $cashTotal = (float)$row['total'];
+            if ($row['type'] === 'banka') $bankTotal = (float)$row['total'];
+        }
+        if ($cashTotal === null) $cashTotal = 0.0;
+        if ($bankTotal === null) $bankTotal = 0.0;
+    } catch (Throwable $e) {
+        $cashTotal = $bankTotal = null;
+    }
+}
+$dataSets['Kasa / banka'] = $cashTotal !== null && $bankTotal !== null;
+if (!$dataSets['Kasa / banka']) $missingItems[] = 'Nakit/Banka Analizi: hesap türü, açılış bakiyesi veya hesap hareketi alanları eksik.';
+
+/* Çekler */
+$checkTable = ym_first_table($pdo, array('checks', 'cekler'));
+$checkColumns = $checkTable ? ym_columns($pdo, $checkTable) : array();
+$checkAmount = ym_first_column($checkColumns, array('amount', 'tutar'));
+$checkDate = ym_first_column($checkColumns, array('due_date', 'issue_date', 'tarih'));
+$checkDirection = ym_first_column($checkColumns, array('direction', 'yon', 'type'));
+$checksReady = $checkTable && $checkAmount && $checkDate && $checkDirection;
+$incomingChecks = $outgoingChecks = null;
+if ($checksReady) {
+    $dirIdent = ym_ident($checkDirection);
+    $cancelSql = isset($checkColumns['is_cancelled']) ? 'COALESCE("is_cancelled",0)=0 AND ' : '';
+    $incomingChecks = ym_safe_sum($pdo, $checkTable, $checkAmount, $checkDate, $yearStart, $yearEnd, $cancelSql . $dirIdent . '=?', array('alinacak'));
+    $outgoingChecks = ym_safe_sum($pdo, $checkTable, $checkAmount, $checkDate, $yearStart, $yearEnd, $cancelSql . $dirIdent . '=?', array('verilecek'));
+}
+$dataSets['Çekler'] = $checksReady;
+if (!$checksReady) $missingItems[] = 'Finansal Durum: çek tablosu veya tutar/vade/yön alanı eksik.';
+
+/* Faturalar, satış/alış ve KDV */
+$invoiceTable = ym_first_table($pdo, array('invoices', 'faturalar', 'invoice_records', 'fatura_kayitlari'));
+$invoiceColumns = $invoiceTable ? ym_columns($pdo, $invoiceTable) : array();
+$invoiceAmount = ym_first_column($invoiceColumns, array('grand_total', 'general_total', 'total_amount', 'total', 'toplam', 'genel_toplam', 'tutar'));
+$invoiceDate = ym_first_column($invoiceColumns, array('invoice_date', 'fatura_tarihi', 'date', 'tarih', 'created_at'));
+$invoiceDirection = ym_first_column($invoiceColumns, array('direction', 'invoice_type', 'type', 'yon', 'fatura_turu'));
+$invoiceVat = ym_first_column($invoiceColumns, array('vat_total', 'kdv_total', 'kdv_toplam', 'total_vat', 'kdv'));
+$invoiceReady = $invoiceTable && $invoiceAmount && $invoiceDate && $invoiceDirection;
+$salesTotal = $purchaseTotal = $salesVat = $purchaseVat = null;
+if ($invoiceReady) {
+    $dir = ym_ident($invoiceDirection);
+    $salesWhere = 'LOWER(COALESCE(CAST(' . $dir . ' AS TEXT),\'\')) IN (\'satis\',\'satış\',\'sales\',\'out\',\'giden\')';
+    $purchaseWhere = 'LOWER(COALESCE(CAST(' . $dir . ' AS TEXT),\'\')) IN (\'alis\',\'alış\',\'purchase\',\'in\',\'gelen\')';
+    $salesTotal = ym_safe_sum($pdo, $invoiceTable, $invoiceAmount, $invoiceDate, $yearStart, $yearEnd, $salesWhere, array());
+    $purchaseTotal = ym_safe_sum($pdo, $invoiceTable, $invoiceAmount, $invoiceDate, $yearStart, $yearEnd, $purchaseWhere, array());
+    if ($invoiceVat) {
+        $salesVat = ym_safe_sum($pdo, $invoiceTable, $invoiceVat, $invoiceDate, $yearStart, $yearEnd, $salesWhere, array());
+        $purchaseVat = ym_safe_sum($pdo, $invoiceTable, $invoiceVat, $invoiceDate, $yearStart, $yearEnd, $purchaseWhere, array());
+    }
+}
+$dataSets['Fatura satış / alış'] = $invoiceReady;
+$dataSets['KDV özeti'] = $invoiceReady && $invoiceVat;
+if (!$invoiceReady) $missingItems[] = 'Satış Analizi: fatura tablosu ile toplam, tarih ve alış/satış yönü alanları bulunamadı.';
+if (!($invoiceReady && $invoiceVat)) $missingItems[] = 'Mali Tablolar: faturalarda KDV toplam alanı bulunamadı.';
+
+/* Üretim */
+$productionTable = ym_first_table($pdo, array('production_records', 'uretim_kayitlari', 'production', 'uretim_takibi', 'uretim'));
+$productionColumns = $productionTable ? ym_columns($pdo, $productionTable) : array();
+$productionAmount = ym_first_column($productionColumns, array('quantity', 'miktar', 'total_quantity', 'uretim_miktari', 'adet', 'kg'));
+$productionDate = ym_first_column($productionColumns, array('production_date', 'uretim_tarihi', 'date', 'tarih', 'created_at'));
+$productionTotal = ($productionTable && $productionAmount && $productionDate) ? ym_safe_sum($pdo, $productionTable, $productionAmount, $productionDate, $yearStart, $yearEnd, '', array()) : null;
+$dataSets['Üretim'] = $productionTotal !== null;
+if ($productionTotal === null) $missingItems[] = 'Üretim Analizi: üretim tablosu veya miktar/tarih alanı eksik.';
+
+/* Stok */
+$stockTable = ym_first_table($pdo, array('stock_movements', 'stok_hareketleri', 'stocks', 'stoklar', 'products', 'urunler'));
+$stockColumns = $stockTable ? ym_columns($pdo, $stockTable) : array();
+$stockAmount = ym_first_column($stockColumns, array('current_stock', 'stock_quantity', 'quantity', 'miktar', 'stok', 'adet'));
+$stockDate = ym_first_column($stockColumns, array('movement_date', 'date', 'tarih', 'created_at'));
+$stockTotal = ($stockTable && $stockAmount) ? ym_safe_sum($pdo, $stockTable, $stockAmount, $stockDate, $yearStart, $yearEnd, '', array()) : null;
+$dataSets['Stok'] = $stockTotal !== null;
+if ($stockTotal === null) $missingItems[] = 'Stok Analizi: stok tablosu veya mevcut miktar alanı eksik.';
+
+/* Kart ekstreleri */
+$cardTable = ym_first_table($pdo, array('card_statements', 'credit_card_statements', 'kart_ekstreleri', 'kart_ekstre', 'kredi_karti_ekstreleri'));
+$cardColumns = $cardTable ? ym_columns($pdo, $cardTable) : array();
+$cardAmount = ym_first_column($cardColumns, array('remaining_amount', 'balance', 'amount', 'total_amount', 'tutar', 'toplam'));
+$cardDate = ym_first_column($cardColumns, array('statement_date', 'due_date', 'date', 'tarih', 'created_at'));
+$cardTotal = ($cardTable && $cardAmount && $cardDate) ? ym_safe_sum($pdo, $cardTable, $cardAmount, $cardDate, $yearStart, $yearEnd, '', array()) : null;
+$dataSets['Kart ekstreleri'] = $cardTotal !== null;
+if ($cardTotal === null) $missingItems[] = 'Kart Analizi: kart ekstresi tablosu veya tutar/tarih alanı eksik.';
+
+$readyCount = 0;
+foreach ($dataSets as $isReady) if ($isReady) $readyCount++;
+$readiness = count($dataSets) ? (int)round(($readyCount / count($dataSets)) * 100) : 0;
+$netCashFlow = ($collection === null || $payment === null) ? null : $collection - $payment;
+$financialPosition = ($netReceivable === null || $netPayable === null) ? null : $netReceivable - $netPayable;
+$grossProfit = ($salesTotal === null || $purchaseTotal === null) ? null : $salesTotal - $purchaseTotal;
+$vatPosition = ($salesVat === null || $purchaseVat === null) ? null : $salesVat - $purchaseVat;
+
+$srcMovement = $movementTable ?: 'hareket tablosu bulunamadı';
+$srcAccounts = $accountTable ? $accountTable . ($transactionTable ? ' + ' . $transactionTable : '') : 'hesap tablosu bulunamadı';
+$srcChecks = $checkTable ?: 'çek tablosu bulunamadı';
+$srcInvoices = $invoiceTable ?: 'fatura tablosu bulunamadı';
+$srcProduction = $productionTable ?: 'üretim tablosu bulunamadı';
+$srcStock = $stockTable ?: 'stok tablosu bulunamadı';
+$srcCards = $cardTable ?: 'kart ekstresi tablosu bulunamadı';
+
+page_header('Dumanlar A.Ş. Yönetim Merkezi', 'raporlar');
 ?>
-<section class="panel-card report-controls <?php echo $print?'print-hide':''; ?>">
-  <form class="filterbar" method="get"><input type="date" name="start" value="<?php echo e($start); ?>"><input type="date" name="end" value="<?php echo e($end); ?>"><button class="btn btn-secondary">Raporla</button><a class="btn btn-primary" href="export.php?type=movements&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Hareket CSV</a><a class="btn btn-secondary" href="export.php?type=checks&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Çek CSV</a><a class="btn btn-secondary" href="export.php?type=account_transactions&start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Kasa/Banka CSV</a><a class="btn btn-secondary" href="ozel-alacaklar.php?start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Özel Alacak</a><a class="btn btn-secondary" href="raporlar.php?start=<?php echo e($start); ?>&end=<?php echo e($end); ?>&print=1" target="_blank">PDF/Yazdır</a></form>
-  <div class="report-period-note">Seçili dönem: <strong><?php echo e(tr_date($start)); ?> - <?php echo e(tr_date($end)); ?></strong>. Aşağıdaki kartlar bu tarih aralığına göre hesaplanır.</div>
-</section>
+<style>
+.ym-hero{margin-bottom:18px;background:linear-gradient(135deg,#fff,#fff7ea);display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center}.ym-hero h2{margin:0 0 8px;font-size:30px;letter-spacing:-.045em}.ym-hero p,.ym-section-head p{margin:0;color:var(--muted);font-size:13px;font-weight:750}.ym-tools{display:flex;align-items:end;gap:12px}.ym-tools label{display:grid;gap:6px;color:var(--muted);font-size:12px;font-weight:900}.ym-progress{min-width:180px}.ym-progress-line{height:10px;border-radius:999px;background:#eeeae1;overflow:hidden;margin:7px 0}.ym-progress-line i{display:block;height:100%;background:linear-gradient(90deg,var(--warning),var(--success));border-radius:999px}.ym-section{margin-top:18px}.ym-section-head{align-items:flex-start}.ym-section-head h3{margin-bottom:5px}.ym-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.ym-card{border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:17px;padding:17px;background:#fff;min-width:0}.ym-card-label{display:block;color:var(--muted);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}.ym-card strong{display:block;font-size:24px;margin:9px 0;letter-spacing:-.035em}.ym-card small{display:block;color:var(--muted);line-height:1.4;margin-top:5px;overflow-wrap:anywhere}.ym-card small b{color:var(--text)}.ym-success{border-left-color:var(--success)}.ym-danger{border-left-color:var(--danger)}.ym-info{border-left-color:var(--accent)}.ym-missing{border-left-color:var(--warning);background:#fffaf0}.ym-missing strong{font-size:20px;color:#835710}.ym-state{padding-top:6px;border-top:1px dashed var(--border)}.ym-missing-list,.ym-status-list{display:grid;gap:10px}.ym-list-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:#fff}.ym-list-row span{font-weight:800}.ym-list-row small{color:var(--muted)}.ym-ok{color:var(--success);font-weight:900}.ym-warn{color:#835710;font-weight:900}.ym-empty-ok{padding:16px;border-radius:14px;background:#f3fbf5;color:var(--success);font-weight:900}.ym-footnote{margin:18px 2px;color:var(--muted);font-size:12px;font-weight:750}@media(max-width:1100px){.ym-hero{grid-template-columns:1fr}.ym-card-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.ym-tools{align-items:stretch;flex-direction:column}.ym-card-grid{grid-template-columns:1fr}.ym-list-row{flex-direction:column}.ym-hero h2{font-size:25px}}
+</style>
 
-<section class="panel-card report-controls <?php echo $print?'print-hide':''; ?>">
-  <form class="filterbar" method="get" action="cari-ekstre.php" target="_blank"><select name="id" required><option value="">Cari seçerek ekstre aç</option><?php foreach($cariler as $c): ?><option value="<?php echo e($c['id']); ?>"><?php echo e($c['name']); ?></option><?php endforeach; ?></select><input type="date" name="start" value="<?php echo e($start); ?>"><input type="date" name="end" value="<?php echo e($end); ?>"><button class="btn btn-primary">Cari ekstresi / PDF</button></form>
-</section>
-
-<section class="panel-card report-block store-profit-report">
-  <div class="card-head">
-    <div>
-      <h3>Mağaza kârlılığı</h3>
-      <small>Günlük Satış Dağılımı kayıtlarından otomatik hesaplanır.</small>
-    </div>
-    <span>%20 kâr marjı</span>
+<section class="panel-card ym-hero">
+  <div><h2>Dumanlar A.Ş. Yönetim Merkezi</h2><p>Şirketin mevcut kayıtlarını değiştirmeden okuyan ilk aşama yönetim kokpiti. Her kart kendi veri kaynağını ve varsa eksiğini gösterir.</p></div>
+  <div class="ym-tools">
+    <form method="get"><label>Rapor yılı<select name="year" onchange="this.form.submit()"><?php for ($y=$currentYear+1; $y>=$currentYear-5; $y--): ?><option value="<?php echo e($y); ?>" <?php echo $y===$year?'selected':''; ?>><?php echo e($y); ?></option><?php endfor; ?></select></label></form>
+    <div class="ym-progress"><strong>Veri hazırlığı: %<?php echo e($readiness); ?></strong><div class="ym-progress-line"><i style="width:<?php echo e($readiness); ?>%"></i></div><small><?php echo e($readyCount); ?>/<?php echo e(count($dataSets)); ?> veri grubu hazır</small></div>
   </div>
-  <section class="stats-grid four">
-    <article class="stat-card soft">
-      <span><?php echo e(month_label($storeReportMonth)); ?> mağaza satışı</span>
-      <strong><?php echo e(money($storeMonthSales)); ?></strong>
-      <small>Nakit + kart + veresiye satış</small>
-    </article>
-    <article class="stat-card status report-hero-stat">
-      <span><?php echo e(month_label($storeReportMonth)); ?> mağaza kârı</span>
-      <strong class="text-success"><?php echo e(money($storeMonthProfit)); ?></strong>
-      <small><?php echo e(money($storeMonthSales)); ?> × %20</small>
-    </article>
-    <article class="stat-card soft">
-      <span><?php echo e($storeReportYear); ?> mağaza satışı</span>
-      <strong><?php echo e(money($storeYearSales)); ?></strong>
-      <small>Nakit + kart + veresiye satış</small>
-    </article>
-    <article class="stat-card status">
-      <span><?php echo e($storeReportYear); ?> mağaza kârı</span>
-      <strong class="text-success"><?php echo e(money($storeYearProfit)); ?></strong>
-      <small><?php echo e(money($storeYearSales)); ?> × %20</small>
-    </article>
-  </section>
-  <p class="calc-note report-calc-note"><strong>Formül:</strong> Mağaza kârı = Günlük Satış Dağılımı genel toplamı × %20.</p>
 </section>
 
-<section class="panel-card report-block annual-salary-report">
-  <div class="card-head">
-    <div>
-      <h3><?php echo e($storeReportYear); ?> yıllık ödenen maaşlar</h3>
-      <small>Manuel aylık toplam varsa o kullanılır; yoksa personel maaş kayıtlarındaki ödenen tutar alınır.</small>
-    </div>
-    <span>Yıllık toplam: <?php echo e(money($salaryAnnualSummary['total'])); ?></span>
-  </div>
-  <section class="stats-grid four">
-    <?php foreach ($salaryAnnualSummary['months'] as $salaryMonth): $salaryMonthNumber=(int)substr($salaryMonth['period'],5,2); ?>
-    <article class="stat-card <?php echo $salaryMonth['source']==='manual'?'status':'soft'; ?>">
-      <span><?php echo e($salaryMonthNames[$salaryMonthNumber]); ?></span>
-      <strong><?php echo e(money($salaryMonth['amount'])); ?></strong>
-      <small><?php echo $salaryMonth['source']==='manual'?'Manuel aylık toplam':'Personel maaş kayıtları'; ?></small>
-    </article>
-    <?php endforeach; ?>
-  </section>
+<?php
+ym_render_section('Finansal Durum', $year . ' yılı cari ve çek pozisyonu.', array(
+    ym_metric('Net cari alacağı', $netReceivable, $srcMovement, 'Cari hareket tablosu/alanları eksik.', 'success'),
+    ym_metric('Net cari borcu', $netPayable, $srcMovement, 'Cari hareket tablosu/alanları eksik.', 'danger'),
+    ym_metric('Finansal pozisyon', $financialPosition, $srcMovement, 'Alacak ve borç birlikte hesaplanamıyor.', $financialPosition !== null && $financialPosition < 0 ? 'danger' : 'info'),
+    ym_metric('Alınacak çekler', $incomingChecks, $srcChecks, 'Çek tutarı, vadesi veya yönü eksik.', 'success'),
+    ym_metric('Verilecek çekler', $outgoingChecks, $srcChecks, 'Çek tutarı, vadesi veya yönü eksik.', 'danger')
+), 'Salt okunur');
+
+ym_render_section('Nakit Durumu', 'Kasa, banka ve seçili yıl tahsilat/ödeme görünümü.', array(
+    ym_metric('Kasa toplamı', $cashTotal, $srcAccounts, 'Hesap türü/açılış bakiyesi alanları eksik.', 'info'),
+    ym_metric('Banka toplamı', $bankTotal, $srcAccounts, 'Hesap türü/açılış bakiyesi alanları eksik.', 'info'),
+    ym_metric('Yıllık nakit neti', $netCashFlow, $srcMovement, 'Tahsilat ve ödeme hareketleri okunamıyor.', $netCashFlow !== null && $netCashFlow < 0 ? 'danger' : 'success')
+), $year . ' dönemi');
+
+ym_render_section('Cari Analizi', 'Cari hareketlerinin brüt ve net özeti.', array(
+    ym_metric('Brüt alacak', $receivable, $srcMovement, 'Alacak hareketleri okunamıyor.', 'success'),
+    ym_metric('Tahsilat', $collection, $srcMovement, 'Tahsilat hareketleri okunamıyor.', 'info'),
+    ym_metric('Brüt borç', $payable, $srcMovement, 'Verecek hareketleri okunamıyor.', 'danger'),
+    ym_metric('Ödeme', $payment, $srcMovement, 'Ödeme hareketleri okunamıyor.', 'info')
+), 'Cari kayıtları');
+
+ym_render_section('Satış Analizi', 'Fatura kayıtlarından yıllık satış ve alış toplamları.', array(
+    ym_metric('Fatura satış toplamı', $salesTotal, $srcInvoices, 'Fatura toplamı, tarihi veya yön alanı eksik.', 'success'),
+    ym_metric('Fatura alış toplamı', $purchaseTotal, $srcInvoices, 'Fatura toplamı, tarihi veya yön alanı eksik.', 'danger')
+), 'Fatura verisi');
+
+ym_render_section('Üretim Analizi', 'Mevcut üretim kayıtlarının seçili yıl toplamı.', array(
+    ym_metric('Toplam üretim', $productionTotal, $srcProduction, 'Üretim miktarı veya tarih alanı eksik.', 'info')
+), 'Üretim verisi');
+
+ym_render_section('Stok Analizi', 'Mevcut stok veya stok hareketi kayıtlarının toplam miktarı.', array(
+    ym_metric('Toplam stok miktarı', $stockTotal, $srcStock, 'Stok miktarı alanı veya stok tablosu eksik.', 'info')
+), 'Stok verisi');
+
+ym_render_section('Banka Analizi', 'Aktif banka hesaplarının açılış ve hareket bakiyeleri.', array(
+    ym_metric('Banka bakiyesi', $bankTotal, $srcAccounts, 'Banka hesapları güvenle hesaplanamıyor.', 'info')
+), 'Kasa / Banka');
+
+ym_render_section('Kart Analizi', 'Kart ekstrelerinin seçili yıl toplam görünümü.', array(
+    ym_metric('Kart ekstre toplamı', $cardTotal, $srcCards, 'Kart ekstresi tutar veya tarih alanı eksik.', 'danger')
+), 'Kart ekstreleri');
+
+ym_render_section('Karlılık Analizi', 'İlk aşamada fatura satış toplamı eksi fatura alış toplamı; genel giderler henüz dahil değildir.', array(
+    ym_metric('Brüt ticari fark', $grossProfit, $srcInvoices, 'Satış ve alış faturaları birlikte okunamıyor.', $grossProfit !== null && $grossProfit < 0 ? 'danger' : 'success')
+), 'Ön gösterge');
+
+ym_render_section('Mali Tablolar', 'KDV pozisyonu hazır veriden okunur; gelir tablosu, bilanço ve nakit akışı için hesap planı gerekir.', array(
+    ym_metric('Hesaplanan KDV', $salesVat, $srcInvoices, 'Faturalarda KDV toplam alanı eksik.', 'danger'),
+    ym_metric('İndirilecek KDV', $purchaseVat, $srcInvoices, 'Faturalarda KDV toplam alanı eksik.', 'success'),
+    ym_metric('KDV pozisyonu', $vatPosition, $srcInvoices, 'Satış ve alış KDV toplamları birlikte okunamıyor.', $vatPosition !== null && $vatPosition < 0 ? 'success' : 'danger'),
+    ym_metric('Gelir tablosu', null, 'Tek düzen hesap planı', 'Hesap planı ve dönem kapanış eşlemesi henüz yok.', 'missing'),
+    ym_metric('Bilanço', null, 'Tek düzen hesap planı', 'Varlık/kaynak hesap sınıfları henüz yok.', 'missing'),
+    ym_metric('Nakit akış tablosu', null, 'Hareket sınıflandırması', 'İşletme/yatırım/finansman sınıfları henüz yok.', 'missing')
+), 'Mali görünüm');
+?>
+
+<section class="panel-card ym-section">
+  <div class="card-head ym-section-head"><div><h3>Eksik Veriler</h3><p>Kartların gerçek veriye bağlanması için gereken eksikler.</p></div><span><?php echo e(count($missingItems)); ?> bulgu</span></div>
+  <?php if (!$missingItems): ?><div class="ym-empty-ok">Hazır veri gruplarında eksik bulunmadı.</div><?php else: ?><div class="ym-missing-list"><?php foreach ($missingItems as $item): ?><div class="ym-list-row"><span><?php echo e($item); ?></span><b class="ym-warn">Eksik veri</b></div><?php endforeach; ?></div><?php endif; ?>
 </section>
 
-<section class="panel-card report-block annual-trade-report">
-  <div class="card-head">
-    <div>
-      <h3><?php echo e($storeReportYear); ?> yıllık satış ve borç dengesi</h3>
-      <small>Her carinin alacak ve borcu kendi içinde mahsup edilir; TL bakiyesi çeklerle hesaplanır.</small>
-    </div>
-    <span>Yıllık hesap</span>
-  </div>
-  <section class="stats-grid four">
-    <article class="stat-card soft">
-      <span>Net cari alacağı</span>
-      <strong><?php echo e(money($tradeYearNetReceivable)); ?></strong>
-      <small>Her cari kendi içinde mahsup edildi</small>
-    </article>
-    <article class="stat-card soft">
-      <span>Alınan çekler</span>
-      <strong><?php echo e(money($tradeYearIncomingChecks)); ?></strong>
-      <small><?php echo e((string)($tradeYearChecks['alinacak_count'] ?? 0)); ?> adet</small>
-    </article>
-    <article class="stat-card soft">
-      <span>Net cari borcu</span>
-      <strong><?php echo e(money($tradeYearNetPayable)); ?></strong>
-      <small>Her cari kendi içinde mahsup edildi</small>
-    </article>
-    <article class="stat-card soft">
-      <span>Verilen çekler</span>
-      <strong><?php echo e(money($tradeYearOutgoingChecks)); ?></strong>
-      <small><?php echo e((string)($tradeYearChecks['verilecek_count'] ?? 0)); ?> adet</small>
-    </article>
-  </section>
-  <section class="stats-grid three">
-    <article class="stat-card">
-      <span>Toplam gelir değeri</span>
-      <strong class="text-success"><?php echo e(money($tradeYearIncomeTotal)); ?></strong>
-      <small>Net cari alacağı + alınan çekler</small>
-    </article>
-    <article class="stat-card">
-      <span>Toplam borç değeri</span>
-      <strong class="text-danger"><?php echo e(money($tradeYearDebtTotal)); ?></strong>
-      <small>Net cari borcu + verilen çekler</small>
-    </article>
-    <article class="stat-card status report-hero-stat">
-      <span>Toplam yıllık satış sonucu</span>
-      <strong class="<?php echo $tradeYearSalesResult>=0?'text-success':'text-danger'; ?>"><?php echo e(money($tradeYearSalesResult)); ?></strong>
-      <small>Toplam gelir değeri - toplam borç değeri</small>
-    </article>
-  </section>
-  <p class="calc-note report-calc-note"><strong>Formül:</strong> (Net cari alacağı + alınan çekler) - (Net cari borcu + verilen çekler). Cari bakiyelerinde aldı-verdi mahsuplaşması uygulanır; USD ve EUR tutarları TL toplamına karıştırılmaz.</p>
+<section class="panel-card ym-section">
+  <div class="card-head ym-section-head"><div><h3>Sistem Hazırlık Durumu</h3><p>Kontrol yalnızca mevcut tablo ve alanlara göre yapılır; hiçbir tablo oluşturulmaz veya değiştirilmez.</p></div><span>%<?php echo e($readiness); ?> hazır</span></div>
+  <div class="ym-status-list"><?php foreach ($dataSets as $name=>$isReady): ?><div class="ym-list-row"><span><?php echo e($name); ?></span><b class="<?php echo $isReady?'ym-ok':'ym-warn'; ?>"><?php echo $isReady?'Hazır':'Eksik veri'; ?></b></div><?php endforeach; ?></div>
 </section>
 
-<section class="stats-grid five report-block report-position-grid">
-  <article class="stat-card status report-hero-stat"><span>Genel Durum</span><strong class="<?php echo $reportNetPosition>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportNetPosition)); ?></strong><small>Net alacak - net verecek</small></article>
-  <article class="stat-card"><span>Kalan alacak</span><strong><?php echo e(money($totals['net_alacak'])); ?></strong><small>Alacak - tahsilat</small></article>
-  <article class="stat-card"><span>Kalan verecek</span><strong><?php echo e(money($totals['net_verecek'])); ?></strong><small>Verecek - ödeme</small></article>
-  <article class="stat-card cash"><span>Nakit neti</span><strong class="<?php echo $reportCashNet>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportCashNet)); ?></strong><small>Giren - çıkan</small></article>
-  <article class="stat-card special"><span>Özel alacak</span><strong><?php echo e(money($privateSummary['acik'])); ?></strong><small>Genel duruma dahil değil</small></article>
-</section>
-<p class="calc-note report-calc-note"><strong>Okuma notu:</strong> Genel Durum = net alacak - net verecek. Nakit Neti = giren para - çıkan para. Özel Alacak bu iki hesaba dahil edilmez.</p>
-
-<section class="stats-grid four report-block">
-  <article class="stat-card"><span>Alacak</span><strong><?php echo e(money($totals['alacak'])); ?></strong><small>Brüt alacak</small></article>
-  <article class="stat-card"><span>Tahsilat</span><strong><?php echo e(money($totals['tahsilat'])); ?></strong><small>Seçili tarih aralığı</small></article>
-  <article class="stat-card"><span>Verecek</span><strong><?php echo e(money($totals['verecek'])); ?></strong><small>Brüt verecek</small></article>
-  <article class="stat-card"><span>Giren / Çıkan</span><strong class="<?php echo $reportCashNet>=0?'text-success':'text-danger'; ?>"><?php echo e(money($reportCashNet)); ?></strong><small>Giriş: <?php echo e(money($reportCashIn)); ?> / Çıkış: <?php echo e(money($reportCashOut)); ?></small></article>
-</section>
-<section class="stats-grid two report-block">
-  <article class="stat-card soft"><span>Aralıktaki alınacak çek</span><strong><?php echo e(money($checkTotalsRange['alinacak'])); ?></strong><small><?php echo e($checkTotalsRange['alinacak_count']); ?> adet</small></article>
-  <article class="stat-card soft"><span>Aralıktaki verilecek çek</span><strong><?php echo e(money($checkTotalsRange['verilecek'])); ?></strong><small><?php echo e($checkTotalsRange['verilecek_count']); ?> adet</small></article>
-</section>
-
-<section class="stats-grid three report-block">
-  <article class="stat-card special"><span>Özel Alacak Açık</span><strong><?php echo e(money($privateSummary['acik'])); ?></strong><small>Genel cari toplamına dahil değildir</small></article>
-  <article class="stat-card soft"><span>Özel Alacak Kapandı</span><strong><?php echo e(money($privateSummary['kapandi'])); ?></strong><small>Seçili tarih aralığı</small></article>
-  <article class="stat-card soft"><span>Özel Alacak kayıt</span><strong><?php echo e((string)$privateSummary['count']); ?></strong><small><a href="ozel-alacaklar.php?start=<?php echo e($start); ?>&end=<?php echo e($end); ?>">Detay raporu aç</a></small></article>
-</section>
-
-<section class="stats-grid four report-block">
-  <article class="stat-card soft"><span>Kasa toplamı</span><strong><?php echo e(money($accountSummary['kasa'])); ?></strong><small>Nakit hesapları</small></article>
-  <article class="stat-card soft"><span>Banka toplamı</span><strong><?php echo e(money($accountSummary['banka'])); ?></strong><small>Banka hesapları</small></article>
-  <article class="stat-card soft"><span>Genel hesap bakiyesi</span><strong class="<?php echo $accountSummary['total']>=0?'text-success':'text-danger'; ?>"><?php echo e(money($accountSummary['total'])); ?></strong><small>Kasa + banka + POS</small></article>
-  <article class="stat-card soft"><span>Aktif hesap</span><strong><?php echo e($accountSummary['active']); ?></strong><small>Panelde kullanılan hesap</small></article>
-</section>
-
-<section class="content-grid">
-  <article class="panel-card"><div class="card-head"><h3>Kategori bazlı toplamlar</h3><span><?php echo e(tr_date($start)); ?> - <?php echo e(tr_date($end)); ?></span></div><div class="table-wrap"><table><thead><tr><th>Kategori</th><th>Tür</th><th class="right">Toplam</th></tr></thead><tbody><?php if(!$categoryTotals): ?><tr><td colspan="3" class="empty">Veri yok.</td></tr><?php endif; ?><?php foreach($categoryTotals as $r): ?><tr><td><?php echo e($r['name'] ?: 'Kategorisiz'); ?></td><td><?php echo badge($r['type'] ?: 'genel', ($r['type']==='gider')?'danger':(($r['type']==='gelir')?'success':'neutral')); ?></td><td class="right"><strong><?php echo e(money($r['total'])); ?></strong></td></tr><?php endforeach; ?></tbody></table></div></article>
-  <article class="panel-card"><div class="card-head"><h3>Ay sonu özeti</h3><span>Aylık kırılım</span></div><div class="table-wrap"><table><thead><tr><th>Ay</th><th>Tip</th><th class="right">Toplam</th></tr></thead><tbody><?php if(!$monthly): ?><tr><td colspan="3" class="empty">Veri yok.</td></tr><?php endif; ?><?php foreach($monthly as $r): ?><tr><td><?php echo e(month_label($r['month'])); ?></td><td><?php echo badge(movement_label($r['movement_type']), movement_tone($r['movement_type'])); ?></td><td class="right"><strong><?php echo e(money($r['total'])); ?></strong></td></tr><?php endforeach; ?></tbody></table></div></article>
-</section>
-
-<section class="panel-card report-block"><div class="card-head"><h3>Cari bakiye raporu</h3><span>İlk 20 cari</span></div><div class="table-wrap"><table><thead><tr><th>Cari</th><th class="right">Alacak</th><th class="right">Tahsilat</th><th class="right">Verecek</th><th class="right">Ödeme</th><th class="right">Net</th></tr></thead><tbody><?php if(!$cariTotals): ?><tr><td colspan="6" class="empty">Veri yok.</td></tr><?php endif; ?><?php foreach($cariTotals as $c): $net=((float)$c['alacak']-(float)$c['tahsilat'])-((float)$c['verecek']-(float)$c['odeme']); ?><tr><td><a href="cari-detay.php?id=<?php echo e($c['id']); ?>"><?php echo e($c['name']); ?></a></td><td class="right"><?php echo e(money($c['alacak'])); ?></td><td class="right"><?php echo e(money($c['tahsilat'])); ?></td><td class="right"><?php echo e(money($c['verecek'])); ?></td><td class="right"><?php echo e(money($c['odeme'])); ?></td><td class="right"><strong class="<?php echo $net>=0?'text-success':'text-danger'; ?>"><?php echo e(money($net)); ?></strong></td></tr><?php endforeach; ?></tbody></table></div></section>
-
-<section class="panel-card report-block"><div class="card-head"><h3>Çek vade raporu</h3><span>İlk 30 çek</span></div><div class="table-wrap"><table><thead><tr><th>Vade</th><th>Yön</th><th>Cari</th><th>Banka</th><th class="right">Tutar</th></tr></thead><tbody><?php if(!$checks): ?><tr><td colspan="5" class="empty">Veri yok.</td></tr><?php endif; ?><?php foreach($checks as $ch): ?><tr><td><?php echo e(tr_date($ch['due_date'])); ?></td><td><?php echo badge(check_direction_label($ch['direction']), check_direction_tone($ch['direction'])); ?></td><td><?php echo e($ch['cari_name'] ?: '-'); ?></td><td><?php echo e($ch['bank_name'] ?: '-'); ?></td><td class="right"><strong><?php echo e(money($ch['amount'])); ?></strong></td></tr><?php endforeach; ?></tbody></table></div></section>
-
-<section class="content-grid report-block">
-  <article class="panel-card"><div class="card-head"><h3>Kasa/Banka hesap raporu</h3><a href="hesaplar.php">Hesaplara git</a></div><div class="table-wrap"><table><thead><tr><th>Hesap</th><th>Tip</th><th>Durum</th><th class="right">Bakiye</th></tr></thead><tbody><?php foreach($accountRows as $a): $bal=account_balance((int)$a['id']); ?><tr><td><?php echo e($a['name']); ?><small><?php echo e($a['bank_name'] ?: $a['iban']); ?></small></td><td><?php echo badge(account_type_label($a['account_type']), account_type_tone($a['account_type'])); ?></td><td><?php echo ((int)$a['is_active']===1)?badge('Aktif','success'):badge('Pasif','neutral'); ?></td><td class="right"><strong class="<?php echo $bal>=0?'text-success':'text-danger'; ?>"><?php echo e(money($bal)); ?></strong></td></tr><?php endforeach; ?></tbody></table></div></article>
-  <article class="panel-card"><div class="card-head"><h3>Seçili aralıktaki hesap hareketleri</h3><span>İlk 50</span></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Hesap</th><th>Kaynak</th><th class="right">Giriş</th><th class="right">Çıkış</th></tr></thead><tbody><?php if(!$accountTransactions): ?><tr><td colspan="5" class="empty">Veri yok.</td></tr><?php endif; ?><?php foreach($accountTransactions as $tr): ?><tr><td><?php echo e(tr_date($tr['transaction_date'])); ?></td><td><?php echo e($tr['account_name']); ?><small><?php echo e($tr['description'] ?: ''); ?></small></td><td><?php echo badge($tr['source_type'], 'neutral'); ?></td><td class="right"><?php echo $tr['direction']==='in'?'<strong class="text-success">'.e(money($tr['amount'])).'</strong>':'-'; ?></td><td class="right"><?php echo $tr['direction']==='out'?'<strong class="text-danger">'.e(money($tr['amount'])).'</strong>':'-'; ?></td></tr><?php endforeach; ?></tbody></table></div></article>
-</section>
-<?php if($print): ?><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),350));</script><?php endif; ?>
+<p class="ym-footnote">Güvenlik notu: Bu Yönetim Merkezi yalnızca SELECT ve PRAGMA table_info sorguları çalıştırır. Finansal kayıt eklemez, güncellemez veya silmez; DDL çalıştırmaz. Gösterimler <?php echo e($yearStart); ?> – <?php echo e($yearEnd); ?> dönemine aittir.</p>
 <?php page_footer(); ?>
