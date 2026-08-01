@@ -1,11 +1,28 @@
 (function(){
   var loading=false;
   var csrfToken='';
+  var accounts=[];
 
   function esc(value){
     return String(value==null?'':value).replace(/[&<>"]/g,function(char){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char];
     });
+  }
+
+  function accountLabel(account){
+    var detail=account.bank_name||account.account_type||'';
+    return account.name+(detail?' — '+detail:'');
+  }
+
+  function accountSelectHtml(item){
+    var choices=accounts.filter(function(account){
+      return item.account_scope!=='bank'||account.account_type==='banka';
+    });
+    var selected=String(item.default_account_id||'');
+    var options=choices.map(function(account){
+      return '<option value="'+Number(account.id||0)+'" '+(selected===String(account.id)?'selected':'')+'>'+esc(accountLabel(account))+'</option>';
+    }).join('');
+    return '<select class="vade-hatirlatma-hesap" aria-label="Ödeme veya tahsilat hesabı"><option value="">Hesap seç</option>'+options+'</select>';
   }
 
   function itemHtml(item){
@@ -14,7 +31,7 @@
       : '';
     var status='<span class="vade-hatirlatma-durum">'+esc(item.status_text||'Bekliyor')+'</span>';
     var action=item.can_complete
-      ? '<button type="button" class="vade-hatirlatma-tamamla" data-source="'+esc(item.source||'movement')+'" data-id="'+esc(item.id||'')+'" data-label="'+esc(item.complete_label||'Tamamlandı')+'" title="Sadece vade hatırlatmasını kapatır; mevcut tahsilat veya ödeme kaydını değiştirmez.">'+esc(item.complete_label||'Tamamlandı')+'</button>'
+      ? '<div class="vade-hatirlatma-islem">'+accountSelectHtml(item)+'<button type="button" class="vade-hatirlatma-tamamla" data-source="'+esc(item.source||'movement')+'" data-id="'+esc(item.id||'')+'" data-label="'+esc(item.complete_label||'Tamamlandı')+'" title="Seçilen hesaba tahsilat veya ödeme kaydı oluşturur.">✓ '+esc(item.complete_label||'Tamamlandı')+'</button></div>'
       : '';
 
     return '<div class="vade-hatirlatma-satir">'
@@ -43,6 +60,7 @@
   function render(data){
     if(!data||!data.ok) return;
     csrfToken=String(data.csrf_token||'');
+    accounts=Array.isArray(data.accounts)?data.accounts:[];
     var groups=Array.isArray(data.groups)?data.groups:[];
     var firstOpen=-1;
     groups.some(function(group,index){
@@ -53,7 +71,7 @@
     var total=Number(data.count||0);
     var section=document.getElementById('dashboardVadeHatirlatmalari');
     if(!section) return;
-    section.innerHTML='<div class="vade-hatirlatma-baslik"><span class="vade-hatirlatma-ikon">🔔</span><div><strong>Vade Hatırlatmaları</strong><small>Çek, vadeli alacak ve ödeme kayıtlarını buradan doğrudan aç.</small></div><b>'+total+' kayıt</b></div>'
+    section.innerHTML='<div class="vade-hatirlatma-baslik"><span class="vade-hatirlatma-ikon">🔔</span><div><strong>Vade Hatırlatmaları</strong><small>Kapanmayan geçmiş vadeler burada kalır; hesap seçip tahsilat veya ödeme olarak kapat.</small></div><b>'+total+' kayıt</b></div>'
       +(total
         ? '<div class="vade-hatirlatma-gruplar">'+groups.map(function(group,index){return groupHtml(group,index===firstOpen);}).join('')+'</div>'
         : '<div class="vade-hatirlatma-temiz">✅ Yaklaşan veya geciken vade bulunmuyor.</div>');
@@ -71,7 +89,16 @@
 
   function completeReminder(button){
     var label=button.getAttribute('data-label')||'Tamamlandı';
-    if(!window.confirm('Bu kayıt '+label+' olarak işaretlensin mi?\n\nBu işlem sadece vade hatırlatmasını kapatır.')) return;
+    var row=button.closest('.vade-hatirlatma-satir');
+    var accountSelect=row?row.querySelector('.vade-hatirlatma-hesap'):null;
+    var accountId=accountSelect?String(accountSelect.value||''):'';
+    if(!accountId){
+      window.alert('Ödeme veya tahsilatın işleneceği hesabı seçmelisin.');
+      if(accountSelect) accountSelect.focus();
+      return;
+    }
+    var accountText=accountSelect.options[accountSelect.selectedIndex]?accountSelect.options[accountSelect.selectedIndex].text:'seçilen hesap';
+    if(!window.confirm('Bu kayıt '+label+' olarak kapatılsın mı?\n\n'+accountText+' hesabına gerçek tahsilat/ödeme hareketi işlenecek.')) return;
 
     var oldText=button.textContent;
     button.disabled=true;
@@ -81,6 +108,7 @@
     body.append('action','complete');
     body.append('source',button.getAttribute('data-source')||'movement');
     body.append('id',button.getAttribute('data-id')||'');
+    body.append('account_id',accountId);
     body.append('csrf_token',csrfToken);
 
     fetch('dashboard-vade-hatirlatmalari.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
@@ -105,8 +133,8 @@
       +'.vade-hatirlatma-baslik{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin-bottom:12px}.vade-hatirlatma-baslik>div{display:grid;gap:3px}.vade-hatirlatma-baslik strong{font-size:17px}.vade-hatirlatma-baslik small{color:var(--muted);font-size:12px}.vade-hatirlatma-baslik>b{padding:7px 10px;border-radius:999px;background:#efe8dd;color:#544b3d;font-size:12px}.vade-hatirlatma-ikon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#fff4dc;font-size:19px}'
       +'.vade-hatirlatma-gruplar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.vade-hatirlatma-grup{border:1px solid var(--border);border-radius:15px;background:#fff;overflow:hidden}.vade-hatirlatma-grup summary{list-style:none;cursor:pointer;padding:13px 14px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.vade-hatirlatma-grup summary::-webkit-details-marker{display:none}.vade-hatirlatma-grup summary span{display:grid;gap:3px}.vade-hatirlatma-grup summary strong{font-size:14px}.vade-hatirlatma-grup summary small{color:var(--muted);font-size:11px}.vade-hatirlatma-grup summary b{font-size:12px;padding:6px 8px;border-radius:999px;background:#f3efe7}.vade-hatirlatma-grup[open] summary{border-bottom:1px solid var(--border)}'
       +'.vade-hatirlatma-grup.tone-danger{border-left:4px solid var(--danger)}.vade-hatirlatma-grup.tone-warning{border-left:4px solid var(--warning)}.vade-hatirlatma-grup.tone-info{border-left:4px solid var(--info)}'
-      +'.vade-hatirlatma-liste{display:grid;max-height:340px;overflow:auto}.vade-hatirlatma-satir{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border);background:#fff}.vade-hatirlatma-satir:last-child{border-bottom:0}.vade-hatirlatma-satir:hover{background:#fffaf3}.vade-hatirlatma-link{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;min-width:0}.vade-hatirlatma-ana,.vade-hatirlatma-tutar{display:grid;gap:4px}.vade-hatirlatma-ana strong{font-size:13px}.vade-hatirlatma-ana small,.vade-hatirlatma-tutar small{font-size:11px;color:var(--muted)}.vade-hatirlatma-tutar{text-align:right}.vade-hatirlatma-tutar strong{font-size:13px}.vade-hatirlatma-aciklama{display:block;margin-top:2px;white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis}.vade-hatirlatma-kontrol{display:grid;gap:5px;justify-items:end}.vade-hatirlatma-durum{font-size:9px;font-weight:900;color:#776b5c;background:#f2eee6;border:1px solid #e4dccf;border-radius:999px;padding:4px 7px}.vade-hatirlatma-tamamla{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:9px;padding:5px 8px;font-size:10px;font-weight:900;cursor:pointer}.vade-hatirlatma-tamamla:hover{background:#d9efdf}.vade-hatirlatma-tamamla:disabled{opacity:.55;cursor:wait}.vade-hatirlatma-bos,.vade-hatirlatma-temiz{margin:0;padding:14px;color:var(--muted);font-size:12px}.vade-hatirlatma-temiz{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:14px;font-weight:800}'
-      +'@media(max-width:1100px){.vade-hatirlatma-gruplar{grid-template-columns:1fr}.vade-hatirlatma-liste{max-height:280px}}@media(max-width:640px){.vade-hatirlatma-baslik{grid-template-columns:auto 1fr}.vade-hatirlatma-baslik>b{grid-column:1/-1;justify-self:start}.vade-hatirlatma-satir{grid-template-columns:1fr}.vade-hatirlatma-link{grid-template-columns:1fr}.vade-hatirlatma-kontrol{grid-template-columns:auto auto;justify-content:start}.vade-hatirlatma-tutar{text-align:left}.vade-hatirlatma-aciklama{max-width:100%}}';
+      +'.vade-hatirlatma-liste{display:grid;max-height:340px;overflow:auto}.vade-hatirlatma-satir{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border);background:#fff}.vade-hatirlatma-satir:last-child{border-bottom:0}.vade-hatirlatma-satir:hover{background:#fffaf3}.vade-hatirlatma-link{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;min-width:0}.vade-hatirlatma-ana,.vade-hatirlatma-tutar{display:grid;gap:4px}.vade-hatirlatma-ana strong{font-size:13px}.vade-hatirlatma-ana small,.vade-hatirlatma-tutar small{font-size:11px;color:var(--muted)}.vade-hatirlatma-tutar{text-align:right}.vade-hatirlatma-tutar strong{font-size:13px}.vade-hatirlatma-aciklama{display:block;margin-top:2px;white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis}.vade-hatirlatma-kontrol{display:grid;gap:5px;justify-items:end;min-width:190px}.vade-hatirlatma-durum{font-size:9px;font-weight:900;color:#776b5c;background:#f2eee6;border:1px solid #e4dccf;border-radius:999px;padding:4px 7px}.vade-hatirlatma-islem{display:grid;gap:6px;width:100%}.vade-hatirlatma-hesap{width:100%;min-height:34px;border:1px solid var(--border);background:#fff;border-radius:9px;padding:5px 7px;font-size:10px;color:#3f493f}.vade-hatirlatma-tamamla{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:9px;padding:7px 8px;font-size:10px;font-weight:900;cursor:pointer}.vade-hatirlatma-tamamla:hover{background:#d9efdf}.vade-hatirlatma-tamamla:disabled{opacity:.55;cursor:wait}.vade-hatirlatma-bos,.vade-hatirlatma-temiz{margin:0;padding:14px;color:var(--muted);font-size:12px}.vade-hatirlatma-temiz{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:14px;font-weight:800}'
+      +'@media(max-width:1100px){.vade-hatirlatma-gruplar{grid-template-columns:1fr}.vade-hatirlatma-liste{max-height:280px}}@media(max-width:640px){.vade-hatirlatma-baslik{grid-template-columns:auto 1fr}.vade-hatirlatma-baslik>b{grid-column:1/-1;justify-self:start}.vade-hatirlatma-satir{grid-template-columns:1fr}.vade-hatirlatma-link{grid-template-columns:1fr}.vade-hatirlatma-kontrol{grid-template-columns:auto minmax(180px,1fr);justify-content:start;justify-items:start;width:100%}.vade-hatirlatma-tutar{text-align:left}.vade-hatirlatma-aciklama{max-width:100%}}';
     document.head.appendChild(style);
   }
 
