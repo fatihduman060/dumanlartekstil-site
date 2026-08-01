@@ -250,7 +250,7 @@ function page_footer(): void
   <script src="assets/muhasebe.js?v=517"></script>
   <?php if ($storeOnly): ?>
   <script src="assets/magaza-kullanici-ekrani.js?v=2"></script>
-  <script src="assets/magaza-gunluk-satis.js?v=8"></script>
+  <script src="assets/magaza-gunluk-satis.js?v=9"></script>
   <?php else: ?>
   <script src="assets/super-admin-role.js?v=2"></script>
   <script src="assets/muhasebe-polish.js?v=2"></script>
