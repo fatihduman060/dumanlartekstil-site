@@ -234,6 +234,26 @@ $productionAmount = ym_first_column($productionColumns, array('produced_dozen', 
 $productionDate = ym_first_column($productionColumns, array('production_date', 'uretim_tarihi', 'date', 'tarih', 'created_at'));
 $productionTotal = ($productionTable && $productionAmount && $productionDate) ? ym_safe_sum($pdo, $productionTable, $productionAmount, $productionDate, $yearStart, $yearEnd, '', array()) : null;
 $productionDefective = ($productionTable && isset($productionColumns['defective_qty']) && $productionDate) ? ym_safe_sum($pdo, $productionTable, 'defective_qty', $productionDate, $yearStart, $yearEnd, '', array()) : null;
+$productionMonthly = array();
+if ($productionTable && $productionAmount && $productionDate) {
+    for ($productionMonthNo=1; $productionMonthNo<=12; $productionMonthNo++) {
+        $productionMonthly[sprintf('%04d-%02d', $year, $productionMonthNo)] = 0.0;
+    }
+    try {
+        $productionSql = 'SELECT substr(' . ym_ident($productionDate) . ',1,7) AS month_key, '
+            . 'COALESCE(SUM(CAST(' . ym_ident($productionAmount) . ' AS REAL)),0) AS total '
+            . 'FROM ' . ym_ident($productionTable) . ' WHERE ' . ym_ident($productionDate) . ' BETWEEN ? AND ? '
+            . 'GROUP BY substr(' . ym_ident($productionDate) . ',1,7)';
+        $productionStmt = $pdo->prepare($productionSql);
+        $productionStmt->execute(array($yearStart, $yearEnd));
+        foreach ($productionStmt->fetchAll() as $productionRow) {
+            $productionKey = (string)$productionRow['month_key'];
+            if (isset($productionMonthly[$productionKey])) $productionMonthly[$productionKey] = (float)$productionRow['total'];
+        }
+    } catch (Throwable $e) {
+        $productionMonthly = array();
+    }
+}
 $dataSets['Üretim'] = $productionTotal !== null;
 if ($productionTotal === null) $missingItems[] = 'Üretim Analizi: üretim tablosu veya miktar/tarih alanı eksik.';
 
@@ -293,6 +313,17 @@ $srcStock = $stockTable ?: 'stok tablosu bulunamadı';
 $srcCards = $cardTable ?: 'kart ekstresi tablosu bulunamadı';
 $srcTaxes = $taxTable ?: 'vergi ödeme tablosu bulunamadı';
 
+$productionMetrics = array(
+    ym_metric($year . ' yıllık toplam üretim', $productionTotal, $srcProduction . '.' . ($productionAmount ?: 'produced_dozen'), 'Üretim düzine veya tarih alanı eksik.', 'info', 'dozen'),
+    ym_metric($year . ' yıllık toplam defolu', $productionDefective, $srcProduction . '.defective_qty', 'Defolu miktar veya tarih alanı eksik.', 'danger', 'quantity')
+);
+$productionMonthNames = array(1=>'Ocak',2=>'Şubat',3=>'Mart',4=>'Nisan',5=>'Mayıs',6=>'Haziran',7=>'Temmuz',8=>'Ağustos',9=>'Eylül',10=>'Ekim',11=>'Kasım',12=>'Aralık');
+for ($productionMonthNo=1; $productionMonthNo<=12; $productionMonthNo++) {
+    $productionKey = sprintf('%04d-%02d', $year, $productionMonthNo);
+    $productionMonthValue = isset($productionMonthly[$productionKey]) ? $productionMonthly[$productionKey] : ($productionTotal === null ? null : 0.0);
+    $productionMetrics[] = ym_metric($productionMonthNames[$productionMonthNo] . ' üretimi', $productionMonthValue, $srcProduction . '.' . ($productionAmount ?: 'produced_dozen'), 'Aylık üretim kaydı okunamıyor.', 'info', 'dozen');
+}
+
 page_header('Dumanlar A.Ş. Yönetim Merkezi', 'raporlar');
 ?>
 <style>
@@ -334,10 +365,7 @@ ym_render_section('Satış Analizi', 'Fatura kayıtlarından yıllık satış ve
     ym_metric('Fatura alış toplamı', $purchaseTotal, $srcInvoices, 'Fatura toplamı, tarihi veya yön alanı eksik.', 'danger')
 ), 'Fatura verisi');
 
-ym_render_section('Üretim Analizi', 'Mevcut üretim kayıtlarının seçili yıl toplamı.', array(
-    ym_metric('Toplam üretim', $productionTotal, $srcProduction . '.produced_dozen', 'Üretim düzine veya tarih alanı eksik.', 'info', 'dozen'),
-    ym_metric('Toplam defolu', $productionDefective, $srcProduction . '.defective_qty', 'Defolu miktar veya tarih alanı eksik.', 'danger', 'quantity')
-), 'Üretim verisi');
+ym_render_section('Üretim Analizi', 'Üretim Takibi bölümündeki günlük düzine kayıtlarının seçilen yıl için aylık kırılımı ve yıllık toplamı.', $productionMetrics, 'Üretim Takibi');
 
 ym_render_section('Stok Analizi', 'Mevcut stok veya stok hareketi kayıtlarının toplam miktarı.', array(
     ym_metric('Toplam stok miktarı', $stockTotal, $srcStock, 'Stok miktarı alanı veya stok tablosu eksik.', 'info')
