@@ -228,7 +228,7 @@ if (!$invoiceReady) $missingItems[] = 'Satış Analizi: fatura tablosu ile topla
 if (!($invoiceReady && $invoiceVat)) $missingItems[] = 'Mali Tablolar: faturalarda KDV toplam alanı bulunamadı.';
 
 /* Üretim */
-$productionTable = ym_first_table($pdo, array('production_daily_entries', 'production_records', 'uretim_kayitlari', 'production', 'uretim_takibi', 'uretim'));
+$productionTable = ym_first_table($pdo, array('production_group_shift_entries', 'production_daily_entries', 'production_records', 'uretim_kayitlari', 'production', 'uretim_takibi', 'uretim'));
 $productionColumns = $productionTable ? ym_columns($pdo, $productionTable) : array();
 $productionAmount = ym_first_column($productionColumns, array('produced_dozen', 'quantity', 'miktar', 'total_quantity', 'uretim_miktari', 'adet', 'kg'));
 $productionDate = ym_first_column($productionColumns, array('production_date', 'uretim_tarihi', 'date', 'tarih', 'created_at'));
