@@ -85,14 +85,17 @@ function ym_safe_sum(PDO $pdo, $table, $amountColumn, $dateColumn, $start, $end,
     }
 }
 
-function ym_metric($label, $value, $source, $missing, $tone)
+function ym_metric($label, $value, $source, $missing, $tone, $format = 'money')
 {
-    return array('label'=>$label, 'value'=>$value, 'source'=>$source, 'missing'=>$missing, 'tone'=>$tone);
+    return array('label'=>$label, 'value'=>$value, 'source'=>$source, 'missing'=>$missing, 'tone'=>$tone, 'format'=>$format);
 }
 
-function ym_money_or_missing($value)
+function ym_value_or_missing($metric)
 {
-    return $value === null ? 'Eksik veri' : money((float)$value);
+    if ($metric['value'] === null) return 'Eksik veri';
+    if ($metric['format'] === 'dozen') return number_format((float)$metric['value'], 2, ',', '.') . ' düzine';
+    if ($metric['format'] === 'quantity') return number_format((float)$metric['value'], 0, ',', '.') . ' adet';
+    return money((float)$metric['value']);
 }
 
 function ym_render_card($metric)
@@ -102,7 +105,7 @@ function ym_render_card($metric)
     ?>
     <article class="ym-card ym-<?php echo e($tone); ?>">
       <span class="ym-card-label"><?php echo e($metric['label']); ?></span>
-      <strong><?php echo e(ym_money_or_missing($metric['value'])); ?></strong>
+      <strong><?php echo e(ym_value_or_missing($metric)); ?></strong>
       <small><b>Bağlı veri:</b> <?php echo e($metric['source']); ?></small>
       <small class="ym-state"><b><?php echo $ready ? 'Durum:' : 'Eksik:'; ?></b> <?php echo e($ready ? 'Veri güvenle okunuyor' : $metric['missing']); ?></small>
     </article>
@@ -225,11 +228,12 @@ if (!$invoiceReady) $missingItems[] = 'Satış Analizi: fatura tablosu ile topla
 if (!($invoiceReady && $invoiceVat)) $missingItems[] = 'Mali Tablolar: faturalarda KDV toplam alanı bulunamadı.';
 
 /* Üretim */
-$productionTable = ym_first_table($pdo, array('production_records', 'uretim_kayitlari', 'production', 'uretim_takibi', 'uretim'));
+$productionTable = ym_first_table($pdo, array('production_daily_entries', 'production_records', 'uretim_kayitlari', 'production', 'uretim_takibi', 'uretim'));
 $productionColumns = $productionTable ? ym_columns($pdo, $productionTable) : array();
-$productionAmount = ym_first_column($productionColumns, array('quantity', 'miktar', 'total_quantity', 'uretim_miktari', 'adet', 'kg'));
+$productionAmount = ym_first_column($productionColumns, array('produced_dozen', 'quantity', 'miktar', 'total_quantity', 'uretim_miktari', 'adet', 'kg'));
 $productionDate = ym_first_column($productionColumns, array('production_date', 'uretim_tarihi', 'date', 'tarih', 'created_at'));
 $productionTotal = ($productionTable && $productionAmount && $productionDate) ? ym_safe_sum($pdo, $productionTable, $productionAmount, $productionDate, $yearStart, $yearEnd, '', array()) : null;
+$productionDefective = ($productionTable && isset($productionColumns['defective_qty']) && $productionDate) ? ym_safe_sum($pdo, $productionTable, 'defective_qty', $productionDate, $yearStart, $yearEnd, '', array()) : null;
 $dataSets['Üretim'] = $productionTotal !== null;
 if ($productionTotal === null) $missingItems[] = 'Üretim Analizi: üretim tablosu veya miktar/tarih alanı eksik.';
 
@@ -331,7 +335,8 @@ ym_render_section('Satış Analizi', 'Fatura kayıtlarından yıllık satış ve
 ), 'Fatura verisi');
 
 ym_render_section('Üretim Analizi', 'Mevcut üretim kayıtlarının seçili yıl toplamı.', array(
-    ym_metric('Toplam üretim', $productionTotal, $srcProduction, 'Üretim miktarı veya tarih alanı eksik.', 'info')
+    ym_metric('Toplam üretim', $productionTotal, $srcProduction . '.produced_dozen', 'Üretim düzine veya tarih alanı eksik.', 'info', 'dozen'),
+    ym_metric('Toplam defolu', $productionDefective, $srcProduction . '.defective_qty', 'Defolu miktar veya tarih alanı eksik.', 'danger', 'quantity')
 ), 'Üretim verisi');
 
 ym_render_section('Stok Analizi', 'Mevcut stok veya stok hareketi kayıtlarının toplam miktarı.', array(
