@@ -30,6 +30,7 @@ function fatura_turleri(): array
         'akaryakit' => 'Akaryakıt',
         'bakim' => 'Makine / Bakım',
         'ambalaj' => 'Ambalaj',
+        'isci_servis' => 'İşçi Servis Ücreti',
         'personel' => 'Personel Gideri',
         'ofis' => 'Ofis / Genel Gider',
         'diger' => 'Diğer',
@@ -74,7 +75,8 @@ function fatura_tur_oner(string $value): array
         'akaryakit' => ['AKARYAKIT'=>110,'BENZIN'=>90,'MOTORIN'=>90,'PETROL'=>70,'OPET'=>100,'SHELL'=>100,'PETROL OFISI'=>110,'TOTAL ENERGIES'=>100,'BP PETROL'=>100],
         'bakim' => ['MAKINE'=>70,'BAKIM'=>100,'YEDEK PARCA'=>100,'SERVIS'=>55,'RULMAN'=>85,'KOMPRESOR'=>85,'ELEKTRONIK KART'=>75,'TEKNIK SERVIS'=>100],
         'ambalaj' => ['AMBALAJ'=>110,'KOLI'=>80,'KARTON'=>75,'POSET'=>75,'KUTU'=>65,'ETIKET'=>65,'BANT'=>55,'PAKETLEME'=>80],
-        'personel' => ['PERSONEL'=>90,'MAAS'=>100,'SGK'=>100,'IS SAGLIGI'=>85,'YEMEK HIZMET'=>80,'PERSONEL SERVIS'=>90],
+        'isci_servis' => ['DURMUS DEMIR'=>220,'ISCI SERVIS UCRETI'=>210,'ISCI SERVISI'=>200,'PERSONEL SERVIS UCRETI'=>200,'PERSONEL TASIMA'=>190,'SERVIS TASIMACILIGI'=>185,'PERSONEL SERVIS'=>180,'ISCI TASIMA'=>180],
+        'personel' => ['PERSONEL'=>90,'MAAS'=>100,'SGK'=>100,'IS SAGLIGI'=>85,'YEMEK HIZMET'=>80],
         'ofis' => ['KIRTASIYE'=>100,'OFIS'=>80,'TEMIZLIK'=>70,'MUHASEBE'=>70,'DANISMANLIK'=>65,'YAZILIM'=>60,'LISANS'=>60,'ABONELIK'=>55],
     ];
 
