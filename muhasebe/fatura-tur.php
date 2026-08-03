@@ -3,6 +3,8 @@ require_once __DIR__ . '/layout.php';
 require_login();
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 db()->exec("CREATE TABLE IF NOT EXISTS invoice_expense_types (
     invoice_id INTEGER PRIMARY KEY,
@@ -60,6 +62,11 @@ function fatura_tur_kendi_unvani(string $value): bool
         if (strpos($text, ' ' . $marker . ' ') !== false) return true;
     }
     return false;
+}
+
+function fatura_tur_isci_servis_tedarikcisi(string $value): bool
+{
+    return strpos(fatura_tur_norm($value), 'DURMUS DEMIR') !== false;
 }
 
 function fatura_tur_oner(string $value): array
@@ -135,7 +142,29 @@ function fatura_tur_payload(string $period): array
         $storedIssuer = trim((string)$row['issuer_name']);
         $displayIssuer = $storedIssuer;
         if ($displayIssuer === '' && $cariName !== '' && !$genericCari) $displayIssuer = $cariName;
+
         $assigned = array_key_exists((string)$row['category'], $types) ? (string)$row['category'] : '';
+        $vendorText = $displayIssuer . ' ' . (!$genericCari ? $cariName : '');
+        $isWorkerServiceVendor = $direction === 'gelen' && fatura_tur_isci_servis_tedarikcisi($vendorText);
+
+        if ($isWorkerServiceVendor && $assigned !== 'isci_servis') {
+            if (can_write()) {
+                $userId = current_user()['id'] ?? null;
+                $fix = db()->prepare("UPDATE invoice_expense_types
+                    SET category='isci_servis', source='manual', updated_by=?, updated_at=?
+                    WHERE invoice_id=?");
+                $fix->execute([$userId, now(), (int)$row['id']]);
+                if ($fix->rowCount() === 0) {
+                    db()->prepare("INSERT INTO invoice_expense_types
+                        (invoice_id, category, source, created_by, created_at, updated_by, updated_at)
+                        VALUES (?, 'isci_servis', 'manual', ?, ?, ?, ?)")
+                        ->execute([(int)$row['id'], $userId, now(), $userId, now()]);
+                }
+            }
+            $assigned = 'isci_servis';
+            $row['category_source'] = 'manual';
+        }
+
         $suggestion = ['category'=>'','confidence'=>0,'matched'=>''];
         if ($direction === 'gelen' && $assigned === '') {
             $suggestion = fatura_tur_oner($displayIssuer . ' ' . (!$genericCari ? $cariName : '') . ' ' . (string)$row['description'] . ' ' . (string)$row['document_name']);
