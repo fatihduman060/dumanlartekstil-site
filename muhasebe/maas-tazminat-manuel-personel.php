@@ -4,6 +4,9 @@ require_admin();
 
 header('Content-Type: application/json; charset=utf-8');
 
+ensure_column(db(), 'salary_employees', 'exit_date', 'TEXT');
+ensure_column(db(), 'salary_employees', 'exit_reason', 'TEXT');
+
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new RuntimeException('Geçersiz istek.');
