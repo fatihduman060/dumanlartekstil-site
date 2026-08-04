@@ -89,6 +89,7 @@
 
   function completeReminder(button){
     var label=button.getAttribute('data-label')||'Tamamlandı';
+    var source=button.getAttribute('data-source')||'movement';
     var row=button.closest('.vade-hatirlatma-satir');
     var accountSelect=row?row.querySelector('.vade-hatirlatma-hesap'):null;
     var accountId=accountSelect?String(accountSelect.value||''):'';
@@ -104,24 +105,59 @@
     button.disabled=true;
     button.textContent='Kaydediliyor';
 
-    var body=new FormData();
-    body.append('action','complete');
-    body.append('source',button.getAttribute('data-source')||'movement');
-    body.append('id',button.getAttribute('data-id')||'');
-    body.append('account_id',accountId);
-    body.append('csrf_token',csrfToken);
+    function resetButton(){
+      button.disabled=false;
+      button.textContent=oldText;
+    }
 
-    fetch('dashboard-vade-hatirlatmalari.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
-      .then(function(response){return response.json();})
-      .then(function(data){
-        if(!data||!data.ok) throw new Error((data&&data.error)||'Vade durumu güncellenemedi.');
-        load();
-      })
-      .catch(function(error){
-        window.alert(error.message||'Vade durumu güncellenemedi.');
-        button.disabled=false;
-        button.textContent=oldText;
-      });
+    function submitCompletion(useExisting,existingMovementId){
+      var body=new FormData();
+      body.append('action','complete');
+      body.append('source',source);
+      body.append('id',button.getAttribute('data-id')||'');
+      body.append('account_id',accountId);
+      body.append('csrf_token',csrfToken);
+      if(useExisting){
+        body.append('use_existing','1');
+        body.append('existing_movement_id',String(existingMovementId||''));
+      }
+
+      var endpoint=source==='movement'?'dashboard-vade-guvenli.php':'dashboard-vade-hatirlatmalari.php';
+      fetch(endpoint,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
+        .then(function(response){
+          return response.json().catch(function(){return {ok:false,error:'Sunucu cevabı okunamadı.'};}).then(function(data){
+            if(!response.ok||!data||!data.ok){
+              var error=new Error((data&&data.error)||'Vade durumu güncellenemedi.');
+              error.data=data||{};
+              throw error;
+            }
+            return data;
+          });
+        })
+        .then(function(){
+          load();
+        })
+        .catch(function(error){
+          var data=error&&error.data?error.data:{};
+          if(source==='movement'&&data.code==='possible_duplicate'&&!useExisting){
+            var existingDate=data.existing_date?('\nMevcut hareket tarihi: '+data.existing_date):'';
+            var linkExisting=window.confirm(
+              'Aynı cari, tutar ve hesap için bugün zaten bir tahsilat/ödeme hareketi var.\n\n'
+              +'Yeni kayıt oluşturulmadı.'+existingDate+'\n\n'
+              +'Vadeyi mevcut harekete bağlayıp kapatalım mı?'
+            );
+            if(linkExisting){
+              button.textContent='Mevcut harekete bağlanıyor';
+              submitCompletion(true,data.existing_movement_id||0);
+              return;
+            }
+          }
+          window.alert(error.message||'Vade durumu güncellenemedi.');
+          resetButton();
+        });
+    }
+
+    submitCompletion(false,0);
   }
 
   function addStyles(){
