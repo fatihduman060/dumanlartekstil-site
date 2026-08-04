@@ -137,3 +137,37 @@
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
+
+(function(){
+  function addCompensationEntry(){
+    if(!/maaslar\.php/i.test(location.pathname)) return;
+    if(document.getElementById('salaryCompensationEntry')) return;
+    var grid=document.querySelector('.salary-grid');
+    var summary=grid&&grid.querySelector('.salary-summary');
+    if(!grid||!summary) return;
+
+    var card=document.createElement('section');
+    card.id='salaryCompensationEntry';
+    card.className='salary-card salary-compensation-entry';
+    card.innerHTML='<div><span>PERSONEL ÇIKIŞ ÖDEMELERİ</span><h3>Tazminat Ödemesi</h3><p>Kıdem, ihbar, kullanılmayan izin ücreti ve diğer tazminatları maaştan ayrı kaydet.</p></div><a href="maas-tazminat.php">Tazminat ödemesi aç</a>';
+    summary.insertAdjacentElement('afterend',card);
+
+    var heroTools=grid.querySelector('.salary-hero-tools');
+    if(heroTools&&!heroTools.querySelector('.salary-compensation-shortcut')){
+      var shortcut=document.createElement('a');
+      shortcut.className='salary-excel-link salary-compensation-shortcut';
+      shortcut.href='maas-tazminat.php';
+      shortcut.textContent='Tazminat Ödemesi';
+      heroTools.appendChild(shortcut);
+    }
+
+    if(!document.getElementById('salaryCompensationEntryStyle')){
+      var style=document.createElement('style');
+      style.id='salaryCompensationEntryStyle';
+      style.textContent='.salary-compensation-entry{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px 19px;border-color:#d8b07a!important;background:linear-gradient(135deg,#fff8ed,#fff)!important}.salary-compensation-entry span{font-size:10px;font-weight:950;letter-spacing:.07em;color:#9a5f24}.salary-compensation-entry h3{margin:4px 0;color:#4d2c19}.salary-compensation-entry p{margin:0;color:#776b5c;font-size:12px}.salary-compensation-entry>a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:9px 14px;border-radius:999px;background:#6f3e20;color:#fff;text-decoration:none;font-weight:950;white-space:nowrap}.salary-compensation-shortcut{background:#fff3df!important;color:#6f3e20!important}@media(max-width:700px){.salary-compensation-entry{align-items:stretch;flex-direction:column}.salary-compensation-entry>a{width:100%}}';
+      document.head.appendChild(style);
+    }
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',addCompensationEntry); else addCompensationEntry();
+})();
