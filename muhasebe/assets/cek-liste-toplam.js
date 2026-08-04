@@ -171,3 +171,110 @@
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',addCompensationEntry); else addCompensationEntry();
 })();
+
+(function(){
+  'use strict';
+
+  function addManualEmployeeField(){
+    if(!/maas-tazminat\.php/i.test(location.pathname)) return;
+    var action=document.querySelector('form.comp-form input[name="action"][value="save"]');
+    var form=action&&action.closest('form');
+    if(!form||form.dataset.manualEmployeeReady==='1') return;
+    form.dataset.manualEmployeeReady='1';
+
+    var select=form.querySelector('select[name="employee_id"]');
+    if(!select) return;
+    select.required=false;
+    var selectLabel=select.closest('label');
+    if(selectLabel){
+      Array.prototype.slice.call(selectLabel.childNodes).forEach(function(node){
+        if(node.nodeType===3&&node.textContent.trim()) node.textContent='Listeden personel seç (isteğe bağlı)';
+      });
+    }
+
+    var manualLabel=document.createElement('label');
+    manualLabel.className='comp-manual-employee';
+    manualLabel.innerHTML='Personel adı — manuel giriş<input type="text" name="manual_employee_name" autocomplete="off" placeholder="Çıkış yapan personelin adını yaz"><small>Listede olmayan eski personel için kullan. İsim yazarsan listedeki seçim yerine bu kişi kullanılır.</small>';
+    if(selectLabel) selectLabel.insertAdjacentElement('afterend',manualLabel);
+    else form.insertBefore(manualLabel,form.firstChild);
+
+    var status=document.createElement('p');
+    status.className='comp-manual-status';
+    status.hidden=true;
+    manualLabel.insertAdjacentElement('afterend',status);
+
+    function showStatus(text,tone){
+      status.textContent=text||'';
+      status.className='comp-manual-status'+(tone?' is-'+tone:'');
+      status.hidden=!text;
+    }
+
+    form.addEventListener('submit',function(event){
+      var manual=form.querySelector('input[name="manual_employee_name"]');
+      var manualName=manual?String(manual.value||'').trim():'';
+      var selected=String(select.value||'').trim();
+
+      if(!manualName&&selected) return;
+      event.preventDefault();
+
+      if(!manualName&&!selected){
+        showStatus('Listeden personel seç veya personel adını elle yaz.','error');
+        if(manual) manual.focus();
+        return;
+      }
+
+      var submit=form.querySelector('button[type="submit"]');
+      var oldText=submit?submit.textContent:'';
+      if(submit){submit.disabled=true;submit.textContent='Personel hazırlanıyor...';}
+      showStatus('Manuel personel kaydı hazırlanıyor...','info');
+
+      var body=new URLSearchParams();
+      var csrf=form.querySelector('input[name="csrf_token"]');
+      var paymentDate=form.querySelector('input[name="payment_date"]');
+      body.set('csrf_token',csrf?csrf.value:'');
+      body.set('manual_employee_name',manualName);
+      body.set('payment_date',paymentDate?paymentDate.value:'');
+
+      fetch('maas-tazminat-manuel-personel.php',{
+        method:'POST',
+        credentials:'same-origin',
+        cache:'no-store',
+        headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+        body:body.toString()
+      }).then(function(response){
+        return response.json().catch(function(){return {ok:false,error:'Sunucu cevabı okunamadı.'};}).then(function(data){
+          if(!response.ok||!data.ok) throw new Error(data.error||'Personel kaydı oluşturulamadı.');
+          return data;
+        });
+      }).then(function(data){
+        var option=null;
+        Array.prototype.some.call(select.options,function(item){
+          if(String(item.value)===String(data.employee_id)){option=item;return true;}
+          return false;
+        });
+        if(!option){
+          option=document.createElement('option');
+          option.value=String(data.employee_id);
+          option.textContent=String(data.full_name)+(Number(data.is_active)===0?' — Çıkış yaptı':'');
+          select.appendChild(option);
+        }
+        select.value=String(data.employee_id);
+        if(manual) manual.value='';
+        showStatus(data.created?'Çıkış yapan personel kaydı oluşturuldu. Tazminat kaydediliyor...':'Mevcut personel bulundu. Tazminat kaydediliyor...','success');
+        HTMLFormElement.prototype.submit.call(form);
+      }).catch(function(error){
+        showStatus(error.message||'Manuel personel kaydı oluşturulamadı.','error');
+        if(submit){submit.disabled=false;submit.textContent=oldText;}
+      });
+    });
+
+    if(!document.getElementById('compManualEmployeeStyle')){
+      var style=document.createElement('style');
+      style.id='compManualEmployeeStyle';
+      style.textContent='.comp-manual-employee{padding:11px;border:1px solid #d8b07a;border-radius:13px;background:#fff8ed}.comp-manual-employee small{display:block;color:#7a5a3d;font-size:10px;line-height:1.4}.comp-manual-status{margin:0;padding:9px 11px;border-radius:10px;background:#edf4ff;color:#315c96;font-size:11px;font-weight:850}.comp-manual-status.is-error{background:#fff0ef;color:#9b3832}.comp-manual-status.is-success{background:#eaf6ed;color:#21683c}.comp-manual-status.is-info{background:#fff7e8;color:#7b5727}';
+      document.head.appendChild(style);
+    }
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',addManualEmployeeField); else addManualEmployeeField();
+})();
