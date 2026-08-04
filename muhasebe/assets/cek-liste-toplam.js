@@ -49,3 +49,91 @@
   function init(){ style(); apply(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
+
+(function(){
+  function checkIdFromLink(link){
+    if(!link) return '';
+    try{return new URL(link.getAttribute('href'), location.href).searchParams.get('edit') || '';}
+    catch(e){return '';}
+  }
+
+  function imageUrl(id){
+    return 'cek-gorsel-ac.php?id=' + encodeURIComponent(id);
+  }
+
+  function addImageAction(row, recordLink, id){
+    var actions = recordLink.parentElement;
+    if(!actions || actions.querySelector('.cari-cek-gorsel-action')) return;
+    var link = document.createElement('a');
+    link.className = 'cari-cek-gorsel-action';
+    link.href = imageUrl(id);
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'Çek görseli';
+    link.title = 'Çekin yüklenen görüntüsünü aç';
+    actions.insertBefore(link, recordLink);
+  }
+
+  function makeCellClickable(cell, id, fallbackLabel){
+    if(!cell || cell.querySelector('.cari-cek-gorsel-ac')) return;
+    var small = cell.querySelector('small');
+    var clone = cell.cloneNode(true);
+    Array.prototype.forEach.call(clone.querySelectorAll('small'), function(node){ node.remove(); });
+    var label = (clone.textContent || '').replace(/\s+/g, ' ').trim() || fallbackLabel;
+
+    Array.prototype.slice.call(cell.childNodes).forEach(function(node){
+      if(node.nodeType === 3) node.remove();
+    });
+
+    var link = document.createElement('a');
+    link.className = 'cari-cek-gorsel-ac';
+    link.href = imageUrl(id);
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = label;
+    link.title = 'Çekin yüklenen görüntüsünü aç';
+    cell.insertBefore(link, small || cell.firstChild);
+  }
+
+  function enhanceMovementRows(){
+    document.querySelectorAll('#hareketler tbody tr').forEach(function(row){
+      var recordLink = row.querySelector('.row-actions a[href*="cekler.php"][href*="edit="]');
+      var id = checkIdFromLink(recordLink);
+      if(!id) return;
+      addImageAction(row, recordLink, id);
+      makeCellClickable(row.children[4], id, 'Çek görselini aç');
+
+      var documentCell = row.children[5];
+      if(documentCell && documentCell.textContent.trim() === '-'){
+        documentCell.innerHTML = '<a class="cari-cek-gorsel-belge" href="' + imageUrl(id) + '" target="_blank" rel="noopener">Çek görseli</a>';
+      }
+    });
+  }
+
+  function enhanceCheckHistory(){
+    document.querySelectorAll('#cekler tbody tr').forEach(function(row){
+      var recordLink = row.querySelector('.row-actions a[href*="cekler.php"][href*="edit="]');
+      var id = checkIdFromLink(recordLink);
+      if(!id) return;
+      addImageAction(row, recordLink, id);
+      makeCellClickable(row.children[3], id, 'Çek görselini aç');
+    });
+  }
+
+  function styles(){
+    if(document.getElementById('cariCekGorselStyle')) return;
+    var style = document.createElement('style');
+    style.id = 'cariCekGorselStyle';
+    style.textContent = '.cari-cek-gorsel-ac,.cari-cek-gorsel-belge,.cari-cek-gorsel-action{color:#16482e;font-weight:900;text-decoration:underline;text-underline-offset:2px;cursor:pointer}.cari-cek-gorsel-ac:hover,.cari-cek-gorsel-belge:hover,.cari-cek-gorsel-action:hover{color:#9a6b16}';
+    document.head.appendChild(style);
+  }
+
+  function init(){
+    if(!/cari-detay\.php/i.test(location.pathname)) return;
+    styles();
+    enhanceMovementRows();
+    enhanceCheckHistory();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
