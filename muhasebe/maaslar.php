@@ -111,6 +111,14 @@ function salary_refresh_after_advance(int $employeeId, string $period): ?string
 salary_db_ensure();
 maas_aylik_kayit_db_ensure();
 
+// Temmuz 2026 ve sonrasındaki mevcut ödenen maaşları da idempotent olarak
+// Garanti Dumanlar hesabına bağlar; manuel toplamda yalnızca eksik farkı işler.
+try {
+    maas_garanti_odeme_sync('2026-07');
+} catch (Throwable $e) {
+    flash('warning', 'Maaş banka eşlemesi tamamlanamadı: ' . $e->getMessage());
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $action = $_POST['action'] ?? '';
