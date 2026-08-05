@@ -1,21 +1,12 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/dashboard-cari-aggregate.php';
 require_login();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 try {
-    ensure_column(db(), 'movements', 'currency', "TEXT NOT NULL DEFAULT 'TL'");
-
-    $stmt = db()->query("SELECT c.id, c.name, c.city, COALESCE(m.currency,'TL') AS currency,
-        COALESCE(SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END),0) AS alacak,
-        COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0) AS tahsilat,
-        COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0) AS verecek,
-        COALESCE(SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END),0) AS odeme
-      FROM cariler c
-      LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
-      GROUP BY c.id, COALESCE(m.currency,'TL')
-      ORDER BY c.name ASC");
+    $aggregate = dashboard_cari_aggregate();
 
     $totals = [
         'TL' => ['receivable'=>0.0, 'payable'=>0.0, 'net'=>0.0],
@@ -26,7 +17,7 @@ try {
     $positions = [];
     $closedCount = 0;
 
-    foreach ($stmt->fetchAll() as $row) {
+    foreach ($aggregate['positions'] as $row) {
         $currency = strtoupper(trim((string)($row['currency'] ?? 'TL')));
         if (!isset($totals[$currency])) $currency = 'TL';
 
@@ -49,6 +40,8 @@ try {
             'name' => (string)$row['name'],
             'city' => (string)($row['city'] ?? ''),
             'currency' => $currency,
+            'cari_ids' => array_values(array_map('intval', $row['cari_ids'] ?? [])),
+            'merged_cari_count' => count($row['cari_ids'] ?? []),
             'net_alacak' => $netAlacak,
             'net_verecek' => $netVerecek,
             'net' => $net,
@@ -78,12 +71,15 @@ try {
 
     echo json_encode([
         'ok' => true,
-        'calculation' => 'cari_net',
+        'calculation' => 'cari_net_deduplicated',
         'totals' => $totals,
         'mixed_count' => count($mixed),
         'closed_count' => $closedCount,
         'mixed' => array_slice($mixed, 0, 200),
         'positions' => $positions,
+        'duplicate_cari_group_count' => (int)($aggregate['duplicate_cari_group_count'] ?? 0),
+        'ignored_duplicate_movement_count' => count($aggregate['ignored_duplicate_movement_ids'] ?? []),
+        'ignored_duplicate_movement_ids' => $aggregate['ignored_duplicate_movement_ids'] ?? [],
         'scanned_at' => now(),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
