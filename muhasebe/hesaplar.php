@@ -137,6 +137,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('hesaplar.php');
     }
 
+    if ($action === 'external_funding') {
+        $accountId = (int)($_POST['account_id'] ?? 0);
+        $amount = decimal_from_input($_POST['amount'] ?? '0');
+        $date = trim((string)($_POST['transaction_date'] ?? date('Y-m-d')));
+        $sourceKind = trim((string)($_POST['source_kind'] ?? 'diger'));
+        $description = trim((string)($_POST['description'] ?? ''));
+        $sourceLabels = [
+            'ortak_sermaye' => 'Ortak / sermaye girişi',
+            'dis_borc' => 'Dışarıdan alınan borç',
+            'kasa_tamamlama' => 'Kasa eksiği tamamlama',
+            'banka_tamamlama' => 'Banka eksiği tamamlama',
+            'diger' => 'Diğer dış kaynak',
+        ];
+        if (!isset($sourceLabels[$sourceKind])) $sourceKind = 'diger';
+        $accountStmt = db()->prepare('SELECT id, name FROM accounts WHERE id=? AND is_active=1 LIMIT 1');
+        $accountStmt->execute([$accountId]);
+        $fundingAccount = $accountStmt->fetch() ?: null;
+        if (!$fundingAccount || $amount <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $description === '') {
+            flash('error', 'Dışarıdan para girişi için aktif hesap, tarih, tutar ve açıklama zorunludur.');
+            redirect('hesaplar.php#disaridan-para-girisi');
+        }
+        $fullDescription = $sourceLabels[$sourceKind] . ' / ' . $description;
+        db()->prepare("INSERT INTO account_transactions
+            (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
+            VALUES (?, 'in', ?, ?, 'external_funding', NULL, ?, ?, ?)")
+            ->execute([$accountId, $amount, $date, $fullDescription, current_user()['id'], now()]);
+        $newTransactionId = (int)db()->lastInsertId();
+        log_action('Dışarıdan kasa/banka para girişi', ($fundingAccount['name'] ?? '') . ' / ' . money($amount));
+        audit_action('hesap_hareketi', $newTransactionId, 'dis_kaynak_girisi', null, [
+            'account_id'=>$accountId, 'amount'=>$amount, 'date'=>$date,
+            'source_kind'=>$sourceKind, 'description'=>$description
+        ], $fullDescription);
+        flash('success', money($amount) . ' dış kaynak girişi ' . ($fundingAccount['name'] ?? 'hesap') . ' hesabına eklendi.');
+        redirect('hesaplar.php#disaridan-para-girisi');
+    }
+
+    if ($action === 'cancel_external_funding') {
+        $id = (int)($_POST['id'] ?? 0);
+        $stmt = db()->prepare("SELECT at.*, a.name AS account_name FROM account_transactions at JOIN accounts a ON a.id=at.account_id WHERE at.id=? AND at.source_type='external_funding' AND at.direction='in' LIMIT 1");
+        $stmt->execute([$id]);
+        $funding = $stmt->fetch() ?: null;
+        if (!$funding) {
+            flash('error', 'Dış kaynak para girişi bulunamadı.');
+            redirect('hesaplar.php#disaridan-para-girisi');
+        }
+        $reverseCheck = db()->prepare("SELECT id FROM account_transactions WHERE source_type='external_funding_reversal' AND source_id=? LIMIT 1");
+        $reverseCheck->execute([$id]);
+        if ($reverseCheck->fetchColumn()) {
+            flash('warning', 'Bu dış kaynak girişi daha önce iptal edilmiş.');
+            redirect('hesaplar.php#disaridan-para-girisi');
+        }
+        $reason = trim((string)($_POST['cancel_reason'] ?? ''));
+        if ($reason === '') $reason = 'Kullanıcı tarafından iptal edildi.';
+        db()->prepare("INSERT INTO account_transactions
+            (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
+            VALUES (?, 'out', ?, ?, 'external_funding_reversal', ?, ?, ?, ?)")
+            ->execute([(int)$funding['account_id'], (float)$funding['amount'], date('Y-m-d'), $id, 'İptal karşılığı: ' . ($funding['description'] ?? 'Dış kaynak para girişi') . ' / ' . $reason, current_user()['id'], now()]);
+        $reversalId = (int)db()->lastInsertId();
+        audit_action('hesap_hareketi', $id, 'dis_kaynak_iptal', $funding, ['reversal_transaction_id'=>$reversalId, 'reason'=>$reason], $funding['account_name'] ?? '');
+        flash('success', 'Dış kaynak girişi iptal edildi; geçmiş kayıt korunarak karşı para çıkışı oluşturuldu.');
+        redirect('hesaplar.php#disaridan-para-girisi');
+    }
+
     if ($action === 'manual_transaction') {
         $accountId = (int)($_POST['account_id'] ?? 0);
         $direction = $_POST['direction'] ?? '';
@@ -225,6 +288,16 @@ $stmt = db()->query("SELECT at.*, a.name AS account_name, a.account_type, a.bank
     LEFT JOIN users u ON u.id=at.created_by
     ORDER BY at.transaction_date DESC, at.id DESC LIMIT 80");
 $transactions = $stmt->fetchAll();
+
+$externalFundingStmt = db()->query("SELECT at.*, a.name AS account_name, a.account_type, a.bank_name, u.display_name AS user_name,
+    EXISTS(SELECT 1 FROM account_transactions rev WHERE rev.source_type='external_funding_reversal' AND rev.source_id=at.id) AS is_cancelled
+    FROM account_transactions at
+    JOIN accounts a ON a.id=at.account_id
+    LEFT JOIN users u ON u.id=at.created_by
+    WHERE at.source_type='external_funding' AND at.direction='in'
+    ORDER BY at.transaction_date DESC, at.id DESC LIMIT 40");
+$externalFundings = $externalFundingStmt->fetchAll() ?: [];
+
 page_header('Kasa / Banka', 'hesaplar');
 ?>
 <section class="stats-grid four">
@@ -334,6 +407,42 @@ page_header('Kasa / Banka', 'hesaplar');
       </table>
     </div>
   </article>
+</section>
+
+<section class="panel-card" id="disaridan-para-girisi" style="border-color:#a9d7b8;background:linear-gradient(135deg,#fff,#f2fbf5)">
+  <div class="card-head">
+    <div><h3>Dışarıdan kasa/banka para girişi</h3><span>Kasa veya banka eksiğinin hangi kaynakla tamamlandığını açıklamasıyla kaydet.</span></div>
+    <strong>Kaynak takibi</strong>
+  </div>
+  <?php if (can_write()): ?>
+  <form method="post" class="stack-form" style="padding:16px">
+    <?php echo csrf_field(); ?><input type="hidden" name="action" value="external_funding">
+    <div class="two-col">
+      <label>Para girilecek hesap<select name="account_id" required><option value="">Hesap seç</option><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?> — <?php echo e($a['bank_name'] ?: account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select></label>
+      <label>Giriş kaynağı<select name="source_kind" required><option value="ortak_sermaye">Ortak / sermaye girişi</option><option value="dis_borc">Dışarıdan alınan borç</option><option value="kasa_tamamlama">Kasa eksiği tamamlama</option><option value="banka_tamamlama">Banka eksiği tamamlama</option><option value="diger">Diğer dış kaynak</option></select></label>
+    </div>
+    <div class="two-col"><label>Tutar<input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label><label>Giriş tarihi<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label></div>
+    <label>Açıklama<textarea name="description" rows="2" placeholder="Örn. Ortak Fatih Duman tarafından kasa eksiği tamamlandı / borç alınan kişi ve geri ödeme bilgisi" required></textarea><small>Paranın nereden geldiğini ve neden eklendiğini açıkça yaz.</small></label>
+    <button class="btn btn-primary" type="submit">Parayı hesaba ekle</button>
+  </form>
+  <?php else: ?><p class="muted" style="padding:16px">Görüntüleme yetkisindesiniz. Para girişi ekleme kapalı.</p><?php endif; ?>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tarih</th><th>Hesap</th><th>Kaynak / Açıklama</th><th>Kaydeden</th><th class="right">Giriş</th><th>Durum / İşlem</th></tr></thead>
+      <tbody>
+        <?php if(!$externalFundings): ?><tr><td colspan="6" class="empty">Henüz dışarıdan para girişi kaydı yok.</td></tr><?php endif; ?>
+        <?php foreach($externalFundings as $funding): $fundingCancelled=(int)$funding['is_cancelled']===1; ?><tr style="<?php echo $fundingCancelled?'opacity:.6;background:#faf8f4':''; ?>">
+          <td><?php echo e(tr_date($funding['transaction_date'])); ?></td>
+          <td><strong><?php echo e($funding['account_name']); ?></strong><small><?php echo e($funding['bank_name'] ?: account_type_label($funding['account_type'])); ?></small></td>
+          <td><?php echo e($funding['description']); ?></td>
+          <td><?php echo e($funding['user_name'] ?: '-'); ?></td>
+          <td class="right"><strong class="text-success"><?php echo e(money($funding['amount'])); ?></strong></td>
+          <td><?php if($fundingCancelled): ?><?php echo badge('İptal edildi','neutral'); ?><?php elseif(can_write()): ?><form method="post" onsubmit="return confirm('Bu dış kaynak para girişi iptal edilsin mi? Kayıt silinmez, karşı para çıkışı oluşturulur.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel_external_funding"><input type="hidden" name="id" value="<?php echo e($funding['id']); ?>"><input type="hidden" name="cancel_reason" value="Kullanıcı tarafından iptal edildi."><button>İptal et</button></form><?php else: ?><?php echo badge('Aktif','success'); ?><?php endif; ?></td>
+        </tr><?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
 </section>
 
 <?php if (can_write()): ?>
