@@ -67,3 +67,53 @@
   function init(){styles();enhance();}
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
+
+(function(){
+  'use strict';
+
+  function loadDuplicateGuard(){
+    if(document.querySelector('script[data-mukerrer-koruma]')) return;
+    var script=document.createElement('script');
+    script.src='assets/mukerrer-koruma.js?v=1';
+    script.async=false;
+    script.dataset.mukerrerKoruma='1';
+    document.head.appendChild(script);
+  }
+
+  function addDuplicateLink(){
+    var nav=document.querySelector('.side-nav');
+    if(!nav||nav.querySelector('a[href="mukerrer-kontrol.php"]')) return;
+    var reports=nav.querySelector('a[href="raporlar.php"]');
+    if(!reports) return;
+
+    var link=document.createElement('a');
+    link.href='mukerrer-kontrol.php';
+    link.innerHTML='<span class="nav-ico">⌕</span><span>Mükerrer Kontrol</span>';
+    reports.insertAdjacentElement('afterend',link);
+  }
+
+  function addDashboardButton(){
+    if(!/dashboard\.php|\/muhasebe\/?$/i.test(location.pathname)) return;
+    if(document.getElementById('dashboardDuplicateControl')) return;
+    var main=document.querySelector('.main');
+    var topbar=main&&main.querySelector('.topbar');
+    if(!main||!topbar) return;
+
+    var link=document.createElement('a');
+    link.id='dashboardDuplicateControl';
+    link.href='mukerrer-kontrol.php';
+    link.textContent='Mükerrerleri kontrol et';
+    link.title='Cari, tahsilat, ödeme, çek, fatura ve banka kaynaklarını tara';
+    link.style.cssText='display:inline-flex;align-items:center;justify-content:center;margin:0 0 14px;padding:9px 13px;border:1px solid #d8b07a;border-radius:999px;background:#fff8ed;color:#6f3e20;text-decoration:none;font-size:11px;font-weight:950;';
+    topbar.insertAdjacentElement('afterend',link);
+  }
+
+  function init(){
+    loadDuplicateGuard();
+    addDuplicateLink();
+    addDashboardButton();
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
+  else init();
+})();
