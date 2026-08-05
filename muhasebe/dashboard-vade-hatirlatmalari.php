@@ -185,7 +185,7 @@ try {
             $pdo = db();
             $pdo->beginTransaction();
             try {
-                dashboard_reminder_cancel_settlement($settlementId, 'Vade hatırlatması yeniden açıldı');
+                // Geçmiş ödeme hareketi korunur; yalnızca hatırlatma bağlantısı yeniden açılır.
                 $pdo->prepare("UPDATE movements SET reminder_status='bekliyor', reminder_completed_at=NULL, reminder_completed_by=NULL,
                         reminder_settlement_movement_id=NULL, updated_at=? WHERE id=?")
                     ->execute([now(), $id]);
@@ -318,7 +318,7 @@ try {
         $pdo = db();
         $pdo->beginTransaction();
         try {
-            dashboard_reminder_cancel_settlement($settlementId, 'Çek vadesi yeniden açıldı');
+            // Geçmiş çek ödeme hareketi korunur; yalnızca vade durumu yeniden açılır.
             $pdo->prepare("UPDATE checks SET status='bekliyor', closed_at=NULL, reminder_settlement_movement_id=NULL, updated_at=? WHERE id=?")
                 ->execute([now(), $id]);
             sync_check_to_movement($id);
