@@ -50,16 +50,14 @@ function vade_guvenli_candidate(array $source, string $settlementType, int $acco
     $where = [
         "COALESCE(is_cancelled,0)=0",
         "movement_type=?",
-        "account_id=?",
+        "(account_id=? OR account_id IS NULL)",
         "ABS(amount-?)<0.005",
         "COALESCE(currency,'TL')='TL'",
-        "movement_date=?",
     ];
     $params = [
         $settlementType,
         $accountId,
         (float)$source['amount'],
-        date('Y-m-d'),
     ];
     if ($cariId > 0) {
         $where[] = 'cari_id=?';
@@ -202,20 +200,23 @@ try {
         }
 
         $candidate = vade_guvenli_candidate($source, $settlementType, (int)$account['id']);
-        if ($candidate) {
+        if (!$candidate) {
             $pdo->rollBack();
             http_response_code(409);
             echo json_encode([
                 'ok'=>false,
-                'code'=>'possible_duplicate',
-                'existing_movement_id'=>(int)$candidate['id'],
-                'existing_date'=>(string)$candidate['movement_date'],
-                'error'=>'Aynı gün aynı cari, tutar ve hesap için mevcut bir ' . ($incoming ? 'tahsilat' : 'ödeme') . ' hareketi bulundu. Yeni kayıt oluşturulmadı.',
+                'code'=>'payment_not_found',
+                'error'=>'Bu vadeye ait geçmiş tahsilat/ödeme bulunamadı. Yeni hareket oluşturulmadı; kayıt beklemeye devam ediyor.',
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
         }
 
-        $settlementId = vade_guvenli_create_settlement($source, $settlementType, (int)$account['id']);
+        $settlementId = (int)$candidate['id'];
+        if ((int)($candidate['account_id'] ?? 0) <= 0) {
+            $pdo->prepare('UPDATE movements SET account_id=?, updated_at=? WHERE id=?')
+                ->execute([(int)$account['id'], now(), $settlementId]);
+            sync_movement_account_transaction($settlementId);
+        }
         vade_guvenli_complete_source($sourceId, $settlementId);
         $pdo->commit();
     } catch (Throwable $e) {
