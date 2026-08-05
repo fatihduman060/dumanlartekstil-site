@@ -309,7 +309,7 @@ $salaryReady = $salaryTable
     && isset($salaryColumns['remaining_amount']);
 $salaryPeriodStart = sprintf('%04d-01', $year);
 $salaryPeriodEnd = sprintf('%04d-12', $year);
-$salaryAccrued = $salaryPaid = $salaryPending = $salaryAdvances = $salaryCompensation = null;
+$salaryAccrued = $salaryPaid = $salaryPending = $salaryAdvances = $salaryGarnishment = $salaryCompensation = null;
 if ($salaryReady) {
     $salaryAccrued = ym_safe_sum($pdo, $salaryTable, 'salary_amount', 'period', $salaryPeriodStart, $salaryPeriodEnd, '', array());
     $salaryPending = ym_safe_sum($pdo, $salaryTable, 'remaining_amount', 'period', $salaryPeriodStart, $salaryPeriodEnd, '', array());
@@ -338,6 +338,15 @@ if ($salaryReady) {
         $salaryAdvanceColumns = ym_columns($pdo, $salaryAdvanceTable);
         if (isset($salaryAdvanceColumns['amount']) && isset($salaryAdvanceColumns['advance_date'])) {
             $salaryAdvances = ym_safe_sum($pdo, $salaryAdvanceTable, 'amount', 'advance_date', $yearStart, $yearEnd, '', array());
+        }
+    }
+
+    $salaryGarnishmentTable = isset(ym_tables($pdo)['salary_garnishment_payments']) ? 'salary_garnishment_payments' : null;
+    if ($salaryGarnishmentTable) {
+        $salaryGarnishmentColumns = ym_columns($pdo, $salaryGarnishmentTable);
+        if (isset($salaryGarnishmentColumns['amount']) && isset($salaryGarnishmentColumns['payment_date'])) {
+            $salaryGarnishmentWhere = isset($salaryGarnishmentColumns['is_cancelled']) ? 'COALESCE("is_cancelled",0)=0' : '';
+            $salaryGarnishment = ym_safe_sum($pdo, $salaryGarnishmentTable, 'amount', 'payment_date', $yearStart, $yearEnd, $salaryGarnishmentWhere, array());
         }
     }
 
@@ -371,6 +380,7 @@ $srcCards = $cardTable ?: 'kart ekstresi tablosu bulunamadı';
 $srcTaxes = $taxTable ?: 'vergi ödeme tablosu bulunamadı';
 $srcSalaries = $salaryTable ?: 'maaş kayıt tablosu bulunamadı';
 $srcSalaryAdvances = !empty($salaryAdvanceTable) ? $salaryAdvanceTable : 'maaş avans tablosu bulunamadı';
+$srcSalaryGarnishment = !empty($salaryGarnishmentTable) ? $salaryGarnishmentTable : 'maaş haczi ödeme tablosu bulunamadı';
 $srcSalaryCompensation = !empty($salaryCompensationTable) ? $salaryCompensationTable : 'tazminat ödeme tablosu bulunamadı';
 
 $productionMetrics = array(
@@ -451,6 +461,7 @@ ym_render_section('Maaş Ödemeleri', 'Seçili yılın bordro, avans ve tazminat
     ym_metric('Ödenen maaş', $salaryPaid, $srcSalaries . ' + manuel aylık toplamlar', 'Ödenen maaş tutarı okunamıyor.', 'success'),
     ym_metric('Bekleyen maaş', $salaryPending, $srcSalaries, 'Kalan maaş tutarı okunamıyor.', 'danger'),
     ym_metric('Maaş avansları', $salaryAdvances, $srcSalaryAdvances, 'Avans tutarı veya tarihi okunamıyor.', 'info'),
+    ym_metric('Maaş haczi ödemesi', $salaryGarnishment, $srcSalaryGarnishment, 'Maaş haczi tutarı veya ödeme tarihi okunamıyor.', 'danger'),
     ym_metric('Tazminat / diğer personel ödemeleri', $salaryCompensation, $srcSalaryCompensation, 'Tazminat tutarı veya ödeme tarihi okunamıyor.', 'danger')
 ), 'Maaşlar');
 
