@@ -160,12 +160,12 @@ function dashboard_cari_aggregate(): array
         }
 
         if ($dueRows && $normalRows) {
-            $keepRow = $dueRows[0];
-            $kept[] = $keepRow;
-            foreach ($bucketRows as $row) {
-                if ((int)$row['id'] !== (int)$keepRow['id']) $ignoredIds[] = (int)$row['id'];
-            }
-            continue;
+            $keepDue = array_shift($dueRows);
+            $ignoreNormal = array_shift($normalRows);
+            $kept[] = $keepDue;
+            $ignoredIds[] = (int)$ignoreNormal['id'];
+            $bucketRows = array_merge($dueRows, $normalRows);
+            if (!$bucketRows) continue;
         }
 
         $exactGroups = [];
