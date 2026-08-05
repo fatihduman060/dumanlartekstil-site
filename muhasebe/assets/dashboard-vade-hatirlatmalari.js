@@ -31,7 +31,7 @@
       : '';
     var status='<span class="vade-hatirlatma-durum">'+esc(item.status_text||'Bekliyor')+'</span>';
     var action=item.can_complete
-      ? '<div class="vade-hatirlatma-islem">'+accountSelectHtml(item)+'<button type="button" class="vade-hatirlatma-tamamla" data-source="'+esc(item.source||'movement')+'" data-id="'+esc(item.id||'')+'" data-label="'+esc(item.complete_label||'Tamamlandı')+'" title="Seçilen hesaba tahsilat veya ödeme kaydı oluşturur.">✓ '+esc(item.complete_label||'Tamamlandı')+'</button></div>'
+      ? '<div class="vade-hatirlatma-islem">'+accountSelectHtml(item)+'<button type="button" class="vade-hatirlatma-tamamla" data-source="'+esc(item.source||'movement')+'" data-id="'+esc(item.id||'')+'" data-label="'+esc(item.complete_label||'Tamamlandı')+'" title="Geçmiş tahsilat veya ödemeyi bulur; yeni hareket oluşturmaz.">✓ '+esc(item.complete_label||'Tamamlandı')+'</button></div>'
       : '';
 
     return '<div class="vade-hatirlatma-satir">'
@@ -99,7 +99,7 @@
       return;
     }
     var accountText=accountSelect.options[accountSelect.selectedIndex]?accountSelect.options[accountSelect.selectedIndex].text:'seçilen hesap';
-    if(!window.confirm('Bu kayıt '+label+' olarak kapatılsın mı?\n\n'+accountText+' hesabına gerçek tahsilat/ödeme hareketi işlenecek.')) return;
+    if(!window.confirm('Bu kayıt '+label+' olarak doğrulansın mı?\n\nYeni hareket oluşturulmayacak. Geçmiş ödeme/tahsilat bulunursa '+accountText+' hesabına bağlanıp vade kapatılacak; bulunamazsa kayıt beklemeye devam edecek.')) return;
 
     var oldText=button.textContent;
     button.disabled=true;
