@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/maas-avans-lib.php';
+require_once __DIR__ . '/maas-haciz-lib.php';
 
 function maas_aylik_kayit_db_ensure(): void
 {
@@ -13,6 +14,7 @@ function maas_aylik_kayit_db_ensure(): void
     ensure_column($pdo, 'salary_payroll_details', 'garnishment_amount', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'salary_payroll_details', 'source_mode', "TEXT NOT NULL DEFAULT 'puantaj'");
     maas_avans_db_ensure();
+    maas_haciz_db_ensure();
 }
 
 function maas_aylik_kayit_key($value): string
@@ -112,11 +114,11 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
 
     $manualDeductionRaw = $input['deduction_amount'] ?? $input['other_deduction_amount'] ?? $existingPayroll['other_deduction_amount'] ?? $existingRecord['manual_deduction_amount'] ?? 0;
     $manualDeduction = max(0, decimal_from_input($manualDeductionRaw));
-    $garnishmentAmount = max(0, decimal_from_input($input['garnishment_amount'] ?? $existingPayroll['garnishment_amount'] ?? $existingRecord['garnishment_amount'] ?? 0));
 
-    // Avans artık maaş formundan elle alınmaz. Seçili personelin dönem içindeki
-    // tarihli avans hareketlerinin toplamı bordroya otomatik yansır.
+    // Avans ve maaş haczi artık maaş formundan elle alınmaz. Seçili personelin
+    // dönem içindeki tarihli ödeme hareketleri bordroya otomatik yansır.
     $advanceAmount = maas_avans_period_total($employeeId, $period);
+    $garnishmentAmount = maas_haciz_period_total($employeeId, $period);
 
     $overtimeAmount = max(0, decimal_from_input($input['overtime_amount'] ?? $existingPayroll['overtime_amount'] ?? 0));
     $bonusAmount = max(0, decimal_from_input($input['bonus_amount'] ?? $existingPayroll['bonus_amount'] ?? 0));
