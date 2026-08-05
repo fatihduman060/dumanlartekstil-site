@@ -143,7 +143,11 @@ function maas_aylik_kayit_save(int $employeeId, string $period, array $input, bo
     }
 
     $defaultAccountId = maas_aylik_kayit_default_account_id();
-    if (array_key_exists('account_id', $input)) {
+    if ($period >= '2026-07') {
+        // Temmuz 2026 ve sonrasındaki ödenen maaşların tamamı şirketin
+        // Garanti Dumanlar hesabından çıkar.
+        $accountId = $defaultAccountId;
+    } elseif (array_key_exists('account_id', $input)) {
         $accountRaw = trim((string)$input['account_id']);
         $accountId = $accountRaw !== '' ? (int)$accountRaw : null;
     } elseif ($forcePaymentDefaults) {
@@ -332,3 +336,101 @@ function maas_yillik_odenen_ozeti(string $year): array
 
     return ['year' => $year, 'months' => $months, 'total' => round($total, 2)];
 }
+
+function maas_garanti_odeme_sync_db_ensure(): void
+{
+    db()->exec("CREATE TABLE IF NOT EXISTS salary_manual_account_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        period TEXT NOT NULL UNIQUE,
+        amount REAL NOT NULL DEFAULT 0,
+        account_id INTEGER NOT NULL,
+        account_transaction_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+        FOREIGN KEY(account_transaction_id) REFERENCES account_transactions(id) ON DELETE SET NULL
+    )");
+}
+
+function maas_garanti_odeme_sync(string $startPeriod = '2026-07'): array
+{
+    maas_manual_aylik_toplam_db_ensure();
+    maas_garanti_odeme_sync_db_ensure();
+    $accountId = maas_aylik_kayit_default_account_id();
+    if (!$accountId) throw new RuntimeException('Garanti Dumanlar hesabı bulunamadı.');
+
+    $pdo = db();
+    $summary = ['salary_records'=>0, 'manual_differences'=>0];
+
+    // Personel bazlı ödenen kayıtları Garanti Dumanlar hesabına bağla.
+    $recordStmt = $pdo->prepare('SELECT id, account_id, account_transaction_id FROM salary_records WHERE period>=? AND COALESCE(paid_amount,0)>0 ORDER BY id');
+    $recordStmt->execute([$startPeriod]);
+    foreach ($recordStmt->fetchAll() as $record) {
+        if ((int)($record['account_id'] ?? 0) !== $accountId) {
+            $pdo->prepare('UPDATE salary_records SET account_id=?, updated_at=? WHERE id=?')->execute([$accountId, now(), (int)$record['id']]);
+        }
+        maas_puantaj_sync_account_transaction((int)$record['id']);
+        $summary['salary_records']++;
+    }
+
+    // Manuel aylık toplam, personel bazlı ödemelerin yerine geçen rapor tutarıdır.
+    // Bankada yalnızca iki kaynak arasındaki pozitif fark ayrıca düşülür.
+    $manualStmt = $pdo->prepare('SELECT period, amount FROM salary_manual_monthly_totals WHERE period>=? ORDER BY period');
+    $manualStmt->execute([$startPeriod]);
+    foreach ($manualStmt->fetchAll() as $manual) {
+        $period = (string)$manual['period'];
+        $manualAmount = max(0, (float)$manual['amount']);
+        $detailStmt = $pdo->prepare('SELECT COALESCE(SUM(paid_amount),0) FROM salary_records WHERE period=?');
+        $detailStmt->execute([$period]);
+        $detailedPaid = (float)$detailStmt->fetchColumn();
+        $difference = max(0, round($manualAmount - $detailedPaid, 2));
+
+        $linkStmt = $pdo->prepare('SELECT * FROM salary_manual_account_links WHERE period=? LIMIT 1');
+        $linkStmt->execute([$period]);
+        $link = $linkStmt->fetch() ?: null;
+        if (!$link) {
+            $pdo->prepare('INSERT INTO salary_manual_account_links (period, amount, account_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+                ->execute([$period, $difference, $accountId, now(), now()]);
+            $linkId = (int)$pdo->lastInsertId();
+            $transactionId = 0;
+        } else {
+            $linkId = (int)$link['id'];
+            $transactionId = (int)($link['account_transaction_id'] ?? 0);
+            $pdo->prepare('UPDATE salary_manual_account_links SET amount=?, account_id=?, updated_at=? WHERE id=?')
+                ->execute([$difference, $accountId, now(), $linkId]);
+        }
+
+        if ($difference > 0) {
+            $description = 'Manuel maaş ödemesi: ' . month_label($period) . ' / personel bazlı ödemeler sonrası fark';
+            $transactionDate = date('Y-m-t', strtotime($period . '-01'));
+            if ($transactionId > 0) {
+                $pdo->prepare("UPDATE account_transactions SET account_id=?, direction='out', amount=?, transaction_date=?, source_type='salary_manual', source_id=?, description=? WHERE id=?")
+                    ->execute([$accountId, $difference, $transactionDate, $linkId, $description, $transactionId]);
+            } else {
+                $pdo->prepare("INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
+                    VALUES (?, 'out', ?, ?, 'salary_manual', ?, ?, ?, ?)")
+                    ->execute([$accountId, $difference, $transactionDate, $linkId, $description, current_user()['id'] ?? null, now()]);
+                $transactionId = (int)$pdo->lastInsertId();
+                $pdo->prepare('UPDATE salary_manual_account_links SET account_transaction_id=?, updated_at=? WHERE id=?')
+                    ->execute([$transactionId, now(), $linkId]);
+            }
+            $summary['manual_differences']++;
+        } elseif ($transactionId > 0) {
+            // Fark daha sonra sıfırlanırsa geçmiş hareketi silmek yerine aynı tutarda
+            // karşı kayıt oluştur ve bağlantıyı boşalt.
+            $oldTxnStmt = $pdo->prepare("SELECT amount FROM account_transactions WHERE id=? AND source_type='salary_manual' LIMIT 1");
+            $oldTxnStmt->execute([$transactionId]);
+            $oldAmount = (float)($oldTxnStmt->fetchColumn() ?: 0);
+            if ($oldAmount > 0) {
+                $pdo->prepare("INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
+                    VALUES (?, 'in', ?, ?, 'salary_manual_reversal', ?, ?, ?, ?)")
+                    ->execute([$accountId, $oldAmount, date('Y-m-d'), $linkId, 'İptal karşılığı: Manuel maaş ödemesi / ' . month_label($period), current_user()['id'] ?? null, now()]);
+            }
+            $pdo->prepare('UPDATE salary_manual_account_links SET account_transaction_id=NULL, updated_at=? WHERE id=?')
+                ->execute([now(), $linkId]);
+        }
+    }
+
+    return $summary;
+}
+
