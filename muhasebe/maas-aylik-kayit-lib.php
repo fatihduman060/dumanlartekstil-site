@@ -352,7 +352,7 @@ function maas_garanti_odeme_sync_db_ensure(): void
     )");
 }
 
-function maas_garanti_odeme_sync(string $startPeriod = '2026-07'): array
+function maas_garanti_odeme_sync(string $startPeriod = '2026-07', bool $syncManualDifferences = false, ?string $onlyManualPeriod = null): array
 {
     maas_manual_aylik_toplam_db_ensure();
     maas_garanti_odeme_sync_db_ensure();
@@ -373,10 +373,19 @@ function maas_garanti_odeme_sync(string $startPeriod = '2026-07'): array
         $summary['salary_records']++;
     }
 
-    // Manuel aylık toplam, personel bazlı ödemelerin yerine geçen rapor tutarıdır.
-    // Bankada yalnızca iki kaynak arasındaki pozitif fark ayrıca düşülür.
-    $manualStmt = $pdo->prepare('SELECT period, amount FROM salary_manual_monthly_totals WHERE period>=? ORDER BY period');
-    $manualStmt->execute([$startPeriod]);
+    // Manuel aylık toplamlar kullanıcı "Garanti Dumanlar'dan düş" düğmesine
+    // basmadan banka hareketi üretmez.
+    if (!$syncManualDifferences) return $summary;
+
+    // Bankada yalnızca manuel toplam ile personel bazlı ödemeler arasındaki
+    // pozitif fark ayrıca düşülür.
+    if ($onlyManualPeriod !== null) {
+        $manualStmt = $pdo->prepare('SELECT period, amount FROM salary_manual_monthly_totals WHERE period=? AND period>=? ORDER BY period');
+        $manualStmt->execute([$onlyManualPeriod, $startPeriod]);
+    } else {
+        $manualStmt = $pdo->prepare('SELECT period, amount FROM salary_manual_monthly_totals WHERE period>=? ORDER BY period');
+        $manualStmt->execute([$startPeriod]);
+    }
     foreach ($manualStmt->fetchAll() as $manual) {
         $period = (string)$manual['period'];
         $manualAmount = max(0, (float)$manual['amount']);
