@@ -2,6 +2,7 @@
 require_once __DIR__ . '/bootstrap.php';
 require_login();
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $type = (string)($_GET['type'] ?? 'alacak');
 if (!in_array($type, ['alacak','verecek'], true)) $type = 'alacak';
@@ -34,10 +35,12 @@ try {
             $amount = abs($net);
         }
 
+        $baseName = (string)$row['name'];
         $rows[] = [
             'id' => (int)$row['id'],
-            'name' => (string)$row['name'],
-            'city' => (string)($row['city'] ?? ''),
+            'name' => $baseName . ' · ' . $currency,
+            'base_name' => $baseName,
+            'city' => trim((string)($row['city'] ?? '')),
             'currency' => $currency,
             'amount' => round($amount, 2),
             'net_alacak' => round($netAlacak, 2),
