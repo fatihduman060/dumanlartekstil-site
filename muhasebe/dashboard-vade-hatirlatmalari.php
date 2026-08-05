@@ -274,20 +274,27 @@ try {
                 throw new RuntimeException('Bu çek açık durumda değil; Çekler ekranından kontrol etmelisin.');
             }
 
-            $checkSource = $check;
-            $checkSource['currency'] = 'TL';
+            $settlementType = $incoming ? 'tahsilat' : 'odeme';
+            $existingStmt = db()->prepare("SELECT * FROM movements
+                WHERE check_id=? AND movement_type=? AND COALESCE(is_cancelled,0)=0
+                ORDER BY COALESCE(is_check_adjustment,0) ASC, id ASC");
+            $existingStmt->execute([$id, $settlementType]);
+            $existingPayments = $existingStmt->fetchAll();
+            if (count($existingPayments) !== 1) {
+                throw new RuntimeException(count($existingPayments) > 1
+                    ? 'Bu çeke bağlı birden fazla geçmiş ödeme/tahsilat bulundu. Yeni hareket oluşturulmadı; kayıt beklemeye devam ediyor.'
+                    : 'Bu çeke ait geçmiş ödeme/tahsilat bulunamadı. Yeni hareket oluşturulmadı; kayıt beklemeye devam ediyor.');
+            }
+            $settlementId = (int)$existingPayments[0]['id'];
+
             $pdo = db();
             $pdo->beginTransaction();
             try {
-                $description = ($incoming ? 'Çek tahsilatı' : 'Çek ödemesi') . ' #' . $id;
-                if (trim((string)($check['check_no'] ?? '')) !== '') $description .= ' / No: ' . trim((string)$check['check_no']);
-                $settlementId = dashboard_reminder_create_settlement(
-                    $checkSource,
-                    $incoming ? 'tahsilat' : 'odeme',
-                    (int)$account['id'],
-                    $description,
-                    $id
-                );
+                if ((int)($existingPayments[0]['account_id'] ?? 0) <= 0) {
+                    $pdo->prepare('UPDATE movements SET account_id=?, updated_at=? WHERE id=?')
+                        ->execute([(int)$account['id'], now(), $settlementId]);
+                    sync_movement_account_transaction($settlementId);
+                }
                 $pdo->prepare("UPDATE checks SET status=?, account_id=?, closed_at=?, reminder_settlement_movement_id=?, updated_at=? WHERE id=?")
                     ->execute([$doneStatus, (int)$account['id'], date('Y-m-d'), $settlementId, now(), $id]);
                 sync_check_to_movement($id);
