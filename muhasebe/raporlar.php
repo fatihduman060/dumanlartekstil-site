@@ -296,6 +296,63 @@ if ($taxReady) {
 $dataSets['SGK / SSK ve vergiler'] = $taxReady;
 if (!$taxReady) $missingItems[] = 'SGK / SSK ve Vergiler: vergi ödeme tablosu veya tür, tutar, durum ve tarih alanları eksik.';
 
+/* Maaş, avans ve tazminat ödemeleri
+ * Rapor kaynak kayıtları toplar; bunlara bağlı account_transactions satırlarını
+ * ayrıca toplamaz. Böylece banka çıkışı ikinci kez sayılmaz.
+ */
+$salaryTable = ym_first_table($pdo, array('salary_records'));
+$salaryColumns = $salaryTable ? ym_columns($pdo, $salaryTable) : array();
+$salaryReady = $salaryTable
+    && isset($salaryColumns['period'])
+    && isset($salaryColumns['salary_amount'])
+    && isset($salaryColumns['paid_amount'])
+    && isset($salaryColumns['remaining_amount']);
+$salaryPeriodStart = sprintf('%04d-01', $year);
+$salaryPeriodEnd = sprintf('%04d-12', $year);
+$salaryAccrued = $salaryPaid = $salaryPending = $salaryAdvances = $salaryCompensation = null;
+if ($salaryReady) {
+    $salaryAccrued = ym_safe_sum($pdo, $salaryTable, 'salary_amount', 'period', $salaryPeriodStart, $salaryPeriodEnd, '', array());
+    $salaryPending = ym_safe_sum($pdo, $salaryTable, 'remaining_amount', 'period', $salaryPeriodStart, $salaryPeriodEnd, '', array());
+
+    try {
+        $manualSalaryTable = isset(ym_tables($pdo)['salary_manual_monthly_totals']) ? 'salary_manual_monthly_totals' : null;
+        if ($manualSalaryTable) {
+            $salaryPaidSql = 'SELECT COALESCE(SUM(x.amount),0) FROM ('
+                . 'SELECT m."period", CAST(m."amount" AS REAL) AS amount FROM "salary_manual_monthly_totals" m WHERE m."period" BETWEEN ? AND ? '
+                . 'UNION ALL '
+                . 'SELECT sr."period", COALESCE(SUM(CAST(sr."paid_amount" AS REAL)),0) AS amount FROM "salary_records" sr '
+                . 'WHERE sr."period" BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM "salary_manual_monthly_totals" m WHERE m."period"=sr."period") '
+                . 'GROUP BY sr."period") x';
+            $salaryPaidStmt = $pdo->prepare($salaryPaidSql);
+            $salaryPaidStmt->execute(array($salaryPeriodStart, $salaryPeriodEnd, $salaryPeriodStart, $salaryPeriodEnd));
+            $salaryPaid = (float)$salaryPaidStmt->fetchColumn();
+        } else {
+            $salaryPaid = ym_safe_sum($pdo, $salaryTable, 'paid_amount', 'period', $salaryPeriodStart, $salaryPeriodEnd, '', array());
+        }
+    } catch (Throwable $e) {
+        $salaryPaid = null;
+    }
+
+    $salaryAdvanceTable = isset(ym_tables($pdo)['salary_advances']) ? 'salary_advances' : null;
+    if ($salaryAdvanceTable) {
+        $salaryAdvanceColumns = ym_columns($pdo, $salaryAdvanceTable);
+        if (isset($salaryAdvanceColumns['amount']) && isset($salaryAdvanceColumns['advance_date'])) {
+            $salaryAdvances = ym_safe_sum($pdo, $salaryAdvanceTable, 'amount', 'advance_date', $yearStart, $yearEnd, '', array());
+        }
+    }
+
+    $salaryCompensationTable = isset(ym_tables($pdo)['salary_compensation_payments']) ? 'salary_compensation_payments' : null;
+    if ($salaryCompensationTable) {
+        $salaryCompensationColumns = ym_columns($pdo, $salaryCompensationTable);
+        if (isset($salaryCompensationColumns['amount']) && isset($salaryCompensationColumns['payment_date'])) {
+            $salaryCompensationWhere = isset($salaryCompensationColumns['is_cancelled']) ? 'COALESCE("is_cancelled",0)=0' : '';
+            $salaryCompensation = ym_safe_sum($pdo, $salaryCompensationTable, 'amount', 'payment_date', $yearStart, $yearEnd, $salaryCompensationWhere, array());
+        }
+    }
+}
+$dataSets['Maaş ödemeleri'] = $salaryReady;
+if (!$salaryReady) $missingItems[] = 'Maaş Ödemeleri: maaş kayıt tablosu veya dönem, tahakkuk, ödenen ve kalan tutar alanları eksik.';
+
 $readyCount = 0;
 foreach ($dataSets as $isReady) if ($isReady) $readyCount++;
 $readiness = count($dataSets) ? (int)round(($readyCount / count($dataSets)) * 100) : 0;
@@ -312,6 +369,9 @@ $srcProduction = $productionTable ?: 'üretim tablosu bulunamadı';
 $srcStock = $stockTable ?: 'stok tablosu bulunamadı';
 $srcCards = $cardTable ?: 'kart ekstresi tablosu bulunamadı';
 $srcTaxes = $taxTable ?: 'vergi ödeme tablosu bulunamadı';
+$srcSalaries = $salaryTable ?: 'maaş kayıt tablosu bulunamadı';
+$srcSalaryAdvances = !empty($salaryAdvanceTable) ? $salaryAdvanceTable : 'maaş avans tablosu bulunamadı';
+$srcSalaryCompensation = !empty($salaryCompensationTable) ? $salaryCompensationTable : 'tazminat ödeme tablosu bulunamadı';
 
 $productionMetrics = array(
     ym_metric($year . ' yıllık toplam üretim', $productionTotal, $srcProduction . '.' . ($productionAmount ?: 'produced_dozen'), 'Üretim düzine veya tarih alanı eksik.', 'info', 'dozen'),
@@ -385,6 +445,14 @@ ym_render_section('SGK / SSK ve Vergiler', 'Vergi Ödemeleri kayıtlarından se�
     ym_metric('Bekleyen diğer vergiler', $pendingTaxes, $srcTaxes, 'Vergi türü, tutar, durum veya vade alanı eksik.', 'danger'),
     ym_metric('Ödenen diğer vergiler', $paidTaxes, $srcTaxes, 'Vergi türü, tutar, durum veya ödeme tarihi alanı eksik.', 'success')
 ), 'Vergi Ödemeleri');
+
+ym_render_section('Maaş Ödemeleri', 'Seçili yılın bordro, avans ve tazminat ödemeleri. Bağlı kasa/banka hareketleri ayrıca toplanmaz; böylece aynı ödeme iki kez sayılmaz.', array(
+    ym_metric('Toplam maaş tahakkuku', $salaryAccrued, $srcSalaries, 'Maaş dönemi veya tahakkuk tutarı okunamıyor.', 'info'),
+    ym_metric('Ödenen maaş', $salaryPaid, $srcSalaries . ' + manuel aylık toplamlar', 'Ödenen maaş tutarı okunamıyor.', 'success'),
+    ym_metric('Bekleyen maaş', $salaryPending, $srcSalaries, 'Kalan maaş tutarı okunamıyor.', 'danger'),
+    ym_metric('Maaş avansları', $salaryAdvances, $srcSalaryAdvances, 'Avans tutarı veya tarihi okunamıyor.', 'info'),
+    ym_metric('Tazminat / diğer personel ödemeleri', $salaryCompensation, $srcSalaryCompensation, 'Tazminat tutarı veya ödeme tarihi okunamıyor.', 'danger')
+), 'Maaşlar');
 
 ym_render_section('Karlılık Analizi', 'İlk aşamada fatura satış toplamı eksi fatura alış toplamı; genel giderler henüz dahil değildir.', array(
     ym_metric('Brüt ticari fark', $grossProfit, $srcInvoices, 'Satış ve alış faturaları birlikte okunamıyor.', $grossProfit !== null && $grossProfit < 0 ? 'danger' : 'success')
