@@ -257,14 +257,28 @@ if ($productionTable && $productionAmount && $productionDate) {
 $dataSets['Üretim'] = $productionTotal !== null;
 if ($productionTotal === null) $missingItems[] = 'Üretim Analizi: üretim tablosu veya miktar/tarih alanı eksik.';
 
-/* Stok */
+/* Stok
+ * Mevcut stok bir dönem toplamı değildir. Tüm aktif girişler eksi tüm aktif
+ * çıkışlar alınır; iptal edilen satış veya manuel hareketler bakiyeye katılmaz.
+ */
 $stockTable = ym_first_table($pdo, array('stock_movements', 'stok_hareketleri', 'stocks', 'stoklar', 'products', 'urunler'));
 $stockColumns = $stockTable ? ym_columns($pdo, $stockTable) : array();
-$stockAmount = ym_first_column($stockColumns, array('current_stock', 'stock_quantity', 'quantity', 'miktar', 'stok', 'adet'));
+$stockAmount = ym_first_column($stockColumns, array('quantity_dozen', 'current_stock', 'stock_quantity', 'quantity', 'miktar', 'stok', 'adet'));
 $stockDate = ym_first_column($stockColumns, array('movement_date', 'date', 'tarih', 'created_at'));
-$stockTotal = ($stockTable && $stockAmount) ? ym_safe_sum($pdo, $stockTable, $stockAmount, $stockDate, $yearStart, $yearEnd, '', array()) : null;
+$stockTotal = null;
+if ($stockTable === 'stock_movements' && $stockAmount && isset($stockColumns['direction'])) {
+    try {
+        $stockCancelSql = isset($stockColumns['is_cancelled']) ? ' WHERE COALESCE("is_cancelled",0)=0' : '';
+        $stockSql = 'SELECT COALESCE(SUM(CASE WHEN "direction"=\'in\' THEN CAST(' . ym_ident($stockAmount) . ' AS REAL) WHEN "direction"=\'out\' THEN -CAST(' . ym_ident($stockAmount) . ' AS REAL) ELSE 0 END),0) FROM ' . ym_ident($stockTable) . $stockCancelSql;
+        $stockTotal = (float)$pdo->query($stockSql)->fetchColumn();
+    } catch (Throwable $e) {
+        $stockTotal = null;
+    }
+} elseif ($stockTable && $stockAmount) {
+    $stockTotal = ym_safe_sum($pdo, $stockTable, $stockAmount, null, $yearStart, $yearEnd, '', array());
+}
 $dataSets['Stok'] = $stockTotal !== null;
-if ($stockTotal === null) $missingItems[] = 'Stok Analizi: stok tablosu veya mevcut miktar alanı eksik.';
+if ($stockTotal === null) $missingItems[] = 'Stok Analizi: stok tablosu veya giriş/çıkış miktar alanları eksik.';
 
 /* Kart ekstreleri */
 $cardTable = ym_first_table($pdo, array('card_statements', 'credit_card_statements', 'kart_ekstreleri', 'kart_ekstre', 'kredi_karti_ekstreleri'));
