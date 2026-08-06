@@ -4,10 +4,176 @@ require_once __DIR__ . '/stok-lib.php';
 require_login();
 stok_db_ensure();
 
+function stok_excel_baslik($value)
+{
+    $value = mb_strtolower(trim((string)$value), 'UTF-8');
+    $value = strtr($value, ['ç'=>'c','ğ'=>'g','ı'=>'i','ö'=>'o','ş'=>'s','ü'=>'u']);
+    return preg_replace('/[^a-z0-9]+/', '', $value);
+}
+
+function stok_excel_sutun_index($cellRef)
+{
+    if (!preg_match('/^([A-Z]+)/i', (string)$cellRef, $m)) return 0;
+    $index = 0;
+    foreach (str_split(strtoupper($m[1])) as $letter) $index = ($index * 26) + (ord($letter) - 64);
+    return max(0, $index - 1);
+}
+
+function stok_excel_csv_oku($path)
+{
+    $handle = fopen($path, 'rb');
+    if (!$handle) throw new RuntimeException('Dosya açılamadı.');
+    $first = fgets($handle);
+    rewind($handle);
+    $delimiter = substr_count((string)$first, ';') >= substr_count((string)$first, ',') ? ';' : ',';
+    $rows = [];
+    while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+        if (isset($row[0])) $row[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$row[0]);
+        $rows[] = $row;
+    }
+    fclose($handle);
+    return $rows;
+}
+
+function stok_excel_xlsx_oku($path)
+{
+    if (!class_exists('ZipArchive')) throw new RuntimeException('Sunucuda XLSX okuma desteği bulunamadı.');
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) throw new RuntimeException('Excel dosyası açılamadı.');
+
+    $shared = [];
+    $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+    if ($sharedXml !== false) {
+        $xml = simplexml_load_string($sharedXml);
+        if ($xml) {
+            $ns = $xml->getNamespaces(true);
+            $items = isset($ns['']) ? $xml->children($ns[''])->si : $xml->si;
+            foreach ($items as $item) {
+                $texts = $item->xpath('.//*[local-name()="t"]') ?: [];
+                $value = '';
+                foreach ($texts as $text) $value .= (string)$text;
+                $shared[] = $value;
+            }
+        }
+    }
+
+    $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+    $zip->close();
+    if ($sheetXml === false) throw new RuntimeException('Excel dosyasının ilk sayfası okunamadı.');
+    $xml = simplexml_load_string($sheetXml);
+    if (!$xml) throw new RuntimeException('Excel içeriği geçersiz.');
+    $rows = [];
+    $rowNodes = $xml->xpath('//*[local-name()="sheetData"]/*[local-name()="row"]') ?: [];
+    foreach ($rowNodes as $rowNode) {
+        $row = [];
+        $cells = $rowNode->xpath('./*[local-name()="c"]') ?: [];
+        foreach ($cells as $cell) {
+            $index = stok_excel_sutun_index((string)$cell['r']);
+            $type = (string)$cell['t'];
+            $valueNodes = $cell->xpath('./*[local-name()="v"]');
+            $inlineNodes = $cell->xpath('./*[local-name()="is"]//*[local-name()="t"]');
+            $value = $valueNodes ? (string)$valueNodes[0] : '';
+            if ($type === 's') $value = $shared[(int)$value] ?? '';
+            elseif ($type === 'inlineStr' && $inlineNodes) {
+                $value = '';
+                foreach ($inlineNodes as $node) $value .= (string)$node;
+            }
+            $row[$index] = $value;
+        }
+        if ($row) {
+            $max = max(array_keys($row));
+            for ($i=0; $i<=$max; $i++) if (!array_key_exists($i, $row)) $row[$i] = '';
+            ksort($row);
+            $rows[] = array_values($row);
+        }
+    }
+    return $rows;
+}
+
+function stok_excel_satirlari($file)
+{
+    if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) throw new RuntimeException('Excel dosyası seçilmedi.');
+    if (($file['size'] ?? 0) > 8 * 1024 * 1024) throw new RuntimeException('Dosya en fazla 8 MB olabilir.');
+    $ext = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
+    if ($ext === 'csv') return stok_excel_csv_oku($file['tmp_name']);
+    if ($ext === 'xlsx') return stok_excel_xlsx_oku($file['tmp_name']);
+    throw new RuntimeException('Yalnızca .xlsx veya .csv dosyası yükleyin.');
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     require_write();
     require_csrf();
     $action = trim((string)($_POST['action'] ?? ''));
+
+    if ($action === 'excel_import') {
+        try {
+            $rows = stok_excel_satirlari($_FILES['stock_excel'] ?? []);
+            if (count($rows) < 2) throw new RuntimeException('Excel tablosunda başlık ve en az bir ürün satırı bulunmalı.');
+
+            $headers = array_map('stok_excel_baslik', $rows[0]);
+            $aliases = [
+                'article'=>['artikel','artikelkodu','article','articlecode','urunkodu','stokkodu'],
+                'name'=>['urunadi','urun','product','productname','stokadi'],
+                'info'=>['urunbilgileri','urunbilgisi','bilgi','aciklama','description','renkbeden'],
+                'stock'=>['stok','stokdz','stokmiktari','baslangicstoku','baslangicstokdz','miktar','dz','duzine']
+            ];
+            $map = [];
+            foreach ($aliases as $key=>$names) {
+                foreach ($headers as $index=>$header) if (in_array($header, $names, true)) { $map[$key] = $index; break; }
+            }
+            if (!isset($map['article']) || !isset($map['name']) || !isset($map['stock'])) {
+                throw new RuntimeException('Başlıklar bulunamadı. Artikel Kodu, Ürün Adı ve Stok DZ sütunları zorunludur.');
+            }
+
+            $pdo = db();
+            $pdo->beginTransaction();
+            $added = $updated = $movementCount = $skipped = 0;
+            foreach (array_slice($rows, 1) as $rowNo=>$row) {
+                $article = trim((string)($row[$map['article']] ?? ''));
+                $name = trim((string)($row[$map['name']] ?? ''));
+                $info = isset($map['info']) ? trim((string)($row[$map['info']] ?? '')) : '';
+                $rawStock = trim((string)($row[$map['stock']] ?? ''));
+                if ($article === '' && $name === '' && $rawStock === '') continue;
+                if ($article === '' || $name === '') { $skipped++; continue; }
+                $quantity = decimal_from_input($rawStock);
+                if ($quantity < 0) { $skipped++; continue; }
+
+                $find = $pdo->prepare('SELECT * FROM stock_products WHERE article_code=? LIMIT 1');
+                $find->execute([$article]);
+                $product = $find->fetch() ?: null;
+                if ($product) {
+                    $productId = (int)$product['id'];
+                    $pdo->prepare('UPDATE stock_products SET product_name=?,product_info=?,is_active=1,updated_at=? WHERE id=?')
+                        ->execute([$name, $info ?: null, now(), $productId]);
+                    $updated++;
+                } else {
+                    $pdo->prepare('INSERT INTO stock_products (article_code,product_name,product_info,unit,is_active,created_by,created_at,updated_at) VALUES (?,?,?,\'DZ\',1,?,?,?)')
+                        ->execute([$article, $name, $info ?: null, current_user()['id'] ?? null, now(), now()]);
+                    $productId = (int)$pdo->lastInsertId();
+                    $added++;
+                }
+
+                $existing = $pdo->prepare("SELECT * FROM stock_movements WHERE product_id=? AND source_type='excel_initial' AND is_cancelled=0 LIMIT 1");
+                $existing->execute([$productId]);
+                $initial = $existing->fetch() ?: null;
+                if ($initial) {
+                    $pdo->prepare('UPDATE stock_movements SET direction=\'in\',quantity_dozen=?,movement_date=?,description=?,updated_at=? WHERE id=?')
+                        ->execute([$quantity, date('Y-m-d'), 'Excel başlangıç stoku', now(), $initial['id']]);
+                } else {
+                    $pdo->prepare('INSERT INTO stock_movements (product_id,direction,quantity_dozen,movement_date,source_type,source_id,description,created_by,created_at,updated_at) VALUES (?,\'in\',?,?,\'excel_initial\',NULL,?,?,?,?)')
+                        ->execute([$productId, $quantity, date('Y-m-d'), 'Excel başlangıç stoku', current_user()['id'] ?? null, now(), now()]);
+                }
+                $movementCount++;
+            }
+            $pdo->commit();
+            audit_action('stok_excel', 0, 'aktarildi', null, ['eklenen'=>$added,'guncellenen'=>$updated,'stok'=>$movementCount,'atlanmis'=>$skipped], (string)($_FILES['stock_excel']['name'] ?? ''));
+            flash('success', 'Excel aktarıldı: ' . $added . ' yeni ürün, ' . $updated . ' güncellenen ürün, ' . $movementCount . ' başlangıç stoku.' . ($skipped ? ' ' . $skipped . ' hatalı satır atlandı.' : ''));
+        } catch (Throwable $e) {
+            if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+            flash('error', 'Excel aktarılamadı: ' . $e->getMessage());
+        }
+        redirect('stok-takibi.php');
+    }
 
     if ($action === 'save_product') {
         $id = (int)($_POST['id'] ?? 0);
@@ -112,7 +278,12 @@ page_header('Stok Takibi', 'stok_takibi');
       <?php if($editProduct): ?><label class="check"><input type="checkbox" name="is_active" <?php echo (int)$editProduct['is_active']===1?'checked':''; ?>> Aktif ürün</label><?php endif; ?>
       <button class="btn btn-primary" type="submit"><?php echo $editProduct?'Ürünü güncelle':'Ürün ekle'; ?></button>
     </form>
-    <div class="stock-import-note"><strong>Excel başlangıç aktarımı</strong><br>Göndereceğin Excel’deki artikel, ürün adı/bilgileri ve başlangıç DZ stokları ürün kartlarına ve “Excel başlangıç stoku” hareketine dönüştürülecek.</div>
+    <form method="post" enctype="multipart/form-data" class="stock-import-note stock-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="excel_import">
+      <strong>Excel başlangıç aktarımı</strong>
+      <span>Başlıklar: <b>Artikel Kodu</b>, <b>Ürün Adı</b>, isteğe bağlı <b>Ürün Bilgileri</b> ve <b>Stok DZ</b>. Aynı artikel yeniden yüklenirse ürün ve başlangıç stoku güncellenir; mükerrer kayıt oluşmaz.</span>
+      <label>Excel dosyası (.xlsx veya .csv)<input type="file" name="stock_excel" accept=".xlsx,.csv" required></label>
+      <button class="btn btn-primary" type="submit">Excel'i yükle ve stokları aktar</button>
+    </form>
   </article>
   <article class="panel-card">
     <div class="card-head"><h3>Ürün stokları</h3><span><?php echo e(count($products)); ?> ürün</span></div>
