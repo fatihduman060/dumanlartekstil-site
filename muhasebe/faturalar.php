@@ -554,7 +554,7 @@ page_header('Faturalar', 'faturalar');
         <div data-invoice-stock-lines>
           <?php $stockRenderLines=$editStockLines ?: [['product_id'=>'','quantity_dozen'=>'']]; foreach($stockRenderLines as $stockLine): ?>
           <div class="invoice-stock-line">
-            <select name="stock_product_id[]"><option value="">Ürün seç</option><?php foreach($stockProducts as $stockProduct): ?><option value="<?php echo e($stockProduct['id']); ?>" <?php echo (string)($stockLine['product_id'] ?? '')===(string)$stockProduct['id']?'selected':''; ?>><?php echo e($stockProduct['article_code'].' · '.$stockProduct['product_name'].' · '.number_format((float)$stockProduct['stock_dozen'],2,',','.').' DZ'); ?></option><?php endforeach; ?></select>
+            <select name="stock_product_id[]"><option value="">Ürün seç</option><?php foreach($stockProducts as $stockProduct): ?><option value="<?php echo e($stockProduct['id']); ?>" <?php echo (string)($stockLine['product_id'] ?? '')===(string)$stockProduct['id']?'selected':''; ?>><?php echo e($stockProduct['article_code'].($stockProduct['barcode'] ? ' · '.$stockProduct['barcode'] : '').' · '.$stockProduct['product_name'].' · '.number_format((float)$stockProduct['stock_dozen'],2,',','.').' DZ'); ?></option><?php endforeach; ?></select>
             <input name="stock_quantity_dozen[]" inputmode="decimal" placeholder="Satılan DZ" value="<?php echo e(isset($stockLine['quantity_dozen']) ? str_replace('.', ',', (string)$stockLine['quantity_dozen']) : ''); ?>">
             <button type="button" data-stock-line-remove>×</button>
           </div>
