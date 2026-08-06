@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/stok-lib.php';
 require_login();
+stok_db_ensure();
 
 db()->exec("CREATE TABLE IF NOT EXISTS invoices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -209,6 +211,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $currency = fatura_para_birimi($_POST['currency'] ?? 'TL');
         $description = trim((string)($_POST['description'] ?? ''));
         $issuerName = trim((string)($_POST['issuer_name'] ?? ''));
+        $stockLines = stok_fatura_post_satirlari($_POST);
+        try {
+            stok_fatura_dogrula($id, $direction, $stockLines);
+        } catch (Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect('faturalar.php' . ($id > 0 ? '?edit=' . $id : ''));
+        }
         if (function_exists('mb_substr')) $issuerName = mb_substr($issuerName, 0, 180, 'UTF-8');
         else $issuerName = substr($issuerName, 0, 180);
 
@@ -257,8 +266,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 fatura_hareket_guncelle((int)$saved['cari_movement_id'], $saved);
             }
             log_action('Fatura güncellendi', ($invoiceNo ?: '#' . $id) . ' ' . fatura_para($totalAmount, $currency));
+            stok_fatura_senkronla($id, $direction, $invoiceDate, $stockLines, false);
             audit_action('fatura', $id, 'guncellendi', $oldRow, $saved, $invoiceNo ?: '#' . $id);
-            flash('success', 'Fatura güncellendi. Cariye işlenmişse bağlı hareket de güncellendi.');
+            flash('success', 'Fatura güncellendi. Cariye işlenmişse bağlı hareket ve satış stokları da güncellendi.');
         } else {
             db()->prepare("INSERT INTO invoices (
                 direction, cari_id, invoice_no, invoice_date, due_date, subtotal, vat_amount, total_amount,
@@ -273,6 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
             $newId = (int)db()->lastInsertId();
             $saved = fatura_getir($newId);
+            stok_fatura_senkronla($newId, $direction, $invoiceDate, $stockLines, false);
             log_action('Fatura eklendi', ($invoiceNo ?: '#' . $newId) . ' ' . fatura_para($totalAmount, $currency));
             audit_action('fatura', $newId, 'eklendi', null, $saved, $invoiceNo ?: '#' . $newId);
             flash('success', 'Fatura arşive eklendi.');
@@ -330,6 +341,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 sync_movement_account_transaction($movementId);
             }
 
+            stok_fatura_senkronla($id, (string)$invoice['direction'], (string)$invoice['invoice_date'], [], true);
             log_action('Fatura iptal edildi', '#' . $id);
             audit_action('fatura', $id, 'iptal', $invoice, ['is_cancelled'=>1,'cancel_reason'=>$reason], $invoice['invoice_no'] ?: '#' . $id);
             flash('success', 'Fatura ve varsa bağlı cari hareket iptal edildi.');
@@ -347,6 +359,9 @@ if (!empty($_GET['edit'])) {
         redirect('faturalar.php?include_cancelled=1');
     }
 }
+
+$stockProducts = stok_urunler(true);
+$editStockLines = $edit ? stok_fatura_satirlari((int)$edit['id']) : [];
 
 $period = trim((string)($_GET['period'] ?? date('Y-m')));
 if (!preg_match('/^\d{4}-\d{2}$/', $period)) $period = date('Y-m');
@@ -533,6 +548,22 @@ page_header('Faturalar', 'faturalar');
         </label>
       </div>
 
+      <section class="invoice-stock-box" data-invoice-stock-box>
+        <div class="invoice-stock-head"><div><strong>Satılan ürünler ve stok düşümü</strong><small>Yalnızca giden/satış faturalarında ürün ve DZ miktarı stoktan otomatik düşer.</small></div><a href="stok-takibi.php" target="_blank">Stok ürünlerini aç</a></div>
+        <?php if(!$stockProducts): ?><p class="muted">Henüz stok ürün kartı yok. Önce Stok Takibi bölümünden ürünleri ekle veya Excel listesini aktar.</p><?php else: ?>
+        <div data-invoice-stock-lines>
+          <?php $stockRenderLines=$editStockLines ?: [['product_id'=>'','quantity_dozen'=>'']]; foreach($stockRenderLines as $stockLine): ?>
+          <div class="invoice-stock-line">
+            <select name="stock_product_id[]"><option value="">Ürün seç</option><?php foreach($stockProducts as $stockProduct): ?><option value="<?php echo e($stockProduct['id']); ?>" <?php echo (string)($stockLine['product_id'] ?? '')===(string)$stockProduct['id']?'selected':''; ?>><?php echo e($stockProduct['article_code'].' · '.$stockProduct['product_name'].' · '.number_format((float)$stockProduct['stock_dozen'],2,',','.').' DZ'); ?></option><?php endforeach; ?></select>
+            <input name="stock_quantity_dozen[]" inputmode="decimal" placeholder="Satılan DZ" value="<?php echo e(isset($stockLine['quantity_dozen']) ? str_replace('.', ',', (string)$stockLine['quantity_dozen']) : ''); ?>">
+            <button type="button" data-stock-line-remove>×</button>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <button type="button" class="btn btn-secondary" data-stock-line-add>+ Ürün satırı ekle</button>
+        <?php endif; ?>
+      </section>
+
       <label>Açıklama<textarea name="description" rows="3" placeholder="Faturaya ilişkin kısa not..."><?php echo e($edit['description'] ?? ''); ?></textarea></label>
       <label>Fatura dosyası <small>PDF veya görsel; max 10 MB</small><input name="document" type="file" accept="image/*,application/pdf"></label>
       <?php if (!empty($edit['document_path'])): ?><p class="muted">Mevcut dosya: <a href="fatura-indir.php?id=<?php echo e($edit['id']); ?>" target="_blank"><?php echo e($edit['document_name'] ?: 'Faturayı aç'); ?></a></p><?php endif; ?>
@@ -622,6 +653,26 @@ page_header('Faturalar', 'faturalar');
   <div class="card-head"><div><h3>Fatura araçları</h3><small>Masraf fişleri ve seyrek kullanılan yardımcı işlemler</small></div></div>
   <div class="fatura-alt-kontrol-body" data-fatura-alt-kontrol-body><div class="toplu-yon-duzelt-panel" data-toplu-yon-panel hidden><div><strong>Son toplu yükleme yön kontrolü</strong><small data-toplu-yon-ozet>Kontrol ediliyor…</small></div><div class="toplu-yon-actions"><button type="button" class="btn btn-secondary" data-toplu-yon="giden">Tamamını giden yap</button><button type="button" class="btn btn-secondary" data-toplu-yon="gelen">Tamamını gelen yap</button></div></div></div>
 </section>
+
+<style>
+.invoice-stock-box{display:grid;gap:10px;padding:13px;border:1px solid #c9ddcf;border-radius:14px;background:#f5fbf7}.invoice-stock-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.invoice-stock-head div{display:grid;gap:3px}.invoice-stock-head small{color:var(--muted)}.invoice-stock-line{display:grid;grid-template-columns:minmax(220px,1fr) 130px 36px;gap:8px;margin-bottom:8px}.invoice-stock-line select,.invoice-stock-line input{width:100%;min-height:40px;border:1px solid var(--border);border-radius:10px;padding:8px}.invoice-stock-line button{border:0;border-radius:10px;background:#f8eaea;color:#a33f35;font-weight:900}@media(max-width:600px){.invoice-stock-head{align-items:flex-start;flex-direction:column}.invoice-stock-line{grid-template-columns:1fr 110px 36px}}
+</style>
+<script>
+(function(){
+  var stockBox=document.querySelector('[data-invoice-stock-box]');
+  var direction=document.querySelector('select[name="direction"]');
+  if(stockBox&&direction){
+    function stockVisibility(){stockBox.hidden=direction.value!=='giden';}
+    direction.addEventListener('change',stockVisibility);stockVisibility();
+    var lines=stockBox.querySelector('[data-invoice-stock-lines]');
+    var add=stockBox.querySelector('[data-stock-line-add]');
+    if(add&&lines){
+      add.addEventListener('click',function(){var first=lines.querySelector('.invoice-stock-line');if(!first)return;var row=first.cloneNode(true);row.querySelector('select').value='';row.querySelector('input').value='';lines.appendChild(row);});
+      lines.addEventListener('click',function(event){var button=event.target.closest('[data-stock-line-remove]');if(!button)return;var rows=lines.querySelectorAll('.invoice-stock-line');if(rows.length>1)button.closest('.invoice-stock-line').remove();else{rows[0].querySelector('select').value='';rows[0].querySelector('input').value='';}});
+    }
+  }
+})();
+</script>
 
 <script>
 (function(){
