@@ -114,6 +114,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $aliases = [
                 'article'=>['artikel','artikelkodu','article','articlecode','urunkodu','stokkodu'],
                 'name'=>['urunadi','urun','product','productname','stokadi'],
+                'barcode'=>['barkod','barcode','urunbarkodu','stokbarkodu','ean','ean13'],
                 'info'=>['urunbilgileri','urunbilgisi','bilgi','aciklama','description','renkbeden'],
                 'stock'=>['stok','stokdz','stokmiktari','baslangicstoku','baslangicstokdz','miktar','dz','duzine']
             ];
@@ -131,6 +132,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             foreach (array_slice($rows, 1) as $rowNo=>$row) {
                 $article = trim((string)($row[$map['article']] ?? ''));
                 $name = trim((string)($row[$map['name']] ?? ''));
+                $barcode = isset($map['barcode']) ? trim((string)($row[$map['barcode']] ?? '')) : '';
                 $info = isset($map['info']) ? trim((string)($row[$map['info']] ?? '')) : '';
                 $rawStock = trim((string)($row[$map['stock']] ?? ''));
                 if ($article === '' && $name === '' && $rawStock === '') continue;
@@ -143,12 +145,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 $product = $find->fetch() ?: null;
                 if ($product) {
                     $productId = (int)$product['id'];
-                    $pdo->prepare('UPDATE stock_products SET product_name=?,product_info=?,is_active=1,updated_at=? WHERE id=?')
-                        ->execute([$name, $info ?: null, now(), $productId]);
+                    $pdo->prepare('UPDATE stock_products SET product_name=?,barcode=?,product_info=?,is_active=1,updated_at=? WHERE id=?')
+                        ->execute([$name, $barcode ?: null, $info ?: null, now(), $productId]);
                     $updated++;
                 } else {
-                    $pdo->prepare('INSERT INTO stock_products (article_code,product_name,product_info,unit,is_active,created_by,created_at,updated_at) VALUES (?,?,?,\'DZ\',1,?,?,?)')
-                        ->execute([$article, $name, $info ?: null, current_user()['id'] ?? null, now(), now()]);
+                    $pdo->prepare('INSERT INTO stock_products (article_code,product_name,barcode,product_info,unit,is_active,created_by,created_at,updated_at) VALUES (?,?,?,?,\'DZ\',1,?,?,?)')
+                        ->execute([$article, $name, $barcode ?: null, $info ?: null, current_user()['id'] ?? null, now(), now()]);
                     $productId = (int)$pdo->lastInsertId();
                     $added++;
                 }
@@ -179,6 +181,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $id = (int)($_POST['id'] ?? 0);
         $article = trim((string)($_POST['article_code'] ?? ''));
         $name = trim((string)($_POST['product_name'] ?? ''));
+        $barcode = trim((string)($_POST['barcode'] ?? ''));
         $info = trim((string)($_POST['product_info'] ?? ''));
         if ($article === '' || $name === '') {
             flash('error', 'Artikel kodu ve ürün adı zorunludur.');
@@ -187,19 +190,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         try {
             if ($id > 0) {
                 $old = stok_urun($id);
-                db()->prepare('UPDATE stock_products SET article_code=?, product_name=?, product_info=?, is_active=?, updated_at=? WHERE id=?')
-                    ->execute([$article, $name, $info ?: null, isset($_POST['is_active']) ? 1 : 0, now(), $id]);
+                db()->prepare('UPDATE stock_products SET article_code=?, product_name=?, barcode=?, product_info=?, is_active=?, updated_at=? WHERE id=?')
+                    ->execute([$article, $name, $barcode ?: null, $info ?: null, isset($_POST['is_active']) ? 1 : 0, now(), $id]);
                 audit_action('stok_urun', $id, 'guncellendi', $old, stok_urun($id), $article);
                 flash('success', 'Ürün kartı güncellendi.');
             } else {
-                db()->prepare('INSERT INTO stock_products (article_code,product_name,product_info,unit,is_active,created_by,created_at,updated_at) VALUES (?,?,?,\'DZ\',1,?,?,?)')
-                    ->execute([$article, $name, $info ?: null, current_user()['id'] ?? null, now(), now()]);
+                db()->prepare('INSERT INTO stock_products (article_code,product_name,barcode,product_info,unit,is_active,created_by,created_at,updated_at) VALUES (?,?,?,?,\'DZ\',1,?,?,?)')
+                    ->execute([$article, $name, $barcode ?: null, $info ?: null, current_user()['id'] ?? null, now(), now()]);
                 $newId = (int)db()->lastInsertId();
                 audit_action('stok_urun', $newId, 'eklendi', null, stok_urun($newId), $article);
                 flash('success', 'Ürün kartı eklendi.');
             }
         } catch (Throwable $e) {
-            flash('error', 'Ürün kaydedilemedi. Aynı artikel kodu daha önce eklenmiş olabilir.');
+            flash('error', 'Ürün kaydedilemedi. Aynı artikel kodu veya barkod daha önce eklenmiş olabilir.');
         }
         redirect('stok-takibi.php');
     }
@@ -274,29 +277,30 @@ page_header('Stok Takibi', 'stok_takibi');
     <form method="post" class="stock-form" style="padding:16px"><?php echo csrf_field(); ?><input type="hidden" name="action" value="save_product"><input type="hidden" name="id" value="<?php echo e($editProduct['id'] ?? 0); ?>">
       <label>Artikel kodu<input name="article_code" required value="<?php echo e($editProduct['article_code'] ?? ''); ?>" placeholder="Ürün artikeli"></label>
       <label>Ürün adı<input name="product_name" required value="<?php echo e($editProduct['product_name'] ?? ''); ?>" placeholder="Ürün adı"></label>
+      <label>Ürün barkodu<input name="barcode" value="<?php echo e($editProduct['barcode'] ?? ''); ?>" placeholder="Barkod / EAN-13" inputmode="numeric"></label>
       <label>Ürün bilgileri<textarea name="product_info" rows="3" placeholder="Renk, beden grubu veya diğer bilgiler"><?php echo e($editProduct['product_info'] ?? ''); ?></textarea></label>
       <?php if($editProduct): ?><label class="check"><input type="checkbox" name="is_active" <?php echo (int)$editProduct['is_active']===1?'checked':''; ?>> Aktif ürün</label><?php endif; ?>
       <button class="btn btn-primary" type="submit"><?php echo $editProduct?'Ürünü güncelle':'Ürün ekle'; ?></button>
     </form>
     <form method="post" enctype="multipart/form-data" class="stock-import-note stock-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="excel_import">
       <strong>Excel başlangıç aktarımı</strong>
-      <span>Başlıklar: <b>Artikel Kodu</b>, <b>Ürün Adı</b>, isteğe bağlı <b>Ürün Bilgileri</b> ve <b>Stok DZ</b>. Aynı artikel yeniden yüklenirse ürün ve başlangıç stoku güncellenir; mükerrer kayıt oluşmaz.</span>
+      <span>Başlıklar: <b>Artikel Kodu</b>, <b>Ürün Adı</b>, <b>Stok DZ</b>; isteğe bağlı <b>Barkod</b> ve <b>Ürün Bilgileri</b>. Aynı artikel yeniden yüklenirse ürün ve başlangıç stoku güncellenir; mükerrer kayıt oluşmaz.</span>
       <label>Excel dosyası (.xlsx veya .csv)<input type="file" name="stock_excel" accept=".xlsx,.csv" required></label>
       <button class="btn btn-primary" type="submit">Excel'i yükle ve stokları aktar</button>
     </form>
   </article>
   <article class="panel-card">
     <div class="card-head"><h3>Ürün stokları</h3><span><?php echo e(count($products)); ?> ürün</span></div>
-    <div class="table-wrap"><table class="stock-table"><thead><tr><th>Artikel</th><th>Ürün</th><th>Bilgi</th><th class="right">Stok</th><th>Durum</th><th></th></tr></thead><tbody>
-      <?php if(!$products): ?><tr><td colspan="6" class="empty">Excel aktarımı veya manuel ürün girişi bekleniyor.</td></tr><?php endif; ?>
-      <?php foreach($products as $product): ?><tr><td><strong><?php echo e($product['article_code']); ?></strong></td><td><?php echo e($product['product_name']); ?></td><td><?php echo e($product['product_info'] ?: '-'); ?></td><td class="right"><strong class="<?php echo (float)$product['stock_dozen']<0?'stock-negative':'stock-positive'; ?>"><?php echo e(number_format((float)$product['stock_dozen'],2,',','.')); ?> DZ</strong></td><td><?php echo (int)$product['is_active']===1?badge('Aktif','success'):badge('Pasif','neutral'); ?></td><td><a href="stok-takibi.php?edit=<?php echo e($product['id']); ?>">Düzenle</a></td></tr><?php endforeach; ?>
+    <div class="table-wrap"><table class="stock-table"><thead><tr><th>Artikel</th><th>Barkod</th><th>Ürün</th><th>Bilgi</th><th class="right">Stok</th><th>Durum</th><th></th></tr></thead><tbody>
+      <?php if(!$products): ?><tr><td colspan="7" class="empty">Excel aktarımı veya manuel ürün girişi bekleniyor.</td></tr><?php endif; ?>
+      <?php foreach($products as $product): ?><tr><td><strong><?php echo e($product['article_code']); ?></strong></td><td><?php echo e($product['barcode'] ?: '-'); ?></td><td><?php echo e($product['product_name']); ?></td><td><?php echo e($product['product_info'] ?: '-'); ?></td><td class="right"><strong class="<?php echo (float)$product['stock_dozen']<0?'stock-negative':'stock-positive'; ?>"><?php echo e(number_format((float)$product['stock_dozen'],2,',','.')); ?> DZ</strong></td><td><?php echo (int)$product['is_active']===1?badge('Aktif','success'):badge('Pasif','neutral'); ?></td><td><a href="stok-takibi.php?edit=<?php echo e($product['id']); ?>">Düzenle</a></td></tr><?php endforeach; ?>
     </tbody></table></div>
   </article>
 </section>
 <section class="panel-card" id="stok-hareketi">
   <div class="card-head"><div><h3>Tek tek stok girişi</h3><span>Ürünü seç, düzine miktarını ekle veya düzeltme çıkışı yap.</span></div></div>
   <form method="post" class="stock-form" style="padding:16px"><?php echo csrf_field(); ?><input type="hidden" name="action" value="stock_entry">
-    <div class="two"><label>Ürün<select name="product_id" required><option value="">Ürün seç</option><?php foreach($products as $product): if((int)$product['is_active']!==1)continue; ?><option value="<?php echo e($product['id']); ?>"><?php echo e($product['article_code'].' · '.$product['product_name'].' · '.number_format((float)$product['stock_dozen'],2,',','.').' DZ'); ?></option><?php endforeach; ?></select></label><label>İşlem<select name="direction"><option value="in">Stok ekle</option><option value="out">Düzeltme çıkışı</option></select></label></div>
+    <div class="two"><label>Ürün<select name="product_id" required><option value="">Ürün seç</option><?php foreach($products as $product): if((int)$product['is_active']!==1)continue; ?><option value="<?php echo e($product['id']); ?>"><?php echo e($product['article_code'].($product['barcode'] ? ' · '.$product['barcode'] : '').' · '.$product['product_name'].' · '.number_format((float)$product['stock_dozen'],2,',','.').' DZ'); ?></option><?php endforeach; ?></select></label><label>İşlem<select name="direction"><option value="in">Stok ekle</option><option value="out">Düzeltme çıkışı</option></select></label></div>
     <div class="two"><label>Miktar (DZ)<input name="quantity_dozen" inputmode="decimal" placeholder="0,00" required></label><label>Tarih<input type="date" name="movement_date" value="<?php echo e(date('Y-m-d')); ?>" required></label></div>
     <label>Açıklama<input name="description" placeholder="Üretimden giriş, sayım farkı veya açıklama"></label>
     <button class="btn btn-primary" type="submit">Stok hareketini kaydet</button>
