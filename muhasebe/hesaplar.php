@@ -300,14 +300,19 @@ $externalFundings = $externalFundingStmt->fetchAll() ?: [];
 
 page_header('Kasa / Banka', 'hesaplar');
 ?>
+<style>
+.account-summary-link{display:block;text-decoration:none;color:inherit;cursor:pointer;position:relative;transition:transform .16s ease,box-shadow .16s ease}
+.account-summary-link:after{content:'›';position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:28px;color:#758078}
+.account-summary-link:hover,.account-summary-link:focus{transform:translateY(-2px);box-shadow:0 10px 24px rgba(23,63,41,.12);outline:2px solid #b8d4c2;outline-offset:2px}
+</style>
 <section class="stats-grid four">
-  <article class="stat-card"><span>Toplam bakiye</span><strong class="<?php echo $summary['total'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($summary['total'])); ?></strong><small>Kasa + banka toplamı</small></article>
-  <article class="stat-card soft"><span>Kasa</span><strong><?php echo e(money($summary['kasa'])); ?></strong><small>Nakit hesapları</small></article>
-  <article class="stat-card soft"><span>Banka</span><strong><?php echo e(money($summary['banka'])); ?></strong><small>Banka hesapları toplamı</small></article>
-  <article class="stat-card soft"><span>Aktif hesap</span><strong><?php echo e($summary['active']); ?></strong><small>Kullanımdaki hesap</small></article>
+  <a class="stat-card account-summary-link" href="#hesap-listesi" aria-label="Tüm kasa ve banka hesaplarını göster"><span>Toplam bakiye</span><strong class="<?php echo $summary['total'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($summary['total'])); ?></strong><small>Kasa + banka toplamı</small></a>
+  <a class="stat-card soft account-summary-link" href="#hesap-listesi" aria-label="Kasa hesaplarını göster"><span>Kasa</span><strong><?php echo e(money($summary['kasa'])); ?></strong><small>Nakit hesapları</small></a>
+  <a class="stat-card soft account-summary-link" href="#banka-bakiyeleri" aria-label="Banka bakiyelerini göster"><span>Banka</span><strong><?php echo e(money($summary['banka'])); ?></strong><small>Banka hesapları toplamı</small></a>
+  <a class="stat-card soft account-summary-link" href="#hesap-listesi" aria-label="Aktif hesapları göster"><span>Aktif hesap</span><strong><?php echo e($summary['active']); ?></strong><small>Kullanımdaki hesap</small></a>
 </section>
 
-<section class="panel-card">
+<section class="panel-card" id="banka-bakiyeleri">
   <div class="card-head">
     <div><h3>Banka bakiyeleri</h3><span>Hangi bankada toplam ne kadar para olduğunu hızlı gör.</span></div>
     <strong><?php echo e(count($bankCards)); ?> banka</strong>
@@ -386,7 +391,7 @@ page_header('Kasa / Banka', 'hesaplar');
     <?php else: ?><p class="muted">Görüntüleme yetkisindesiniz. Hesap ekleme/düzenleme kapalı.</p><?php endif; ?>
   </article>
 
-  <article class="panel-card">
+  <article class="panel-card" id="hesap-listesi">
     <div class="card-head"><h3>Hesap listesi</h3><a href="export.php?type=account_transactions">Hareket CSV</a></div>
     <div class="table-wrap">
       <table>
