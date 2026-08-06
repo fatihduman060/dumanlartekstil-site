@@ -452,7 +452,7 @@ ym_render_section('Satış Analizi', 'Fatura kayıtlarından yıllık satış ve
 ym_render_section('Üretim Analizi', 'Üretim Takibi bölümündeki günlük düzine kayıtlarının seçilen yıl için aylık kırılımı ve yıllık toplamı.', $productionMetrics, 'Üretim Takibi');
 
 ym_render_section('Stok Analizi', 'Mevcut stok veya stok hareketi kayıtlarının toplam miktarı.', array(
-    ym_metric('Toplam stok miktarı', $stockTotal, $srcStock, 'Stok miktarı alanı veya stok tablosu eksik.', 'info')
+    ym_metric('Toplam stok miktarı', $stockTotal, $srcStock, 'Stok miktarı alanı veya stok tablosu eksik.', 'info', 'dozen')
 ), 'Stok verisi');
 
 ym_render_section('Banka Analizi', 'Aktif banka hesaplarının açılış ve hareket bakiyeleri.', array(
