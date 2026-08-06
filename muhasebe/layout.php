@@ -165,7 +165,10 @@ function page_header(string $title, string $active = ''): void
         $nav[] = ['cariler', 'cariler.php', 'Cariler', '◎'];
         if ($fullAdmin) $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
         if (can_access_private_finance_modules()) $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa / Banka', '▣'];
-        if (can_write()) $nav[] = ['uretim_takibi', 'uretim-takibi.php', 'Üretim Takibi', '⚙'];
+        if (can_write()) {
+            $nav[] = ['uretim_takibi', 'uretim-takibi.php', 'Üretim Takibi', '⚙'];
+            $nav[] = ['stok_takibi', 'stok-takibi.php', 'Stok Takibi', '▦'];
+        }
         if ($fullAdmin) $nav[] = ['magaza', 'magaza.php', 'Mağaza', '▥'];
         if (can_access_private_finance_modules()) $nav[] = ['vergi_odemeleri', 'vergi-odemeleri.php', 'Vergi Ödemeleri', '₺'];
         if (can_access_private_finance_modules()) $nav[] = ['kart_ekstre', 'kart-ekstre-takibi.php', 'Kart Ekstre Takibi', '▧'];
