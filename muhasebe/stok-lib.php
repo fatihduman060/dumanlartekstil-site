@@ -15,6 +15,12 @@ function stok_db_ensure(): void
         updated_at TEXT NOT NULL,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
+    $productColumns = $pdo->query('PRAGMA table_info(stock_products)')->fetchAll() ?: [];
+    $hasBarcode = false;
+    foreach ($productColumns as $column) if (($column['name'] ?? '') === 'barcode') $hasBarcode = true;
+    if (!$hasBarcode) $pdo->exec('ALTER TABLE stock_products ADD COLUMN barcode TEXT');
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_products_barcode ON stock_products(barcode) WHERE barcode IS NOT NULL AND barcode<>''");
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS stock_movements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         product_id INTEGER NOT NULL,
@@ -104,7 +110,7 @@ function stok_fatura_post_satirlari(array $post): array
 function stok_fatura_satirlari(int $invoiceId): array
 {
     stok_db_ensure();
-    $stmt = db()->prepare("SELECT isl.*, p.article_code, p.product_name
+    $stmt = db()->prepare("SELECT isl.*, p.article_code, p.barcode, p.product_name
         FROM invoice_stock_lines isl JOIN stock_products p ON p.id=isl.product_id
         WHERE isl.invoice_id=? AND isl.is_cancelled=0 ORDER BY isl.id");
     $stmt->execute([$invoiceId]);
