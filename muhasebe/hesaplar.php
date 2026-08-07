@@ -200,6 +200,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('hesaplar.php#disaridan-para-girisi');
     }
 
+
+    if ($action === 'owner_salary_payment') {
+        $accountId = (int)($_POST['account_id'] ?? 0);
+        $amount = decimal_from_input($_POST['amount'] ?? '0');
+        $date = trim((string)($_POST['transaction_date'] ?? date('Y-m-d')));
+        $note = trim((string)($_POST['description'] ?? ''));
+        $accountStmt = db()->prepare('SELECT id, name FROM accounts WHERE id=? AND is_active=1 LIMIT 1');
+        $accountStmt->execute([$accountId]);
+        $salaryAccount = $accountStmt->fetch() ?: null;
+        if (!$salaryAccount || $amount <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            flash('error', 'Fatih Duman maaş çıkışı için aktif hesap, tarih ve sıfırdan büyük tutar zorunludur.');
+            redirect('hesaplar.php#fatih-duman-maas');
+        }
+        $fullDescription = 'Maaş ödemesi: Fatih Duman' . ($note !== '' ? ' / ' . $note : '');
+        db()->prepare("INSERT INTO account_transactions
+            (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
+            VALUES (?, 'out', ?, ?, 'salary', NULL, ?, ?, ?)")
+            ->execute([$accountId, $amount, $date, $fullDescription, current_user()['id'], now()]);
+        $newTransactionId = (int)db()->lastInsertId();
+        log_action('Fatih Duman maaş çıkışı', ($salaryAccount['name'] ?? '') . ' / ' . money($amount));
+        audit_action('hesap_hareketi', $newTransactionId, 'fatih_duman_maas_cikisi', null, [
+            'account_id'=>$accountId, 'amount'=>$amount, 'date'=>$date, 'description'=>$note
+        ], $fullDescription);
+        flash('success', money($amount) . ' Fatih Duman maaş ödemesi olarak ' . ($salaryAccount['name'] ?? 'hesap') . ' hesabından düşüldü.');
+        redirect('hesaplar.php#fatih-duman-maas');
+    }
+
+    if ($action === 'cancel_owner_salary_payment') {
+        $id = (int)($_POST['id'] ?? 0);
+        $stmt = db()->prepare("SELECT at.*, a.name AS account_name FROM account_transactions at JOIN accounts a ON a.id=at.account_id WHERE at.id=? AND at.source_type='salary' AND at.source_id IS NULL AND at.direction='out' AND at.description LIKE 'Maaş ödemesi: Fatih Duman%' LIMIT 1");
+        $stmt->execute([$id]);
+        $salaryPayment = $stmt->fetch() ?: null;
+        if (!$salaryPayment) {
+            flash('error', 'Fatih Duman maaş çıkışı bulunamadı.');
+            redirect('hesaplar.php#fatih-duman-maas');
+        }
+        $reverseCheck = db()->prepare("SELECT id FROM account_transactions WHERE source_type='salary_reversal' AND source_id=? LIMIT 1");
+        $reverseCheck->execute([$id]);
+        if ($reverseCheck->fetchColumn()) {
+            flash('warning', 'Bu maaş çıkışı daha önce iptal edilmiş.');
+            redirect('hesaplar.php#fatih-duman-maas');
+        }
+        $reason = trim((string)($_POST['cancel_reason'] ?? ''));
+        if ($reason === '') $reason = 'Kullanıcı tarafından iptal edildi.';
+        db()->prepare("INSERT INTO account_transactions
+            (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
+            VALUES (?, 'in', ?, ?, 'salary_reversal', ?, ?, ?, ?)")
+            ->execute([(int)$salaryPayment['account_id'], (float)$salaryPayment['amount'], date('Y-m-d'), $id, 'İptal karşılığı: ' . ($salaryPayment['description'] ?? 'Fatih Duman maaş ödemesi') . ' / ' . $reason, current_user()['id'], now()]);
+        $reversalId = (int)db()->lastInsertId();
+        audit_action('hesap_hareketi', $id, 'fatih_duman_maas_iptal', $salaryPayment, ['reversal_transaction_id'=>$reversalId, 'reason'=>$reason], $salaryPayment['account_name'] ?? '');
+        flash('success', 'Maaş çıkışı iptal edildi; geçmiş kayıt korunarak tutar hesaba geri eklendi.');
+        redirect('hesaplar.php#fatih-duman-maas');
+    }
+
     if ($action === 'manual_transaction') {
         $accountId = (int)($_POST['account_id'] ?? 0);
         $direction = $_POST['direction'] ?? '';
@@ -297,6 +351,16 @@ $externalFundingStmt = db()->query("SELECT at.*, a.name AS account_name, a.accou
     WHERE at.source_type='external_funding' AND at.direction='in'
     ORDER BY at.transaction_date DESC, at.id DESC LIMIT 40");
 $externalFundings = $externalFundingStmt->fetchAll() ?: [];
+
+$ownerSalaryStmt = db()->query("SELECT at.*, a.name AS account_name, a.account_type, a.bank_name, u.display_name AS user_name,
+    EXISTS(SELECT 1 FROM account_transactions rev WHERE rev.source_type='salary_reversal' AND rev.source_id=at.id) AS is_cancelled
+    FROM account_transactions at
+    JOIN accounts a ON a.id=at.account_id
+    LEFT JOIN users u ON u.id=at.created_by
+    WHERE at.source_type='salary' AND at.source_id IS NULL AND at.direction='out'
+      AND at.description LIKE 'Maaş ödemesi: Fatih Duman%'
+    ORDER BY at.transaction_date DESC, at.id DESC LIMIT 40");
+$ownerSalaryPayments = $ownerSalaryStmt->fetchAll() ?: [];
 
 page_header('Kasa / Banka', 'hesaplar');
 ?>
@@ -412,6 +476,44 @@ page_header('Kasa / Banka', 'hesaplar');
       </table>
     </div>
   </article>
+</section>
+
+<section class="panel-card" id="fatih-duman-maas" style="border-color:#d5b879;background:linear-gradient(135deg,#fff,#fff9ed)">
+  <div class="card-head">
+    <div><h3>Fatih Duman maaş çıkışı</h3><span>Fatih Duman kasadan veya bankadan para aldığında maaş ödemesi olarak kaydet.</span></div>
+    <strong>Maaş ödemesi</strong>
+  </div>
+  <?php if (can_write()): ?>
+  <form method="post" class="stack-form" style="padding:16px" onsubmit="return confirm('Girilen tutar seçilen hesaptan Fatih Duman maaş ödemesi olarak düşülecek. Onaylıyor musunuz?');">
+    <?php echo csrf_field(); ?><input type="hidden" name="action" value="owner_salary_payment">
+    <div class="two-col">
+      <label>Çıkış yapılacak hesap<select name="account_id" required><option value="">Hesap seç</option><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?> — <?php echo e($a['bank_name'] ?: account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select></label>
+      <label>Maaş tutarı<input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label>
+    </div>
+    <div class="two-col">
+      <label>Ödeme tarihi<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label>
+      <label>Açıklama<input name="description" placeholder="Örn. Ağustos maaş ödemesi / kasadan alındı"></label>
+    </div>
+    <button class="btn btn-primary" type="submit">Maaş olarak hesaptan düş</button>
+  </form>
+  <?php else: ?><p class="muted" style="padding:16px">Görüntüleme yetkisindesiniz. Maaş çıkışı ekleme kapalı.</p><?php endif; ?>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tarih</th><th>Hesap</th><th>Açıklama</th><th>Kaydeden</th><th class="right">Maaş çıkışı</th><th>Durum / İşlem</th></tr></thead>
+      <tbody>
+        <?php if(!$ownerSalaryPayments): ?><tr><td colspan="6" class="empty">Henüz Fatih Duman maaş çıkışı yok.</td></tr><?php endif; ?>
+        <?php foreach($ownerSalaryPayments as $payment): $paymentCancelled=(int)$payment['is_cancelled']===1; ?><tr style="<?php echo $paymentCancelled?'opacity:.6;background:#faf8f4':''; ?>">
+          <td><?php echo e(tr_date($payment['transaction_date'])); ?></td>
+          <td><strong><?php echo e($payment['account_name']); ?></strong><small><?php echo e($payment['bank_name'] ?: account_type_label($payment['account_type'])); ?></small></td>
+          <td><?php echo e($payment['description']); ?></td>
+          <td><?php echo e($payment['user_name'] ?: '-'); ?></td>
+          <td class="right"><strong class="text-danger"><?php echo e(money($payment['amount'])); ?></strong></td>
+          <td><?php if($paymentCancelled): ?><?php echo badge('İptal edildi','neutral'); ?><?php elseif(can_write()): ?><form method="post" onsubmit="return confirm('Bu maaş çıkışı iptal edilsin mi? Tutar seçilen hesaba geri eklenecek.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel_owner_salary_payment"><input type="hidden" name="id" value="<?php echo e($payment['id']); ?>"><input type="hidden" name="cancel_reason" value="Kullanıcı tarafından iptal edildi."><button>İptal et</button></form><?php else: ?><?php echo badge('Aktif','success'); ?><?php endif; ?></td>
+        </tr><?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
 </section>
 
 <section class="panel-card" id="disaridan-para-girisi" style="border-color:#a9d7b8;background:linear-gradient(135deg,#fff,#f2fbf5)">
