@@ -9,9 +9,12 @@ page_header('Mağaza', 'magaza');
 ?>
 <section class="dashboard-section magaza-page-shell">
   <div class="dashboard-section-head">
-    <div><span>Mağaza</span><h3>Günlük satışlar</h3></div>
-    <p>Günlük ödeme dağılımını kaydet; nakit aynı gün Ana Kasa’ya, kart/POS satışları 13 gün sonra Garanti Dumanlar hesabına otomatik işlensin.</p>
+    <div><span>Mağaza</span><h3>Günlük satışlar</h3><p>Günlük ödeme dağılımını kaydet; nakit aynı gün Mağaza Kasa’ya, kart/POS satışları 13 gün sonra Garanti Dumanlar hesabına otomatik işlensin.</p></div>
+    <a class="btn btn-primary" href="magaza-veresiye.php">Personel Veresiye</a>
   </div>
+  <a class="panel-card magaza-veresiye-card" href="magaza-veresiye.php">
+    <span>Fabrika personeli</span><strong>Personel Veresiye Takibi</strong><small>Personel ekle, isimden ara, veresiye alışveriş ve tahsilatları takip et.</small>
+  </a>
 
   <form class="filterbar magaza-period-filter" method="get" action="magaza.php">
     <input type="month" name="period" value="<?php echo e($period); ?>">
@@ -26,7 +29,7 @@ page_header('Mağaza', 'magaza');
 .magaza-page-shell{display:grid;gap:16px;max-width:none}
 .magaza-page-shell .dashboard-section-head{margin-bottom:0}
 .magaza-period-filter{margin:0;padding:12px;border:1px solid var(--border);border-radius:14px;background:#fff}
-.magaza-page-body{display:grid;gap:14px}
+.magaza-page-body{display:grid;gap:14px}.magaza-veresiye-card{display:grid;gap:5px;text-decoration:none;color:inherit;padding:16px;border-color:#b8d8c2;background:linear-gradient(135deg,#fff,#f1faf4)}.magaza-veresiye-card span{font-size:11px;font-weight:850;color:#4f765c;text-transform:uppercase}.magaza-veresiye-card strong{font-size:20px;color:#173f29}.magaza-veresiye-card small{color:#66736b}
 @media(max-width:700px){
 .magaza-page-shell .dashboard-section-head{order:1}
 .magaza-page-shell .dashboard-section-head p{display:none}
