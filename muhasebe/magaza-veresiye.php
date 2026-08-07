@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
 require_login();
 
 function pv_normalize_name($name)
@@ -39,7 +40,48 @@ function pv_db_ensure()
         FOREIGN KEY(person_id) REFERENCES store_credit_people(id) ON DELETE RESTRICT,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
+    $columns = $pdo->query('PRAGMA table_info(store_credit_entries)')->fetchAll() ?: [];
+    $hasPaymentMethod = $hasDailyBreakdown = false;
+    foreach ($columns as $column) {
+        if (($column['name'] ?? '') === 'payment_method') $hasPaymentMethod = true;
+        if (($column['name'] ?? '') === 'daily_breakdown_id') $hasDailyBreakdown = true;
+    }
+    if (!$hasPaymentMethod) $pdo->exec('ALTER TABLE store_credit_entries ADD COLUMN payment_method TEXT');
+    if (!$hasDailyBreakdown) $pdo->exec('ALTER TABLE store_credit_entries ADD COLUMN daily_breakdown_id INTEGER');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_store_credit_person_date ON store_credit_entries(person_id,entry_date)');
+}
+
+function pv_daily_sync($date, $type, $paymentMethod, $delta)
+{
+    magaza_odeme_dagilim_tablosunu_hazirla();
+    $pdo = db();
+    $stmt = $pdo->prepare('SELECT * FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1');
+    $stmt->execute([$date]);
+    $row = $stmt->fetch() ?: null;
+    $userId = current_user()['id'] ?? null;
+
+    if (!$row) {
+        if ($delta < 0) throw new RuntimeException('Bağlı günlük mağaza kaydı bulunamadı.');
+        $pdo->prepare('INSERT INTO store_daily_payment_breakdown (sale_date,cash_amount,card_amount,credit_amount,credit_collection_amount,cash_credit_collection_amount,card_credit_collection_amount,cash_change_left_amount,daily_total,created_by,created_at,updated_by,updated_at) VALUES (?,0,0,0,0,0,0,0,0,?,?,?,?)')
+            ->execute([$date,$userId,now(),$userId,now()]);
+        $id = (int)$pdo->lastInsertId();
+        $stmt = $pdo->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+    }
+
+    $credit = (float)($row['credit_amount'] ?? 0);
+    $cashCollection = (float)($row['cash_credit_collection_amount'] ?? 0);
+    $cardCollection = (float)($row['card_credit_collection_amount'] ?? 0);
+    if ($type === 'debt') $credit = max(0, round($credit + $delta, 2));
+    elseif ($paymentMethod === 'cash') $cashCollection = max(0, round($cashCollection + $delta, 2));
+    else $cardCollection = max(0, round($cardCollection + $delta, 2));
+
+    $dailyTotal = magaza_odeme_dagilim_gunluk_toplam((float)$row['cash_amount'], (float)$row['card_amount'], $credit);
+    $pdo->prepare('UPDATE store_daily_payment_breakdown SET credit_amount=?,credit_collection_amount=?,cash_credit_collection_amount=?,card_credit_collection_amount=?,daily_total=?,updated_by=?,updated_at=? WHERE id=?')
+        ->execute([$credit,round($cashCollection+$cardCollection,2),$cashCollection,$cardCollection,$dailyTotal,$userId,now(),$row['id']]);
+    magaza_odeme_dagilim_hareketlerini_senkronla((int)$row['id']);
+    return (int)$row['id'];
 }
 
 function pv_person($id)
@@ -81,9 +123,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $personId = (int)($_POST['person_id'] ?? 0);
         $type = (string)($_POST['entry_type'] ?? 'debt');
         $amount = max(0, decimal_from_input($_POST['amount'] ?? 0));
+        $paymentMethod = trim((string)($_POST['payment_method'] ?? ''));
         $date = trim((string)($_POST['entry_date'] ?? date('Y-m-d')));
         $description = trim((string)($_POST['description'] ?? ''));
         if (!in_array($type, ['debt','payment'], true)) $type = 'debt';
+        if ($type === 'payment' && !in_array($paymentMethod, ['cash','card'], true)) {
+            flash('error', 'Tahsilat için Nakit veya Kart seçmelisiniz.');
+            redirect('magaza-veresiye.php?person=' . $personId);
+        }
+        if ($type === 'debt') $paymentMethod = '';
         $person = pv_person($personId);
         if (!$person || $amount <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             flash('error', 'Personel, tarih ve tutarı kontrol edin.');
@@ -93,10 +141,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             flash('error', 'Tahsilat, personelin kalan borcundan fazla olamaz.');
             redirect('magaza-veresiye.php?person=' . $personId);
         }
-        db()->prepare('INSERT INTO store_credit_entries (person_id,entry_type,amount,entry_date,description,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)')
-            ->execute([$personId, $type, $amount, $date, $description ?: ($type === 'debt' ? 'Mağaza veresiye alışverişi' : 'Personelden tahsilat'), current_user()['id'] ?? null, now(), now()]);
-        $entryId = (int)db()->lastInsertId();
-        audit_action('magaza_personel_veresiye_hareketi', $entryId, 'eklendi', null, ['person_id'=>$personId,'type'=>$type,'amount'=>$amount,'date'=>$date,'description'=>$description], $person['full_name']);
+        db()->beginTransaction();
+        try {
+            $dailyBreakdownId = pv_daily_sync($date, $type, $paymentMethod, $amount);
+            db()->prepare('INSERT INTO store_credit_entries (person_id,entry_type,amount,entry_date,payment_method,daily_breakdown_id,description,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+                ->execute([$personId, $type, $amount, $date, $paymentMethod ?: null, $dailyBreakdownId, $description ?: ($type === 'debt' ? 'Mağaza veresiye alışverişi' : 'Personelden ' . ($paymentMethod === 'cash' ? 'nakit' : 'kart') . ' tahsilat'), current_user()['id'] ?? null, now(), now()]);
+            $entryId = (int)db()->lastInsertId();
+            db()->commit();
+        } catch (Throwable $e) {
+            if (db()->inTransaction()) db()->rollBack();
+            throw $e;
+        }
+        audit_action('magaza_personel_veresiye_hareketi', $entryId, 'eklendi', null, ['person_id'=>$personId,'type'=>$type,'amount'=>$amount,'payment_method'=>$paymentMethod,'date'=>$date,'description'=>$description], $person['full_name']);
         flash('success', $type === 'debt' ? 'Veresiye alışveriş kaydedildi.' : 'Tahsilat kaydedildi.');
         redirect('magaza-veresiye.php?person=' . $personId);
     }
@@ -107,8 +163,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $stmt->execute([$id]);
         $entry = $stmt->fetch() ?: null;
         if ($entry) {
-            db()->prepare('UPDATE store_credit_entries SET is_cancelled=1,cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=?')
-                ->execute([now(), current_user()['id'] ?? null, 'Liste üzerinden iptal edildi', now(), $id]);
+            db()->beginTransaction();
+            try {
+                pv_daily_sync((string)$entry['entry_date'], (string)$entry['entry_type'], (string)($entry['payment_method'] ?? ''), -(float)$entry['amount']);
+                db()->prepare('UPDATE store_credit_entries SET is_cancelled=1,cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=?')
+                    ->execute([now(), current_user()['id'] ?? null, 'Liste üzerinden iptal edildi', now(), $id]);
+                db()->commit();
+            } catch (Throwable $e) {
+                if (db()->inTransaction()) db()->rollBack();
+                throw $e;
+            }
             audit_action('magaza_personel_veresiye_hareketi', $id, 'iptal', $entry, ['is_cancelled'=>1], $entry['full_name']);
             flash('success', 'Hareket iptal edildi; kayıt geçmişte korundu.');
             redirect('magaza-veresiye.php?person=' . (int)$entry['person_id']);
@@ -177,7 +241,8 @@ page_header('Personel Veresiye', 'magaza');
     <?php else: ?>
       <div class="card-head"><div><h3><?php echo e($selected['full_name']); ?></h3><span>Kişi bazında veresiye ve ödeme geçmişi</span></div><strong class="<?php echo (float)$selected['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$selected['balance'])); ?> kalan</strong></div>
       <form method="post" class="pv-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>">
-        <div class="two-col"><label>İşlem<select name="entry_type"><option value="debt">Veresiye alışveriş</option><option value="payment">Ödeme / tahsilat</option></select></label><label>Tutar<input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
+        <div class="two-col"><label>İşlem<select name="entry_type" id="pv-entry-type"><option value="debt">Veresiye alışveriş</option><option value="payment">Ödeme / tahsilat</option></select></label><label>Tutar<input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
+        <label id="pv-payment-method" style="display:none">Tahsilat şekli<select name="payment_method"><option value="">Nakit veya kart seç</option><option value="cash">Nakit</option><option value="card">Kart / POS</option></select><small>Seçilen tutar günlük mağaza kaydına otomatik yansır.</small></label>
         <div class="two-col"><label>Tarih<input type="date" name="entry_date" value="<?php echo e(date('Y-m-d')); ?>" required></label><label>Açıklama<input name="description" placeholder="Alınan ürünler veya ödeme açıklaması"></label></div>
         <button class="btn btn-primary" type="submit">Hareketi kaydet</button>
       </form>
@@ -188,4 +253,12 @@ page_header('Personel Veresiye', 'magaza');
     <?php endif; ?>
   </article>
 </section>
+<script>
+(function(){
+  var type=document.getElementById('pv-entry-type'),method=document.getElementById('pv-payment-method');
+  if(!type||!method)return;
+  function sync(){method.style.display=type.value==='payment'?'grid':'none';method.querySelector('select').required=type.value==='payment';}
+  type.addEventListener('change',sync);sync();
+})();
+</script>
 <?php page_footer(); ?>
