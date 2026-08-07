@@ -59,7 +59,7 @@ page_header('Mağaza', 'magaza');
 [data-magaza-odeme-dagilimi-body]{order:4}
 }
 </style>
-<script src="assets/magaza-odeme-dagilimi.js?v=5"></script>
+<script src="assets/magaza-odeme-dagilimi.js?v=6"></script>
 <?php if (!is_store_sales_user()): ?>
 <script src="assets/magaza-gunluk-satis.js?v=10"></script>
 <?php endif; ?>
