@@ -90,9 +90,10 @@ function magaza_odeme_dagilim_hesap_id(string $target): int
 {
     $rows = db()->query("SELECT * FROM accounts ORDER BY is_active DESC, id ASC")->fetchAll() ?: [];
     foreach ($rows as $row) {
+        if ((int)($row['is_active'] ?? 0) !== 1) continue;
         $nameKey = magaza_odeme_dagilim_hesap_anahtari((string)($row['name'] ?? ''));
         $bankKey = magaza_odeme_dagilim_hesap_anahtari((string)($row['bank_name'] ?? ''));
-        if ($target === 'cash' && in_array($nameKey, ['magazakasa','anakasa','genelkasa','merkezkasa'], true)) return (int)$row['id'];
+        if ($target === 'cash' && $nameKey === 'magazakasa') return (int)$row['id'];
         if ($target === 'card') {
             $exact = in_array($nameKey, ['garantidumanlar','dumanlargaranti'], true);
             $combined = strpos($nameKey, 'garanti') !== false && strpos($nameKey, 'dumanlar') !== false;
