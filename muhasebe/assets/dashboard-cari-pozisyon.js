@@ -135,7 +135,7 @@
   function renderStoreCards(data){
     var cards=ensureStoreCards();if(!cards)return;
     var count=Number(data&&data.day_count||0),latest=String(data&&data.latest_sale_date||data&&data.cutoff_date||''),dateText=latest?trDate(latest)+' tarihine kadar':'Bu ay',countText=count>0?' · '+count+' günlük kayıt':'',settled=Number(data&&data.settled_pos_total||0);
-    cards.cash.querySelector('strong').textContent=fmt(data&&data.cash_total||0,'TL');cards.cash.querySelector('small').textContent=dateText+countText+' · Ana Kasa’ya işlendi';cards.cash.title='Nakit satış + nakit veresiye tahsilatı';
+    cards.cash.querySelector('strong').textContent=fmt(data&&data.cash_total||0,'TL');cards.cash.querySelector('small').textContent=dateText+countText+' · Mağaza Kasa’ya işlendi';cards.cash.title='Nakit satış + nakit veresiye tahsilatı';
     cards.pos.querySelector('strong').textContent=fmt(data&&data.card_total||0,'TL');cards.pos.querySelector('small').textContent=dateText+countText+' · Garanti’ye geçen: '+fmt(settled,'TL');cards.pos.title='Kart satış + kart veresiye tahsilatı. Banka girişi satıştan 13 gün sonra Garanti Dumanlar hesabına işlenir.';
   }
   function loadStoreMonthlyCards(){
