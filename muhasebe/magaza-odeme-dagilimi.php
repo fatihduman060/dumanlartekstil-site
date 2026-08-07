@@ -82,21 +82,28 @@ try {
             $saleDate = trim((string)($_POST['sale_date'] ?? date('Y-m-d')));
             $cash = decimal_from_input($_POST['cash_amount'] ?? '0');
             $card = decimal_from_input($_POST['card_amount'] ?? '0');
-            $credit = decimal_from_input($_POST['credit_amount'] ?? '0');
-            $cashCollection = decimal_from_input($_POST['cash_credit_collection_amount'] ?? ($_POST['credit_collection_amount'] ?? '0'));
-            $cardCollection = decimal_from_input($_POST['card_credit_collection_amount'] ?? '0');
+            // Veresiye satış ve tahsilatlar yalnızca Personel Veresiye modülünden gelir.
+            // Günlük satış formundan gönderilen bu alanlar güvenlik için dikkate alınmaz.
+            $credit = 0.0;
+            $cashCollection = 0.0;
+            $cardCollection = 0.0;
             $cashChangeLeft = decimal_from_input($_POST['cash_change_left_amount'] ?? '0');
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) throw new RuntimeException('Satış tarihini kontrol etmelisin.');
             foreach ([$cash,$card,$credit,$cashCollection,$cardCollection,$cashChangeLeft] as $amount) if ($amount < 0) throw new RuntimeException('Tutarlar negatif olamaz.');
             if (($cash+$card+$credit+$cashCollection+$cardCollection+$cashChangeLeft) <= 0) throw new RuntimeException('En az bir alana sıfırdan büyük tutar girmelisin.');
 
-            $dailyTotal = magaza_odeme_dagilim_gunluk_toplam($cash, $card, $credit);
-            $legacyCollectionTotal = round($cashCollection + $cardCollection, 2);
             $userId = current_user()['id'] ?? null;
             $stmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1');
             $stmt->execute([$saleDate]);
             $old = $stmt->fetch();
+            if ($old) {
+                $credit = (float)($old['credit_amount'] ?? 0);
+                $cashCollection = (float)($old['cash_credit_collection_amount'] ?? 0);
+                $cardCollection = (float)($old['card_credit_collection_amount'] ?? 0);
+            }
+            $dailyTotal = magaza_odeme_dagilim_gunluk_toplam($cash, $card, $credit);
+            $legacyCollectionTotal = round($cashCollection + $cardCollection, 2);
 
             db()->beginTransaction();
             try {
