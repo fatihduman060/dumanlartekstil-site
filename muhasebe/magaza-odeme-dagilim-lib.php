@@ -92,7 +92,7 @@ function magaza_odeme_dagilim_hesap_id(string $target): int
     foreach ($rows as $row) {
         $nameKey = magaza_odeme_dagilim_hesap_anahtari((string)($row['name'] ?? ''));
         $bankKey = magaza_odeme_dagilim_hesap_anahtari((string)($row['bank_name'] ?? ''));
-        if ($target === 'cash' && in_array($nameKey, ['anakasa','genelkasa','merkezkasa'], true)) return (int)$row['id'];
+        if ($target === 'cash' && in_array($nameKey, ['magazakasa','anakasa','genelkasa','merkezkasa'], true)) return (int)$row['id'];
         if ($target === 'card') {
             $exact = in_array($nameKey, ['garantidumanlar','dumanlargaranti'], true);
             $combined = strpos($nameKey, 'garanti') !== false && strpos($nameKey, 'dumanlar') !== false;
@@ -104,7 +104,7 @@ function magaza_odeme_dagilim_hesap_id(string $target): int
     $now = now();
     if ($target === 'cash') {
         db()->prepare("INSERT INTO accounts (account_type, name, iban, bank_name, opening_balance, is_active, notes, created_at, updated_at)
-            VALUES ('kasa', 'Ana Kasa', '', '', 0, 1, ?, ?, ?)")
+            VALUES ('kasa', 'Mağaza Kasa', '', '', 0, 1, ?, ?, ?)")
             ->execute(['Mağaza günlük nakit girişleri için otomatik oluşturuldu.', $now, $now]);
     } else {
         db()->prepare("INSERT INTO accounts (account_type, name, iban, bank_name, opening_balance, is_active, notes, created_at, updated_at)
