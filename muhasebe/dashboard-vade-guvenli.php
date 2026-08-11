@@ -1,14 +1,41 @@
 <?php
-require_once __DIR__ . '/layout.php';
-require_login();
-
-ensure_column(db(), 'movements', 'reminder_status', "TEXT NOT NULL DEFAULT 'bekliyor'");
-ensure_column(db(), 'movements', 'reminder_completed_at', 'TEXT');
-ensure_column(db(), 'movements', 'reminder_completed_by', 'INTEGER');
-ensure_column(db(), 'movements', 'reminder_settlement_movement_id', 'INTEGER');
+ob_start();
+require_once __DIR__ . '/bootstrap.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+function vade_guvenli_json(array $payload, int $status = 200): void
+{
+    if (ob_get_level() > 0 && ob_get_length()) {
+        ob_clean();
+    }
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function vade_guvenli_require_ajax_access(): void
+{
+    if (!is_logged_in() || !current_user()) {
+        throw new RuntimeException('Oturum süresi dolmuş olabilir. Sayfayı yenileyip tekrar deneyin.');
+    }
+
+    $last = (int)($_SESSION['last_activity'] ?? time());
+    if (time() - $last > SESSION_TIMEOUT_SECONDS) {
+        destroy_session_cookie();
+        throw new RuntimeException('Oturum süresi doldu. Sayfayı yenileyip tekrar giriş yapın.');
+    }
+    $_SESSION['last_activity'] = time();
+
+    if (!can_write()) {
+        throw new RuntimeException('Bu işlem için düzenleme yetkiniz yok.');
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !verify_csrf($_POST['csrf_token'] ?? null)) {
+        throw new RuntimeException('Güvenlik doğrulaması başarısız oldu. Sayfayı yenileyip tekrar deneyin.');
+    }
+}
 
 function vade_guvenli_account(int $accountId): ?array
 {
@@ -146,13 +173,22 @@ function vade_guvenli_create_settlement(array $source, string $settlementType, i
 }
 
 try {
-    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        echo json_encode(['ok'=>true, 'csrf_token'=>csrf_token()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
-    }
+    vade_guvenli_require_ajax_access();
 
-    require_write();
-    require_csrf();
+    ensure_column(db(), 'movements', 'account_id', 'INTEGER');
+    ensure_column(db(), 'movements', 'currency', "TEXT NOT NULL DEFAULT 'TL'");
+    ensure_column(db(), 'movements', 'check_id', 'INTEGER');
+    ensure_column(db(), 'movements', 'is_check_adjustment', 'INTEGER NOT NULL DEFAULT 0');
+    ensure_column(db(), 'movements', 'document_type', 'TEXT');
+    ensure_column(db(), 'movements', 'is_cancelled', 'INTEGER NOT NULL DEFAULT 0');
+    ensure_column(db(), 'movements', 'reminder_status', "TEXT NOT NULL DEFAULT 'bekliyor'");
+    ensure_column(db(), 'movements', 'reminder_completed_at', 'TEXT');
+    ensure_column(db(), 'movements', 'reminder_completed_by', 'INTEGER');
+    ensure_column(db(), 'movements', 'reminder_settlement_movement_id', 'INTEGER');
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        vade_guvenli_json(['ok'=>true, 'csrf_token'=>csrf_token()]);
+    }
 
     $sourceId = (int)($_POST['id'] ?? 0);
     $accountId = (int)($_POST['account_id'] ?? 0);
@@ -179,8 +215,7 @@ try {
 
     if ((string)($source['reminder_status'] ?? 'bekliyor') === 'tamamlandi'
         && (int)($source['reminder_settlement_movement_id'] ?? 0) > 0) {
-        echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label, 'already_completed'=>true], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
+        vade_guvenli_json(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label, 'already_completed'=>true]);
     }
 
     $pdo = db();
@@ -199,8 +234,7 @@ try {
         if ((string)($source['reminder_status'] ?? 'bekliyor') === 'tamamlandi'
             && (int)($source['reminder_settlement_movement_id'] ?? 0) > 0) {
             $pdo->commit();
-            echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label, 'already_completed'=>true], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            exit;
+            vade_guvenli_json(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label, 'already_completed'=>true]);
         }
 
         $exact = vade_guvenli_existing_exact($sourceId);
@@ -222,8 +256,6 @@ try {
             $linkedExisting = true;
             $pdo->commit();
         } else {
-            // Açık hesapta aynı gün aynı cari+tutar+hesap için normal bir tahsilat/ödeme zaten varsa
-            // ikinci kez hareket üretme; mevcut hareketi vadeye bağla. Yoksa gerçek tahsilat/ödeme oluştur.
             $candidate = vade_guvenli_candidate($source, $settlementType, (int)$account['id']);
             if ($candidate) {
                 $settlementId = (int)$candidate['id'];
@@ -263,16 +295,15 @@ try {
         ], $label);
     }
 
-    echo json_encode([
+    vade_guvenli_json([
         'ok'=>true,
         'status'=>'tamamlandi',
         'label'=>$label,
         'settlement_movement_id'=>$settlementId,
         'created_new'=>$createdNew,
         'linked_existing'=>$linkedExisting,
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    ]);
 } catch (Throwable $e) {
     if (db()->inTransaction()) db()->rollBack();
-    http_response_code(400);
-    echo json_encode(['ok'=>false, 'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    vade_guvenli_json(['ok'=>false, 'error'=>$e->getMessage()], 400);
 }
