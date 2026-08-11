@@ -44,6 +44,49 @@ function mk_has_column(string $table, string $column): bool
     return isset($columns[$column]);
 }
 
+function mk_ensure_movement_ignore_table(): void
+{
+    db()->exec("CREATE TABLE IF NOT EXISTS duplicate_movement_ignores (
+        first_movement_id INTEGER NOT NULL,
+        second_movement_id INTEGER NOT NULL,
+        ignored_by INTEGER,
+        ignored_at TEXT NOT NULL,
+        PRIMARY KEY (first_movement_id, second_movement_id)
+    )");
+}
+
+function mk_ignore_movement_pair(int $firstId, int $secondId): void
+{
+    $firstId = min($firstId, $secondId);
+    $secondId = max($firstId, $secondId);
+    if ($firstId <= 0 || $secondId <= 0 || $firstId === $secondId) {
+        throw new RuntimeException('Hareket seçimi geçersiz.');
+    }
+
+    $pairExists = false;
+    foreach (mk_movement_pairs() as $pair) {
+        if ((int)$pair['first_id'] === $firstId && (int)$pair['second_id'] === $secondId) {
+            $pairExists = true;
+            break;
+        }
+    }
+    if (!$pairExists) {
+        throw new RuntimeException('Olası mükerrer hareket çifti artık bulunamadı.');
+    }
+
+    mk_ensure_movement_ignore_table();
+    db()->prepare("INSERT OR IGNORE INTO duplicate_movement_ignores
+        (first_movement_id, second_movement_id, ignored_by, ignored_at)
+        VALUES (?, ?, ?, ?)")
+        ->execute([$firstId, $secondId, current_user()['id'] ?? null, now()]);
+
+    audit_action('hareket', $firstId, 'mukerrer_degil', null, [
+        'first_movement_id'=>$firstId,
+        'second_movement_id'=>$secondId,
+    ], 'Mükerrer değil');
+    log_action('Hareket çifti mükerrer değil işaretlendi', '#' . $firstId . ' / #' . $secondId);
+}
+
 function mk_cari_meta(int $cariId): array
 {
     $meta = [
@@ -113,6 +156,7 @@ function mk_cari_duplicate_groups(): array
 function mk_movement_pairs(): array
 {
     if (!mk_table_exists('movements')) return [];
+    mk_ensure_movement_ignore_table();
 
     $sql = "SELECT
         a.id AS first_id,
@@ -153,6 +197,11 @@ function mk_movement_pairs(): array
       LEFT JOIN cariler c ON c.id=a.cari_id
       LEFT JOIN accounts ac ON ac.id=a.account_id
       WHERE COALESCE(a.is_cancelled,0)=0
+        AND NOT EXISTS (
+          SELECT 1 FROM duplicate_movement_ignores ignored
+          WHERE ignored.first_movement_id=a.id
+            AND ignored.second_movement_id=b.id
+        )
         AND a.movement_type IN ('tahsilat','odeme','gelir','gider')
         AND (
           COALESCE(a.description,'') LIKE 'Vade kapatma #%'
@@ -582,6 +631,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 'Mükerrer kontrol ekranından iptal edildi; korunan hareket #' . $keepId
             );
             flash('success', 'Mükerrer hareket iptal edildi. Korunan kayıt #' . $keepId . '.');
+        } elseif ($action === 'ignore_movement_duplicate') {
+            $firstId = (int)($_POST['first_id'] ?? 0);
+            $secondId = (int)($_POST['second_id'] ?? 0);
+            mk_ignore_movement_pair($firstId, $secondId);
+            flash('success', 'Hareket çifti mükerrer değil olarak işaretlendi ve listeden kaldırıldı.');
         } elseif ($action === 'merge_cari') {
             $keepId = (int)($_POST['keep_id'] ?? 0);
             $removeId = (int)($_POST['remove_id'] ?? 0);
@@ -787,6 +841,13 @@ page_header('Mükerrer Kontrolü', 'raporlar');
                   <input type="hidden" name="keep_id" value="<?php echo e($row['second_id']); ?>">
                   <input type="hidden" name="cancel_id" value="<?php echo e($row['first_id']); ?>">
                   <button class="danger" type="submit">Birinciyi iptal et</button>
+                </form>
+                <form method="post">
+                  <?php echo csrf_field(); ?>
+                  <input type="hidden" name="action" value="ignore_movement_duplicate">
+                  <input type="hidden" name="first_id" value="<?php echo e($row['first_id']); ?>">
+                  <input type="hidden" name="second_id" value="<?php echo e($row['second_id']); ?>">
+                  <button type="submit">Mükerrer değil</button>
                 </form>
               </div>
             </td>
