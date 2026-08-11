@@ -5,6 +5,12 @@ require_write();
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') redirect('hareketler.php');
 require_csrf();
 
+// Aynı detaylı satış isteği tarayıcıdan iki kez ulaşsa bile ikinci hareket oluşmasın.
+ensure_column(db(), 'movements', 'submission_guard_key', 'TEXT');
+db()->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_movements_submission_guard_key
+    ON movements(submission_guard_key)
+    WHERE submission_guard_key IS NOT NULL AND submission_guard_key <> ''");
+
 function hareket_satis_ean13_check_digit(string $first12): string
 {
     $digits = preg_replace('/\D+/', '', $first12) ?: '';
@@ -101,6 +107,67 @@ function hareket_satis_persist_product_barcodes(PDO $pdo, array $sale, string $n
     }
 }
 
+function hareket_satis_signature(array $sale): string
+{
+    $items = [];
+    foreach ($sale['items'] as $item) {
+        $items[] = [
+            'barcode' => trim((string)($item['barcode'] ?? '')),
+            'name' => trim((string)($item['name'] ?? '')),
+            'quantity' => round((float)($item['quantity'] ?? 0), 4),
+            'unit_price' => round((float)($item['unit_price'] ?? 0), 4),
+            'line_total' => round((float)($item['line_total'] ?? 0), 2),
+            'note' => trim((string)($item['note'] ?? '')),
+        ];
+    }
+    $data = [
+        'items' => $items,
+        'discount_enabled' => (int)($sale['discount_enabled'] ?? 0),
+        'discount_rate' => round((float)($sale['discount_rate'] ?? 0), 4),
+        'vat_enabled' => (int)($sale['vat_enabled'] ?? 0),
+        'vat_rate' => round((float)($sale['vat_rate'] ?? 0), 4),
+        'subtotal' => round((float)($sale['subtotal'] ?? 0), 2),
+        'grand_total' => round((float)($sale['grand_total'] ?? 0), 2),
+    ];
+    return hash('sha256', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+}
+
+function hareket_satis_recent_duplicate(PDO $pdo, int $cariId, int $categoryId, string $currency, string $movementDate, string $description, array $sale, ?int $userId): int
+{
+    $since = date('Y-m-d H:i:s', time() - 30);
+    $stmt = $pdo->prepare("SELECT m.id
+        FROM movements m
+        INNER JOIN movement_sales ms ON ms.movement_id=m.id
+        WHERE COALESCE(m.is_cancelled,0)=0
+          AND m.cari_id=? AND m.category_id=? AND m.movement_type='alacak'
+          AND ABS(m.amount-?)<0.005
+          AND COALESCE(m.currency,'TL')=?
+          AND m.movement_date=?
+          AND COALESCE(m.description,'')=?
+          AND COALESCE(m.created_by,0)=?
+          AND m.created_at>=?
+        ORDER BY m.id DESC LIMIT 5");
+    $stmt->execute([
+        $cariId,
+        $categoryId,
+        (float)$sale['grand_total'],
+        $currency,
+        $movementDate,
+        $description,
+        (int)($userId ?: 0),
+        $since,
+    ]);
+
+    $wanted = hareket_satis_signature($sale);
+    foreach ($stmt->fetchAll() as $row) {
+        $movementId = (int)($row['id'] ?? 0);
+        if ($movementId <= 0) continue;
+        $existing = hareket_satis_load($movementId);
+        if ($existing && hareket_satis_signature($existing) === $wanted) return $movementId;
+    }
+    return 0;
+}
+
 $id = (int)($_POST['id'] ?? 0);
 $cariId = (int)($_POST['cari_id'] ?? 0);
 $categoryId = (int)($_POST['category_id'] ?? 0);
@@ -129,6 +196,17 @@ try {
     $pdo = db();
     $oldMovement = null;
     $oldDoc = null;
+    $userId = current_user()['id'] ?? null;
+
+    // Aynı kullanıcıdan saniyeler içinde birebir aynı detaylı satış ikinci kez gelirse
+    // yeni hareket üretme. Bu kontrol yalnızca yeni kayıt içindir; düzenlemeyi etkilemez.
+    if ($id <= 0) {
+        $duplicateId = hareket_satis_recent_duplicate($pdo, $cariId, $categoryId, $currency, $movementDate, $description, $sale, $userId);
+        if ($duplicateId > 0) {
+            flash('success', 'Satış zaten kaydedilmişti. İkinci mükerrer kayıt oluşturulmadı.');
+            redirect($back);
+        }
+    }
 
     if ($id > 0) {
         $stmt = $pdo->prepare('SELECT * FROM movements WHERE id=? LIMIT 1');
@@ -146,7 +224,6 @@ try {
 
     $doc = handle_upload('document', $oldDoc);
     $now = now();
-    $userId = current_user()['id'] ?? null;
 
     $pdo->beginTransaction();
     if ($id > 0) {
@@ -154,8 +231,26 @@ try {
             ->execute([$cariId, $categoryId, 'alacak', $amount, $currency, $movementDate, $dueDate, $paymentMethod, $description, $documentType, $doc['path'], $doc['name'], $doc['mime'], $now, $id]);
         $movementId = $id;
     } else {
-        $pdo->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, currency, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            ->execute([$cariId, $categoryId, 'alacak', $amount, $currency, $movementDate, $dueDate, $paymentMethod, $description, $documentType, $doc['path'], $doc['name'], $doc['mime'], $userId, $now, $now]);
+        $guardBase = implode('|', [
+            (string)$cariId,
+            (string)$categoryId,
+            $currency,
+            $movementDate,
+            $description,
+            hareket_satis_signature($sale),
+            (string)(int)($userId ?: 0),
+        ]);
+        // 15 saniyelik pencere içinde aynı formun eşzamanlı iki POST'u da DB seviyesinde tekilleştirilir.
+        $submissionGuardKey = hash('sha256', $guardBase . '|' . (string)floor(time() / 15));
+
+        $stmt = $pdo->prepare('INSERT OR IGNORE INTO movements (cari_id, category_id, account_id, movement_type, amount, currency, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, submission_guard_key, created_by, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$cariId, $categoryId, 'alacak', $amount, $currency, $movementDate, $dueDate, $paymentMethod, $description, $documentType, $doc['path'], $doc['name'], $doc['mime'], $submissionGuardKey, $userId, $now, $now]);
+
+        if ($stmt->rowCount() === 0) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            flash('success', 'Satış zaten kaydedilmişti. İkinci mükerrer kayıt engellendi.');
+            redirect($back);
+        }
         $movementId = (int)$pdo->lastInsertId();
     }
 
