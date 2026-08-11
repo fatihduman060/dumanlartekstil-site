@@ -1,11 +1,10 @@
 <?php
 ob_start();
-require_once __DIR__ . '/bootstrap.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-function vade_guvenli_json(array $payload, int $status = 200): void
+function vade_guvenli_json($payload, $status = 200)
 {
     if (ob_get_level() > 0 && ob_get_length()) {
         ob_clean();
@@ -13,6 +12,29 @@ function vade_guvenli_json(array $payload, int $status = 200): void
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if (!$error || !in_array((int)$error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        return;
+    }
+    vade_guvenli_json([
+        'ok' => false,
+        'error' => 'Sunucu hatası: ' . (string)$error['message'],
+        'error_type' => (int)$error['type'],
+    ], 500);
+});
+
+set_error_handler(function ($severity, $message, $file, $line) {
+    if (!(error_reporting() & $severity)) return false;
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
+
+try {
+    require_once __DIR__ . '/bootstrap.php';
+} catch (Throwable $e) {
+    vade_guvenli_json(['ok'=>false, 'error'=>'Başlatma hatası: ' . $e->getMessage()], 500);
 }
 
 function vade_guvenli_require_ajax_access(): void
@@ -304,6 +326,10 @@ try {
         'linked_existing'=>$linkedExisting,
     ]);
 } catch (Throwable $e) {
-    if (db()->inTransaction()) db()->rollBack();
+    try {
+        if (function_exists('db') && db()->inTransaction()) db()->rollBack();
+    } catch (Throwable $rollbackError) {
+        // Asıl hatayı koru; rollback hatası JSON yanıtını bozmamalı.
+    }
     vade_guvenli_json(['ok'=>false, 'error'=>$e->getMessage()], 400);
 }
