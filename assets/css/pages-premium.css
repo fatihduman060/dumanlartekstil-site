@@ -721,8 +721,10 @@
   }
 
   .product-card-meta div {
-    grid-template-columns: 1fr;
-    gap: 4px;
+    grid-template-columns: 88px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    padding: 9px 0;
   }
 
   .product-table th,
