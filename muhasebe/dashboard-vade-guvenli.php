@@ -206,7 +206,7 @@ try {
         $exact = vade_guvenli_existing_exact($sourceId);
         if ($exact) {
             $settlementId = (int)$exact['id'];
-            if ((int)($exact['account_id'] ?? 0) <= 0) {
+            if ((int)($exact['account_id'] ?? 0) !== (int)$account['id']) {
                 $pdo->prepare('UPDATE movements SET account_id=?, updated_at=? WHERE id=?')
                     ->execute([(int)$account['id'], now(), $settlementId]);
                 sync_movement_account_transaction($settlementId);
