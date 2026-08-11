@@ -1,10 +1,3 @@
-perl: warning: Setting locale failed.
-perl: warning: Please check that your locale settings:
-	LC_ALL = "C.UTF-8",
-	LC_CTYPE = "C.UTF-8",
-	LANG = "C.UTF-8"
-    are supported and installed on your system.
-perl: warning: Falling back to the standard locale ("C").
 <?php
 require_once __DIR__ . '/layout.php';
 require_login();
@@ -78,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Çek yalnızca vade günü veya vadesi geçtikten sonra ödenmedi işaretlenebilir.');
             redirect('cari-detay.php?id=' . $id . '#cekler');
         }
-        if (!in_array((string)$check['status'], ['bekliyor','bankaya_verildi'], true)) {
+        if (!in_array((string)$check['status'], ['bekliyor','bankaya_verildi','tahsil_edildi'], true)) {
             flash('error', 'Bu çek zaten sonuçlandırılmış.');
             redirect('cari-detay.php?id=' . $id . '#cekler');
         }
@@ -391,7 +384,7 @@ page_header($cari['name'], 'cariler');
             <td class="right"><strong><?php echo e(money($ch['amount'])); ?></strong></td>
             <td class="row-actions">
               <a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($ch['id']); ?>#cek-form">İncele / Düzelt</a>
-              <?php if (can_write() && in_array((string)$ch['status'], ['bekliyor','bankaya_verildi'], true) && !empty($ch['due_date']) && (string)$ch['due_date'] <= date('Y-m-d')): ?>
+              <?php if (can_write() && in_array((string)$ch['status'], ['bekliyor','bankaya_verildi','tahsil_edildi'], true) && !empty($ch['due_date']) && (string)$ch['due_date'] <= date('Y-m-d')): ?>
                 <form method="post" onsubmit="return confirm('Bu çek ödenmedi olarak işaretlensin mi? Tutar cari bakiyeye yeniden yansıyacak.');">
                   <?php echo csrf_field(); ?><input type="hidden" name="action" value="mark_check_unpaid"><input type="hidden" name="check_id" value="<?php echo e($ch['id']); ?>">
                   <button class="btn btn-danger" type="submit">Ödenmedi</button>
