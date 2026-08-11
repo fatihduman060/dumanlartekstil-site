@@ -25,13 +25,23 @@
     return '<select class="vade-hatirlatma-hesap" aria-label="Ödeme veya tahsilat hesabı"><option value="">Hesap seç</option>'+options+'</select>';
   }
 
+  function actionTitle(item){
+    if((item.source||'movement')==='movement'){
+      return 'Açık hesapta seçilen hesaba tahsilat/ödeme işler ve cari açık bakiyeyi kapatır.';
+    }
+    if(item.source==='check'){
+      return 'Çek/senette mevcut bağlı hareketi seçilen bankaya yansıtır; cari bakiyeyi ikinci kez değiştirmez.';
+    }
+    return 'Seçilen banka hesabına ödeme olarak işler.';
+  }
+
   function itemHtml(item){
     var description=item.description
       ? '<span class="vade-hatirlatma-aciklama">'+esc(item.description)+'</span>'
       : '';
     var status='<span class="vade-hatirlatma-durum">'+esc(item.status_text||'Bekliyor')+'</span>';
     var action=item.can_complete
-      ? '<div class="vade-hatirlatma-islem">'+accountSelectHtml(item)+'<button type="button" class="vade-hatirlatma-tamamla" data-source="'+esc(item.source||'movement')+'" data-id="'+esc(item.id||'')+'" data-label="'+esc(item.complete_label||'Tamamlandı')+'" title="Geçmiş tahsilat veya ödemeyi bulur; yeni hareket oluşturmaz.">✓ '+esc(item.complete_label||'Tamamlandı')+'</button></div>'
+      ? '<div class="vade-hatirlatma-islem">'+accountSelectHtml(item)+'<button type="button" class="vade-hatirlatma-tamamla" data-source="'+esc(item.source||'movement')+'" data-id="'+esc(item.id||'')+'" data-label="'+esc(item.complete_label||'Tamamlandı')+'" title="'+esc(actionTitle(item))+'">✓ '+esc(item.complete_label||'Tamamlandı')+'</button></div>'
       : '';
 
     return '<div class="vade-hatirlatma-satir">'
@@ -71,7 +81,7 @@
     var total=Number(data.count||0);
     var section=document.getElementById('dashboardVadeHatirlatmalari');
     if(!section) return;
-    section.innerHTML='<div class="vade-hatirlatma-baslik"><span class="vade-hatirlatma-ikon">🔔</span><div><strong>Vade Hatırlatmaları</strong><small>Kapanmayan geçmiş vadeler burada kalır; hesap seçip tahsilat veya ödeme olarak kapat.</small></div><b>'+total+' kayıt</b></div>'
+    section.innerHTML='<div class="vade-hatirlatma-baslik"><span class="vade-hatirlatma-ikon">🔔</span><div><strong>Vade Hatırlatmaları</strong><small>Açık hesapta seçilen hesaba tahsilat/ödeme işlenir; çek ve senette cari ikinci kez etkilenmeden banka kapanışı yapılır.</small></div><b>'+total+' kayıt</b></div>'
       +(total
         ? '<div class="vade-hatirlatma-gruplar">'+groups.map(function(group,index){return groupHtml(group,index===firstOpen);}).join('')+'</div>'
         : '<div class="vade-hatirlatma-temiz">✅ Yaklaşan veya geciken vade bulunmuyor.</div>');
@@ -99,7 +109,20 @@
       return;
     }
     var accountText=accountSelect.options[accountSelect.selectedIndex]?accountSelect.options[accountSelect.selectedIndex].text:'seçilen hesap';
-    if(!window.confirm('Bu kayıt '+label+' olarak doğrulansın mı?\n\nYeni hareket oluşturulmayacak. Geçmiş ödeme/tahsilat bulunursa '+accountText+' hesabına bağlanıp vade kapatılacak; bulunamazsa kayıt beklemeye devam edecek.')) return;
+    var confirmText='';
+
+    if(source==='movement'){
+      confirmText='Bu açık hesap kaydı '+label+' olarak işlensin mi?\n\n'
+        +accountText+' hesabına tahsilat/ödeme yansıyacak ve cari açık bakiye aynı tutarda kapanacak.\n\n'
+        +'Aynı cari, tutar ve hesap için bugün tahsilat/ödeme zaten kayıtlıysa ikinci hareket oluşturulmadan mevcut kayıt kullanılacak.';
+    }else if(source==='check'){
+      confirmText='Bu çek/senet '+label+' olarak doğrulansın mı?\n\n'
+        +'Yeni cari tahsilat/ödeme oluşturulmayacak. Çek/senede bağlı mevcut hareket '+accountText+' hesabına yansıtılacak; cari bakiye ikinci kez değişmeyecek.';
+    }else{
+      confirmText='Bu kayıt '+label+' olarak doğrulansın mı?\n\nÖdeme '+accountText+' hesabına işlenecek.';
+    }
+
+    if(!window.confirm(confirmText)) return;
 
     var oldText=button.textContent;
     button.disabled=true;
