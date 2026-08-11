@@ -57,8 +57,10 @@ function mk_ensure_movement_ignore_table(): void
 
 function mk_ignore_movement_pair(int $firstId, int $secondId): void
 {
-    $firstId = min($firstId, $secondId);
-    $secondId = max($firstId, $secondId);
+    $lowerId = min($firstId, $secondId);
+    $higherId = max($firstId, $secondId);
+    $firstId = $lowerId;
+    $secondId = $higherId;
     if ($firstId <= 0 || $secondId <= 0 || $firstId === $secondId) {
         throw new RuntimeException('Hareket seçimi geçersiz.');
     }
