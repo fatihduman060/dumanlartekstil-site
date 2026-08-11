@@ -1,12 +1,19 @@
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+	LC_ALL = "C.UTF-8",
+	LC_CTYPE = "C.UTF-8",
+	LANG = "C.UTF-8"
+    are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
 <?php
 // Bitke Muhasebe / Cari Takip Paneli
 // İlk kurulum kullanıcı bilgisi README-KURULUM.txt içindedir.
 
 const APP_NAME = 'Bitke Muhasebe Paneli';
-const APP_VERSION = 'v50.23.1';
+const APP_VERSION = 'v50.24.0';
 const APP_TIMEZONE = 'Europe/Istanbul';
 const APP_BASE_PATH = '/muhasebe';
-const DB_SCHEMA_VERSION = 5023;
+const DB_SCHEMA_VERSION = 5024;
 
 const DB_PATH = __DIR__ . '/storage/bitke_muhasebe.sqlite';
 const UPLOAD_DIR = __DIR__ . '/storage/uploads';
