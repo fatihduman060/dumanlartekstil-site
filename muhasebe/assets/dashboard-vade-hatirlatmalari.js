@@ -162,7 +162,12 @@
               data={ok:false,error:'Sunucu cevabı JSON değil.',response_body:raw};
             }
             if(!response.ok||!data||!data.ok){
-              var error=new Error('HTTP '+response.status+': '+((data&&data.error)||'Vade durumu güncellenemedi.'));
+              var detail=(data&&data.error)||'Vade durumu güncellenemedi.';
+              if(data&&data.response_body){
+                var responseText=String(data.response_body).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+                if(responseText) detail+=' / '+responseText.slice(0,500);
+              }
+              var error=new Error('HTTP '+response.status+': '+detail);
               error.data=data||{};
               throw error;
             }
