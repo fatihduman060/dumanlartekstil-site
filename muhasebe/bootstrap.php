@@ -1,3 +1,10 @@
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+	LC_ALL = "C.UTF-8",
+	LC_CTYPE = "C.UTF-8",
+	LANG = "C.UTF-8"
+    are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
 <?php
 require_once __DIR__ . '/config.php';
 
@@ -271,11 +278,17 @@ function init_db(PDO $pdo): void
     ensure_column($pdo, 'checks', 'movement_id', 'INTEGER');
     ensure_column($pdo, 'checks', 'is_opening_balance_check', 'INTEGER NOT NULL DEFAULT 0');
     ensure_column($pdo, 'checks', 'adjustment_movement_id', 'INTEGER');
+    ensure_column($pdo, 'checks', 'unpaid_movement_id', 'INTEGER');
+    ensure_column($pdo, 'checks', 'unpaid_marked_at', 'TEXT');
+    ensure_column($pdo, 'checks', 'unpaid_marked_by', 'INTEGER');
     ensure_column($pdo, 'movements', 'is_check_adjustment', 'INTEGER NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'movements', 'is_check_unpaid_adjustment', 'INTEGER NOT NULL DEFAULT 0');
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_movements_check_id ON movements(check_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_checks_movement_id ON checks(movement_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_checks_adjustment_movement_id ON checks(adjustment_movement_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_checks_unpaid_movement_id ON checks(unpaid_movement_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_movements_check_adjustment ON movements(is_check_adjustment, check_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_movements_check_unpaid ON movements(is_check_unpaid_adjustment, check_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_checks_match ON checks(cari_id, direction, due_date, amount)");
 
     $accountCount = (int)$pdo->query('SELECT COUNT(*) FROM accounts')->fetchColumn();
@@ -1058,6 +1071,7 @@ function sync_check_to_movement(int $checkId, bool $allowCreate = true): void
         }
         sync_check_account_transaction($checkId);
         sync_check_balance_adjustment($checkId);
+        sync_check_unpaid_movement($checkId);
         return;
     }
 
@@ -1093,6 +1107,7 @@ function sync_check_to_movement(int $checkId, bool $allowCreate = true): void
     }
     sync_check_account_transaction($checkId);
     sync_check_balance_adjustment($checkId);
+    sync_check_unpaid_movement($checkId);
 }
 
 function sync_movement_to_check(int $movementId, bool $allowCreate = true): void
@@ -1102,6 +1117,7 @@ function sync_movement_to_check(int $movementId, bool $allowCreate = true): void
     $stmt->execute([$movementId]);
     $m = $stmt->fetch();
     if (!$m) return;
+    if ((int)($m['is_check_unpaid_adjustment'] ?? 0) === 1) return;
 
     $checkId = !empty($m['check_id']) ? (int)$m['check_id'] : 0;
     if ((int)($m['is_cancelled'] ?? 0) === 1) {
@@ -1214,6 +1230,65 @@ function sync_check_balance_adjustment(int $checkId): void
         $pdo->prepare('UPDATE checks SET adjustment_movement_id=?, updated_at=? WHERE id=?')->execute([$adjustmentId, now(), $checkId]);
         sync_movement_account_transaction($adjustmentId);
     }
+}
+
+function sync_check_unpaid_movement(int $checkId): void
+{
+    $pdo = db();
+    $stmt = $pdo->prepare('SELECT * FROM checks WHERE id=?');
+    $stmt->execute([$checkId]);
+    $ch = $stmt->fetch();
+    if (!$ch) return;
+
+    $movementId = (int)($ch['unpaid_movement_id'] ?? 0);
+    $enabled = (int)($ch['is_cancelled'] ?? 0) === 0
+        && !empty($ch['cari_id'])
+        && in_array((string)($ch['status'] ?? ''), ['karsiliksiz','protestolu'], true);
+
+    if ($movementId <= 0) {
+        $find = $pdo->prepare("SELECT id FROM movements
+            WHERE check_id=? AND COALESCE(is_check_unpaid_adjustment,0)=1
+            ORDER BY id ASC LIMIT 1");
+        $find->execute([$checkId]);
+        $movementId = (int)($find->fetchColumn() ?: 0);
+    }
+
+    if (!$enabled) {
+        if ($movementId > 0) {
+            $pdo->prepare("UPDATE movements SET is_cancelled=1, cancelled_at=?, cancelled_by=?,
+                    cancel_reason=?, updated_at=? WHERE id=? AND COALESCE(is_cancelled,0)=0")
+                ->execute([now(), current_user()['id'] ?? null, 'Çek ödenmedi işareti kaldırıldı', now(), $movementId]);
+            sync_movement_account_transaction($movementId);
+        }
+        return;
+    }
+
+    $movementType = (string)$ch['direction'] === 'verilecek' ? 'verecek' : 'alacak';
+    $descriptionParts = ['Ödenmeyen çek #' . $checkId];
+    if (!empty($ch['check_no'])) $descriptionParts[] = 'No: ' . trim((string)$ch['check_no']);
+    if (!empty($ch['bank_name'])) $descriptionParts[] = trim((string)$ch['bank_name']);
+    $description = implode(' / ', $descriptionParts);
+    $movementDate = (string)($ch['closed_at'] ?: date('Y-m-d'));
+
+    if ($movementId > 0) {
+        $pdo->prepare("UPDATE movements SET cari_id=?, category_id=?, account_id=NULL, movement_type=?, amount=?,
+                movement_date=?, due_date=NULL, payment_method='ÇEK ÖDENMEDİ', description=?, document_type=NULL,
+                document_path=NULL, document_name=NULL, document_mime=NULL, check_id=?,
+                is_check_unpaid_adjustment=1, is_cancelled=0, cancelled_at=NULL, cancelled_by=NULL,
+                cancel_reason=NULL, updated_at=? WHERE id=?")
+            ->execute([(int)$ch['cari_id'], check_category_id($pdo), $movementType, (float)$ch['amount'], $movementDate, $description, $checkId, now(), $movementId]);
+    } else {
+        $pdo->prepare("INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount,
+                movement_date, due_date, payment_method, description, document_type, check_id,
+                is_check_unpaid_adjustment, created_by, created_at, updated_at)
+            VALUES (?, ?, NULL, ?, ?, ?, NULL, 'ÇEK ÖDENMEDİ', ?, NULL, ?, 1, ?, ?, ?)")
+            ->execute([(int)$ch['cari_id'], check_category_id($pdo), $movementType, (float)$ch['amount'], $movementDate, $description, $checkId, current_user()['id'] ?? null, now(), now()]);
+        $movementId = (int)$pdo->lastInsertId();
+    }
+
+    $pdo->prepare('UPDATE checks SET unpaid_movement_id=?, unpaid_marked_at=COALESCE(unpaid_marked_at,?), unpaid_marked_by=COALESCE(unpaid_marked_by,?), updated_at=? WHERE id=?')
+        ->execute([$movementId, now(), current_user()['id'] ?? null, now(), $checkId]);
+    sync_movement_account_transaction($movementId);
 }
 
 function migrate_opening_check_adjustments(PDO $pdo): void
