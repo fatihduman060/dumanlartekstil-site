@@ -1,3 +1,10 @@
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+	LC_ALL = "C.UTF-8",
+	LC_CTYPE = "C.UTF-8",
+	LANG = "C.UTF-8"
+    are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
 <?php
 require_once __DIR__ . '/layout.php';
 require_login();
@@ -56,6 +63,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         audit_action('ozel_alacak', $privateId, 'durum_guncellendi', $row, ['status'=>$status], $cari['name']);
         flash('success', 'Özel alacak durumu güncellendi. Genel cari bakiye etkilenmedi.');
         redirect('cari-detay.php?id=' . $id);
+    }
+
+    if ($action === 'mark_check_unpaid') {
+        $checkId = (int)($_POST['check_id'] ?? 0);
+        $stmt = db()->prepare('SELECT * FROM checks WHERE id=? AND cari_id=? AND COALESCE(is_cancelled,0)=0 LIMIT 1');
+        $stmt->execute([$checkId, $id]);
+        $check = $stmt->fetch();
+        if (!$check) {
+            flash('error', 'Çek kaydı bulunamadı.');
+            redirect('cari-detay.php?id=' . $id . '#cekler');
+        }
+        if (empty($check['due_date']) || (string)$check['due_date'] > date('Y-m-d')) {
+            flash('error', 'Çek yalnızca vade günü veya vadesi geçtikten sonra ödenmedi işaretlenebilir.');
+            redirect('cari-detay.php?id=' . $id . '#cekler');
+        }
+        if (!in_array((string)$check['status'], ['bekliyor','bankaya_verildi'], true)) {
+            flash('error', 'Bu çek zaten sonuçlandırılmış.');
+            redirect('cari-detay.php?id=' . $id . '#cekler');
+        }
+
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare("UPDATE checks SET status='karsiliksiz', closed_at=?, unpaid_marked_at=?, unpaid_marked_by=?, updated_at=? WHERE id=?")
+                ->execute([date('Y-m-d'), now(), current_user()['id'] ?? null, now(), $checkId]);
+            sync_check_to_movement($checkId);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            flash('error', 'Çek ödenmedi olarak işaretlenemedi: ' . $e->getMessage());
+            redirect('cari-detay.php?id=' . $id . '#cekler');
+        }
+        log_action('Çek ödenmedi işaretlendi', '#' . $checkId . ' ' . $cari['name'] . ' - ' . money($check['amount']));
+        audit_action('cek', $checkId, 'odenmedi', $check, ['status'=>'karsiliksiz','unpaid_balance_movement'=>true], $cari['name']);
+        flash('success', 'Çek ödenmedi olarak işaretlendi. Tutar cari bakiyeye yeniden yansıtıldı.');
+        redirect('cari-detay.php?id=' . $id . '#cekler');
     }
 
     if ($action === 'quick_movement') {
@@ -334,18 +377,27 @@ page_header($cari['name'], 'cariler');
   <div class="card-head"><h3>Çek geçmişi</h3><a href="export.php?type=checks&cari_id=<?php echo e($id); ?>">Excel CSV indir</a></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Vade</th><th>Yön</th><th>Banka</th><th>Çek No</th><th>Açıklama</th><th class="right">Tutar</th><th>İşlem</th></tr></thead>
+      <thead><tr><th>Vade</th><th>Yön</th><th>Durum</th><th>Banka</th><th>Çek No</th><th>Açıklama</th><th class="right">Tutar</th><th>İşlem</th></tr></thead>
       <tbody>
-        <?php if (!$checks): ?><tr><td colspan="7" class="empty">Bu cariye ait çek yok.</td></tr><?php endif; ?>
+        <?php if (!$checks): ?><tr><td colspan="8" class="empty">Bu cariye ait çek yok.</td></tr><?php endif; ?>
         <?php foreach ($checks as $ch): ?>
           <tr>
             <td><?php echo e(tr_date($ch['due_date'])); ?></td>
             <td><?php echo badge(check_direction_label($ch['direction']), check_direction_tone($ch['direction'])); ?></td>
+            <td><?php echo (string)$ch['status'] === 'karsiliksiz' ? badge('Ödenmedi','danger') : badge(check_status_label((string)$ch['status']), check_status_tone((string)$ch['status'])); ?></td>
             <td><?php echo e($ch['bank_name'] ?: '-'); ?><small><?php echo e($ch['branch_name'] ?: ''); ?></small></td>
             <td><?php echo e($ch['check_no'] ?: '-'); ?></td>
             <td><?php echo e($ch['description'] ?: '-'); ?></td>
             <td class="right"><strong><?php echo e(money($ch['amount'])); ?></strong></td>
-            <td class="row-actions"><a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($ch['id']); ?>#cek-form">İncele / Düzelt</a></td>
+            <td class="row-actions">
+              <a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($ch['id']); ?>#cek-form">İncele / Düzelt</a>
+              <?php if (can_write() && in_array((string)$ch['status'], ['bekliyor','bankaya_verildi'], true) && !empty($ch['due_date']) && (string)$ch['due_date'] <= date('Y-m-d')): ?>
+                <form method="post" onsubmit="return confirm('Bu çek ödenmedi olarak işaretlensin mi? Tutar cari bakiyeye yeniden yansıyacak.');">
+                  <?php echo csrf_field(); ?><input type="hidden" name="action" value="mark_check_unpaid"><input type="hidden" name="check_id" value="<?php echo e($ch['id']); ?>">
+                  <button class="btn btn-danger" type="submit">Ödenmedi</button>
+                </form>
+              <?php endif; ?>
+            </td>
           </tr>
         <?php endforeach; ?>
       </tbody>
