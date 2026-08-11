@@ -275,7 +275,7 @@ function page_footer(): void
   <script src="assets/dashboard-cari-pozisyon.js?v=4"></script>
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/dashboard-acik-cekler.js?v=2"></script>
-  <script src="assets/dashboard-vade-hatirlatmalari.js?v=9"></script>
+  <script src="assets/dashboard-vade-hatirlatmalari.js?v=10"></script>
   <script src="assets/vergi-odemeleri-link.js?v=1"></script>
   <script src="assets/vergi-tahakkuk-v2.js?v=1"></script>
   <script src="assets/fatura-okuma-core.js?v=7"></script>
