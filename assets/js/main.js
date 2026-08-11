@@ -188,7 +188,7 @@
             observer.unobserve(entry.target);
           }
         });
-      }, { threshold: 0.12 });
+      }, { threshold: 0.01 });
       items.forEach((item) => observer.observe(item));
     } else {
       items.forEach((item) => item.classList.add('is-visible'));
