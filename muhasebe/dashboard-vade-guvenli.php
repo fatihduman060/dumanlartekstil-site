@@ -37,7 +37,7 @@ try {
     vade_guvenli_json(['ok'=>false, 'error'=>'Başlatma hatası: ' . $e->getMessage()], 500);
 }
 
-function vade_guvenli_require_ajax_access(): void
+function vade_guvenli_require_ajax_access()
 {
     if (!is_logged_in() || !current_user()) {
         throw new RuntimeException('Oturum süresi dolmuş olabilir. Sayfayı yenileyip tekrar deneyin.');
@@ -59,7 +59,7 @@ function vade_guvenli_require_ajax_access(): void
     }
 }
 
-function vade_guvenli_account(int $accountId): ?array
+function vade_guvenli_account($accountId)
 {
     if ($accountId <= 0) return null;
     $stmt = db()->prepare('SELECT * FROM accounts WHERE id=? AND is_active=1 LIMIT 1');
@@ -68,7 +68,7 @@ function vade_guvenli_account(int $accountId): ?array
     return $row ?: null;
 }
 
-function vade_guvenli_source(int $id): ?array
+function vade_guvenli_source($id)
 {
     $stmt = db()->prepare("SELECT m.*, c.name AS cari_name
         FROM movements m
@@ -83,7 +83,7 @@ function vade_guvenli_source(int $id): ?array
     return $row ?: null;
 }
 
-function vade_guvenli_is_instrument(array $source): bool
+function vade_guvenli_is_instrument($source)
 {
     $method = strtoupper(trim((string)($source['payment_method'] ?? '')));
     $documentType = trim((string)($source['document_type'] ?? ''));
@@ -94,7 +94,7 @@ function vade_guvenli_is_instrument(array $source): bool
         || in_array($documentType, ['cek_gorseli','senet_gorseli'], true);
 }
 
-function vade_guvenli_existing_exact(int $sourceId): ?array
+function vade_guvenli_existing_exact($sourceId)
 {
     $base = 'Vade kapatma #' . $sourceId;
     $stmt = db()->prepare("SELECT * FROM movements
@@ -107,7 +107,7 @@ function vade_guvenli_existing_exact(int $sourceId): ?array
     return $row ?: null;
 }
 
-function vade_guvenli_candidate(array $source, string $settlementType, int $accountId): ?array
+function vade_guvenli_candidate($source, $settlementType, $accountId)
 {
     $cariId = (int)($source['cari_id'] ?? 0);
     $where = [
@@ -138,7 +138,7 @@ function vade_guvenli_candidate(array $source, string $settlementType, int $acco
     return $row ?: null;
 }
 
-function vade_guvenli_candidate_by_id(int $candidateId, array $source, string $settlementType, int $accountId): ?array
+function vade_guvenli_candidate_by_id($candidateId, $source, $settlementType, $accountId)
 {
     if ($candidateId <= 0) return null;
     $stmt = db()->prepare("SELECT * FROM movements
@@ -158,7 +158,7 @@ function vade_guvenli_candidate_by_id(int $candidateId, array $source, string $s
     return $row;
 }
 
-function vade_guvenli_complete_source(int $sourceId, int $settlementId): void
+function vade_guvenli_complete_source($sourceId, $settlementId)
 {
     db()->prepare("UPDATE movements
         SET reminder_status='tamamlandi', reminder_completed_at=?, reminder_completed_by=?,
@@ -167,7 +167,7 @@ function vade_guvenli_complete_source(int $sourceId, int $settlementId): void
         ->execute([now(), current_user()['id'] ?? null, $settlementId, now(), $sourceId]);
 }
 
-function vade_guvenli_create_settlement(array $source, string $settlementType, int $accountId): int
+function vade_guvenli_create_settlement($source, $settlementType, $accountId)
 {
     $description = 'Vade kapatma #' . (int)$source['id'];
     if (trim((string)($source['description'] ?? '')) !== '') {
