@@ -25,6 +25,8 @@ function vade_guvenli_source(int $id): ?array
         FROM movements m
         LEFT JOIN cariler c ON c.id=m.cari_id
         WHERE m.id=? AND COALESCE(m.is_cancelled,0)=0
+          AND COALESCE(m.check_id,0)=0
+          AND COALESCE(m.is_check_adjustment,0)=0
           AND m.movement_type IN ('alacak','verecek')
         LIMIT 1");
     $stmt->execute([$id]);
@@ -32,14 +34,26 @@ function vade_guvenli_source(int $id): ?array
     return $row ?: null;
 }
 
+function vade_guvenli_is_instrument(array $source): bool
+{
+    $method = strtoupper(trim((string)($source['payment_method'] ?? '')));
+    $documentType = trim((string)($source['document_type'] ?? ''));
+
+    return strpos($method, 'ÇEK') !== false
+        || strpos($method, 'CEK') !== false
+        || strpos($method, 'SENET') !== false
+        || in_array($documentType, ['cek_gorseli','senet_gorseli'], true);
+}
+
 function vade_guvenli_existing_exact(int $sourceId): ?array
 {
+    $base = 'Vade kapatma #' . $sourceId;
     $stmt = db()->prepare("SELECT * FROM movements
         WHERE COALESCE(is_cancelled,0)=0
-          AND description LIKE ?
+          AND (description=? OR description LIKE ?)
           AND movement_type IN ('tahsilat','odeme')
         ORDER BY id DESC LIMIT 1");
-    $stmt->execute(['Vade kapatma #' . $sourceId . '%']);
+    $stmt->execute([$base, $base . ' / %']);
     $row = $stmt->fetch();
     return $row ?: null;
 }
@@ -53,11 +67,14 @@ function vade_guvenli_candidate(array $source, string $settlementType, int $acco
         "(account_id=? OR account_id IS NULL)",
         "ABS(amount-?)<0.005",
         "COALESCE(currency,'TL')='TL'",
+        "movement_date=?",
+        "COALESCE(description,'') NOT LIKE 'Vade kapatma #%'
     ];
     $params = [
         $settlementType,
         $accountId,
         (float)$source['amount'],
+        date('Y-m-d'),
     ];
     if ($cariId > 0) {
         $where[] = 'cari_id=?';
@@ -65,8 +82,6 @@ function vade_guvenli_candidate(array $source, string $settlementType, int $acco
     } else {
         $where[] = 'cari_id IS NULL';
     }
-    $where[] = "description NOT LIKE ?";
-    $params[] = 'Vade kapatma #' . (int)$source['id'] . '%';
 
     $stmt = db()->prepare('SELECT * FROM movements WHERE ' . implode(' AND ', $where) . ' ORDER BY id DESC LIMIT 1');
     $stmt->execute($params);
@@ -82,6 +97,7 @@ function vade_guvenli_candidate_by_id(int $candidateId, array $source, string $s
           AND movement_type=? AND account_id=?
           AND ABS(amount-?)<0.005
           AND COALESCE(currency,'TL')='TL'
+          AND COALESCE(description,'') NOT LIKE 'Vade kapatma #%'
         LIMIT 1");
     $stmt->execute([$candidateId, $settlementType, $accountId, (float)$source['amount']]);
     $row = $stmt->fetch();
@@ -145,7 +161,10 @@ try {
 
     if ($sourceId <= 0) throw new RuntimeException('Vadeli hareket bulunamadı.');
     $source = vade_guvenli_source($sourceId);
-    if (!$source) throw new RuntimeException('Vadeli hareket bulunamadı veya iptal edilmiş.');
+    if (!$source) throw new RuntimeException('Açık hesap vadesi bulunamadı veya bu kayıt çek/senet akışına bağlı.');
+    if (vade_guvenli_is_instrument($source)) {
+        throw new RuntimeException('Çek ve senet vadeleri açık hesap gibi kapatılamaz. Çek/senet satırındaki işlemi kullanmalısın.');
+    }
 
     $incoming = (string)$source['movement_type'] === 'alacak';
     $settlementType = $incoming ? 'tahsilat' : 'odeme';
@@ -165,10 +184,18 @@ try {
     }
 
     $pdo = db();
+    $createdNew = false;
+    $linkedExisting = false;
+    $settlementId = 0;
+
     $pdo->beginTransaction();
     try {
         $source = vade_guvenli_source($sourceId);
-        if (!$source) throw new RuntimeException('Vadeli hareket bulunamadı veya iptal edilmiş.');
+        if (!$source) throw new RuntimeException('Açık hesap vadesi bulunamadı veya bu kayıt çek/senet akışına bağlı.');
+        if (vade_guvenli_is_instrument($source)) {
+            throw new RuntimeException('Çek ve senet vadeleri açık hesap gibi kapatılamaz.');
+        }
+
         if ((string)($source['reminder_status'] ?? 'bekliyor') === 'tamamlandi'
             && (int)($source['reminder_settlement_movement_id'] ?? 0) > 0) {
             $pdo->commit();
@@ -178,59 +205,72 @@ try {
 
         $exact = vade_guvenli_existing_exact($sourceId);
         if ($exact) {
-            vade_guvenli_complete_source($sourceId, (int)$exact['id']);
+            $settlementId = (int)$exact['id'];
+            if ((int)($exact['account_id'] ?? 0) <= 0) {
+                $pdo->prepare('UPDATE movements SET account_id=?, updated_at=? WHERE id=?')
+                    ->execute([(int)$account['id'], now(), $settlementId]);
+                sync_movement_account_transaction($settlementId);
+            }
+            vade_guvenli_complete_source($sourceId, $settlementId);
+            $linkedExisting = true;
             $pdo->commit();
-            echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label, 'linked_existing'=>true], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            exit;
-        }
-
-        if ($useExisting) {
+        } elseif ($useExisting) {
             $candidate = vade_guvenli_candidate_by_id($existingMovementId, $source, $settlementType, (int)$account['id']);
             if (!$candidate) throw new RuntimeException('Bağlanacak mevcut tahsilat/ödeme hareketi bulunamadı.');
-            vade_guvenli_complete_source($sourceId, (int)$candidate['id']);
+            $settlementId = (int)$candidate['id'];
+            vade_guvenli_complete_source($sourceId, $settlementId);
+            $linkedExisting = true;
             $pdo->commit();
-            log_action('Vade mevcut harekete bağlandı', '#' . $sourceId . ' → Hareket #' . (int)$candidate['id']);
-            audit_action('hareket', $sourceId, 'vade_mevcut_harekete_baglandi', $source, [
-                'reminder_status'=>'tamamlandi',
-                'reminder_settlement_movement_id'=>(int)$candidate['id'],
-                'account_id'=>(int)$account['id'],
-            ], $label);
-            echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label, 'linked_existing'=>true], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            exit;
+        } else {
+            // Açık hesapta aynı gün aynı cari+tutar+hesap için normal bir tahsilat/ödeme zaten varsa
+            // ikinci kez hareket üretme; mevcut hareketi vadeye bağla. Yoksa gerçek tahsilat/ödeme oluştur.
+            $candidate = vade_guvenli_candidate($source, $settlementType, (int)$account['id']);
+            if ($candidate) {
+                $settlementId = (int)$candidate['id'];
+                if ((int)($candidate['account_id'] ?? 0) <= 0) {
+                    $pdo->prepare('UPDATE movements SET account_id=?, updated_at=? WHERE id=?')
+                        ->execute([(int)$account['id'], now(), $settlementId]);
+                    sync_movement_account_transaction($settlementId);
+                }
+                vade_guvenli_complete_source($sourceId, $settlementId);
+                $linkedExisting = true;
+            } else {
+                $settlementId = vade_guvenli_create_settlement($source, $settlementType, (int)$account['id']);
+                vade_guvenli_complete_source($sourceId, $settlementId);
+                $createdNew = true;
+            }
+            $pdo->commit();
         }
-
-        $candidate = vade_guvenli_candidate($source, $settlementType, (int)$account['id']);
-        if (!$candidate) {
-            $pdo->rollBack();
-            http_response_code(409);
-            echo json_encode([
-                'ok'=>false,
-                'code'=>'payment_not_found',
-                'error'=>'Bu vadeye ait geçmiş tahsilat/ödeme bulunamadı. Yeni hareket oluşturulmadı; kayıt beklemeye devam ediyor.',
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            exit;
-        }
-
-        $settlementId = (int)$candidate['id'];
-        if ((int)($candidate['account_id'] ?? 0) <= 0) {
-            $pdo->prepare('UPDATE movements SET account_id=?, updated_at=? WHERE id=?')
-                ->execute([(int)$account['id'], now(), $settlementId]);
-            sync_movement_account_transaction($settlementId);
-        }
-        vade_guvenli_complete_source($sourceId, $settlementId);
-        $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         throw $e;
     }
 
-    log_action('Vade ödemesi kaydedildi', '#' . $sourceId . ' ' . $label . ' / ' . (string)$account['name']);
-    audit_action('hareket', $sourceId, 'vade_tamamlandi', $source, [
-        'reminder_status'=>'tamamlandi',
-        'reminder_settlement_movement_id'=>$settlementId,
-        'account_id'=>(int)$account['id'],
-    ], $label);
-    echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($createdNew) {
+        log_action('Açık hesap vadesi kapatıldı', '#' . $sourceId . ' ' . $label . ' / ' . (string)$account['name'] . ' / Hareket #' . $settlementId);
+        audit_action('hareket', $sourceId, 'vade_tahsilat_odeme_olusturuldu', $source, [
+            'reminder_status'=>'tamamlandi',
+            'reminder_settlement_movement_id'=>$settlementId,
+            'account_id'=>(int)$account['id'],
+            'settlement_type'=>$settlementType,
+        ], $label);
+    } else {
+        log_action('Açık hesap vadesi mevcut harekete bağlandı', '#' . $sourceId . ' → Hareket #' . $settlementId);
+        audit_action('hareket', $sourceId, 'vade_mevcut_harekete_baglandi', $source, [
+            'reminder_status'=>'tamamlandi',
+            'reminder_settlement_movement_id'=>$settlementId,
+            'account_id'=>(int)$account['id'],
+        ], $label);
+    }
+
+    echo json_encode([
+        'ok'=>true,
+        'status'=>'tamamlandi',
+        'label'=>$label,
+        'settlement_movement_id'=>$settlementId,
+        'created_new'=>$createdNew,
+        'linked_existing'=>$linkedExisting,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     if (db()->inTransaction()) db()->rollBack();
     http_response_code(400);
