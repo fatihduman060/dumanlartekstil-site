@@ -238,7 +238,7 @@ function page_header(string $title, string $active = ''): void
         <button class="menu-toggle" type="button" data-menu-toggle>☰</button>
         <div>
           <p>Bitke özel alan</p>
-          <h1><?php echo e($title); ?>}</h1>
+          <h1><?php echo e($title); ?></h1>
         </div>
         <div class="top-actions">
           <?php if (!$storeOnly): ?><a class="ghost-link" href="../" target="_blank" rel="noopener">Siteyi aç</a><?php endif; ?>
