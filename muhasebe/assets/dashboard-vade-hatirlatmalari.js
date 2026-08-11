@@ -133,6 +133,14 @@
       button.textContent=oldText;
     }
 
+    function showRowError(message){
+      var status=row?row.querySelector('.vade-hatirlatma-durum'):null;
+      if(!status) return;
+      status.classList.add('is-error');
+      status.textContent=message;
+      status.title=message;
+    }
+
     function submitCompletion(useExisting,existingMovementId){
       var body=new FormData();
       body.append('action','complete');
@@ -148,9 +156,13 @@
       var endpoint=source==='movement'?'dashboard-vade-guvenli.php':'dashboard-vade-hatirlatmalari.php';
       fetch(endpoint,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
         .then(function(response){
-          return response.json().catch(function(){return {ok:false,error:'Sunucu cevabı okunamadı.'};}).then(function(data){
+          return response.text().then(function(raw){
+            var data=null;
+            try{data=JSON.parse(raw);}catch(parseError){
+              data={ok:false,error:'Sunucu cevabı JSON değil.',response_body:raw};
+            }
             if(!response.ok||!data||!data.ok){
-              var error=new Error((data&&data.error)||'Vade durumu güncellenemedi.');
+              var error=new Error('HTTP '+response.status+': '+((data&&data.error)||'Vade durumu güncellenemedi.'));
               error.data=data||{};
               throw error;
             }
@@ -175,7 +187,7 @@
               return;
             }
           }
-          window.alert(error.message||'Vade durumu güncellenemedi.');
+          showRowError(error.message||'Vade durumu güncellenemedi.');
           resetButton();
         });
     }
@@ -192,7 +204,7 @@
       +'.vade-hatirlatma-baslik{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin-bottom:12px}.vade-hatirlatma-baslik>div{display:grid;gap:3px}.vade-hatirlatma-baslik strong{font-size:17px}.vade-hatirlatma-baslik small{color:var(--muted);font-size:12px}.vade-hatirlatma-baslik>b{padding:7px 10px;border-radius:999px;background:#efe8dd;color:#544b3d;font-size:12px}.vade-hatirlatma-ikon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#fff4dc;font-size:19px}'
       +'.vade-hatirlatma-gruplar{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}.vade-hatirlatma-grup{border:1px solid var(--border);border-radius:15px;background:#fff;overflow:hidden}.vade-hatirlatma-grup summary{list-style:none;cursor:pointer;padding:13px 14px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.vade-hatirlatma-grup summary::-webkit-details-marker{display:none}.vade-hatirlatma-grup summary span{display:grid;gap:3px}.vade-hatirlatma-grup summary strong{font-size:14px}.vade-hatirlatma-grup summary small{color:var(--muted);font-size:11px}.vade-hatirlatma-grup summary b{font-size:12px;padding:6px 8px;border-radius:999px;background:#f3efe7}.vade-hatirlatma-grup[open] summary{border-bottom:1px solid var(--border)}'
       +'.vade-hatirlatma-grup.tone-danger{border-left:4px solid var(--danger)}.vade-hatirlatma-grup.tone-warning{border-left:4px solid var(--warning)}.vade-hatirlatma-grup.tone-info{border-left:4px solid var(--info)}'
-      +'.vade-hatirlatma-liste{display:grid;max-height:340px;overflow:auto}.vade-hatirlatma-satir{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border);background:#fff}.vade-hatirlatma-satir:last-child{border-bottom:0}.vade-hatirlatma-satir:hover{background:#fffaf3}.vade-hatirlatma-link{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;min-width:0}.vade-hatirlatma-ana,.vade-hatirlatma-tutar{display:grid;gap:4px}.vade-hatirlatma-ana strong{font-size:13px}.vade-hatirlatma-ana small,.vade-hatirlatma-tutar small{font-size:11px;color:var(--muted)}.vade-hatirlatma-tutar{text-align:right}.vade-hatirlatma-tutar strong{font-size:13px}.vade-hatirlatma-aciklama{display:block;margin-top:2px;white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis}.vade-hatirlatma-kontrol{display:grid;gap:5px;justify-items:end;min-width:190px}.vade-hatirlatma-durum{font-size:9px;font-weight:900;color:#776b5c;background:#f2eee6;border:1px solid #e4dccf;border-radius:999px;padding:4px 7px}.vade-hatirlatma-islem{display:grid;gap:6px;width:100%}.vade-hatirlatma-hesap{width:100%;min-height:34px;border:1px solid var(--border);background:#fff;border-radius:9px;padding:5px 7px;font-size:10px;color:#3f493f}.vade-hatirlatma-tamamla{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:9px;padding:7px 8px;font-size:10px;font-weight:900;cursor:pointer}.vade-hatirlatma-tamamla:hover{background:#d9efdf}.vade-hatirlatma-tamamla:disabled{opacity:.55;cursor:wait}.vade-hatirlatma-bos,.vade-hatirlatma-temiz{margin:0;padding:14px;color:var(--muted);font-size:12px}.vade-hatirlatma-temiz{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:14px;font-weight:800}'
+      +'.vade-hatirlatma-liste{display:grid;max-height:340px;overflow:auto}.vade-hatirlatma-satir{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border);background:#fff}.vade-hatirlatma-satir:last-child{border-bottom:0}.vade-hatirlatma-satir:hover{background:#fffaf3}.vade-hatirlatma-link{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;min-width:0}.vade-hatirlatma-ana,.vade-hatirlatma-tutar{display:grid;gap:4px}.vade-hatirlatma-ana strong{font-size:13px}.vade-hatirlatma-ana small,.vade-hatirlatma-tutar small{font-size:11px;color:var(--muted)}.vade-hatirlatma-tutar{text-align:right}.vade-hatirlatma-tutar strong{font-size:13px}.vade-hatirlatma-aciklama{display:block;margin-top:2px;white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis}.vade-hatirlatma-kontrol{display:grid;gap:5px;justify-items:end;min-width:190px}.vade-hatirlatma-durum{font-size:9px;font-weight:900;color:#776b5c;background:#f2eee6;border:1px solid #e4dccf;border-radius:999px;padding:4px 7px}.vade-hatirlatma-durum.is-error{max-width:360px;white-space:normal;color:#9f2d22;background:#fff1ef;border-color:#efb8b2}.vade-hatirlatma-islem{display:grid;gap:6px;width:100%}.vade-hatirlatma-hesap{width:100%;min-height:34px;border:1px solid var(--border);background:#fff;border-radius:9px;padding:5px 7px;font-size:10px;color:#3f493f}.vade-hatirlatma-tamamla{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:9px;padding:7px 8px;font-size:10px;font-weight:900;cursor:pointer}.vade-hatirlatma-tamamla:hover{background:#d9efdf}.vade-hatirlatma-tamamla:disabled{opacity:.55;cursor:wait}.vade-hatirlatma-bos,.vade-hatirlatma-temiz{margin:0;padding:14px;color:var(--muted);font-size:12px}.vade-hatirlatma-temiz{border:1px solid #bfe3ca;background:#e8f5ed;color:#1f6b3d;border-radius:14px;font-weight:800}'
       +'@media(max-width:1100px){.vade-hatirlatma-liste{max-height:300px}}@media(max-width:640px){.vade-hatirlatma-baslik{grid-template-columns:auto 1fr}.vade-hatirlatma-baslik>b{grid-column:1/-1;justify-self:start}.vade-hatirlatma-liste{max-height:none;overflow:visible}.vade-hatirlatma-satir{grid-template-columns:minmax(0,1fr)}.vade-hatirlatma-link{grid-template-columns:minmax(0,1fr)}.vade-hatirlatma-kontrol{grid-template-columns:minmax(0,1fr);justify-content:stretch;justify-items:stretch;width:100%;min-width:0}.vade-hatirlatma-durum{justify-self:start;align-self:start}.vade-hatirlatma-islem{width:100%;min-width:0}.vade-hatirlatma-hesap,.vade-hatirlatma-tamamla{width:100%;min-width:0}.vade-hatirlatma-tutar{text-align:left}.vade-hatirlatma-aciklama{max-width:100%;white-space:normal}}';
     document.head.appendChild(style);
   }
