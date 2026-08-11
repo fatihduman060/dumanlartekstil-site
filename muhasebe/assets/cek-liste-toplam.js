@@ -278,3 +278,220 @@
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',addManualEmployeeField); else addManualEmployeeField();
 })();
+
+(function(){
+  'use strict';
+
+  function norm(value){
+    return String(value||'').toLocaleLowerCase('tr-TR').replace(/\s+/g,' ').trim();
+  }
+
+  function initInstrumentForm(){
+    if(!/hareketler\.php/i.test(location.pathname)) return;
+    var action=document.querySelector('.stack-form input[name="action"][value="save"]');
+    var form=action&&action.closest('form');
+    if(!form||form.dataset.instrumentFieldsReady==='1') return;
+    form.dataset.instrumentFieldsReady='1';
+
+    var type=form.querySelector('select[name="movement_type"]');
+    var currency=form.querySelector('select[name="currency"]');
+    var dueDate=form.querySelector('input[name="due_date"]');
+    var cari=form.querySelector('select[name="cari_id"]');
+    var category=form.querySelector('select[name="category_id"]');
+    var account=form.querySelector('select[name="account_id"]');
+    var method=form.querySelector('input[name="payment_method"]');
+    var docType=form.querySelector('select[name="document_type"]');
+    var genericDocument=form.querySelector('input[name="document"]');
+    var genericDocumentLabel=genericDocument?genericDocument.closest('label'):null;
+    if(!type||!currency||!dueDate||!cari||!method||!docType) return;
+
+    if(!Array.prototype.some.call(docType.options,function(option){return option.value==='senet_gorseli';})){
+      var senetOption=document.createElement('option');
+      senetOption.value='senet_gorseli';
+      senetOption.textContent='Senet görseli';
+      docType.appendChild(senetOption);
+    }
+
+    var panel=document.createElement('div');
+    panel.className='hareket-instrument-panel';
+    panel.innerHTML=''
+      +'<div class="hareket-instrument-head"><strong>Çek / Senet bilgileri</strong><small>Tekli çek veya senet girişinde numara ve görseli burada kaydet.</small></div>'
+      +'<div class="hareket-instrument-grid">'
+      +'<label>İşlem belgesi<select name="instrument_kind"><option value="">Normal işlem</option><option value="cek">Çek</option><option value="senet">Senet</option></select></label>'
+      +'<label data-instrument-no hidden>Çek / Senet numarası<input name="instrument_no" maxlength="120" autocomplete="off" placeholder="Belge numarasını yaz"></label>'
+      +'<label data-instrument-document hidden>Çek / Senet görseli <small>JPG, PNG, WEBP, HEIC veya PDF; max 10 MB</small><input name="instrument_document" type="file" accept="image/*,application/pdf"></label>'
+      +'</div><p class="hareket-instrument-note" data-instrument-note hidden></p>';
+
+    var docRow=docType.closest('.two-col');
+    if(docRow) docRow.insertAdjacentElement('afterend',panel);
+    else docType.closest('label').insertAdjacentElement('afterend',panel);
+
+    var kind=panel.querySelector('select[name="instrument_kind"]');
+    var noLabel=panel.querySelector('[data-instrument-no]');
+    var noInput=panel.querySelector('input[name="instrument_no"]');
+    var documentLabel=panel.querySelector('[data-instrument-document]');
+    var documentInput=panel.querySelector('input[name="instrument_document"]');
+    var note=panel.querySelector('[data-instrument-note]');
+    var submit=form.querySelector('button[type="submit"]');
+
+    function checkCategorySelected(){
+      if(!category||category.selectedIndex<0) return false;
+      var text=norm(category.options[category.selectedIndex].textContent||'');
+      return text==='çek'||text==='cek'||text.indexOf('çek')===0||text.indexOf('cek')===0;
+    }
+
+    function selectCheckCategory(){
+      if(!category||String(category.value||'')!=='') return;
+      Array.prototype.some.call(category.options,function(option){
+        var text=norm(option.textContent||'');
+        if(text==='çek'||text==='cek'){
+          category.value=option.value;
+          return true;
+        }
+        return false;
+      });
+    }
+
+    function showNote(text,tone){
+      note.textContent=text||'';
+      note.hidden=!text;
+      note.className='hareket-instrument-note'+(tone?' is-'+tone:'');
+    }
+
+    function sync(forceFromKind){
+      var value=String(kind.value||'');
+      var active=value==='cek'||value==='senet';
+      noLabel.hidden=!active;
+      documentLabel.hidden=!active;
+      noInput.required=active;
+      dueDate.required=active;
+      cari.required=active;
+
+      if(genericDocumentLabel) genericDocumentLabel.style.display=active?'none':'';
+      if(account){
+        account.disabled=active;
+        if(active) account.value='';
+      }
+
+      if(active){
+        var isSenet=value==='senet';
+        noLabel.firstChild.nodeValue=isSenet?'Senet numarası':'Çek numarası';
+        documentLabel.firstChild.nodeValue=isSenet?'Senet görseli ':'Çek görseli ';
+        noInput.placeholder=isSenet?'Senet numarasını yaz':'Çek numarasını yaz';
+        method.value=isSenet?'SENET':'ÇEK';
+        docType.value=isSenet?'senet_gorseli':'cek_gorseli';
+        selectCheckCategory();
+        if(type.value!=='tahsilat'&&type.value!=='odeme'){
+          showNote('İşlem türünü Tahsilat (aldığımız çek/senet) veya Ödeme (verdiğimiz çek/senet) olarak seç.','warning');
+        }else{
+          showNote((type.value==='tahsilat'?'Alınan ':'Verilen ')+(isSenet?'senet':'çek')+' kaydı cariye bağlanacak; banka hesabı vade kapatılırken seçilecek.','info');
+        }
+      }else{
+        noInput.required=false;
+        dueDate.required=false;
+        cari.required=false;
+        if(account) account.disabled=false;
+        showNote('', '');
+      }
+    }
+
+    function autoDetect(){
+      if(String(kind.value||'')!=='') return;
+      var methodText=norm(method.value||'');
+      if(methodText.indexOf('senet')!==-1||docType.value==='senet_gorseli') kind.value='senet';
+      else if(methodText.indexOf('çek')!==-1||methodText.indexOf('cek')!==-1||docType.value==='cek_gorseli'||checkCategorySelected()) kind.value='cek';
+      sync(false);
+    }
+
+    kind.addEventListener('change',function(){sync(true);});
+    type.addEventListener('change',function(){sync(false);});
+    method.addEventListener('change',autoDetect);
+    docType.addEventListener('change',autoDetect);
+    if(category) category.addEventListener('change',autoDetect);
+
+    var movementIdInput=form.querySelector('input[name="id"]');
+    var movementId=Number(movementIdInput?movementIdInput.value:0)||0;
+    if(movementId>0){
+      fetch('hareket-cek-senet-kaydet.php?movement_id='+encodeURIComponent(movementId)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+        .then(function(response){return response.json();})
+        .then(function(data){
+          if(!data||!data.ok||!data.instrument){autoDetect();return;}
+          kind.value=data.instrument.kind||'cek';
+          noInput.value=data.instrument.number||'';
+          sync(true);
+          if(data.instrument.has_document){
+            showNote((kind.value==='senet'?'Senet':'Çek')+' görseli kayıtlı'+(data.instrument.document_name?' · '+data.instrument.document_name:'')+'. Yeni dosya seçersen mevcut görsel değişir.','success');
+          }
+        })
+        .catch(autoDetect);
+    }else{
+      autoDetect();
+    }
+
+    form.addEventListener('submit',function(event){
+      var instrumentKind=String(kind.value||'');
+      if(instrumentKind!=='cek'&&instrumentKind!=='senet') return;
+      event.preventDefault();
+
+      if(type.value!=='tahsilat'&&type.value!=='odeme'){
+        showNote('Çek/senet için işlem türünü Tahsilat veya Ödeme seçmelisin.','error');
+        type.focus();
+        return;
+      }
+      if(String(currency.value||'TL').toUpperCase()!=='TL'){
+        showNote('Çek/senet kaydı bu ekranda TL olmalı.','error');
+        currency.focus();
+        return;
+      }
+      if(!String(cari.value||'')){
+        showNote('Çek/senet için cari seçmelisin.','error');
+        cari.focus();
+        return;
+      }
+      if(!String(dueDate.value||'')){
+        showNote('Çek/senet için vade tarihi zorunlu.','error');
+        dueDate.focus();
+        return;
+      }
+      if(!String(noInput.value||'').trim()){
+        showNote((instrumentKind==='senet'?'Senet':'Çek')+' numarasını yazmalısın.','error');
+        noInput.focus();
+        return;
+      }
+
+      var oldText=submit?submit.textContent:'';
+      if(submit){submit.disabled=true;submit.textContent='Çek / senet kaydediliyor...';}
+      showNote('Hareket ve çek/senet kaydı birlikte hazırlanıyor...','info');
+
+      var body=new FormData(form);
+      body.set('instrument_kind',instrumentKind);
+      body.set('instrument_no',String(noInput.value||'').trim());
+      if(documentInput&&documentInput.files&&documentInput.files[0]) body.set('instrument_document',documentInput.files[0]);
+
+      fetch('hareket-cek-senet-kaydet.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}})
+        .then(function(response){
+          return response.json().catch(function(){return {ok:false,error:'Sunucu cevabı okunamadı.'};}).then(function(data){
+            if(!response.ok||!data||!data.ok) throw new Error((data&&data.error)||'Çek/senet kaydı oluşturulamadı.');
+            return data;
+          });
+        })
+        .then(function(data){
+          showNote('Kaydedildi. Çek/senet kaydı ve görseli birbirine bağlandı.','success');
+          location.href=data.redirect||'hareketler.php';
+        })
+        .catch(function(error){
+          showNote(error.message||'Çek/senet kaydı oluşturulamadı.','error');
+          if(submit){submit.disabled=false;submit.textContent=oldText;}
+        });
+    });
+
+    if(!document.getElementById('hareketInstrumentStyle')){
+      var style=document.createElement('style');
+      style.id='hareketInstrumentStyle';
+      style.textContent='.hareket-instrument-panel{display:grid;gap:10px;padding:13px;border:1px solid #d7c28f;border-radius:15px;background:linear-gradient(135deg,#fff9ed,#fff)}.hareket-instrument-head{display:grid;gap:3px}.hareket-instrument-head strong{color:#5d3d18;font-size:13px}.hareket-instrument-head small{color:#7c6b55;font-size:10px}.hareket-instrument-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.hareket-instrument-grid label{display:grid;gap:5px;font-size:11px;font-weight:850}.hareket-instrument-grid input,.hareket-instrument-grid select{width:100%;min-height:42px;border:1px solid #d8cbb5;border-radius:10px;padding:8px 9px;background:#fff;box-sizing:border-box}.hareket-instrument-grid input[type=file]{padding:7px}.hareket-instrument-note{margin:0;padding:8px 10px;border-radius:10px;font-size:10px;font-weight:800;background:#eef4ff;color:#315c96}.hareket-instrument-note.is-warning{background:#fff5df;color:#7a581d}.hareket-instrument-note.is-error{background:#fff0ef;color:#9b3832}.hareket-instrument-note.is-success{background:#eaf6ed;color:#21683c}.hareket-instrument-note.is-info{background:#eef4ff;color:#315c96}@media(max-width:760px){.hareket-instrument-grid{grid-template-columns:1fr}}';
+      document.head.appendChild(style);
+    }
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initInstrumentForm); else initInstrumentForm();
+})();
