@@ -159,7 +159,73 @@ try {
                     $description = 'Vade kapatma #' . $id;
                     if (trim((string)($movement['description'] ?? '')) !== '') $description .= ' / ' . trim((string)$movement['description']);
                     $settlementType = $incoming ? 'tahsilat' : 'odeme';
-                    $settlementId = dashboard_reminder_create_settlement($movement, $settlementType, (int)$account['id'], $description);
+                    $useExisting = (int)($_POST['use_existing'] ?? 0) === 1;
+                    $existingMovementId = (int)($_POST['existing_movement_id'] ?? 0);
+
+                    $exactStmt = $pdo->prepare("SELECT * FROM movements
+                        WHERE COALESCE(is_cancelled,0)=0
+                          AND movement_type=?
+                          AND (description=? OR description LIKE ?)
+                        ORDER BY id DESC LIMIT 1");
+                    $exactStmt->execute([$settlementType, 'Vade kapatma #' . $id, 'Vade kapatma #' . $id . ' / %']);
+                    $settlement = $exactStmt->fetch() ?: null;
+
+                    if (!$settlement && $useExisting) {
+                        $candidateStmt = $pdo->prepare("SELECT * FROM movements
+                            WHERE id=? AND COALESCE(is_cancelled,0)=0
+                              AND movement_type=? AND account_id=?
+                              AND ABS(amount-?)<0.005
+                              AND COALESCE(currency,'TL')='TL'
+                            LIMIT 1");
+                        $candidateStmt->execute([$existingMovementId, $settlementType, (int)$account['id'], (float)$movement['amount']]);
+                        $settlement = $candidateStmt->fetch() ?: null;
+                        if (!$settlement || (int)($settlement['cari_id'] ?? 0) !== (int)($movement['cari_id'] ?? 0)) {
+                            throw new RuntimeException('Bağlanacak mevcut tahsilat/ödeme hareketi bulunamadı.');
+                        }
+                    }
+
+                    if (!$settlement && !$useExisting) {
+                        $candidateStmt = $pdo->prepare("SELECT * FROM movements
+                            WHERE COALESCE(is_cancelled,0)=0
+                              AND movement_type=? AND account_id=?
+                              AND ABS(amount-?)<0.005
+                              AND COALESCE(currency,'TL')='TL'
+                              AND movement_date=?
+                              AND COALESCE(cari_id,0)=?
+                              AND COALESCE(description,'') NOT LIKE 'Vade kapatma #%'
+                            ORDER BY id DESC LIMIT 1");
+                        $candidateStmt->execute([
+                            $settlementType,
+                            (int)$account['id'],
+                            (float)$movement['amount'],
+                            date('Y-m-d'),
+                            (int)($movement['cari_id'] ?? 0),
+                        ]);
+                        $candidate = $candidateStmt->fetch() ?: null;
+                        if ($candidate) {
+                            $pdo->rollBack();
+                            http_response_code(409);
+                            echo json_encode([
+                                'ok'=>false,
+                                'code'=>'possible_duplicate',
+                                'error'=>'Aynı cari, tutar ve hesap için bugün bir tahsilat/ödeme hareketi zaten var.',
+                                'existing_movement_id'=>(int)$candidate['id'],
+                                'existing_date'=>(string)$candidate['movement_date'],
+                            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                            exit;
+                        }
+                    }
+
+                    if ($settlement) {
+                        $settlementId = (int)$settlement['id'];
+                        if ((int)($settlement['account_id'] ?? 0) !== (int)$account['id']) {
+                            $pdo->prepare('UPDATE movements SET account_id=?, updated_at=? WHERE id=?')
+                                ->execute([(int)$account['id'], now(), $settlementId]);
+                            sync_movement_account_transaction($settlementId);
+                        }
+                    } else {
+                        $settlementId = dashboard_reminder_create_settlement($movement, $settlementType, (int)$account['id'], $description);
+                    }
                     $completedAt = now();
                     $completedBy = current_user()['id'] ?? null;
                     $pdo->prepare("UPDATE movements SET reminder_status='tamamlandi', reminder_completed_at=?, reminder_completed_by=?,
@@ -177,7 +243,12 @@ try {
                     'reminder_settlement_movement_id'=>$settlementId,
                     'account_id'=>(int)$account['id'],
                 ], $label);
-                echo json_encode(['ok'=>true, 'status'=>'tamamlandi', 'label'=>$label], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                echo json_encode([
+                    'ok'=>true,
+                    'status'=>'tamamlandi',
+                    'label'=>$label,
+                    'settlement_movement_id'=>$settlementId,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 exit;
             }
 
@@ -447,67 +518,3 @@ try {
     $checkStmt->execute([$weekAhead]);
     foreach ($checkStmt->fetchAll() as $row) {
         $dueDate = (string)$row['due_date'];
-        $incoming = (string)$row['direction'] === 'alinacak';
-        $bucket = dashboard_reminder_bucket($dueDate, $today);
-        $checkInfo = trim(implode(' · ', array_filter([
-            trim((string)($row['bank_name'] ?? '')),
-            trim((string)($row['check_no'] ?? '')),
-            trim((string)($row['description'] ?? '')),
-        ])));
-        $groups[$bucket]['items'][] = [
-            'source' => 'check',
-            'id' => (int)$row['id'],
-            'kind' => $incoming ? 'Alınacak çek' : 'Verilecek çek',
-            'direction' => $incoming ? 'incoming' : 'outgoing',
-            'tone' => $incoming ? 'success' : 'danger',
-            'cari_name' => (string)($row['cari_name'] ?: ($row['drawer'] ?: 'Cari seçilmedi')),
-            'description' => $checkInfo,
-            'amount' => (float)$row['amount'],
-            'currency' => 'TL',
-            'amount_text' => dashboard_reminder_money($row['amount'], 'TL'),
-            'due_date' => $dueDate,
-            'due_text' => tr_date($dueDate),
-            'state_text' => dashboard_reminder_due_text($dueDate, $today),
-            'status_text' => (string)$row['status'] === 'bankaya_verildi' ? 'Bankaya verildi' : 'Bekliyor',
-            'can_complete' => can_write(),
-            'complete_label' => $incoming ? 'Tahsil edildi' : 'Ödendi',
-            'account_scope' => 'bank',
-            'default_account_id' => !empty($row['account_id']) ? (int)$row['account_id'] : '',
-            'url' => 'cekler.php?direction=' . urlencode((string)$row['direction']) . '&edit=' . (int)$row['id'] . '#cek-form',
-        ];
-    }
-
-    $totalCount = 0;
-    foreach ($groups as &$group) {
-        usort($group['items'], function(array $a, array $b): int {
-            $dateCompare = strcmp((string)$a['due_date'], (string)$b['due_date']);
-            if ($dateCompare !== 0) return $dateCompare;
-            return ((int)$b['id']) <=> ((int)$a['id']);
-        });
-        $group['count'] = count($group['items']);
-        $group['incoming_count'] = count(array_filter($group['items'], fn($item) => ($item['direction'] ?? '') === 'incoming'));
-        $group['outgoing_count'] = $group['count'] - $group['incoming_count'];
-        $totalCount += $group['count'];
-    }
-    unset($group);
-
-    echo json_encode([
-        'ok' => true,
-        'today' => $today,
-        'week_ahead' => $weekAhead,
-        'count' => $totalCount,
-        'csrf_token' => csrf_token(),
-        'accounts' => array_values(array_map(function(array $account): array {
-            return [
-                'id'=>(int)$account['id'],
-                'name'=>(string)$account['name'],
-                'bank_name'=>(string)($account['bank_name'] ?? ''),
-                'account_type'=>(string)($account['account_type'] ?? ''),
-            ];
-        }, accounts_for_select(true))),
-        'groups' => array_values($groups),
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-} catch (Throwable $e) {
-    http_response_code(400);
-    echo json_encode(['ok'=>false, 'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-}
