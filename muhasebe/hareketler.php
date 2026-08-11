@@ -140,6 +140,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $cariler = cariler_for_select();
+$movementCategoryDefinitions = [
+    ['Fatura', 'gider'],
+    ['Fiş', 'genel'],
+    ['Tahsilat', 'gelir'],
+    ['Ödeme', 'gider'],
+    ['İade', 'genel'],
+    ['Mal Alımı', 'gider'],
+    ['Çek', 'genel'],
+    ['Senet', 'genel'],
+    ['Vergi', 'gider'],
+    ['Nakliye', 'gider'],
+    ['Kira', 'gider'],
+    ['Genel', 'genel'],
+    ['Diğer', 'genel'],
+];
+$insertMovementCategory = db()->prepare('INSERT OR IGNORE INTO categories (name, type, created_at) VALUES (?, ?, ?)');
+foreach ($movementCategoryDefinitions as $categoryDefinition) {
+    $insertMovementCategory->execute([$categoryDefinition[0], $categoryDefinition[1], now()]);
+}
 $categories = categories();
 $accounts = accounts_for_select(true);
 $edit = null;
@@ -150,6 +169,35 @@ if (!empty($_GET['edit'])) {
     if ($edit && (int)($edit['is_cancelled'] ?? 0) === 1) {
         flash('error', 'İptal edilmiş hareket düzenlenemez. Gerekirse yeni düzeltme hareketi girin.');
         redirect('hareketler.php?include_cancelled=1');
+    }
+}
+$categoriesByName = [];
+foreach ($categories as $category) {
+    $categoriesByName[(string)$category['name']] = $category;
+}
+$movementFormCategories = [];
+foreach ($movementCategoryDefinitions as $categoryDefinition) {
+    if (isset($categoriesByName[$categoryDefinition[0]])) {
+        $movementFormCategories[] = $categoriesByName[$categoryDefinition[0]];
+    }
+}
+// Eski bir hareket düzenlenirken artık standart listede olmayan mevcut kategoriyi koru.
+if ($edit && !empty($edit['category_id'])) {
+    $selectedCategoryId = (int)$edit['category_id'];
+    $selectedCategoryExists = false;
+    foreach ($movementFormCategories as $category) {
+        if ((int)$category['id'] === $selectedCategoryId) {
+            $selectedCategoryExists = true;
+            break;
+        }
+    }
+    if (!$selectedCategoryExists) {
+        foreach ($categories as $category) {
+            if ((int)$category['id'] === $selectedCategoryId) {
+                $movementFormCategories[] = $category;
+                break;
+            }
+        }
     }
 }
 
@@ -259,7 +307,7 @@ page_header('Hareketler', 'hareketler');
       <div class="movement-top-row">
         <label class="movement-cari-wide">Cari<select name="cari_id"><option value="">Cari seçilmedi</option><?php foreach($cariler as $c): $selected=(string)($edit['cari_id'] ?? ($_GET['cari_id'] ?? ''))===(string)$c['id']; ?><option value="<?php echo e($c['id']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($c['name']); ?> — <?php echo e($c['cari_type']); ?></option><?php endforeach; ?></select></label>
         <label>Tip<select name="movement_type" required data-cash-type><?php $entryTypes = $edit ? movement_types() : movement_entry_types(); foreach ($entryTypes as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['movement_type'] ?? ($_GET['movement_type'] ?? ''))===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select><small>Özel Alacak seçilirse genel bakiyeye işlemez; sadece seçilen carinin özel alanına kaydolur.</small></label>
-        <label>Kategori<select name="category_id"><option value="">Kategori yok</option><?php foreach($categories as $cat): ?><option value="<?php echo e($cat['id']); ?>" <?php echo ((string)($edit['category_id'] ?? '')===(string)$cat['id'])?'selected':''; ?>><?php echo e($cat['name']); ?></option><?php endforeach; ?></select></label>
+        <label>Kategori<select name="category_id"><option value="">Kategori yok</option><?php foreach($movementFormCategories as $cat): ?><option value="<?php echo e($cat['id']); ?>" <?php echo ((string)($edit['category_id'] ?? '')===(string)$cat['id'])?'selected':''; ?>><?php echo e($cat['name']); ?></option><?php endforeach; ?></select></label>
       </div>
       <div class="two-col">
         <label>Tutar<input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>"></label>
