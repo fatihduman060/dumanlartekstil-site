@@ -153,7 +153,7 @@
         body.append('existing_movement_id',String(existingMovementId||''));
       }
 
-      var endpoint=source==='movement'?'dashboard-vade-guvenli.php':'dashboard-vade-hatirlatmalari.php';
+      var endpoint='dashboard-vade-hatirlatmalari.php';
       fetch(endpoint,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
         .then(function(response){
           return response.text().then(function(raw){
