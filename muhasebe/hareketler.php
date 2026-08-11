@@ -235,6 +235,16 @@ if ($q !== '') {
 }
 page_header('Hareketler', 'hareketler');
 ?>
+<style>
+.movement-top-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .movement-top-row { grid-template-columns: 1fr; }
+}
+</style>
 <section class="form-grid">
   <article class="panel-card form-card">
     <div class="card-head"><h3><?php echo $edit ? 'Hareket düzenle' : 'Yeni hareket'; ?></h3></div>
@@ -242,24 +252,24 @@ page_header('Hareketler', 'hareketler');
     <form method="post" enctype="multipart/form-data" class="stack-form">
       <?php echo csrf_field(); ?>
       <input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id'] ?? 0); ?>">
-      <div class="two-col">
+      <div class="movement-top-row">
         <label>Tip<select name="movement_type" required data-cash-type><?php $entryTypes = $edit ? movement_types() : movement_entry_types(); foreach ($entryTypes as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['movement_type'] ?? ($_GET['movement_type'] ?? ''))===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select><small>Özel Alacak seçilirse genel bakiyeye işlemez; sadece seçilen carinin özel alanına kaydolur.</small></label>
-        <label>Tutar<input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>"></label>
-      </div>
-      <div class="two-col">
-        <label>Para birimi<select name="currency"><?php $currentCurrency = hareket_currency_value($edit['currency'] ?? 'TL'); foreach(hareket_currency_options() as $cur=>$label): ?><option value="<?php echo e($cur); ?>" <?php echo $currentCurrency===$cur?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><small>TL dışı hareketler kasa/banka bakiyesine otomatik yazılmaz; cari borç/alacak kendi döviziyle takip edilir.</small></label>
-        <label>İşlem tarihi<input name="movement_date" type="date" required value="<?php echo e($edit['movement_date'] ?? date('Y-m-d')); ?>"></label>
-      </div>
-      <div class="two-col">
-        <label>Vade tarihi<input name="due_date" type="date" value="<?php echo e($edit['due_date'] ?? ''); ?>"></label>
         <label>Cari<select name="cari_id"><option value="">Cari seçilmedi</option><?php foreach($cariler as $c): $selected=(string)($edit['cari_id'] ?? ($_GET['cari_id'] ?? ''))===(string)$c['id']; ?><option value="<?php echo e($c['id']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($c['name']); ?> — <?php echo e($c['cari_type']); ?></option><?php endforeach; ?></select></label>
-      </div>
-      <div class="two-col">
         <label>Kategori<select name="category_id"><option value="">Kategori yok</option><?php foreach($categories as $cat): ?><option value="<?php echo e($cat['id']); ?>" <?php echo ((string)($edit['category_id'] ?? '')===(string)$cat['id'])?'selected':''; ?>><?php echo e($cat['name']); ?></option><?php endforeach; ?></select></label>
-        <label>Ödeme/Kasa hesabı<select name="account_id"><option value="">Kasa/banka seçilmedi</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo ((string)($edit['account_id'] ?? '')===(string)$a['id'])?'selected':''; ?>><?php echo e($a['name']); ?> — <?php echo e(account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select><small>TL dışı hareketlerde kasa/banka hesabı otomatik boş bırakılır.</small></label>
       </div>
       <div class="two-col">
+        <label>Tutar<input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>"></label>
+        <label>Para birimi<select name="currency"><?php $currentCurrency = hareket_currency_value($edit['currency'] ?? 'TL'); foreach(hareket_currency_options() as $cur=>$label): ?><option value="<?php echo e($cur); ?>" <?php echo $currentCurrency===$cur?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><small>TL dışı hareketler kasa/banka bakiyesine otomatik yazılmaz; cari borç/alacak kendi döviziyle takip edilir.</small></label>
+      </div>
+      <div class="two-col">
+        <label>İşlem tarihi<input name="movement_date" type="date" required value="<?php echo e($edit['movement_date'] ?? date('Y-m-d')); ?>"></label>
+        <label>Vade tarihi<input name="due_date" type="date" value="<?php echo e($edit['due_date'] ?? ''); ?>"></label>
+      </div>
+      <div class="two-col">
+        <label>Ödeme/Kasa hesabı<select name="account_id"><option value="">Kasa/banka seçilmedi</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo ((string)($edit['account_id'] ?? '')===(string)$a['id'])?'selected':''; ?>><?php echo e($a['name']); ?> — <?php echo e(account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select><small>TL dışı hareketlerde kasa/banka hesabı otomatik boş bırakılır.</small></label>
         <label>Ödeme yöntemi<input name="payment_method" placeholder="Nakit, EFT, kart..." value="<?php echo e($edit['payment_method'] ?? ''); ?>"></label>
+      </div>
+      <div class="two-col">
         <label>Belge türü<select name="document_type"><option value="">Belge türü yok</option><?php foreach(document_types() as $key=>$label): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['document_type'] ?? '')===$key)?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select></label>
       </div>
       <label>Açıklama<textarea name="description" rows="3"><?php echo e($edit['description'] ?? ''); ?></textarea></label>
