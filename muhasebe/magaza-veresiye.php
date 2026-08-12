@@ -62,7 +62,7 @@ function pv_daily_sync($date, $type, $paymentMethod, $delta)
 
     if (!$row) {
         if ($delta < 0) throw new RuntimeException('Bağlı günlük mağaza kaydı bulunamadı.');
-        $pdo->prepare('INSERT INTO store_daily_payment_breakdown (sale_date,cash_amount,card_amount,credit_amount,credit_collection_amount,cash_credit_collection_amount,card_credit_collection_amount,cash_change_left_amount,daily_total,created_by,created_at,updated_by,updated_at) VALUES (?,0,0,0,0,0,0,0,0,?,?,?,?)')
+        $pdo->prepare('INSERT INTO store_daily_payment_breakdown (sale_date,cash_amount,card_amount,manual_credit_amount,credit_amount,credit_collection_amount,cash_credit_collection_amount,card_credit_collection_amount,cash_change_left_amount,daily_total,created_by,created_at,updated_by,updated_at) VALUES (?,0,0,0,0,0,0,0,0,0,?,?,?,?)')
             ->execute([$date,$userId,now(),$userId,now()]);
         $id = (int)$pdo->lastInsertId();
         $stmt = $pdo->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
@@ -70,12 +70,17 @@ function pv_daily_sync($date, $type, $paymentMethod, $delta)
         $row = $stmt->fetch();
     }
 
-    $credit = (float)($row['credit_amount'] ?? 0);
+    $manualCredit = max(0, (float)($row['manual_credit_amount'] ?? 0));
+    $personnelCredit = magaza_odeme_dagilim_personel_veresiye_toplami((string)$date);
+    if ($type === 'debt') $personnelCredit = max(0, round($personnelCredit + (float)$delta, 2));
+    $credit = round($manualCredit + $personnelCredit, 2);
+
     $cashCollection = (float)($row['cash_credit_collection_amount'] ?? 0);
     $cardCollection = (float)($row['card_credit_collection_amount'] ?? 0);
-    if ($type === 'debt') $credit = max(0, round($credit + $delta, 2));
-    elseif ($paymentMethod === 'cash') $cashCollection = max(0, round($cashCollection + $delta, 2));
-    else $cardCollection = max(0, round($cardCollection + $delta, 2));
+    if ($type !== 'debt') {
+        if ($paymentMethod === 'cash') $cashCollection = max(0, round($cashCollection + $delta, 2));
+        else $cardCollection = max(0, round($cardCollection + $delta, 2));
+    }
 
     $dailyTotal = magaza_odeme_dagilim_gunluk_toplam((float)$row['cash_amount'], (float)$row['card_amount'], $credit);
     $pdo->prepare('UPDATE store_daily_payment_breakdown SET credit_amount=?,credit_collection_amount=?,cash_credit_collection_amount=?,card_credit_collection_amount=?,daily_total=?,updated_by=?,updated_at=? WHERE id=?')
