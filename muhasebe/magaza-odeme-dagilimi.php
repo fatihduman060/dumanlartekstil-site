@@ -82,9 +82,10 @@ try {
             $saleDate = trim((string)($_POST['sale_date'] ?? date('Y-m-d')));
             $cash = decimal_from_input($_POST['cash_amount'] ?? '0');
             $card = decimal_from_input($_POST['card_amount'] ?? '0');
-            // Veresiye satış ve tahsilatlar yalnızca Personel Veresiye modülünden gelir.
-            // Günlük satış formundan gönderilen bu alanlar güvenlik için dikkate alınmaz.
-            $credit = 0.0;
+            // Geçici olarak günlük mağaza formundan veresiye satış tutarı manuel girilebilir.
+            // Personel Veresiye modülünden yapılan kayıtlar da aynı günlük toplamı güncellemeye devam eder.
+            $credit = decimal_from_input($_POST['credit_amount'] ?? '0');
+            // Tahsilatlar halen yalnızca Personel Veresiye modülünden gelir ve günlük kayıt güncellenirken korunur.
             $cashCollection = 0.0;
             $cardCollection = 0.0;
             $cashChangeLeft = decimal_from_input($_POST['cash_change_left_amount'] ?? '0');
@@ -98,7 +99,7 @@ try {
             $stmt->execute([$saleDate]);
             $old = $stmt->fetch();
             if ($old) {
-                $credit = (float)($old['credit_amount'] ?? 0);
+                // Manuel veresiye tutarı formdan gelir; otomatik tahsilat alanları ise ezilmeden korunur.
                 $cashCollection = (float)($old['cash_credit_collection_amount'] ?? 0);
                 $cardCollection = (float)($old['card_credit_collection_amount'] ?? 0);
             }
