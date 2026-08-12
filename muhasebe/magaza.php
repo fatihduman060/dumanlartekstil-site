@@ -60,7 +60,7 @@ page_header('Mağaza', 'magaza');
 }
 </style>
 <script src="assets/magaza-odeme-dagilimi.js?v=6"></script>
-<script src="assets/magaza-veresiye-manuel.js?v=1"></script>
+<script src="assets/magaza-veresiye-manuel.js?v=2"></script>
 <?php if (!is_store_sales_user()): ?>
 <script src="assets/magaza-gunluk-satis.js?v=10"></script>
 <?php endif; ?>
