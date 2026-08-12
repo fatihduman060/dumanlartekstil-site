@@ -17,6 +17,7 @@ function magaza_odeme_dagilim_tablosunu_hazirla(): void
         cash_amount REAL NOT NULL DEFAULT 0,
         card_amount REAL NOT NULL DEFAULT 0,
         credit_amount REAL NOT NULL DEFAULT 0,
+        manual_credit_amount REAL NOT NULL DEFAULT 0,
         credit_collection_amount REAL NOT NULL DEFAULT 0,
         cash_credit_collection_amount REAL NOT NULL DEFAULT 0,
         card_credit_collection_amount REAL NOT NULL DEFAULT 0,
@@ -31,6 +32,7 @@ function magaza_odeme_dagilim_tablosunu_hazirla(): void
     )");
 
     $columns = [
+        'manual_credit_amount' => 'REAL NOT NULL DEFAULT 0',
         'cash_credit_collection_amount' => 'REAL NOT NULL DEFAULT 0',
         'card_credit_collection_amount' => 'REAL NOT NULL DEFAULT 0',
         'cash_change_left_amount' => 'REAL NOT NULL DEFAULT 0',
@@ -57,6 +59,23 @@ function magaza_odeme_dagilim_tablosunu_hazirla(): void
               AND COALESCE(card_credit_collection_amount, 0) = 0");
         setting_set('migration_store_payment_collection_split_v1', '1');
     }
+
+    if (setting_get('migration_store_manual_credit_split_v1', '0') !== '1') {
+        $creditEntriesTable = (bool)db()->query("SELECT name FROM sqlite_master WHERE type='table' AND name='store_credit_entries' LIMIT 1")->fetchColumn();
+        $rows = db()->query("SELECT id, sale_date, credit_amount FROM store_daily_payment_breakdown ORDER BY id ASC")->fetchAll() ?: [];
+        $personStmt = $creditEntriesTable ? db()->prepare("SELECT COALESCE(SUM(amount),0) FROM store_credit_entries WHERE entry_date=? AND entry_type='debt' AND COALESCE(is_cancelled,0)=0") : null;
+        $updateStmt = db()->prepare("UPDATE store_daily_payment_breakdown SET manual_credit_amount=? WHERE id=?");
+        foreach ($rows as $row) {
+            $personnel = 0.0;
+            if ($personStmt) {
+                $personStmt->execute([(string)$row['sale_date']]);
+                $personnel = (float)($personStmt->fetchColumn() ?: 0);
+            }
+            $manual = max(0, round((float)($row['credit_amount'] ?? 0) - $personnel, 2));
+            $updateStmt->execute([$manual, (int)$row['id']]);
+        }
+        setting_set('migration_store_manual_credit_split_v1', '1');
+    }
 }
 
 function magaza_odeme_dagilim_period(string $value): string
@@ -68,6 +87,45 @@ function magaza_odeme_dagilim_period(string $value): string
 function magaza_odeme_dagilim_gunluk_toplam(float $cash, float $card, float $credit): float
 {
     return round($cash + $card + $credit, 2);
+}
+
+function magaza_odeme_dagilim_personel_veresiye_toplami(string $saleDate): float
+{
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate)) return 0.0;
+    $exists = (bool)db()->query("SELECT name FROM sqlite_master WHERE type='table' AND name='store_credit_entries' LIMIT 1")->fetchColumn();
+    if (!$exists) return 0.0;
+    $stmt = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM store_credit_entries WHERE entry_date=? AND entry_type='debt' AND COALESCE(is_cancelled,0)=0");
+    $stmt->execute([$saleDate]);
+    return round((float)($stmt->fetchColumn() ?: 0), 2);
+}
+
+function magaza_odeme_dagilim_veresiye_toplamini_yenile(int $recordId): float
+{
+    if ($recordId <= 0) return 0.0;
+    $stmt = db()->prepare("SELECT * FROM store_daily_payment_breakdown WHERE id=? LIMIT 1");
+    $stmt->execute([$recordId]);
+    $row = $stmt->fetch();
+    if (!$row) return 0.0;
+
+    $manual = max(0, round((float)($row['manual_credit_amount'] ?? 0), 2));
+    $personnel = magaza_odeme_dagilim_personel_veresiye_toplami((string)$row['sale_date']);
+    $credit = round($manual + $personnel, 2);
+    $dailyTotal = magaza_odeme_dagilim_gunluk_toplam((float)$row['cash_amount'], (float)$row['card_amount'], $credit);
+    db()->prepare("UPDATE store_daily_payment_breakdown SET credit_amount=?, daily_total=? WHERE id=?")
+        ->execute([$credit, $dailyTotal, $recordId]);
+    return $credit;
+}
+
+function magaza_odeme_dagilim_veresiye_period_senkronla(string $period): void
+{
+    $period = magaza_odeme_dagilim_period($period);
+    $start = $period . '-01';
+    $end = date('Y-m-t', strtotime($start));
+    $stmt = db()->prepare("SELECT id FROM store_daily_payment_breakdown WHERE sale_date BETWEEN ? AND ? ORDER BY id ASC");
+    $stmt->execute([$start, $end]);
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        magaza_odeme_dagilim_veresiye_toplamini_yenile((int)$row['id']);
+    }
 }
 
 function magaza_odeme_dagilim_kart_hesaba_gecis_tarihi(string $saleDate): string
