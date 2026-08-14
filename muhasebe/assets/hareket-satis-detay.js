@@ -42,7 +42,34 @@
     return option ? option.textContent.trim() : '';
   }
 
+  function selectedTypeText() {
+    var option = typeSelect.options[typeSelect.selectedIndex];
+    return option ? option.textContent.trim() : '';
+  }
+
+  function isSalesInvoiceSelection() {
+    return selectedTypeText().toLocaleLowerCase('tr-TR') === 'satış faturası';
+  }
+
+  function ensureSalesCategory() {
+    if (!isSalesInvoiceSelection()) return false;
+    var salesOption = null;
+    Array.prototype.some.call(categorySelect.options, function (option) {
+      if (String(option.textContent || '').trim().toLocaleLowerCase('tr-TR') === 'satış') {
+        salesOption = option;
+        return true;
+      }
+      return false;
+    });
+    if (!salesOption) return false;
+    if (String(categorySelect.value) !== String(salesOption.value)) categorySelect.value = salesOption.value;
+    return true;
+  }
+
   function eligible() {
+    if (isSalesInvoiceSelection()) {
+      return typeSelect.value === 'alacak' && selectedCategoryText().toLocaleLowerCase('tr-TR') === 'satış';
+    }
     return typeSelect.value === 'alacak' && selectedCategoryText().toLocaleLowerCase('tr-TR') === 'satış';
   }
 
@@ -354,13 +381,16 @@
   }
 
   function syncEntry() {
-    entry.classList.toggle('open', eligible());
-    if (!eligible() && detailActive) {
-      statusOut.textContent = 'Satış detayı var; kaydetmek için Tip: Alacak ve Kategori: Satış seçili kalmalı.';
+    if (isSalesInvoiceSelection()) ensureSalesCategory();
+    var canShow = eligible();
+    entry.classList.toggle('open', canShow);
+    if (!canShow && detailActive) {
+      statusOut.textContent = 'Satış detayı var; kaydetmek için Satış Faturası ve Satış kategorisi seçili kalmalı.';
     }
   }
 
   trigger.addEventListener('click', function () {
+    if (isSalesInvoiceSelection()) ensureSalesCategory();
     if (!eligible()) return;
     if (!detailActive && !rowsBox.querySelector('.satis-item-row')) setRows([]);
     openModal(false);
@@ -380,8 +410,9 @@
   mainForm.addEventListener('submit', function (event) {
     if (!detailActive) return;
     event.preventDefault();
+    if (isSalesInvoiceSelection()) ensureSalesCategory();
     if (!eligible()) {
-      alert('Detaylı satışı kaydetmek için Tip: Alacak ve Kategori: Satış seçili olmalı.');
+      alert('Detaylı satışı kaydetmek için Satış Faturası ve Satış kategorisi seçili olmalı.');
       return;
     }
     if (!cariSelect.value) {
@@ -471,5 +502,7 @@
   }).catch(function () { setRows([]); });
 
   syncEntry();
+  window.setTimeout(syncEntry, 50);
+  window.setTimeout(syncEntry, 300);
   decorateList();
 })();
