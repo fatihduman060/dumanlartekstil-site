@@ -17,6 +17,7 @@
   var products = [];
   var detailActive = false;
   var currentViewOnly = false;
+  var salesCategoryRequesting = false;
   var editId = parseInt((idInput && idInput.value) || '0', 10) || 0;
   var fmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -51,8 +52,7 @@
     return selectedTypeText().toLocaleLowerCase('tr-TR') === 'satış faturası';
   }
 
-  function ensureSalesCategory() {
-    if (!isSalesInvoiceSelection()) return false;
+  function findSalesCategoryOption() {
     var salesOption = null;
     Array.prototype.some.call(categorySelect.options, function (option) {
       if (String(option.textContent || '').trim().toLocaleLowerCase('tr-TR') === 'satış') {
@@ -61,15 +61,44 @@
       }
       return false;
     });
-    if (!salesOption) return false;
+    return salesOption;
+  }
+
+  function requestSalesCategory() {
+    if (salesCategoryRequesting) return;
+    salesCategoryRequesting = true;
+    fetch('hareket-satis-kategori.php?_=' + Date.now(), { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } })
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        if (!data || !data.ok || !data.id) return;
+        var option = findSalesCategoryOption();
+        if (!option) {
+          option = document.createElement('option');
+          option.value = String(data.id);
+          option.textContent = data.label || 'Satış';
+          categorySelect.appendChild(option);
+        }
+        if (isSalesInvoiceSelection()) categorySelect.value = String(option.value);
+      })
+      .catch(function () {})
+      .then(function () {
+        salesCategoryRequesting = false;
+        syncEntry();
+      });
+  }
+
+  function ensureSalesCategory() {
+    if (!isSalesInvoiceSelection()) return false;
+    var salesOption = findSalesCategoryOption();
+    if (!salesOption) {
+      requestSalesCategory();
+      return false;
+    }
     if (String(categorySelect.value) !== String(salesOption.value)) categorySelect.value = salesOption.value;
     return true;
   }
 
   function eligible() {
-    if (isSalesInvoiceSelection()) {
-      return typeSelect.value === 'alacak' && selectedCategoryText().toLocaleLowerCase('tr-TR') === 'satış';
-    }
     return typeSelect.value === 'alacak' && selectedCategoryText().toLocaleLowerCase('tr-TR') === 'satış';
   }
 
