@@ -1,1 +1,15 @@
-m«ëˆ§½©buªàºg§¶k¡jÇ›{ùš'Ş²Ünf§‰÷¬µKæÚ±î¸Ø[é¢Šwâ•ê(º×â•æÛ­æ¤n·š‘éÜ¡×²Úâ§¶‰î™ÈZ­§-z¹bëu×œ¡×yÊzÈ§¦ëa…éiv+)•¬­†+&zËè¢›­Šznµø¥y×Ÿjém~ŠìµØ§¢‹­¦ëhºÚnµø¥y×Ÿjém~ŠìµÚ.
+{
+  "name": "Dumanlar Muhasebe",
+  "short_name": "Muhasebe",
+  "id": "/muhasebe/",
+  "start_url": "/muhasebe/",
+  "scope": "/muhasebe/",
+  "display": "standalone",
+  "background_color": "#f5f2ec",
+  "theme_color": "#17241c",
+  "lang": "tr-TR",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "assets/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
