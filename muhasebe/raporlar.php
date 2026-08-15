@@ -404,6 +404,40 @@ $financialPosition = ($netReceivable === null || $netPayable === null) ? null : 
 $grossProfit = ($salesTotal === null || $purchaseTotal === null) ? null : $salesTotal - $purchaseTotal;
 $vatPosition = ($salesVat === null || $purchaseVat === null) ? null : $salesVat - $purchaseVat;
 
+/* Yönetim amaçlı mali tablo özetleri
+ * Resmî tek düzen bilanço yerine, panelde hâlihazırda tutulan ve doğrulanabilen
+ * kaynaklardan seçili yılın gelir-gideri, mevcut varlık/yükümlülük pozisyonu
+ * ve nakit akışı oluşturulur. Aynı kayıtlar ikinci kez toplanmaz.
+ */
+$managementRevenue = ($salesTotal === null || $storeSalesTotal === null)
+    ? null
+    : $salesTotal + $storeSalesTotal;
+$managementExpense = ($purchaseTotal === null)
+    ? null
+    : $purchaseTotal
+        + (float)($paidSgk ?? 0)
+        + (float)($paidTaxes ?? 0)
+        + (float)($salaryPaid ?? 0)
+        + (float)($salaryAdvances ?? 0)
+        + (float)($salaryGarnishment ?? 0)
+        + (float)($salaryCompensation ?? 0);
+$managementPeriodResult = ($managementRevenue === null || $managementExpense === null)
+    ? null
+    : $managementRevenue - $managementExpense;
+
+$managementAssets = ($cashTotal === null || $bankTotal === null || $netReceivable === null || $incomingChecks === null)
+    ? null
+    : $cashTotal + $bankTotal + $netReceivable + $incomingChecks;
+$managementLiabilities = ($netPayable === null || $outgoingChecks === null || $cardTotal === null)
+    ? null
+    : $netPayable + $outgoingChecks + $cardTotal
+        + (float)($pendingSgk ?? 0)
+        + (float)($pendingTaxes ?? 0)
+        + (float)($salaryPending ?? 0);
+$managementBalancePosition = ($managementAssets === null || $managementLiabilities === null)
+    ? null
+    : $managementAssets - $managementLiabilities;
+
 $srcMovement = $movementTable ?: 'hareket tablosu bulunamadı';
 $srcAccounts = $accountTable ? $accountTable . ($transactionTable ? ' + ' . $transactionTable : '') : 'hesap tablosu bulunamadı';
 $srcChecks = $checkTable ?: 'çek tablosu bulunamadı';
@@ -509,14 +543,18 @@ ym_render_section('Karlılık Analizi', 'İlk aşamada fatura satış toplamı e
     ym_metric('Brüt ticari fark', $grossProfit, $srcInvoices, 'Satış ve alış faturaları birlikte okunamıyor.', $grossProfit !== null && $grossProfit < 0 ? 'danger' : 'success')
 ), 'Ön gösterge');
 
-ym_render_section('Mali Tablolar', 'KDV pozisyonu hazır veriden okunur; gelir tablosu, bilanço ve nakit akışı için hesap planı gerekir.', array(
+ym_render_section('Mali Tablolar', 'Seçili yılın mevcut fatura, mağaza, personel, vergi, cari, çek, kart ve kasa/banka kayıtlarından oluşturulan yönetim özeti.', array(
     ym_metric('Hesaplanan KDV', $salesVat, $srcInvoices, 'Faturalarda KDV toplam alanı eksik.', 'danger'),
     ym_metric('İndirilecek KDV', $purchaseVat, $srcInvoices, 'Faturalarda KDV toplam alanı eksik.', 'success'),
     ym_metric('KDV pozisyonu', $vatPosition, $srcInvoices, 'Satış ve alış KDV toplamları birlikte okunamıyor.', $vatPosition !== null && $vatPosition < 0 ? 'success' : 'danger'),
-    ym_metric('Gelir tablosu', null, 'Tek düzen hesap planı', 'Hesap planı ve dönem kapanış eşlemesi henüz yok.', 'missing'),
-    ym_metric('Bilanço', null, 'Tek düzen hesap planı', 'Varlık/kaynak hesap sınıfları henüz yok.', 'missing'),
-    ym_metric('Nakit akış tablosu', null, 'Hareket sınıflandırması', 'İşletme/yatırım/finansman sınıfları henüz yok.', 'missing')
-), 'Mali görünüm');
+    ym_metric('Gelir tablosu · toplam gelir', $managementRevenue, $srcInvoices . ' + ' . $srcStoreSales, 'Fatura veya mağaza satış toplamı okunamıyor.', 'success'),
+    ym_metric('Gelir tablosu · toplam gider', $managementExpense, $srcInvoices . ' + ' . $srcTaxes . ' + ' . $srcSalaries, 'Alış, vergi veya personel giderleri okunamıyor.', 'danger'),
+    ym_metric('Gelir tablosu · dönem sonucu', $managementPeriodResult, 'Toplam gelir − toplam gider', 'Gelir ve gider toplamları birlikte hesaplanamıyor.', $managementPeriodResult !== null && $managementPeriodResult < 0 ? 'danger' : 'success'),
+    ym_metric('Bilanço · toplam varlık', $managementAssets, $srcAccounts . ' + ' . $srcMovement . ' + ' . $srcChecks, 'Kasa, banka, alacak veya alınacak çekler okunamıyor.', 'success'),
+    ym_metric('Bilanço · toplam yükümlülük', $managementLiabilities, $srcMovement . ' + ' . $srcChecks . ' + ' . $srcCards, 'Borç, verilecek çek, kart veya bekleyen yükümlülükler okunamıyor.', 'danger'),
+    ym_metric('Bilanço · net pozisyon', $managementBalancePosition, 'Toplam varlık − toplam yükümlülük', 'Varlık ve yükümlülükler birlikte hesaplanamıyor.', $managementBalancePosition !== null && $managementBalancePosition < 0 ? 'danger' : 'info'),
+    ym_metric('Nakit akış tablosu · net akış', $netCashFlow, $srcMovement, 'Tahsilat ve ödeme hareketleri birlikte okunamıyor.', $netCashFlow !== null && $netCashFlow < 0 ? 'danger' : 'success')
+), 'Yönetim özeti');
 ?>
 
 <section class="panel-card ym-section">
