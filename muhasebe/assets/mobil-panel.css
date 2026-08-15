@@ -85,6 +85,9 @@ body.store-sales-user .mobile-sidebar-backdrop{display:none!important}
   .mobile-card-table td>*{min-width:0;max-width:100%}
   .mobile-card-table td,.mobile-card-table td a,.mobile-card-table td small,.mobile-card-table td span,.mobile-card-table td code,.mobile-card-table td pre{overflow-wrap:anywhere;word-break:break-word;white-space:normal}
   .mobile-card-table td pre,.mobile-card-table .audit-snapshot{overflow:hidden}
+  .audit-table-human .mobile-card-table{width:100%!important;min-width:0!important;max-width:100%!important}
+  .card-head .inline-form{width:100%;min-width:0;max-width:100%;flex-wrap:wrap}
+  .card-head .inline-form input,.card-head .inline-form select{width:100%!important;min-width:0!important;max-width:100%!important}
   .mobile-card-table td form{min-width:0!important;max-width:100%!important}
   .mobile-card-table td input,.mobile-card-table td select,.mobile-card-table td textarea{width:100%;max-width:100%;box-sizing:border-box}
   .mobile-card-table .audit-change-cell,.mobile-card-table .audit-snapshot{min-width:0!important;max-width:100%!important}
