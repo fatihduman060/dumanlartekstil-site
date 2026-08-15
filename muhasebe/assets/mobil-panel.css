@@ -68,20 +68,23 @@ body.store-sales-user .mobile-sidebar-backdrop{display:none!important}
   form.mobile-sticky-form>.form-actions .btn,
   form.mobile-sticky-form .mobile-sticky-actions .btn{flex:1 1 130px}
 
-  .table-wrap.mobile-card-wrap{overflow:visible;border:0;background:transparent}
+  .table-wrap.mobile-card-wrap{width:100%;min-width:0;max-width:100%;overflow:visible;border:0;background:transparent}
   .table-wrap:not(.mobile-card-wrap){max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
   .table-wrap:not(.mobile-card-wrap) table{min-width:680px}
-  .mobile-card-table{display:block;background:transparent}
+  .mobile-card-table{display:block;width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed;background:transparent}
   .mobile-card-table thead{display:none}
-  .mobile-card-table tbody{display:grid;gap:10px}
-  .mobile-card-table tr{display:block;padding:13px 13px 10px;border:1px solid var(--border);border-radius:16px;background:#fff;box-shadow:0 8px 22px rgba(40,35,25,.06)}
+  .mobile-card-table tbody{display:grid;width:100%;min-width:0;gap:10px}
+  .mobile-card-table tr{display:block;width:100%;min-width:0;box-sizing:border-box;padding:13px 13px 10px;border:1px solid var(--border);border-radius:16px;background:#fff;box-shadow:0 8px 22px rgba(40,35,25,.06)}
   .mobile-card-table tr.row-cancelled{opacity:.72}
   .mobile-card-table td{display:grid;grid-template-columns:minmax(94px,38%) minmax(0,1fr);gap:10px;align-items:start;padding:8px 0;border:0!important;text-align:left!important;min-height:0;background:transparent!important;text-decoration:none}
   .mobile-card-table td+td{border-top:1px dashed #ece4d8!important}
   .mobile-card-table td::before{content:attr(data-mobile-label);color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
   .mobile-card-table td[data-mobile-label=""]::before{display:none}
   .mobile-card-table td[data-mobile-label=""]{grid-template-columns:1fr}
-  .mobile-card-table td>*{min-width:0}
+  .mobile-card-table td>*{min-width:0;max-width:100%}
+  .mobile-card-table td form{min-width:0!important;max-width:100%!important}
+  .mobile-card-table td input,.mobile-card-table td select,.mobile-card-table td textarea{width:100%;max-width:100%;box-sizing:border-box}
+  .mobile-card-table .audit-change-cell,.mobile-card-table .audit-snapshot{min-width:0!important;max-width:100%!important}
   .mobile-card-table td.right strong{font-size:16px}
   .mobile-card-table .row-actions{justify-content:flex-start}
   .mobile-card-table .empty{display:block;padding:24px;text-align:center}
@@ -109,6 +112,11 @@ body.store-sales-user .mobile-sidebar-backdrop{display:none!important}
   .cari-mobile-table .cari-actions{grid-column:2;grid-row:2;align-self:end;justify-content:flex-end!important;gap:5px}
   .cari-mobile-table .cari-actions a,.cari-mobile-table .cari-actions button{min-height:30px;padding:5px 8px;border-radius:8px;font-size:10px}
   .cari-mobile-table .cari-actions form{display:inline-flex}
+
+  .perm-matrix{width:100%;max-width:100%;overflow:hidden}
+  .perm-matrix table{width:100%;min-width:0;table-layout:fixed}
+  .perm-matrix th,.perm-matrix td{padding:7px 3px!important;font-size:9px!important;overflow-wrap:anywhere}
+  .perm-matrix th:first-child,.perm-matrix td:first-child{width:43%;text-align:left}
 
   .cariden-cikar-wrap{width:auto!important;max-width:none!important;gap:4px!important}
   .cariden-cikar-form{width:100%!important}

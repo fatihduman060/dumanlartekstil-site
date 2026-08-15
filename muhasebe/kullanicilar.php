@@ -94,7 +94,7 @@ page_header('Kullanıcılar', 'kullanicilar');
   <article class="panel-card">
     <div class="card-head"><h3>Kullanıcı listesi</h3><span><?php echo count($users); ?> kullanıcı</span></div>
     <div class="table-wrap">
-      <table>
+      <table class="user-mobile-table" data-mobile-table="card">
         <thead><tr><th>Kullanıcı</th><th>Yetki</th><th>Son giriş</th><th>Durum</th><th>Güncelle</th><th>Sil</th></tr></thead>
         <tbody>
           <?php foreach($users as $u): ?>

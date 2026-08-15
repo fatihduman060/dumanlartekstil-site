@@ -91,7 +91,7 @@
 
   function prepareCardTable(table) {
     if (!table || table.classList.contains('mobile-card-table')) return;
-    if (table.closest('.audit-table,.perm-matrix,.satis-modal,.toplu-evrak-panel,.magaza-satis-panel')) return;
+    if (table.closest('.perm-matrix,.satis-modal,.toplu-evrak-panel,.magaza-satis-panel')) return;
     var mobileTableMode = table.getAttribute('data-mobile-table');
     if (mobileTableMode === 'scroll') return;
 
