@@ -151,18 +151,18 @@ page_header('Cariler', 'cariler');
     <button class="btn btn-secondary" type="submit">Filtrele</button>
   </form>
   <div class="table-wrap">
-    <table>
+    <table class="cari-mobile-table">
       <thead><tr><th>Cari</th><th>Yetkili / Şehir</th><th>Vergi</th><th>İletişim</th><th class="right">Net</th><th></th></tr></thead>
       <tbody>
       <?php if (!$cariler): ?><tr><td colspan="6" class="empty">Cari bulunamadı.</td></tr><?php endif; ?>
       <?php foreach ($cariler as $c): $b=cari_balance((int)$c['id']); ?>
         <tr>
-          <td><a href="cari-detay.php?id=<?php echo e($c['id']); ?>"><strong><?php echo e($c['name']); ?></strong></a><small><?php echo badge($c['cari_type'], 'neutral'); ?></small></td>
-          <td><?php echo e($c['authorized_person'] ?: '-'); ?><small><?php echo e($c['city'] ?: ''); ?></small></td>
-          <td><?php echo e($c['tax_no'] ?: '-'); ?><small><?php echo e($c['tax_office'] ?: ''); ?></small></td>
-          <td><small><?php echo e(trim(($c['phone'] ?: '') . ' ' . ($c['email'] ?: '')) ?: '-'); ?></small></td>
-          <td class="right"><strong class="<?php echo $b['net'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($b['net'])); ?></strong></td>
-          <td class="row-actions"><a href="cariler.php?edit=<?php echo e($c['id']); ?>">Düzenle</a><?php if (can_write()): ?><form method="post" onsubmit="return confirm('Cari silinsin mi? Hareket/çek kayıtları korunur, cari bağı kaldırılır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($c['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></td>
+          <td class="cari-primary"><a href="cari-detay.php?id=<?php echo e($c['id']); ?>"><strong><?php echo e($c['name']); ?></strong></a><small><?php echo badge($c['cari_type'], 'neutral'); ?></small></td>
+          <td class="cari-meta"><?php echo e($c['authorized_person'] ?: '-'); ?><small><?php echo e($c['city'] ?: ''); ?></small></td>
+          <td class="cari-tax"><?php echo e($c['tax_no'] ?: '-'); ?><small><?php echo e($c['tax_office'] ?: ''); ?></small></td>
+          <td class="cari-contact"><small><?php echo e(trim(($c['phone'] ?: '') . ' ' . ($c['email'] ?: '')) ?: '-'); ?></small></td>
+          <td class="right cari-balance"><strong class="<?php echo $b['net'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($b['net'])); ?></strong></td>
+          <td class="row-actions cari-actions"><a href="cariler.php?edit=<?php echo e($c['id']); ?>">Düzenle</a><?php if (can_write()): ?><form method="post" onsubmit="return confirm('Cari silinsin mi? Hareket/çek kayıtları korunur, cari bağı kaldırılır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($c['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>

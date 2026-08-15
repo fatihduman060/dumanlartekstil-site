@@ -87,6 +87,27 @@ body.store-sales-user .mobile-sidebar-backdrop{display:none!important}
   .mobile-card-table .empty{display:block;padding:24px;text-align:center}
   .mobile-card-table .empty::before{display:none}
 
+  /* Cariler: ad ve bakiye ilk bakışta aynı kartta görünsün. */
+  .cari-mobile-table.mobile-card-table tbody{gap:9px}
+  .cari-mobile-table.mobile-card-table tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(112px,auto);gap:8px 12px;padding:14px}
+  .cari-mobile-table.mobile-card-table td{display:block!important;padding:0!important;border:0!important;min-width:0}
+  .cari-mobile-table.mobile-card-table td::before{display:none!important}
+  .cari-mobile-table .cari-primary{grid-column:1;grid-row:1}
+  .cari-mobile-table .cari-primary>a{display:-webkit-box;overflow:hidden;color:var(--text);font-size:14px;line-height:1.28;text-decoration:none;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+  .cari-mobile-table .cari-primary>a strong{font-size:14px}
+  .cari-mobile-table .cari-primary>small{margin-top:6px}
+  .cari-mobile-table .cari-primary .badge{padding:4px 7px;font-size:8px}
+  .cari-mobile-table .cari-balance{grid-column:2;grid-row:1;text-align:right!important;align-self:start;padding-left:8px!important;border-left:1px solid #eee5d8!important}
+  .cari-mobile-table .cari-balance::after{content:'Bakiye';display:block;margin-top:4px;color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.05em;text-transform:uppercase}
+  .cari-mobile-table .cari-balance strong{display:block;font-size:15px!important;line-height:1.2;white-space:nowrap}
+  .cari-mobile-table .cari-balance small{display:block;margin-top:3px;font-size:9px;line-height:1.2}
+  .cari-mobile-table .cari-meta{grid-column:1;grid-row:2;color:var(--muted);font-size:11px;font-weight:750}
+  .cari-mobile-table .cari-meta small{display:inline;margin-left:5px;color:var(--muted);font-size:10px}
+  .cari-mobile-table .cari-tax,.cari-mobile-table .cari-contact{display:none!important}
+  .cari-mobile-table .cari-actions{grid-column:2;grid-row:2;align-self:end;justify-content:flex-end!important;gap:5px}
+  .cari-mobile-table .cari-actions a,.cari-mobile-table .cari-actions button{min-height:30px;padding:5px 8px;border-radius:8px;font-size:10px}
+  .cari-mobile-table .cari-actions form{display:inline-flex}
+
   .cariden-cikar-wrap{width:auto!important;max-width:none!important;gap:4px!important}
   .cariden-cikar-form{width:100%!important}
   .cariden-cikar-btn{width:auto!important;min-width:116px!important;height:auto!important;min-height:42px!important;padding:9px 11px!important;border-radius:10px!important;font-size:12px!important;line-height:1.15!important;zoom:2.25}
