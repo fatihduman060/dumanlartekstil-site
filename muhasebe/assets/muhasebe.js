@@ -64,6 +64,9 @@ document.addEventListener('change', function (event) {
   function replaceText(text) {
     let next = text;
     for (const [from, to] of replacements) {
+      // Gelir/Gider işlem türlerini sadeleştirirken "Gelir tablosu" gibi
+      // rapor başlıklarını değiştirme.
+      if ((from === 'Gelir' || from === 'Gider') && next.trim() !== from) continue;
       next = next.split(from).join(to);
     }
     return next;
