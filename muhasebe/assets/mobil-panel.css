@@ -88,8 +88,10 @@ body.store-sales-user .mobile-sidebar-backdrop{display:none!important}
   .mobile-card-table .empty::before{display:none}
 
   /* Cariler: ad ve bakiye ilk bakışta aynı kartta görünsün. */
-  .cari-mobile-table.mobile-card-table tbody{gap:9px}
-  .cari-mobile-table.mobile-card-table tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(112px,auto);gap:8px 12px;padding:14px}
+  .table-wrap.mobile-card-wrap:has(.cari-mobile-table){width:100%;min-width:0;overflow:visible}
+  .cari-mobile-table.mobile-card-table{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed}
+  .cari-mobile-table.mobile-card-table tbody{width:100%;min-width:0;gap:9px}
+  .cari-mobile-table.mobile-card-table tr{width:100%;min-width:0;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) minmax(112px,auto);gap:8px 12px;padding:14px}
   .cari-mobile-table.mobile-card-table td{display:block!important;padding:0!important;border:0!important;min-width:0}
   .cari-mobile-table.mobile-card-table td::before{display:none!important}
   .cari-mobile-table .cari-primary{grid-column:1;grid-row:1}
@@ -103,7 +105,7 @@ body.store-sales-user .mobile-sidebar-backdrop{display:none!important}
   .cari-mobile-table .cari-balance small{display:block;margin-top:3px;font-size:9px;line-height:1.2}
   .cari-mobile-table .cari-meta{grid-column:1;grid-row:2;color:var(--muted);font-size:11px;font-weight:750}
   .cari-mobile-table .cari-meta small{display:inline;margin-left:5px;color:var(--muted);font-size:10px}
-  .cari-mobile-table .cari-tax,.cari-mobile-table .cari-contact{display:none!important}
+  .cari-mobile-table.mobile-card-table .cari-tax,.cari-mobile-table.mobile-card-table .cari-contact{display:none!important}
   .cari-mobile-table .cari-actions{grid-column:2;grid-row:2;align-self:end;justify-content:flex-end!important;gap:5px}
   .cari-mobile-table .cari-actions a,.cari-mobile-table .cari-actions button{min-height:30px;padding:5px 8px;border-radius:8px;font-size:10px}
   .cari-mobile-table .cari-actions form{display:inline-flex}
