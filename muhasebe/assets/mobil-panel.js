@@ -92,11 +92,12 @@
   function prepareCardTable(table) {
     if (!table || table.classList.contains('mobile-card-table')) return;
     if (table.closest('.audit-table,.perm-matrix,.satis-modal,.toplu-evrak-panel,.magaza-satis-panel')) return;
-    if (table.getAttribute('data-mobile-table') === 'scroll') return;
+    var mobileTableMode = table.getAttribute('data-mobile-table');
+    if (mobileTableMode === 'scroll') return;
 
     var body = table.tBodies && table.tBodies[0];
     if (!body) return;
-    if (body.querySelector('input,select,textarea,[contenteditable="true"]')) return;
+    if (mobileTableMode !== 'card' && body.querySelector('input:not([type="hidden"]),select,textarea,[contenteditable="true"]')) return;
 
     var headers = [];
     var headRow = table.tHead ? table.tHead.querySelector('tr') : null;

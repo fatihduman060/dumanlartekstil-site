@@ -151,7 +151,7 @@ page_header('Cariler', 'cariler');
     <button class="btn btn-secondary" type="submit">Filtrele</button>
   </form>
   <div class="table-wrap">
-    <table class="cari-mobile-table">
+    <table class="cari-mobile-table" data-mobile-table="card">
       <thead><tr><th>Cari</th><th>Yetkili / Şehir</th><th>Vergi</th><th>İletişim</th><th class="right">Net</th><th></th></tr></thead>
       <tbody>
       <?php if (!$cariler): ?><tr><td colspan="6" class="empty">Cari bulunamadı.</td></tr><?php endif; ?>
