@@ -208,18 +208,20 @@ $invoiceColumns = $invoiceTable ? ym_columns($pdo, $invoiceTable) : array();
 $invoiceAmount = ym_first_column($invoiceColumns, array('grand_total', 'general_total', 'total_amount', 'total', 'toplam', 'genel_toplam', 'tutar'));
 $invoiceDate = ym_first_column($invoiceColumns, array('invoice_date', 'fatura_tarihi', 'date', 'tarih', 'created_at'));
 $invoiceDirection = ym_first_column($invoiceColumns, array('direction', 'invoice_type', 'type', 'yon', 'fatura_turu'));
-$invoiceVat = ym_first_column($invoiceColumns, array('vat_total', 'kdv_total', 'kdv_toplam', 'total_vat', 'kdv'));
+$invoiceVat = ym_first_column($invoiceColumns, array('vat_amount', 'vat_total', 'kdv_total', 'kdv_toplam', 'total_vat', 'kdv'));
 $invoiceReady = $invoiceTable && $invoiceAmount && $invoiceDate && $invoiceDirection;
 $salesTotal = $purchaseTotal = $salesVat = $purchaseVat = null;
 if ($invoiceReady) {
     $dir = ym_ident($invoiceDirection);
-    $salesWhere = 'LOWER(COALESCE(CAST(' . $dir . ' AS TEXT),\'\')) IN (\'satis\',\'satış\',\'sales\',\'out\',\'giden\')';
-    $purchaseWhere = 'LOWER(COALESCE(CAST(' . $dir . ' AS TEXT),\'\')) IN (\'alis\',\'alış\',\'purchase\',\'in\',\'gelen\')';
+    $activeInvoiceWhere = isset($invoiceColumns['is_cancelled']) ? 'COALESCE("is_cancelled",0)=0 AND ' : '';
+    $salesWhere = $activeInvoiceWhere . 'LOWER(COALESCE(CAST(' . $dir . ' AS TEXT),\'\')) IN (\'satis\',\'satış\',\'sales\',\'out\',\'giden\')';
+    $purchaseWhere = $activeInvoiceWhere . 'LOWER(COALESCE(CAST(' . $dir . ' AS TEXT),\'\')) IN (\'alis\',\'alış\',\'purchase\',\'in\',\'gelen\')';
     $salesTotal = ym_safe_sum($pdo, $invoiceTable, $invoiceAmount, $invoiceDate, $yearStart, $yearEnd, $salesWhere, array());
     $purchaseTotal = ym_safe_sum($pdo, $invoiceTable, $invoiceAmount, $invoiceDate, $yearStart, $yearEnd, $purchaseWhere, array());
     if ($invoiceVat) {
-        $salesVat = ym_safe_sum($pdo, $invoiceTable, $invoiceVat, $invoiceDate, $yearStart, $yearEnd, $salesWhere, array());
-        $purchaseVat = ym_safe_sum($pdo, $invoiceTable, $invoiceVat, $invoiceDate, $yearStart, $yearEnd, $purchaseWhere, array());
+        $tlWhere = isset($invoiceColumns['currency']) ? ' AND UPPER(COALESCE("currency",\'TL\'))=\'TL\'' : '';
+        $salesVat = ym_safe_sum($pdo, $invoiceTable, $invoiceVat, $invoiceDate, $yearStart, $yearEnd, $salesWhere . $tlWhere, array());
+        $purchaseVat = ym_safe_sum($pdo, $invoiceTable, $invoiceVat, $invoiceDate, $yearStart, $yearEnd, $purchaseWhere . $tlWhere, array());
     }
 }
 $dataSets['Fatura satış / alış'] = $invoiceReady;
