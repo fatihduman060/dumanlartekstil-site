@@ -77,6 +77,13 @@ $nextDate = $date;
 if ($saved) {
     $completeStmt = db()->prepare("SELECT COUNT(DISTINCT shift_code) FROM production_group_shift_entries WHERE production_date=? AND shift_code IN ('gunduz','gece')");
     $completeStmt->execute([$date]);
-    if ((int)$completeStmt->fetchColumn() >= 2) $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
+    if ((int)$completeStmt->fetchColumn() >= 2) {
+        $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
+        if (setting_get('production_weekend_enabled', '0') !== '1') {
+            while (in_array((int)date('N', strtotime($nextDate)), [6, 7], true)) {
+                $nextDate = date('Y-m-d', strtotime($nextDate . ' +1 day'));
+            }
+        }
+    }
 }
 redirect('uretim-takibi.php?date=' . urlencode($nextDate));

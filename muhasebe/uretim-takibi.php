@@ -58,7 +58,15 @@ function uretim_next_entry_date(): string
 
     $stmt = db()->prepare("SELECT COUNT(DISTINCT shift_code) FROM production_group_shift_entries WHERE production_date=? AND shift_code IN ('gunduz','gece')");
     $stmt->execute([$lastDate]);
-    if ((int)$stmt->fetchColumn() >= 2) return date('Y-m-d', strtotime($lastDate . ' +1 day'));
+    if ((int)$stmt->fetchColumn() >= 2) {
+        $nextDate = date('Y-m-d', strtotime($lastDate . ' +1 day'));
+        if (setting_get('production_weekend_enabled', '0') !== '1') {
+            while (in_array((int)date('N', strtotime($nextDate)), [6, 7], true)) {
+                $nextDate = date('Y-m-d', strtotime($nextDate . ' +1 day'));
+            }
+        }
+        return $nextDate;
+    }
     return $lastDate;
 }
 
@@ -73,6 +81,16 @@ uretim_db_ensure();
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     require_csrf();
     $action = trim((string)($_POST['action'] ?? ''));
+
+    if ($action === 'toggle_weekend') {
+        $weekendEnabled = setting_get('production_weekend_enabled', '0') === '1';
+        setting_set('production_weekend_enabled', $weekendEnabled ? '0' : '1');
+        log_action('Üretim hafta sonu ayarı değiştirildi', $weekendEnabled ? 'Pasif' : 'Aktif');
+        flash('success', $weekendEnabled
+            ? 'Cumartesi ve pazar üretim günü olmaktan çıkarıldı.'
+            : 'Cumartesi ve pazar üretim günü olarak aktifleştirildi.');
+        redirect('uretim-takibi.php');
+    }
 
     if ($action === 'add_machine') {
         $group = uretim_group((string)($_POST['group_code'] ?? 'A'));
@@ -150,6 +168,7 @@ $date = array_key_exists('date', $_GET)
     ? trim((string)$_GET['date'])
     : uretim_next_entry_date();
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = uretim_next_entry_date();
+$weekendEnabled = setting_get('production_weekend_enabled', '0') === '1';
 
 $machines = db()->query("SELECT * FROM production_machines ORDER BY CASE group_code WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 ELSE 5 END, sort_order, machine_no")->fetchAll();
 $entryStmt = db()->prepare('SELECT * FROM production_daily_entries WHERE production_date=?');
@@ -174,6 +193,7 @@ page_header('Üretim Takibi', 'uretim_takibi');
 <style>
 .stock-follow-link{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:18px;padding:15px 17px;border:1px solid #b9d5c0;border-radius:16px;background:linear-gradient(135deg,#eff8f1,#fff)}.stock-follow-link h3{margin:0;color:#173f29}.stock-follow-link p{margin:4px 0 0;color:#657168;font-size:12px}.stock-follow-link a{white-space:nowrap}.production-head{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:18px}.production-head p{margin:5px 0 0;color:#657168}.production-date{display:flex;gap:8px;align-items:flex-end}.production-date label{font-size:12px;font-weight:850;color:#59665e}.production-date input{display:block;margin-top:5px;height:42px;border:1px solid #d7e0d9;border-radius:10px;padding:8px 11px}.production-date button{height:42px;border:0;border-radius:10px;background:#183f29;color:#fff;padding:0 15px;font-weight:900}.production-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}.production-summary article{padding:16px;border:1px solid #dde6df;border-radius:16px;background:#fff}.production-summary span{display:block;color:#6b776f;font-size:12px;font-weight:800}.production-summary strong{display:block;margin-top:5px;font-size:25px;color:#183f29}.production-groups{display:grid;gap:16px}.production-group{border:1px solid #dce5de;border-radius:18px;background:#fff;overflow:hidden}.production-group-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#f2f7f3}.production-group-head h2{margin:0;font-size:18px;color:#183f29}.production-group-head strong{font-size:13px;color:#526158}.production-table-wrap{overflow:auto}.production-table{width:100%;border-collapse:collapse;min-width:850px}.production-table th,.production-table td{padding:10px;border-bottom:1px solid #edf1ee;text-align:left}.production-table th{font-size:10px;text-transform:uppercase;color:#6b776f;background:#fbfcfb}.production-table input{width:100%;height:40px;border:1px solid #dbe3dd;border-radius:9px;padding:7px 9px}.production-table .machine-no{font-weight:900;color:#183f29}.production-table .number{max-width:120px}.production-table .net-cell{font-weight:900;color:#176536;white-space:nowrap}.production-empty{padding:22px;color:#6a766e;text-align:center}.production-actions{position:sticky;bottom:0;display:flex;justify-content:flex-end;padding:14px 0;margin-top:14px;background:linear-gradient(transparent,#f7f9f7 25%)}.production-actions button{border:0;border-radius:12px;background:#183f29;color:#fff;padding:12px 20px;font-weight:900}.machine-add{margin-top:20px;padding:16px;border:1px dashed #bfcfc3;border-radius:16px;background:#f8fbf9}.machine-add h3{margin:0 0 10px}.machine-add-grid{display:grid;grid-template-columns:120px 1fr 1fr auto;gap:10px}.machine-add select,.machine-add input{height:42px;border:1px solid #d7e0d9;border-radius:10px;padding:8px 10px}.machine-add button{border:0;border-radius:10px;background:#e8f2eb;color:#183f29;padding:0 16px;font-weight:900}.machine-list{margin-top:12px;display:flex;flex-wrap:wrap;gap:7px}.machine-chip{display:inline-flex;gap:7px;align-items:center;border:1px solid #dce5de;border-radius:999px;padding:5px 9px;background:#fff;font-size:12px}.machine-chip form{margin:0}.machine-chip button{border:0;background:transparent;color:#9a3f3f;cursor:pointer;font-weight:900}@media(max-width:760px){.production-head{align-items:stretch;flex-direction:column}.production-date{align-items:stretch}.production-date label{flex:1}.production-date input{width:100%}.production-summary{grid-template-columns:1fr}.machine-add-grid{grid-template-columns:1fr}.production-actions{padding-bottom:80px}.production-group{border-radius:14px}.production-table{min-width:720px}}
 .shift-entry-box{margin:0 0 20px;border:1px solid #d8e4db;border-radius:18px;background:#fff;overflow:hidden}.shift-main-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:17px 18px;background:#eef7f0}.shift-main-head h2{margin:0;color:#173f29}.shift-main-head p{margin:4px 0 0;color:#657168}.day-total{text-align:right}.day-total span,.day-total small{display:block;color:#627067;font-size:12px}.day-total strong{display:block;color:#173f29;font-size:23px}.shift-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}.shift-card{border:1px solid #dde6df;border-radius:15px;overflow:hidden}.shift-card header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 14px;background:#f7faf8}.shift-card h3{margin:0;color:#173f29}.shift-card header div{text-align:right}.shift-card header strong,.shift-card header span{display:block}.shift-card header span{font-size:12px;color:#6a766e}.shift-table{width:100%;border-collapse:collapse}.shift-table th,.shift-table td{padding:10px;border-bottom:1px solid #edf1ee;text-align:left}.shift-table thead th{font-size:10px;text-transform:uppercase;color:#68766d;background:#fbfcfb}.shift-table tbody th{width:80px}.fixed-group{display:inline-flex;width:36px;height:36px;border-radius:10px;align-items:center;justify-content:center;background:#e7f2ea;color:#173f29;font-weight:950}.shift-table input{width:100%;height:42px;border:1px solid #d7e1d9;border-radius:9px;padding:8px 10px;font-size:16px}.shift-card-save{padding:14px}.shift-card-save button{width:100%;border:0;border-radius:11px;background:#173f29;color:#fff;padding:12px 16px;font-weight:900;cursor:pointer}.shift-card-save button:disabled{opacity:.65;cursor:wait}.production-report{display:grid;grid-template-columns:minmax(220px,.7fr) minmax(420px,1.6fr) minmax(220px,.7fr);gap:16px;margin-bottom:24px}.selected-month-card,.year-total-card,.month-table-card{border:1px solid #dce5de;border-radius:17px;background:#fff;padding:17px}.selected-month-card,.year-total-card{display:flex;flex-direction:column;justify-content:center}.selected-month-card span,.year-total-card span{font-weight:850;color:#647168}.selected-month-card strong,.year-total-card strong{font-size:27px;color:#173f29;margin:7px 0}.selected-month-card small,.year-total-card small{color:#6b776f}.month-table-card h2{margin:0 0 12px;color:#173f29}.month-table-wrap{overflow:auto}.month-table{width:100%;border-collapse:collapse}.month-table th,.month-table td{padding:9px 10px;border-bottom:1px solid #edf1ee;text-align:left}.month-table thead th{font-size:10px;text-transform:uppercase;color:#68766d}.month-table .selected-month{background:#eef7f0}.month-table .selected-month th{color:#173f29}@media(max-width:900px){.shift-grid{grid-template-columns:1fr}.production-report{grid-template-columns:1fr}.day-total{text-align:left}.shift-main-head{align-items:flex-start;flex-direction:column}}@media(max-width:600px){.shift-grid{padding:10px}.shift-main-head{padding:14px}.shift-table th,.shift-table td{padding:8px}.shift-card-save{padding:10px}.shift-card-save button{min-height:48px}.production-report{gap:10px}}
+.weekend-setting{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 24px;padding:17px;border:1px solid #dce5de;border-radius:17px;background:#fff}.weekend-setting h3{margin:0;color:#173f29}.weekend-setting p{margin:5px 0 0;color:#68756d;font-size:12px}.weekend-setting form{margin:0}.weekend-setting button{min-width:190px;min-height:44px;border:0;border-radius:12px;padding:10px 16px;font-weight:900;cursor:pointer}.weekend-setting .is-off{background:#e8f2eb;color:#173f29}.weekend-setting .is-on{background:#f5e8e3;color:#8b362d}@media(max-width:600px){.weekend-setting{align-items:stretch;flex-direction:column}.weekend-setting button{width:100%}}
 </style>
 
 <section class="production-head">
@@ -210,6 +230,13 @@ page_header('Üretim Takibi', 'uretim_takibi');
     <div class="selected-month-card"><span data-selected-month-title>Seçili ay üretimi</span><strong data-selected-month-dz>0,00 DZ</strong><small data-selected-month-def>0 defolu</small></div>
     <div class="month-table-card"><h2>Ay ay üretim</h2><div class="month-table-wrap"><table class="month-table"><thead><tr><th>Ay</th><th>Üretim</th><th>Defolu</th></tr></thead><tbody data-month-body><?php foreach (['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'] as $monthName): ?><tr><th><?php echo e($monthName); ?></th><td>0,00 DZ</td><td>0 adet</td></tr><?php endforeach; ?></tbody></table></div></div>
     <div class="year-total-card"><span data-year-title>Yıl toplamı</span><strong data-year-dz>0,00 DZ</strong><small data-year-def>0 defolu</small></div>
+  </section>
+  <section class="weekend-setting">
+    <div><h3>Hafta sonu üretimi</h3><p><?php echo $weekendEnabled ? 'Cumartesi ve pazar normal üretim günü olarak açılır.' : 'Cumartesi ve pazar atlanır; cuma tamamlanınca pazartesi açılır.'; ?></p></div>
+    <form method="post">
+      <?php echo csrf_field(); ?><input type="hidden" name="action" value="toggle_weekend">
+      <button type="submit" class="<?php echo $weekendEnabled ? 'is-on' : 'is-off'; ?>"><?php echo $weekendEnabled ? 'Hafta sonunu pasif et' : 'Hafta sonunu aktif et'; ?></button>
+    </form>
   </section>
 </div>
 
