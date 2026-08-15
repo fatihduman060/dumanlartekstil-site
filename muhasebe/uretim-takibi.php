@@ -36,6 +36,30 @@ function uretim_db_ensure(): void
     )");
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_production_daily_date ON production_daily_entries(production_date)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_production_machine_group ON production_machines(group_code, sort_order, machine_no)');
+    $pdo->exec("CREATE TABLE IF NOT EXISTS production_group_shift_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        production_date TEXT NOT NULL,
+        shift_code TEXT NOT NULL,
+        group_code TEXT NOT NULL,
+        produced_dozen REAL NOT NULL DEFAULT 0,
+        defective_qty INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(production_date, shift_code, group_code)
+    )");
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_prod_group_shift_date ON production_group_shift_entries(production_date)');
+}
+
+function uretim_next_entry_date(): string
+{
+    $lastDate = (string)(db()->query("SELECT MAX(production_date) FROM production_group_shift_entries WHERE shift_code IN ('gunduz','gece')")->fetchColumn() ?: '');
+    if (!preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $lastDate)) return date('Y-m-d');
+
+    $stmt = db()->prepare("SELECT COUNT(DISTINCT shift_code) FROM production_group_shift_entries WHERE production_date=? AND shift_code IN ('gunduz','gece')");
+    $stmt->execute([$lastDate]);
+    if ((int)$stmt->fetchColumn() >= 2) return date('Y-m-d', strtotime($lastDate . ' +1 day'));
+    return $lastDate;
 }
 
 function uretim_group(string $value): string
@@ -122,8 +146,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
-$date = trim((string)($_GET['date'] ?? date('Y-m-d')));
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = date('Y-m-d');
+$date = array_key_exists('date', $_GET)
+    ? trim((string)$_GET['date'])
+    : uretim_next_entry_date();
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = uretim_next_entry_date();
 
 $machines = db()->query("SELECT * FROM production_machines ORDER BY CASE group_code WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 ELSE 5 END, sort_order, machine_no")->fetchAll();
 $entryStmt = db()->prepare('SELECT * FROM production_daily_entries WHERE production_date=?');

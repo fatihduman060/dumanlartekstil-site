@@ -40,6 +40,7 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = date('Y-m-d');
 $shift = uretim_shift_code((string)($_POST['shift_code'] ?? 'gunduz'));
 $rows = is_array($_POST['shift_rows'] ?? null) ? $_POST['shift_rows'] : [];
 $pdo = db();
+$saved = false;
 
 try {
     $pdo->beginTransaction();
@@ -64,6 +65,7 @@ try {
     }
 
     $pdo->commit();
+    $saved = true;
     $shiftName = $shift === 'gece' ? 'Gece vardiyası' : 'Gündüz vardiyası';
     flash('success', date('d.m.Y', strtotime($date)) . ' ' . $shiftName . ' üretimi kaydedildi.');
 } catch (Throwable $e) {
@@ -71,4 +73,10 @@ try {
     flash('error', 'Vardiya üretimi kaydedilemedi: ' . $e->getMessage());
 }
 
-redirect('uretim-takibi.php?date=' . urlencode($date));
+$nextDate = $date;
+if ($saved) {
+    $completeStmt = db()->prepare("SELECT COUNT(DISTINCT shift_code) FROM production_group_shift_entries WHERE production_date=? AND shift_code IN ('gunduz','gece')");
+    $completeStmt->execute([$date]);
+    if ((int)$completeStmt->fetchColumn() >= 2) $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
+}
+redirect('uretim-takibi.php?date=' . urlencode($nextDate));
