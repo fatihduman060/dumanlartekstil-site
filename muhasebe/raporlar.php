@@ -227,6 +227,24 @@ $dataSets['KDV özeti'] = $invoiceReady && $invoiceVat;
 if (!$invoiceReady) $missingItems[] = 'Satış Analizi: fatura tablosu ile toplam, tarih ve alış/satış yönü alanları bulunamadı.';
 if (!($invoiceReady && $invoiceVat)) $missingItems[] = 'Mali Tablolar: faturalarda KDV toplam alanı bulunamadı.';
 
+/* Mağaza satışları
+ * Günlük mağaza kayıtlarının seçili yıldaki brüt toplamı okunur. Kullanıcının
+ * belirlediği raporlama kuralına göre bu toplamın %20'si tahmini kâr gösterilir.
+ */
+$storeSalesTable = ym_first_table($pdo, array('store_daily_sales'));
+$storeSalesColumns = $storeSalesTable ? ym_columns($pdo, $storeSalesTable) : array();
+$storeSalesReady = $storeSalesTable
+    && isset($storeSalesColumns['gross_amount'])
+    && isset($storeSalesColumns['sale_date']);
+$storeSalesTotal = null;
+$storeEstimatedProfit = null;
+if ($storeSalesReady) {
+    $storeSalesTotal = ym_safe_sum($pdo, $storeSalesTable, 'gross_amount', 'sale_date', $yearStart, $yearEnd, '', array());
+    if ($storeSalesTotal !== null) $storeEstimatedProfit = $storeSalesTotal * 0.20;
+}
+$dataSets['Mağaza satışları'] = $storeSalesReady;
+if (!$storeSalesReady) $missingItems[] = 'Mağaza Raporu: günlük mağaza satış tablosu veya toplam/tarih alanı bulunamadı.';
+
 /* Üretim */
 $productionTable = ym_first_table($pdo, array('production_group_shift_entries', 'production_daily_entries', 'production_records', 'uretim_kayitlari', 'production', 'uretim_takibi', 'uretim'));
 $productionColumns = $productionTable ? ym_columns($pdo, $productionTable) : array();
@@ -388,6 +406,7 @@ $srcMovement = $movementTable ?: 'hareket tablosu bulunamadı';
 $srcAccounts = $accountTable ? $accountTable . ($transactionTable ? ' + ' . $transactionTable : '') : 'hesap tablosu bulunamadı';
 $srcChecks = $checkTable ?: 'çek tablosu bulunamadı';
 $srcInvoices = $invoiceTable ?: 'fatura tablosu bulunamadı';
+$srcStoreSales = $storeSalesTable ?: 'mağaza satış tablosu bulunamadı';
 $srcProduction = $productionTable ?: 'üretim tablosu bulunamadı';
 $srcStock = $stockTable ?: 'stok tablosu bulunamadı';
 $srcCards = $cardTable ?: 'kart ekstresi tablosu bulunamadı';
@@ -448,6 +467,11 @@ ym_render_section('Satış Analizi', 'Fatura kayıtlarından yıllık satış ve
     ym_metric('Fatura satış toplamı', $salesTotal, $srcInvoices, 'Fatura toplamı, tarihi veya yön alanı eksik.', 'success'),
     ym_metric('Fatura alış toplamı', $purchaseTotal, $srcInvoices, 'Fatura toplamı, tarihi veya yön alanı eksik.', 'danger')
 ), 'Fatura verisi');
+
+ym_render_section('Mağaza Raporu', $year . ' yılı günlük mağaza satış kayıtlarının toplamı ve toplam tutar üzerinden %20 tahmini kârı.', array(
+    ym_metric($year . ' mağaza toplam tutarı', $storeSalesTotal, $srcStoreSales . '.gross_amount', 'Mağaza satış toplamı veya tarihi okunamıyor.', 'success'),
+    ym_metric($year . ' tahmini mağaza kârı (%20)', $storeEstimatedProfit, $srcStoreSales . '.gross_amount × %20', 'Mağaza yıllık toplamı hesaplanamıyor.', 'info')
+), '%20 kâr oranı');
 
 ym_render_section('Üretim Analizi', 'Üretim Takibi bölümündeki günlük düzine kayıtlarının seçilen yıl için aylık kırılımı ve yıllık toplamı.', $productionMetrics, 'Üretim Takibi');
 
