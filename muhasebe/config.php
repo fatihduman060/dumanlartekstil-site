@@ -1,24 +1,1 @@
-<?php
-// Bitke Muhasebe / Cari Takip Paneli
-// Ä°lk kurulum kullanÄ±cÄ± bilgisi README-KURULUM.txt iÃ§indedir.
-
-const APP_NAME = 'Bitke Muhasebe Paneli';
-const APP_VERSION = 'v50.24.0';
-const APP_TIMEZONE = 'Europe/Istanbul';
-const APP_BASE_PATH = '/muhasebe';
-const DB_SCHEMA_VERSION = 5024;
-
-const DB_PATH = __DIR__ . '/storage/bitke_muhasebe.sqlite';
-const UPLOAD_DIR = __DIR__ . '/storage/uploads';
-const BACKUP_DIR = __DIR__ . '/storage/backups';
-const MAX_UPLOAD_BYTES = 10485760; // 10 MB
-
-// GÃ¼venlik ayarlarÄ±
-const SESSION_TIMEOUT_SECONDS = 1800; // 30 dakika iÅŸlem yoksa otomatik Ã§Ä±kÄ±ÅŸ
-const LOGIN_MAX_ATTEMPTS = 5;
-const LOGIN_LOCK_SECONDS = 600; // 10 dakika kilit
-
-// Ä°lk aÃ§Ä±lÄ±ÅŸta users tablosu boÅŸsa bu kullanÄ±cÄ± oluÅŸturulur.
-const DEFAULT_ADMIN_USERNAME = 'admin';
-const DEFAULT_ADMIN_DISPLAY = 'YÃ¶netici';
-const DEFAULT_ADMIN_PASSWORD_HASH = '$2y$12$FUFv1VJ4.7D6X3o.pnbat.z/AqTyPRXuDO75P/t5Pzdi/xTW0r40G';
+m«ëˆ§½©buªàºg§¶k¡jÇ›{÷(ø ¦T±¨m«ë€Ý…¹îš(§~)^¢‹­~)^mºÞjFëy©ÊyÛ-®)àŠ{hžéœ…ªÚr×«–)Þ°7]yÊy×œ¡×¬Šzn¶^–—b²™ZÊØb²g¬±¨Š)éºØ§¦ë_ŠWyö®–×è®Ë]Šz(ºÚn¶‹­¦ë_ŠWyö®–×è®Ë]¢ë
