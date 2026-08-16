@@ -278,7 +278,7 @@ function page_footer(): void
   <script src="assets/teklif-barkod-auto.js?v=1"></script>
   <script src="assets/cek-vade-uyari.js?v=2"></script>
   <script src="assets/cari-doviz-bakiye.js?v=3"></script>
-  <script src="assets/dashboard-cari-pozisyon.js?v=4"></script>
+  <script src="assets/dashboard-cari-pozisyon.js?v=5"></script>
   <script src="assets/dashboard-nakit-cek-detay.js?v=1"></script>
   <script src="assets/dashboard-acik-cekler.js?v=2"></script>
   <script src="assets/dashboard-vade-hatirlatmalari.js?v=10"></script>

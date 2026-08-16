@@ -309,12 +309,12 @@ page_header('Genel Bakış', 'dashboard');
     <p>Alacak, verecek ve genel durum ayrı ayrı okunur.</p>
   </div>
   <div class="stats-grid four section-stats">
+    <article id="dashboardNetCariAlacak" class="stat-card"><span>Net cari alacağı</span><strong class="text-success"><?php echo e(money($totals['net_alacak'])); ?></strong><small>Her cari kendi içinde mahsup edildi</small></article>
+    <article id="dashboardNetCariBorc" class="stat-card"><span>Net cari borcu</span><strong class="text-danger"><?php echo e(money($totals['net_verecek'])); ?></strong><small>Her cari kendi içinde mahsup edildi</small></article>
+    <article id="dashboardKalanCariDurum" class="stat-card status"><span>Kalan cari durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small>Net alacak - net borç</small></article>
     <article class="stat-card"><span>Toplam cari</span><strong><?php echo e($cariCount); ?></strong><small>Kişi / firma kartı</small></article>
-    <article class="stat-card"><span>Net cari alacağı</span><strong class="text-success"><?php echo e(money($totals['net_alacak'])); ?></strong><small>Her cari kendi içinde mahsup edildi</small></article>
-    <article class="stat-card"><span>Net cari borcu</span><strong class="text-danger"><?php echo e(money($totals['net_verecek'])); ?></strong><small>Her cari kendi içinde mahsup edildi</small></article>
-    <article class="stat-card status"><span>Genel cari durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small><?php echo $netPosition >= 0 ? 'Toplam net alacak' : 'Toplam net borç'; ?></small></article>
   </div>
-  <p class="calc-note"><strong>Genel durum</strong> = net alacak - net verecek. Pozitifse genel olarak alacaklı, negatifse borçlu görünürsün.</p>
+  <p class="calc-note"><strong>Kalan cari durum</strong> = net cari alacağı - net cari borcu. Pozitifse alacak, negatifse borç kalır.</p>
   <div id="cariNetTaramaPanel" class="cari-net-scan">
     <div class="cari-net-scan-head"><div><small>CANLI CARİ TARAMASI</small><h3>Karşılıklı alacak ve borcu bulunan cariler</h3><p>Satış ve alış hareketleri aynı caride mahsup edilerek gerçek net durum gösterilir.</p></div><span class="cari-net-scan-count" data-count>Hazırlanıyor…</span></div>
     <div data-content><p class="muted">Cari kayıtları hazırlanıyor…</p></div>

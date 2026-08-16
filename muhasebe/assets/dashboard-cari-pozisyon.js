@@ -29,8 +29,8 @@
     fetch('dashboard-cari-pozisyon.php?type='+type+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){show(type,(d&&d.rows)||[]);}).catch(function(){document.getElementById('cariPozisyonIcerik').innerHTML='<p class="text-danger">Liste yüklenemedi.</p>';});
   }
   function initCards(){
-    var a=cardAny(['net alacak','durum alacak','alacak'],['verecek','borc','borç','alis','alış','genel durum','cek','çek']);
-    var v=cardAny(['net verecek','durum alis','durum alış','borc','borç','verecek'],['alacak','genel durum','cek','çek']);
+    var a=document.getElementById('dashboardNetCariAlacak');
+    var v=document.getElementById('dashboardNetCariBorc');
     [a,v].forEach(function(x){if(x){x.style.cursor='pointer';x.title='Cari listesini aç';}});
     if(a)a.onclick=function(){load('alacak');};
     if(v)v.onclick=function(){load('verecek');};
@@ -72,12 +72,12 @@
   function renderNetCards(data){
     var totals=data&&data.totals?data.totals:{};
     var tl=totals.TL||{receivable:0,payable:0,net:0};
-    var a=cardAny(['net alacak','durum alacak','alacak'],['verecek','borc','borç','alis','alış','genel durum','cek','çek']);
-    var v=cardAny(['net verecek','durum alis','durum alış','borc','borç','verecek'],['alacak','genel durum','cek','çek']);
-    var g=cardAny(['genel durum'],[]);
+    var a=document.getElementById('dashboardNetCariAlacak');
+    var v=document.getElementById('dashboardNetCariBorc');
+    var g=document.getElementById('dashboardKalanCariDurum');
     setCard(a,tl.receivable,'Net cari alacağı','Her cari kendi içinde mahsup edildi','text-success');
     setCard(v,tl.payable,'Net cari borcu','Her cari kendi içinde mahsup edildi','text-danger');
-    setCard(g,tl.net,'Genel cari durum',Number(tl.net||0)>=0?'Toplam net alacak':'Toplam net borç',Number(tl.net||0)>=0?'text-success':'text-danger');
+    setCard(g,tl.net,'Kalan cari durum','Net alacak - net borç',Number(tl.net||0)>=0?'text-success':'text-danger');
     var note=currencyNote(totals);
     [a,v,g].forEach(function(card){if(!card||!note)return;var old=card.querySelector('.cari-net-currency-note');if(!old){old=document.createElement('em');old.className='cari-net-currency-note';card.appendChild(old);}old.textContent=note;});
   }
