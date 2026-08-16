@@ -14,7 +14,7 @@ const BACKUP_DIR = __DIR__ . '/storage/backups';
 const MAX_UPLOAD_BYTES = 10485760; // 10 MB
 
 // Güvenlik ayarları
-const SESSION_TIMEOUT_SECONDS = 1800; // 30 dakika işlem yoksa otomatik çıkış
+const SESSION_TIMEOUT_SECONDS = 21600; // 6 saat işlem yoksa otomatik çıkış
 const PWA_SESSION_TIMEOUT_SECONDS = 2592000; // Hatırlanan PWA cihazında 30 gün
 const PWA_SESSION_COOKIE_SECONDS = 2592000;
 const LOGIN_MAX_ATTEMPTS = 5;

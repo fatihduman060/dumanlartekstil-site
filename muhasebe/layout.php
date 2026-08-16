@@ -248,7 +248,7 @@ function page_header(string $title, string $active = ''): void
         </div>
         <div class="top-actions">
           <?php if (!$storeOnly): ?><a class="ghost-link" href="../" target="_blank" rel="noopener">Siteyi aç</a><?php endif; ?>
-          <span class="session-chip" title="İşlem yapılmazsa otomatik çıkış süresi"><?php echo !empty($_SESSION['remember_pwa']) ? '30 gün' : '30 dk'; ?></span><a class="logout-link" href="logout.php">Çıkış</a>
+          <span class="session-chip" title="İşlem yapılmazsa otomatik çıkış süresi"><?php echo !empty($_SESSION['remember_pwa']) ? '30 gün' : ((int)(SESSION_TIMEOUT_SECONDS / 3600) . ' saat'); ?></span><a class="logout-link" href="logout.php">Çıkış</a>
         </div>
       </header>
       <?php foreach (get_flashes() as $flash): ?>

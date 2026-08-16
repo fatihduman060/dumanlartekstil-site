@@ -7,9 +7,7 @@ $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SER
 if (session_status() === PHP_SESSION_NONE) {
     $rememberedPwa = isset($_COOKIE['bitke_pwa_device']) && hash_equals('1', (string)$_COOKIE['bitke_pwa_device']);
     $cookieLifetime = $rememberedPwa ? PWA_SESSION_COOKIE_SECONDS : 0;
-    if ($rememberedPwa) {
-        ini_set('session.gc_maxlifetime', (string)PWA_SESSION_TIMEOUT_SECONDS);
-    }
+    ini_set('session.gc_maxlifetime', (string)($rememberedPwa ? PWA_SESSION_TIMEOUT_SECONDS : SESSION_TIMEOUT_SECONDS));
     session_name('bitke_muhasebe_session');
     session_set_cookie_params([
         'lifetime' => $cookieLifetime,

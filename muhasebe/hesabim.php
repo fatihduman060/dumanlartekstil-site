@@ -50,7 +50,7 @@ page_header('Hesabım', 'hesabim');
   <div>
     <span class="status-pill">Güvenlik merkezi</span>
     <h2>Şifre, oturum ve hesap bilgileri burada.</h2>
-    <p>Panel 30 dakika işlem yapılmazsa otomatik çıkış yapar. İlk kurulumdan sonra geçici şifreyi burada değiştirmen önerilir.</p>
+    <p>Panel 6 saat işlem yapılmazsa otomatik çıkış yapar. İlk kurulumdan sonra geçici şifreyi burada değiştirmen önerilir.</p>
   </div>
   <div class="hero-actions"><?php if (is_admin()): ?><a class="btn btn-secondary" href="loglar.php">Logları gör</a><?php endif; ?></div>
 </section>
@@ -59,7 +59,7 @@ page_header('Hesabım', 'hesabim');
   <article class="stat-card"><span>Kullanıcı adı</span><strong><?php echo e($u['username']); ?></strong><small>Giriş hesabı</small></article>
   <article class="stat-card"><span>Yetki</span><strong><?php echo e(role_label($u['role'])); ?></strong><small>Panel rolü</small></article>
   <article class="stat-card"><span>Son giriş</span><strong><?php echo e(tr_datetime($u['last_login'])); ?></strong><small>Kayıtlı son başarılı giriş</small></article>
-  <article class="stat-card"><span>Otomatik çıkış</span><strong><?php echo !empty($_SESSION['remember_pwa']) ? '30 gün' : ((int)(SESSION_TIMEOUT_SECONDS / 60) . ' dk'); ?></strong><small>İşlem yapılmazsa</small></article>
+  <article class="stat-card"><span>Otomatik çıkış</span><strong><?php echo !empty($_SESSION['remember_pwa']) ? '30 gün' : ((int)(SESSION_TIMEOUT_SECONDS / 3600) . ' saat'); ?></strong><small>İşlem yapılmazsa</small></article>
 </section>
 
 <section class="content-grid compact">
