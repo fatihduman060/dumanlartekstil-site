@@ -85,9 +85,9 @@ function ym_safe_sum(PDO $pdo, $table, $amountColumn, $dateColumn, $start, $end,
     }
 }
 
-function ym_metric($label, $value, $source, $missing, $tone, $format = 'money')
+function ym_metric($label, $value, $source, $missing, $tone, $format = 'money', $detail = null)
 {
-    return array('label'=>$label, 'value'=>$value, 'source'=>$source, 'missing'=>$missing, 'tone'=>$tone, 'format'=>$format);
+    return array('label'=>$label, 'value'=>$value, 'source'=>$source, 'missing'=>$missing, 'tone'=>$tone, 'format'=>$format, 'detail'=>$detail);
 }
 
 function ym_value_or_missing($metric)
@@ -103,7 +103,7 @@ function ym_render_card($metric)
     $ready = $metric['value'] !== null;
     $tone = $ready ? $metric['tone'] : 'missing';
     ?>
-    <article class="ym-card ym-<?php echo e($tone); ?>">
+    <article class="ym-card ym-<?php echo e($tone); ?><?php echo !empty($metric['detail']) && $ready ? ' ym-clickable' : ''; ?>"<?php if (!empty($metric['detail']) && $ready): ?> role="button" tabindex="0" data-report-detail="<?php echo e($metric['detail']); ?>" aria-label="<?php echo e($metric['label'] . ' detaylarını aç'); ?>"<?php endif; ?>>
       <span class="ym-card-label"><?php echo e($metric['label']); ?></span>
       <strong><?php echo e(ym_value_or_missing($metric)); ?></strong>
       <small><b>Bağlı veri:</b> <?php echo e($metric['source']); ?></small>
@@ -476,19 +476,19 @@ $annualSourcesRemaining = ($annualIncomeSources === null || $annualExpenseSource
     : $annualIncomeSources - $annualExpenseSources;
 
 $annualIncomeMetrics = array(
-    ym_metric('Nakit / banka tahsilatları', $collection, $srcMovement, 'Tahsilat hareketleri okunamıyor.', 'success'),
-    ym_metric('Diğer gelir hareketleri', $otherIncome, $srcMovement, 'Diğer gelir hareketleri okunamıyor.', 'success'),
-    ym_metric('Mağaza satışları', $storeSalesTotal, $srcStoreSales, 'Yıllık mağaza satış toplamı okunamıyor.', 'success'),
-    ym_metric('Yıllık gelen çekler', $incomingChecks, $srcChecks, 'Gelen çek tutarı, vadesi veya yönü okunamıyor.', 'success'),
-    ym_metric('Açıkta kalan alacak', $netReceivable, $srcMovement, 'Cari alacak ve tahsilat kayıtları birlikte okunamıyor.', 'success'),
+    ym_metric('Nakit / banka tahsilatları', $collection, $srcMovement, 'Tahsilat hareketleri okunamıyor.', 'success', 'money', 'collection'),
+    ym_metric('Diğer gelir hareketleri', $otherIncome, $srcMovement, 'Diğer gelir hareketleri okunamıyor.', 'success', 'money', 'other_income'),
+    ym_metric('Mağaza satışları', $storeSalesTotal, $srcStoreSales, 'Yıllık mağaza satış toplamı okunamıyor.', 'success', 'money', 'store_sales'),
+    ym_metric('Yıllık gelen çekler', $incomingChecks, $srcChecks, 'Gelen çek tutarı, vadesi veya yönü okunamıyor.', 'success', 'money', 'incoming_checks'),
+    ym_metric('Açıkta kalan alacak', $netReceivable, $srcMovement, 'Cari alacak ve tahsilat kayıtları birlikte okunamıyor.', 'success', 'money', 'open_receivables'),
     ym_metric('Toplam gelir kaynakları', $annualIncomeSources, $srcChecks . ' + ' . $srcMovement . ' + ' . $srcStoreSales, 'Gelir kaynaklarının tamamı birlikte hesaplanamıyor.', 'success')
 );
 $annualExpenseMetrics = array(
-    ym_metric('Yıllık verilen çekler', $outgoingChecks, $srcChecks, 'Verilen çek tutarı, vadesi veya yönü okunamıyor.', 'danger'),
-    ym_metric('Ödenen SSK / SGK', $paidSgk, $srcTaxes, 'Ödenen SSK / SGK tutarı okunamıyor.', 'danger'),
-    ym_metric('Ödenen diğer vergiler', $paidTaxes, $srcTaxes, 'Ödenen vergi tutarı okunamıyor.', 'danger'),
-    ym_metric('Maaş ve personel ödemeleri', $salaryPaid === null ? null : $salaryPaid + (float)($salaryAdvances ?? 0) + (float)($salaryGarnishment ?? 0) + (float)($salaryCompensation ?? 0), $srcSalaries, 'Ödenen maaş ve personel tutarları okunamıyor.', 'danger'),
-    ym_metric('Diğer ödemeler', $payment, $srcMovement, 'Diğer cari ödeme hareketleri okunamıyor.', 'danger'),
+    ym_metric('Yıllık verilen çekler', $outgoingChecks, $srcChecks, 'Verilen çek tutarı, vadesi veya yönü okunamıyor.', 'danger', 'money', 'outgoing_checks'),
+    ym_metric('Ödenen SSK / SGK', $paidSgk, $srcTaxes, 'Ödenen SSK / SGK tutarı okunamıyor.', 'danger', 'money', 'paid_sgk'),
+    ym_metric('Ödenen diğer vergiler', $paidTaxes, $srcTaxes, 'Ödenen vergi tutarı okunamıyor.', 'danger', 'money', 'paid_taxes'),
+    ym_metric('Maaş ve personel ödemeleri', $salaryPaid === null ? null : $salaryPaid + (float)($salaryAdvances ?? 0) + (float)($salaryGarnishment ?? 0) + (float)($salaryCompensation ?? 0), $srcSalaries, 'Ödenen maaş ve personel tutarları okunamıyor.', 'danger', 'money', 'personnel'),
+    ym_metric('Diğer ödemeler', $payment, $srcMovement, 'Diğer cari ödeme hareketleri okunamıyor.', 'danger', 'money', 'other_payments'),
     ym_metric('Toplam gider kaynakları', $annualExpenseSources, $srcChecks . ' + ' . $srcTaxes . ' + ' . $srcSalaries . ' + ' . $srcMovement, 'Gider kaynakları birlikte hesaplanamıyor.', 'danger')
 );
 
@@ -506,7 +506,7 @@ for ($productionMonthNo=1; $productionMonthNo<=12; $productionMonthNo++) {
 page_header('Dumanlar A.Ş. Yönetim Merkezi', 'raporlar');
 ?>
 <style>
-.ym-hero{margin-bottom:18px;background:linear-gradient(135deg,#fff,#fff7ea);display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center}.ym-hero h2{margin:0 0 8px;font-size:30px;letter-spacing:-.045em}.ym-hero p,.ym-section-head p{margin:0;color:var(--muted);font-size:13px;font-weight:750}.ym-tools{display:flex;align-items:end;gap:12px}.ym-tools label{display:grid;gap:6px;color:var(--muted);font-size:12px;font-weight:900}.ym-progress{min-width:180px}.ym-progress-line{height:10px;border-radius:999px;background:#eeeae1;overflow:hidden;margin:7px 0}.ym-progress-line i{display:block;height:100%;background:linear-gradient(90deg,var(--warning),var(--success));border-radius:999px}.ym-section{margin-top:18px}.ym-section-head{align-items:flex-start}.ym-section-head h3{margin-bottom:5px}.ym-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.ym-card{border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:17px;padding:17px;background:#fff;min-width:0}.ym-card-label{display:block;color:var(--muted);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}.ym-card strong{display:block;font-size:24px;margin:9px 0;letter-spacing:-.035em}.ym-card small{display:block;color:var(--muted);line-height:1.4;margin-top:5px;overflow-wrap:anywhere}.ym-card small b{color:var(--text)}.ym-success{border-left-color:var(--success)}.ym-danger{border-left-color:var(--danger)}.ym-info{border-left-color:var(--accent)}.ym-missing{border-left-color:var(--warning);background:#fffaf0}.ym-missing strong{font-size:20px;color:#835710}.ym-state{padding-top:6px;border-top:1px dashed var(--border)}.ym-source-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.ym-source-column{padding:15px;border:1px solid var(--border);border-radius:18px;background:#fafbf9}.ym-source-column h4{margin:0 0 12px;font-size:17px}.ym-source-column .ym-card-grid{grid-template-columns:1fr}.ym-remaining{margin-top:16px}.ym-remaining .ym-card{background:linear-gradient(135deg,#fff,#f1f8f3)}.ym-missing-list,.ym-status-list{display:grid;gap:10px}.ym-list-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:#fff}.ym-list-row span{font-weight:800}.ym-list-row small{color:var(--muted)}.ym-ok{color:var(--success);font-weight:900}.ym-warn{color:#835710;font-weight:900}.ym-empty-ok{padding:16px;border-radius:14px;background:#f3fbf5;color:var(--success);font-weight:900}.ym-footnote{margin:18px 2px;color:var(--muted);font-size:12px;font-weight:750}@media(max-width:1100px){.ym-hero{grid-template-columns:1fr}.ym-card-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.ym-tools{align-items:stretch;flex-direction:column}.ym-card-grid,.ym-source-columns{grid-template-columns:1fr}.ym-list-row{flex-direction:column}.ym-hero h2{font-size:25px}}
+.ym-hero{margin-bottom:18px;background:linear-gradient(135deg,#fff,#fff7ea);display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center}.ym-hero h2{margin:0 0 8px;font-size:30px;letter-spacing:-.045em}.ym-hero p,.ym-section-head p{margin:0;color:var(--muted);font-size:13px;font-weight:750}.ym-tools{display:flex;align-items:end;gap:12px}.ym-tools label{display:grid;gap:6px;color:var(--muted);font-size:12px;font-weight:900}.ym-progress{min-width:180px}.ym-progress-line{height:10px;border-radius:999px;background:#eeeae1;overflow:hidden;margin:7px 0}.ym-progress-line i{display:block;height:100%;background:linear-gradient(90deg,var(--warning),var(--success));border-radius:999px}.ym-section{margin-top:18px}.ym-section-head{align-items:flex-start}.ym-section-head h3{margin-bottom:5px}.ym-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.ym-card{border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:17px;padding:17px;background:#fff;min-width:0}.ym-card-label{display:block;color:var(--muted);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}.ym-card strong{display:block;font-size:24px;margin:9px 0;letter-spacing:-.035em}.ym-card small{display:block;color:var(--muted);line-height:1.4;margin-top:5px;overflow-wrap:anywhere}.ym-card small b{color:var(--text)}.ym-success{border-left-color:var(--success)}.ym-danger{border-left-color:var(--danger)}.ym-info{border-left-color:var(--accent)}.ym-missing{border-left-color:var(--warning);background:#fffaf0}.ym-missing strong{font-size:20px;color:#835710}.ym-state{padding-top:6px;border-top:1px dashed var(--border)}.ym-clickable{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.ym-clickable:hover,.ym-clickable:focus{transform:translateY(-2px);box-shadow:0 12px 28px rgba(27,49,36,.12);outline:2px solid rgba(31,107,73,.25);outline-offset:2px}.ym-clickable:after{content:'Detayı aç →';display:block;margin-top:9px;color:var(--accent);font-size:11px;font-weight:900}.ym-source-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.ym-source-column{padding:15px;border:1px solid var(--border);border-radius:18px;background:#fafbf9}.ym-source-column h4{margin:0 0 12px;font-size:17px}.ym-source-column .ym-card-grid{grid-template-columns:1fr}.ym-remaining{margin-top:16px}.ym-remaining .ym-card{background:linear-gradient(135deg,#fff,#f1f8f3)}.ym-detail-backdrop{position:fixed;inset:0;z-index:10050;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(13,25,18,.58)}.ym-detail-backdrop.open{display:flex}.ym-detail-modal{width:min(980px,100%);max-height:min(86vh,820px);display:flex;flex-direction:column;border-radius:20px;background:#fff;box-shadow:0 30px 90px rgba(0,0,0,.3);overflow:hidden}.ym-detail-head{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:17px 18px;background:#eef6f0}.ym-detail-head h3{margin:0}.ym-detail-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.ym-detail-close{width:44px;height:44px;border:0;border-radius:12px;background:#fff;font-size:23px;cursor:pointer}.ym-detail-body{padding:15px;overflow:auto}.ym-detail-table{width:100%;border-collapse:collapse;min-width:680px}.ym-detail-table th,.ym-detail-table td{padding:10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}.ym-detail-table th{position:sticky;top:0;background:#fff;font-size:11px;text-transform:uppercase;color:var(--muted)}.ym-detail-table td:last-child,.ym-detail-table th:last-child{text-align:right;white-space:nowrap}.ym-detail-empty{padding:28px;text-align:center;color:var(--muted);font-weight:800}.ym-missing-list,.ym-status-list{display:grid;gap:10px}.ym-list-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:#fff}.ym-list-row span{font-weight:800}.ym-list-row small{color:var(--muted)}.ym-ok{color:var(--success);font-weight:900}.ym-warn{color:#835710;font-weight:900}.ym-empty-ok{padding:16px;border-radius:14px;background:#f3fbf5;color:var(--success);font-weight:900}.ym-footnote{margin:18px 2px;color:var(--muted);font-size:12px;font-weight:750}@media(max-width:1100px){.ym-hero{grid-template-columns:1fr}.ym-card-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.ym-tools{align-items:stretch;flex-direction:column}.ym-card-grid,.ym-source-columns{grid-template-columns:1fr}.ym-list-row{flex-direction:column}.ym-hero h2{font-size:25px}.ym-detail-backdrop{padding:0}.ym-detail-modal{height:100dvh;max-height:none;border-radius:0}.ym-detail-body{padding:10px}.ym-detail-table{min-width:600px}}
 </style>
 
 <section class="panel-card ym-hero">
@@ -527,6 +527,33 @@ page_header('Dumanlar A.Ş. Yönetim Merkezi', 'raporlar');
   </div>
   <div class="ym-remaining"><?php ym_render_card(ym_metric('Kalan', $annualSourcesRemaining, 'Toplam gelir kaynakları − toplam gider kaynakları', 'Gelir ve gider kaynakları birlikte hesaplanamıyor.', $annualSourcesRemaining !== null && $annualSourcesRemaining < 0 ? 'danger' : 'success')); ?></div>
 </section>
+<div class="ym-detail-backdrop" data-report-modal aria-hidden="true">
+  <section class="ym-detail-modal" role="dialog" aria-modal="true" aria-labelledby="ymDetailTitle">
+    <header class="ym-detail-head"><div><h3 id="ymDetailTitle">Detay listesi</h3><p data-report-detail-summary></p></div><button type="button" class="ym-detail-close" data-report-close aria-label="Kapat">×</button></header>
+    <div class="ym-detail-body" data-report-detail-body><div class="ym-detail-empty">Detaylar yükleniyor…</div></div>
+  </section>
+</div>
+<script>
+(function(){
+  var modal=document.querySelector('[data-report-modal]'); if(!modal)return;
+  var title=modal.querySelector('#ymDetailTitle'),summary=modal.querySelector('[data-report-detail-summary]'),body=modal.querySelector('[data-report-detail-body]');
+  var money=new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'});
+  function closeModal(){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');document.body.style.overflow='';}
+  function cell(text){var td=document.createElement('td');td.textContent=text==null?'':String(text);return td;}
+  function render(data){
+    title.textContent=data.title||'Detay listesi';summary.textContent=(data.year||'')+' yılı · '+(data.rows||[]).length+' kayıt · '+money.format(Number(data.total||0));body.textContent='';
+    if(!data.rows||!data.rows.length){body.innerHTML='<div class="ym-detail-empty">Bu dönem için kayıt bulunamadı.</div>';return;}
+    var table=document.createElement('table');table.className='ym-detail-table';table.innerHTML='<thead><tr><th>Tarih</th><th>Kaynak</th><th>Açıklama</th><th>Tutar</th></tr></thead>';
+    var tbody=document.createElement('tbody');data.rows.forEach(function(row){var tr=document.createElement('tr');tr.appendChild(cell(row.date));tr.appendChild(cell(row.source));tr.appendChild(cell(row.description));tr.appendChild(cell(money.format(Number(row.amount||0))));tbody.appendChild(tr);});table.appendChild(tbody);body.appendChild(table);
+  }
+  function openDetail(card){
+    modal.classList.add('open');modal.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';title.textContent='Detay listesi';summary.textContent='';body.innerHTML='<div class="ym-detail-empty">Detaylar yükleniyor…</div>';
+    fetch('rapor-detay.php?year=<?php echo (int)$year; ?>&type='+encodeURIComponent(card.getAttribute('data-report-detail')),{headers:{'Accept':'application/json'}}).then(function(r){return r.json();}).then(function(data){if(!data.ok)throw new Error(data.message||'Detay okunamadı.');render(data);}).catch(function(err){body.innerHTML='<div class="ym-detail-empty"></div>';body.firstChild.textContent=err.message||'Detay kayıtları okunamadı.';});
+  }
+  document.addEventListener('click',function(event){var card=event.target.closest('[data-report-detail]');if(card){openDetail(card);return;}if(event.target.closest('[data-report-close]')||event.target===modal)closeModal();});
+  document.addEventListener('keydown',function(event){if(event.key==='Escape'&&modal.classList.contains('open'))closeModal();if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-report-detail]')){event.preventDefault();openDetail(event.target);}});
+})();
+</script>
 <?php
 ym_render_section('Finansal Durum', $year . ' yılı cari ve çek pozisyonu.', array(
     ym_metric('Net cari alacağı', $netReceivable, $srcMovement, 'Cari hareket tablosu/alanları eksik.', 'success'),
