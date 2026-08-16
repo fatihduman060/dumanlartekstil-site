@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
+require_once __DIR__ . '/dashboard-cari-aggregate.php';
 require_login();
 
 function dashboard_cashflow_periods(): array
@@ -153,6 +154,22 @@ $monthStart = date('Y-m-01');
 $monthEnd = date('Y-m-t');
 $weekAhead = date('Y-m-d', strtotime('+7 days'));
 $totals = dashboard_totals();
+try {
+    $initialCariAggregate = dashboard_cari_aggregate();
+    $initialNetReceivable = 0.0;
+    $initialNetPayable = 0.0;
+    foreach ($initialCariAggregate['positions'] as $initialCariPosition) {
+        if (strtoupper((string)($initialCariPosition['currency'] ?? 'TL')) !== 'TL') continue;
+        $initialCariNet = (float)$initialCariPosition['alacak'] - (float)$initialCariPosition['tahsilat']
+            - (float)$initialCariPosition['verecek'] + (float)$initialCariPosition['odeme'];
+        if ($initialCariNet > 0.005) $initialNetReceivable += $initialCariNet;
+        elseif ($initialCariNet < -0.005) $initialNetPayable += abs($initialCariNet);
+    }
+    $totals['net_alacak'] = $initialNetReceivable;
+    $totals['net_verecek'] = $initialNetPayable;
+} catch (Throwable $e) {
+    // Ortak cari taraması aksarsa eski özetle sayfanın açılması sürer.
+}
 $monthTotals = dashboard_real_cash_totals($monthStart, $monthEnd);
 $monthCashIn = (float)$monthTotals['gelir'] + (float)$monthTotals['tahsilat'];
 $monthCashOut = (float)$monthTotals['gider'] + (float)$monthTotals['odeme'];
@@ -293,9 +310,9 @@ page_header('Genel Bakış', 'dashboard');
   </div>
   <div class="stats-grid four section-stats">
     <article class="stat-card"><span>Toplam cari</span><strong><?php echo e($cariCount); ?></strong><small>Kişi / firma kartı</small></article>
-    <article class="stat-card"><span>Net alacak</span><strong><?php echo e(money($totals['net_alacak'])); ?></strong><small>Alacak - tahsilat</small></article>
-    <article class="stat-card"><span>Net verecek</span><strong><?php echo e(money($totals['net_verecek'])); ?></strong><small>Verecek - ödeme</small></article>
-    <article class="stat-card status"><span>Genel durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small>Net alacak - net verecek</small></article>
+    <article class="stat-card"><span>Net cari alacağı</span><strong class="text-success"><?php echo e(money($totals['net_alacak'])); ?></strong><small>Her cari kendi içinde mahsup edildi</small></article>
+    <article class="stat-card"><span>Net cari borcu</span><strong class="text-danger"><?php echo e(money($totals['net_verecek'])); ?></strong><small>Her cari kendi içinde mahsup edildi</small></article>
+    <article class="stat-card status"><span>Genel cari durum</span><strong class="<?php echo $netPosition >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($netPosition)); ?></strong><small><?php echo $netPosition >= 0 ? 'Toplam net alacak' : 'Toplam net borç'; ?></small></article>
   </div>
   <p class="calc-note"><strong>Genel durum</strong> = net alacak - net verecek. Pozitifse genel olarak alacaklı, negatifse borçlu görünürsün.</p>
   <div id="cariNetTaramaPanel" class="cari-net-scan">
