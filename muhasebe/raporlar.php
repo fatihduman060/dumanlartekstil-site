@@ -1,11 +1,13 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/dashboard-cari-aggregate.php';
+require_once __DIR__ . '/rapor-manuel-ozet-lib.php';
 require_login();
 
 /*
  * Dumanlar A.Ş. Yönetim Merkezi
- * Bu sayfa yalnızca mevcut SQLite tablolarını okur. INSERT/UPDATE/DELETE/DDL içermez.
+ * Finansal kaynakları okur; ayrıca kullanıcı tarafından bildirilen geçmiş dönem
+ * aylık özetlerini ayrı rapor tablosundan dahil eder.
  * Farklı kurulum sürümlerinde tablo veya alan bulunmadığında kart hata vermek yerine
  * veri kaynağını ve eksik olan parçayı açıkça gösterir.
  */
@@ -130,6 +132,13 @@ $year = isset($_GET['year']) ? (int)$_GET['year'] : $currentYear;
 if ($year < 2000 || $year > 2100) $year = $currentYear;
 $yearStart = sprintf('%04d-01-01', $year);
 $yearEnd = sprintf('%04d-12-31', $year);
+$manualMonthlyRows = rapor_manuel_ozet_yil($year);
+$manualIncomeTotal = 0.0;
+$manualExpenseTotal = 0.0;
+foreach ($manualMonthlyRows as $manualMonthlyRow) {
+    $manualIncomeTotal += (float)$manualMonthlyRow['income_amount'];
+    $manualExpenseTotal += (float)$manualMonthlyRow['expense_amount'];
+}
 
 $missingItems = array();
 $dataSets = array();
@@ -435,10 +444,11 @@ $vatPosition = ($salesVat === null || $purchaseVat === null) ? null : $salesVat 
  */
 $managementRevenue = ($salesTotal === null || $storeSalesTotal === null)
     ? null
-    : $salesTotal + $storeSalesTotal;
+    : $salesTotal + $storeSalesTotal + $manualIncomeTotal;
 $managementExpense = ($purchaseTotal === null)
     ? null
     : $purchaseTotal
+        + $manualExpenseTotal
         + (float)($paidSgk ?? 0)
         + (float)($paidTaxes ?? 0)
         + (float)($salaryPaid ?? 0)
@@ -483,10 +493,11 @@ $srcSalaryCompensation = !empty($salaryCompensationTable) ? $salaryCompensationT
  */
 $annualIncomeSources = ($incomingChecks === null || $netReceivable === null || $collection === null || $otherIncome === null || $storeSalesTotal === null)
     ? null
-    : $incomingChecks + $netReceivable + $collection + $otherIncome + $storeSalesTotal;
+    : $incomingChecks + $netReceivable + $collection + $otherIncome + $storeSalesTotal + $manualIncomeTotal;
 $annualExpenseSources = ($outgoingChecks === null || $payment === null || $otherExpense === null || $paidSgk === null || $paidTaxes === null || $salaryPaid === null)
     ? null
     : $outgoingChecks
+        + $manualExpenseTotal
         + $payment
         + $otherExpense
         + $paidSgk
@@ -500,6 +511,7 @@ $annualSourcesRemaining = ($annualIncomeSources === null || $annualExpenseSource
     : $annualIncomeSources - $annualExpenseSources;
 
 $annualIncomeMetrics = array(
+    ym_metric('Ocak–Haziran geçmiş dönem geliri', $manualIncomeTotal, 'Manuel aylık rapor özeti', 'Geçmiş dönem geliri okunamıyor.', 'success'),
     ym_metric('Nakit / banka tahsilatları', $collection, $srcMovement, 'Tahsilat hareketleri okunamıyor.', 'success', 'money', 'collection'),
     ym_metric('Diğer gelir hareketleri', $otherIncome, $srcMovement, 'Diğer gelir hareketleri okunamıyor.', 'success', 'money', 'other_income'),
     ym_metric('Mağaza satışları', $storeSalesTotal, $srcStoreSales, 'Yıllık mağaza satış toplamı okunamıyor.', 'success', 'money', 'store_sales'),
@@ -508,6 +520,7 @@ $annualIncomeMetrics = array(
     ym_metric('Toplam gelir kaynakları', $annualIncomeSources, $srcChecks . ' + ' . $srcMovement . ' + ' . $srcStoreSales, 'Gelir kaynaklarının tamamı birlikte hesaplanamıyor.', 'success')
 );
 $annualExpenseMetrics = array(
+    ym_metric('Ocak–Haziran geçmiş dönem gideri', $manualExpenseTotal, 'Manuel aylık rapor özeti', 'Geçmiş dönem gideri okunamıyor.', 'danger'),
     ym_metric('Yıllık verilen çekler', $outgoingChecks, $srcChecks, 'Verilen çek tutarı, vadesi veya yönü okunamıyor.', 'danger', 'money', 'outgoing_checks'),
     ym_metric('Ödenen SSK / SGK', $paidSgk, $srcTaxes, 'Ödenen SSK / SGK tutarı okunamıyor.', 'danger', 'money', 'paid_sgk'),
     ym_metric('Ödenen diğer vergiler', $paidTaxes, $srcTaxes, 'Ödenen vergi tutarı okunamıyor.', 'danger', 'money', 'paid_taxes'),
@@ -527,6 +540,17 @@ for ($productionMonthNo=1; $productionMonthNo<=12; $productionMonthNo++) {
     $productionMetrics[] = ym_metric($productionMonthNames[$productionMonthNo] . ' üretimi', $productionMonthValue, $srcProduction . '.' . ($productionAmount ?: 'produced_dozen'), 'Aylık üretim kaydı okunamıyor.', 'info', 'dozen');
 }
 
+$reportMonthNames = array(1=>'Ocak',2=>'Şubat',3=>'Mart',4=>'Nisan',5=>'Mayıs',6=>'Haziran',7=>'Temmuz',8=>'Ağustos',9=>'Eylül',10=>'Ekim',11=>'Kasım',12=>'Aralık');
+$manualMonthlyMetrics = array();
+foreach ($manualMonthlyRows as $manualMonthlyRow) {
+    $manualMonthNo = (int)substr((string)$manualMonthlyRow['period'], 5, 2);
+    $manualMonthlyMetrics[] = array(
+        'month' => $reportMonthNames[$manualMonthNo] ?? (string)$manualMonthlyRow['period'],
+        'income' => (float)$manualMonthlyRow['income_amount'],
+        'expense' => (float)$manualMonthlyRow['expense_amount'],
+    );
+}
+
 page_header('Dumanlar A.Ş. Yönetim Merkezi', 'raporlar');
 ?>
 <style>
@@ -540,6 +564,22 @@ page_header('Dumanlar A.Ş. Yönetim Merkezi', 'raporlar');
     <div class="ym-progress"><strong>Veri hazırlığı: %<?php echo e($readiness); ?></strong><div class="ym-progress-line"><i style="width:<?php echo e($readiness); ?>%"></i></div><small><?php echo e($readyCount); ?>/<?php echo e(count($dataSets)); ?> veri grubu hazır</small></div>
   </div>
 </section>
+
+<?php if ($manualMonthlyMetrics): ?>
+<section class="panel-card ym-section">
+  <div class="card-head ym-section-head"><div><h3>Ocak–Haziran Geçmiş Dönem Özeti</h3><p>Banka, cari ve fatura hareketi oluşturmadan rapora eklenen aylık gelir-gider toplamları.</p></div><span>Manuel rapor</span></div>
+  <div class="ym-card-grid">
+    <?php foreach ($manualMonthlyMetrics as $manualMetric): ?>
+      <article class="ym-card ym-info">
+        <span class="ym-card-label"><?php echo e($manualMetric['month']); ?></span>
+        <small>Gelir</small><strong class="text-success"><?php echo e(money($manualMetric['income'])); ?></strong>
+        <small>Gider</small><strong class="text-danger"><?php echo e(money($manualMetric['expense'])); ?></strong>
+        <small>Fark</small><strong class="<?php echo $manualMetric['income']-$manualMetric['expense']>=0?'text-success':'text-danger'; ?>"><?php echo e(money($manualMetric['income']-$manualMetric['expense'])); ?></strong>
+      </article>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
 
 <?php
 ?>
@@ -668,5 +708,5 @@ ym_render_section('Mali Tablolar', 'Seçili yılın mevcut fatura, mağaza, pers
   <div class="ym-status-list"><?php foreach ($dataSets as $name=>$isReady): ?><div class="ym-list-row"><span><?php echo e($name); ?></span><b class="<?php echo $isReady?'ym-ok':'ym-warn'; ?>"><?php echo $isReady?'Hazır':'Eksik veri'; ?></b></div><?php endforeach; ?></div>
 </section>
 
-<p class="ym-footnote">Güvenlik notu: Bu Yönetim Merkezi yalnızca SELECT ve PRAGMA table_info sorguları çalıştırır. Finansal kayıt eklemez, güncellemez veya silmez; DDL çalıştırmaz. Gösterimler <?php echo e($yearStart); ?> – <?php echo e($yearEnd); ?> dönemine aittir.</p>
+<p class="ym-footnote">Güvenlik notu: Yönetim Merkezi finansal hareketleri değiştirmez. Geçmiş dönem manuel özetleri yalnızca rapor tablosunda tutulur; cari, banka, kasa veya fatura hareketi oluşturmaz. Gösterimler <?php echo e($yearStart); ?> – <?php echo e($yearEnd); ?> dönemine aittir.</p>
 <?php page_footer(); ?>
