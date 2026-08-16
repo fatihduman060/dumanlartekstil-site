@@ -165,6 +165,7 @@ if ($movementReady) {
         $netReceivable = 0.0;
         $netPayable = 0.0;
         foreach ($positionTotals['positions'] as $positionRow) {
+            if (strtoupper((string)($positionRow['currency'] ?? 'TL')) !== 'TL') continue;
             $positionNet = (float)$positionRow['alacak'] - (float)$positionRow['tahsilat']
                 - (float)$positionRow['verecek'] + (float)$positionRow['odeme'];
             if ($positionNet > 0.005) $netReceivable += $positionNet;

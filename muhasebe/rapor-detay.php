@@ -64,6 +64,7 @@ try {
         $title = 'Açıkta kalan alacaklar';
         $aggregate = dashboard_cari_aggregate(null, $end);
         foreach ($aggregate['positions'] as $positionRow) {
+            if (strtoupper((string)($positionRow['currency'] ?? 'TL')) !== 'TL') continue;
             $amount = (float)$positionRow['alacak'] - (float)$positionRow['tahsilat']
                 - (float)$positionRow['verecek'] + (float)$positionRow['odeme'];
             if ($amount <= 0.005) continue;
