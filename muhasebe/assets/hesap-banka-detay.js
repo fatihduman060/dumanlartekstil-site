@@ -48,6 +48,7 @@
     var bankSection=Array.from(document.querySelectorAll('.panel-card')).find(function(x){return norm(x.textContent).indexOf('banka bakiyeleri')>-1;});
     if(!bankSection) return;
     bankSection.querySelectorAll('.stat-card').forEach(function(card){
+      if(card.matches('details.bank-account-card')) return;
       var span=card.querySelector('span');
       var bank=span ? (span.textContent||'').trim() : '';
       if(!bank || card.dataset.bankDetailBound) return;
