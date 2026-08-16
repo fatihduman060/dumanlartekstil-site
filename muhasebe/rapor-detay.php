@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/dashboard-cari-aggregate.php';
 require_login();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -61,9 +62,19 @@ try {
         rd_add_rows($rows, $stmt->fetchAll(), 'Çek');
     } elseif ($type === 'open_receivables') {
         $title = 'Açıkta kalan alacaklar';
-        $stmt = $pdo->prepare("SELECT MAX(m.movement_date) AS date, COALESCE(c.name,'Cari belirtilmedi') AS source, 'Cari bazında net açık alacak' AS description, SUM(CASE WHEN m.movement_type='alacak' THEN m.amount WHEN m.movement_type='tahsilat' THEN -m.amount WHEN m.movement_type='verecek' THEN -m.amount WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END) AS amount FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? AND m.movement_type IN ('alacak','tahsilat','verecek','odeme') GROUP BY m.cari_id,c.name HAVING amount>0.005 ORDER BY amount DESC LIMIT 1000");
-        $stmt->execute([$start, $end]);
-        rd_add_rows($rows, $stmt->fetchAll(), 'Açık alacak');
+        $aggregate = dashboard_cari_aggregate($start, $end);
+        foreach ($aggregate['positions'] as $positionRow) {
+            $amount = (float)$positionRow['alacak'] - (float)$positionRow['tahsilat']
+                - (float)$positionRow['verecek'] + (float)$positionRow['odeme'];
+            if ($amount <= 0.005) continue;
+            $rows[] = [
+                'date'=>(string)($positionRow['last_date'] ?? ''),
+                'source'=>(string)$positionRow['name'],
+                'description'=>'Açık alacak · Cari bazında net mahsup',
+                'amount'=>$amount,
+            ];
+        }
+        usort($rows, function ($a, $b) { return (float)$b['amount'] <=> (float)$a['amount']; });
     } elseif (in_array($type, ['paid_sgk','paid_taxes'], true)) {
         $isSgk = $type === 'paid_sgk';
         $title = $isSgk ? 'Ödenen SSK / SGK' : 'Ödenen diğer vergiler';

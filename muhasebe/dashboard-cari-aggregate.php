@@ -33,7 +33,7 @@ function dashboard_cari_created_gap_seconds(array $first, array $second): ?int
     return abs($firstTime - $secondTime);
 }
 
-function dashboard_cari_aggregate(): array
+function dashboard_cari_aggregate(?string $startDate = null, ?string $endDate = null): array
 {
     ensure_column(db(), 'movements', 'currency', "TEXT NOT NULL DEFAULT 'TL'");
 
@@ -48,7 +48,18 @@ function dashboard_cari_aggregate(): array
         ];
     }
 
-    $stmt = db()->query("SELECT m.id, m.cari_id, m.movement_type, m.amount,
+    $dateSql = '';
+    $dateParams = [];
+    if ($startDate !== null) {
+        $dateSql .= ' AND m.movement_date >= ?';
+        $dateParams[] = $startDate;
+    }
+    if ($endDate !== null) {
+        $dateSql .= ' AND m.movement_date <= ?';
+        $dateParams[] = $endDate;
+    }
+
+    $stmt = db()->prepare("SELECT m.id, m.cari_id, m.movement_type, m.amount,
         COALESCE(m.currency,'TL') AS currency, m.movement_date,
         COALESCE(m.account_id,0) AS account_id,
         COALESCE(m.description,'') AS description,
@@ -59,7 +70,9 @@ function dashboard_cari_aggregate(): array
       FROM movements m
       WHERE COALESCE(m.is_cancelled,0)=0
         AND m.movement_type IN ('alacak','tahsilat','verecek','odeme')
+        " . $dateSql . "
       ORDER BY m.id ASC");
+    $stmt->execute($dateParams);
 
     $buckets = [];
     foreach ($stmt->fetchAll() as $movement) {
@@ -168,12 +181,16 @@ function dashboard_cari_aggregate(): array
                 'tahsilat'=>0.0,
                 'verecek'=>0.0,
                 'odeme'=>0.0,
+                'last_date'=>'',
             ];
         }
 
         $movementType = (string)$movement['movement_type'];
         if (isset($positions[$key][$movementType])) {
             $positions[$key][$movementType] += (float)$movement['amount'];
+        }
+        if ((string)$movement['movement_date'] > (string)$positions[$key]['last_date']) {
+            $positions[$key]['last_date'] = (string)$movement['movement_date'];
         }
     }
 
