@@ -107,8 +107,9 @@ function ym_render_card($metric)
     <article class="ym-card ym-<?php echo e($tone); ?><?php echo !empty($metric['detail']) && $ready ? ' ym-clickable' : ''; ?>"<?php if (!empty($metric['detail']) && $ready): ?> role="button" tabindex="0" data-report-detail="<?php echo e($metric['detail']); ?>" aria-label="<?php echo e($metric['label'] . ' detaylarını aç'); ?>"<?php endif; ?>>
       <span class="ym-card-label"><?php echo e($metric['label']); ?></span>
       <strong><?php echo e(ym_value_or_missing($metric)); ?></strong>
-      <small><b>Bağlı veri:</b> <?php echo e($metric['source']); ?></small>
-      <small class="ym-state"><b><?php echo $ready ? 'Durum:' : 'Eksik:'; ?></b> <?php echo e($ready ? 'Veri güvenle okunuyor' : $metric['missing']); ?></small>
+      <?php if (!$ready): ?>
+        <small class="ym-state"><b>Eksik:</b> <?php echo e($metric['missing']); ?></small>
+      <?php endif; ?>
     </article>
     <?php
 }
