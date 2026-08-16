@@ -328,19 +328,39 @@ foreach ($accounts as $account) {
     if (($account['account_type'] ?? '') === 'banka') {
         $bankName = banka_kart_adi($account);
         if (!isset($bankCards[$bankName])) {
-            $bankCards[$bankName] = ['name' => $bankName, 'balance' => 0.0, 'accounts' => 0, 'active' => 0];
+            $bankCards[$bankName] = ['name' => $bankName, 'balance' => 0.0, 'accounts' => 0, 'active' => 0, 'items' => []];
         }
         $bankCards[$bankName]['balance'] += $balance;
         $bankCards[$bankName]['accounts']++;
         if ((int)($account['is_active'] ?? 0) === 1) $bankCards[$bankName]['active']++;
+        $bankCards[$bankName]['items'][] = [
+            'id' => (int)$account['id'],
+            'name' => (string)$account['name'],
+            'iban' => (string)($account['iban'] ?? ''),
+            'balance' => $balance,
+            'active' => (int)($account['is_active'] ?? 0),
+        ];
     }
 }
 usort($bankCards, fn($a, $b) => abs($b['balance']) <=> abs($a['balance']));
-$stmt = db()->query("SELECT at.*, a.name AS account_name, a.account_type, a.bank_name, u.display_name AS user_name
+$selectedAccountId = max(0, (int)($_GET['account_id'] ?? 0));
+$selectedAccount = null;
+if ($selectedAccountId > 0) {
+    $selectedStmt = db()->prepare('SELECT * FROM accounts WHERE id=? LIMIT 1');
+    $selectedStmt->execute([$selectedAccountId]);
+    $selectedAccount = $selectedStmt->fetch() ?: null;
+    if (!$selectedAccount) $selectedAccountId = 0;
+}
+$transactionSql = "SELECT at.*, a.name AS account_name, a.account_type, a.bank_name, u.display_name AS user_name
     FROM account_transactions at
     JOIN accounts a ON a.id=at.account_id
-    LEFT JOIN users u ON u.id=at.created_by
-    ORDER BY at.transaction_date DESC, at.id DESC LIMIT 80");
+    LEFT JOIN users u ON u.id=at.created_by";
+if ($selectedAccountId > 0) {
+    $stmt = db()->prepare($transactionSql . ' WHERE at.account_id=? ORDER BY at.transaction_date DESC, at.id DESC LIMIT 250');
+    $stmt->execute([$selectedAccountId]);
+} else {
+    $stmt = db()->query($transactionSql . ' ORDER BY at.transaction_date DESC, at.id DESC LIMIT 80');
+}
 $transactions = $stmt->fetchAll();
 
 $externalFundingStmt = db()->query("SELECT at.*, a.name AS account_name, a.account_type, a.bank_name, u.display_name AS user_name,
@@ -368,6 +388,18 @@ page_header('Kasa / Banka', 'hesaplar');
 .account-summary-link{display:block;text-decoration:none;color:inherit;cursor:pointer;position:relative;transition:transform .16s ease,box-shadow .16s ease}
 .account-summary-link:after{content:'›';position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:28px;color:#758078}
 .account-summary-link:hover,.account-summary-link:focus{transform:translateY(-2px);box-shadow:0 10px 24px rgba(23,63,41,.12);outline:2px solid #b8d4c2;outline-offset:2px}
+.bank-account-card{padding:0;overflow:hidden}
+.bank-account-card>summary{list-style:none;cursor:pointer;padding:18px;position:relative}
+.bank-account-card>summary::-webkit-details-marker{display:none}
+.bank-account-card>summary:after{content:'Hesapları göster ›';display:block;margin-top:8px;color:#28734b;font-weight:700;font-size:13px}
+.bank-account-card[open]>summary:after{content:'Hesapları gizle ⌃'}
+.bank-account-list{display:grid;gap:8px;padding:0 12px 12px;border-top:1px solid #e4e8e4}
+.bank-account-link{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 10px;border-radius:12px;color:inherit;text-decoration:none;background:#fff}
+.bank-account-link:hover,.bank-account-link:focus{background:#edf7f0;outline:2px solid #b8d4c2}
+.bank-account-link small{display:block;margin-top:3px}
+.bank-account-link strong:last-child{white-space:nowrap}
+.account-filter-note{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin:0 16px 16px;border-radius:14px;background:#edf7f0}
+@media(max-width:700px){.bank-account-link{align-items:flex-start;flex-direction:column}.account-filter-note{align-items:flex-start;flex-direction:column}}
 </style>
 <section class="stats-grid four">
   <a class="stat-card account-summary-link" href="#hesap-listesi" aria-label="Tüm kasa ve banka hesaplarını göster"><span>Toplam bakiye</span><strong class="<?php echo $summary['total'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($summary['total'])); ?></strong><small>Kasa + banka toplamı</small></a>
@@ -386,11 +418,21 @@ page_header('Kasa / Banka', 'hesaplar');
   <?php else: ?>
     <section class="stats-grid four">
       <?php foreach ($bankCards as $bank): ?>
-        <article class="stat-card soft">
-          <span><?php echo e($bank['name']); ?></span>
-          <strong class="<?php echo $bank['balance'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($bank['balance'])); ?></strong>
-          <small><?php echo e($bank['accounts']); ?> hesap · <?php echo e($bank['active']); ?> aktif</small>
-        </article>
+        <details class="stat-card soft bank-account-card">
+          <summary>
+            <span><?php echo e($bank['name']); ?></span>
+            <strong class="<?php echo $bank['balance'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($bank['balance'])); ?></strong>
+            <small><?php echo e($bank['accounts']); ?> hesap · <?php echo e($bank['active']); ?> aktif</small>
+          </summary>
+          <div class="bank-account-list">
+            <?php foreach ($bank['items'] as $bankAccount): ?>
+              <a class="bank-account-link" href="hesaplar.php?account_id=<?php echo e($bankAccount['id']); ?>#hesap-hareketleri">
+                <span><strong><?php echo e($bankAccount['name']); ?></strong><small><?php echo e($bankAccount['iban'] ?: ($bankAccount['active'] ? 'Aktif hesap' : 'Pasif hesap')); ?></small></span>
+                <strong class="<?php echo $bankAccount['balance'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($bankAccount['balance'])); ?></strong>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        </details>
       <?php endforeach; ?>
     </section>
   <?php endif; ?>
@@ -469,7 +511,7 @@ page_header('Kasa / Banka', 'hesaplar');
             <td><strong><?php echo e($a['bank_name'] ?: (($a['account_type'] ?? '') === 'kasa' ? 'Kasa' : '-')); ?></strong><small><?php echo e($a['iban'] ?: 'IBAN girilmedi'); ?></small></td>
             <td><?php echo ((int)$a['is_active']===1) ? badge('Aktif','success') : badge('Pasif','neutral'); ?></td>
             <td class="right"><strong class="<?php echo $bal>=0?'text-success':'text-danger'; ?>"><?php echo e(money($bal)); ?></strong></td>
-            <td class="row-actions"><a href="hesaplar.php?edit=<?php echo e($a['id']); ?>">Düzenle</a></td>
+            <td class="row-actions"><a href="hesaplar.php?account_id=<?php echo e($a['id']); ?>#hesap-hareketleri">Hareketler</a><a href="hesaplar.php?edit=<?php echo e($a['id']); ?>">Düzenle</a></td>
           </tr>
           <?php endforeach; ?>
         </tbody>
@@ -578,8 +620,9 @@ page_header('Kasa / Banka', 'hesaplar');
 </section>
 <?php endif; ?>
 
-<section class="panel-card">
-  <div class="card-head"><h3>Son kasa/banka hareketleri</h3><span>Hareket, çek ve manuel kayıtlar</span></div>
+<section class="panel-card" id="hesap-hareketleri">
+  <div class="card-head"><h3><?php echo $selectedAccount ? e($selectedAccount['name']) . ' hareketleri' : 'Son kasa/banka hareketleri'; ?></h3><span><?php echo $selectedAccount ? e($selectedAccount['bank_name'] ?: account_type_label($selectedAccount['account_type'])) : 'Hareket, çek ve manuel kayıtlar'; ?></span></div>
+  <?php if ($selectedAccount): ?><div class="account-filter-note"><span><strong>Yalnızca bu hesap gösteriliyor:</strong> <?php echo e($selectedAccount['name']); ?> · <?php echo e(money(account_balance($selectedAccountId))); ?></span><a class="btn btn-secondary" href="hesaplar.php#hesap-hareketleri">Tüm hareketleri göster</a></div><?php endif; ?>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Tarih</th><th>Hesap</th><th>Kaynak</th><th>Açıklama</th><th class="right">Giriş</th><th class="right">Çıkış</th><th></th></tr></thead>
