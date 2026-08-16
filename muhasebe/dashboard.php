@@ -186,11 +186,11 @@ $docCount = (int)db()->query("SELECT COUNT(*) FROM movements WHERE document_path
     + (int)db()->query("SELECT COUNT(*) FROM private_receivables WHERE document_path IS NOT NULL AND document_path != ''")->fetchColumn()
     + (int)db()->query("SELECT COUNT(*) FROM standalone_documents WHERE document_path IS NOT NULL AND document_path != ''")->fetchColumn();
 $recent = db()->query("SELECT m.*, c.name AS cari_name, cat.name AS category_name, a.name AS account_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id LEFT JOIN categories cat ON cat.id=m.category_id LEFT JOIN accounts a ON a.id=m.account_id WHERE COALESCE(m.is_cancelled,0)=0 ORDER BY m.movement_date DESC, m.id DESC LIMIT 8")->fetchAll();
-$dueMovStmt = db()->prepare("SELECT m.*, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.due_date IS NOT NULL AND m.due_date <= ? AND m.movement_type IN ('alacak','verecek') ORDER BY m.due_date ASC, m.id DESC LIMIT 8");
-$dueMovStmt->execute([$weekAhead]);
+$dueMovStmt = db()->prepare("SELECT m.*, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.due_date BETWEEN ? AND ? AND m.movement_type IN ('alacak','verecek') ORDER BY m.due_date ASC, m.id DESC LIMIT 8");
+$dueMovStmt->execute([$today, $weekAhead]);
 $dueMovements = $dueMovStmt->fetchAll();
-$dueCheckStmt = db()->prepare("SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.due_date <= ? ORDER BY ch.due_date ASC, ch.id DESC LIMIT 8");
-$dueCheckStmt->execute([$weekAhead]);
+$dueCheckStmt = db()->prepare("SELECT ch.*, c.name AS cari_name FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.due_date BETWEEN ? AND ? ORDER BY ch.due_date ASC, ch.id DESC LIMIT 8");
+$dueCheckStmt->execute([$today, $weekAhead]);
 $dueChecks = $dueCheckStmt->fetchAll();
 $topStmt = db()->query("SELECT c.id, c.name,
     SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END) - SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END) AS net_alacak,
