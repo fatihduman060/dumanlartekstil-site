@@ -174,7 +174,7 @@ $lastMovement = $lastMovementStmt->fetch() ?: null;
 $daysSinceTahsilat = $lastTahsilat ? (int)floor((time() - strtotime($lastTahsilat['movement_date'])) / 86400) : null;
 $cariAlertText = 'Cari dengesi normal görünüyor.';
 $cariAlertTone = 'success';
-if ($balance['net_alacak'] > 0 && ($daysSinceTahsilat === null || $daysSinceTahsilat >= 30)) {
+if ($balance['net'] > 0 && ($daysSinceTahsilat === null || $daysSinceTahsilat >= 30)) {
     $cariAlertText = $daysSinceTahsilat === null ? 'Bu caride açık alacak var ama tahsilat kaydı görünmüyor.' : $daysSinceTahsilat . ' gündür tahsilat görünmüyor.';
     $cariAlertTone = 'danger';
 } elseif ($pendingCheckTotal > 0) {

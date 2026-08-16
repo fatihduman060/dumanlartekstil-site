@@ -205,11 +205,14 @@ $upcomingPayments = array_slice($upcomingPayments, 0, 8);
 $noCollectionThreshold = date('Y-m-d', strtotime('-30 days'));
 $noCollectionStmt = db()->prepare("SELECT * FROM (
     SELECT c.id, c.name,
-      COALESCE(SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0) AS net_alacak,
+      COALESCE(SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END),0)
+        - COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0)
+        - COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0)
+        + COALESCE(SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END),0) AS net_bakiye,
       MAX(CASE WHEN m.movement_type='tahsilat' THEN m.movement_date ELSE NULL END) AS last_tahsilat
     FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
     GROUP BY c.id
-  ) x WHERE net_alacak > 0 AND (last_tahsilat IS NULL OR last_tahsilat < ?) ORDER BY net_alacak DESC LIMIT 6");
+  ) x WHERE net_bakiye > 0 AND (last_tahsilat IS NULL OR last_tahsilat < ?) ORDER BY net_bakiye DESC LIMIT 6");
 $noCollectionStmt->execute([$noCollectionThreshold]);
 $noCollectionCariler = $noCollectionStmt->fetchAll();
 
@@ -360,7 +363,7 @@ page_header('Genel Bakış', 'dashboard');
         <?php foreach($noCollectionCariler as $c): ?>
           <a class="mini-row alert-row" href="cari-detay.php?id=<?php echo e($c['id']); ?>">
             <span><?php echo e($c['name']); ?><small>Son tahsilat: <?php echo e($c['last_tahsilat'] ? tr_date($c['last_tahsilat']) : 'Yok'); ?></small></span>
-            <strong class="text-danger"><?php echo e(money($c['net_alacak'])); ?></strong>
+            <strong class="text-danger"><?php echo e(money($c['net_bakiye'])); ?></strong>
           </a>
         <?php endforeach; ?>
       </div>
