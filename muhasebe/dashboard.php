@@ -198,7 +198,6 @@ $topStmt = db()->query("SELECT c.id, c.name,
   FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0 GROUP BY c.id ORDER BY ABS((COALESCE(net_alacak,0)-COALESCE(net_verecek,0))) DESC LIMIT 6");
 $topCariler = $topStmt->fetchAll();
 
-$privateOpenSummary = private_receivable_totals(['status'=>'acik']);
 $topReceivables = db()->query("SELECT c.id, c.name,
     COALESCE(SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0) -
     (COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END),0)) AS net
@@ -352,19 +351,6 @@ page_header('Genel Bakış', 'dashboard');
     <article class="stat-card soft"><span>Vadesi geçen çek</span><strong class="<?php echo $overdueChecks>0?'text-danger':''; ?>"><?php echo e($overdueChecks); ?></strong><small>Vadesi geçmiş kayıt</small></article>
   </div>
   <p class="calc-note"><strong>Çek takibi</strong> çekleri vade tarihine göre gösterir. Çek cari bakiyeye bağlı hareket olarak işler; gerçek kasa/banka girişi ayrıca hareket kaydıyla takip edilir.</p>
-</section>
-
-<section class="dashboard-section">
-  <div class="dashboard-section-head">
-    <div><span>Özel Alan</span><h3>Özel alacak ve ödeme takibi</h3></div>
-    <p>Genel cari toplamına karışmayan özel takip alanı.</p>
-  </div>
-  <div class="stats-grid three section-stats">
-    <article class="stat-card special"><span>Açık özel alacak</span><strong><?php echo e(money($privateOpenSummary['acik'])); ?></strong><small><a href="ozel-alacaklar.php?status=acik">Özel rapora git</a></small></article>
-    <article class="stat-card soft"><span>Özel alacak kayıt</span><strong><?php echo e((string)$privateOpenSummary['count']); ?></strong><small>Açık kayıt sayısı</small></article>
-    <article class="stat-card soft"><span>Bu ay ödeme takibi</span><strong><?php echo e((string)count($upcomingPayments)); ?></strong><small>Verecek + verilecek çek</small></article>
-  </div>
-  <p class="calc-note"><strong>Özel alacak</strong> genel alacak/verecek toplamına dahil edilmez; sadece özel takip için ayrı tutulur.</p>
 </section>
 
 <section class="dashboard-section smart-alert-section">
