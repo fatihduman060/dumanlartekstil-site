@@ -142,7 +142,7 @@ $movementDate = ym_first_column($movementColumns, array('movement_date', 'tarih'
 $movementType = ym_first_column($movementColumns, array('movement_type', 'hareket_turu', 'type'));
 $movementReady = $movementTable && $movementAmount && $movementDate && $movementType;
 $dataSets['Cari hareketleri'] = $movementReady;
-$receivable = $payable = $collection = $payment = $otherIncome = null;
+$receivable = $payable = $collection = $payment = $otherIncome = $otherExpense = null;
 if ($movementReady) {
     $typeIdent = ym_ident($movementType);
     $cancelSql = isset($movementColumns['is_cancelled']) ? 'COALESCE("is_cancelled",0)=0 AND ' : '';
@@ -151,6 +151,7 @@ if ($movementReady) {
     $collection = ym_safe_sum($pdo, $movementTable, $movementAmount, $movementDate, $yearStart, $yearEnd, $cancelSql . $typeIdent . '=?', array('tahsilat'));
     $payment = ym_safe_sum($pdo, $movementTable, $movementAmount, $movementDate, $yearStart, $yearEnd, $cancelSql . $typeIdent . '=?', array('odeme'));
     $otherIncome = ym_safe_sum($pdo, $movementTable, $movementAmount, $movementDate, $yearStart, $yearEnd, $cancelSql . $typeIdent . '=?', array('gelir'));
+    $otherExpense = ym_safe_sum($pdo, $movementTable, $movementAmount, $movementDate, $yearStart, $yearEnd, $cancelSql . $typeIdent . '=?', array('gider'));
 } else {
     $missingItems[] = 'Cari Analizi: hareket tablosu ile tutar, tarih ve hareket türü alanları birlikte bulunamadı.';
 }
@@ -483,10 +484,11 @@ $srcSalaryCompensation = !empty($salaryCompensationTable) ? $salaryCompensationT
 $annualIncomeSources = ($incomingChecks === null || $netReceivable === null || $collection === null || $otherIncome === null || $storeSalesTotal === null)
     ? null
     : $incomingChecks + $netReceivable + $collection + $otherIncome + $storeSalesTotal;
-$annualExpenseSources = ($outgoingChecks === null || $payment === null || $paidSgk === null || $paidTaxes === null || $salaryPaid === null)
+$annualExpenseSources = ($outgoingChecks === null || $payment === null || $otherExpense === null || $paidSgk === null || $paidTaxes === null || $salaryPaid === null)
     ? null
     : $outgoingChecks
         + $payment
+        + $otherExpense
         + $paidSgk
         + $paidTaxes
         + $salaryPaid
@@ -510,7 +512,7 @@ $annualExpenseMetrics = array(
     ym_metric('Ödenen SSK / SGK', $paidSgk, $srcTaxes, 'Ödenen SSK / SGK tutarı okunamıyor.', 'danger', 'money', 'paid_sgk'),
     ym_metric('Ödenen diğer vergiler', $paidTaxes, $srcTaxes, 'Ödenen vergi tutarı okunamıyor.', 'danger', 'money', 'paid_taxes'),
     ym_metric('Maaş ve personel ödemeleri', $salaryPaid === null ? null : $salaryPaid + (float)($salaryAdvances ?? 0) + (float)($salaryGarnishment ?? 0) + (float)($salaryCompensation ?? 0), $srcSalaries, 'Ödenen maaş ve personel tutarları okunamıyor.', 'danger', 'money', 'personnel'),
-    ym_metric('Diğer ödemeler', $payment, $srcMovement, 'Diğer cari ödeme hareketleri okunamıyor.', 'danger', 'money', 'other_payments'),
+    ym_metric('Diğer ödemeler', ($payment === null || $otherExpense === null) ? null : $payment + $otherExpense, $srcMovement, 'Diğer ödeme ve gider hareketleri okunamıyor.', 'danger', 'money', 'other_payments'),
     ym_metric('Toplam gider kaynakları', $annualExpenseSources, $srcChecks . ' + ' . $srcTaxes . ' + ' . $srcSalaries . ' + ' . $srcMovement, 'Gider kaynakları birlikte hesaplanamıyor.', 'danger')
 );
 

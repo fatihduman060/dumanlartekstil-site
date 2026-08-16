@@ -46,8 +46,13 @@ try {
     if (in_array($type, ['collection','other_income','other_payments'], true)) {
         $movementType = ['collection'=>'tahsilat','other_income'=>'gelir','other_payments'=>'odeme'][$type];
         $title = ['collection'=>'Nakit / banka tahsilatları','other_income'=>'Diğer gelir hareketleri','other_payments'=>'Diğer ödemeler'][$type];
-        $stmt = $pdo->prepare("SELECT m.movement_date AS date, COALESCE(c.name,'Cari belirtilmedi') AS source, COALESCE(m.description,'') AS description, m.amount AS amount FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_type=? AND m.movement_date BETWEEN ? AND ? ORDER BY m.movement_date DESC,m.id DESC LIMIT 1000");
-        $stmt->execute([$movementType, $start, $end]);
+        if ($type === 'other_payments') {
+            $stmt = $pdo->prepare("SELECT m.movement_date AS date, COALESCE(c.name,'Cari belirtilmedi') AS source, COALESCE(m.description,'') AS description, m.amount AS amount FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_type IN ('odeme','gider') AND m.movement_date BETWEEN ? AND ? ORDER BY m.movement_date DESC,m.id DESC LIMIT 1000");
+            $stmt->execute([$start, $end]);
+        } else {
+            $stmt = $pdo->prepare("SELECT m.movement_date AS date, COALESCE(c.name,'Cari belirtilmedi') AS source, COALESCE(m.description,'') AS description, m.amount AS amount FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_type=? AND m.movement_date BETWEEN ? AND ? ORDER BY m.movement_date DESC,m.id DESC LIMIT 1000");
+            $stmt->execute([$movementType, $start, $end]);
+        }
         rd_add_rows($rows, $stmt->fetchAll(), 'Hareket');
     } elseif ($type === 'store_sales') {
         $title = 'Mağaza satışları';

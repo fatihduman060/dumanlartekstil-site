@@ -302,6 +302,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Cariye işlemek için faturada cari seçmelisin.');
             redirect('faturalar.php?edit=' . $id);
         }
+        $invoiceCariStmt = db()->prepare('SELECT name FROM cariler WHERE id=? LIMIT 1');
+        $invoiceCariStmt->execute([(int)$invoice['cari_id']]);
+        if (fatura_muhtelif_cari_mi((string)($invoiceCariStmt->fetchColumn() ?: ''))) {
+            flash('success', 'Muhtelif fatura arşivde tutulur; cari borç/alacak hareketi oluşturulmaz. Ödeme banka/kasa hesabından Gider olarak girilmelidir.');
+            redirect('faturalar.php');
+        }
         if ((float)$invoice['total_amount'] <= 0) {
             flash('error', 'Fatura toplamı sıfır olamaz.');
             redirect('faturalar.php?edit=' . $id);
@@ -623,6 +629,8 @@ page_header('Faturalar', 'faturalar');
             <td>
               <?php if($cancelled): ?>
                 <?php echo badge('İptal','neutral'); ?>
+              <?php elseif(fatura_muhtelif_cari_mi($r['cari_name'] ?? '')): ?>
+                <?php echo badge('Cari bakiyesi yok','neutral'); ?><small>Muhtelif kayıt</small>
               <?php elseif(!empty($r['cari_movement_id']) && (int)($r['movement_cancelled'] ?? 0)===0): ?>
                 <?php echo badge('Cariye işlendi','success'); ?><small>Hareket #<?php echo e($r['cari_movement_id']); ?></small>
               <?php else: ?>
@@ -632,10 +640,10 @@ page_header('Faturalar', 'faturalar');
             <td class="row-actions">
               <?php if(!$cancelled && can_write()): ?>
                 <a href="faturalar.php?period=<?php echo e($period); ?>&direction=<?php echo e($directionFilter); ?>&edit=<?php echo e($r['id']); ?>">Düzenle</a>
-                <form method="post">
+                <?php if (!fatura_muhtelif_cari_mi($r['cari_name'] ?? '')): ?><form method="post">
                   <?php echo csrf_field(); ?><input type="hidden" name="action" value="post_cari"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>">
                   <button><?php echo !empty($r['cari_movement_id']) && (int)($r['movement_cancelled'] ?? 0)===0 ? 'Cariyi güncelle' : 'Cariye işle'; ?></button>
-                </form>
+                </form><?php endif; ?>
                 <form method="post" onsubmit="return confirm('Fatura ve varsa bağlı cari hareket iptal edilsin mi?');">
                   <?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal">
                   <button>İptal</button>
