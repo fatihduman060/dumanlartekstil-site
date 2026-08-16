@@ -394,12 +394,12 @@ page_header('Kasa / Banka', 'hesaplar');
 .bank-account-card>summary:after{content:'Hesapları göster ›';display:block;margin-top:8px;color:#28734b;font-weight:700;font-size:13px}
 .bank-account-card[open]>summary:after{content:'Hesapları gizle ⌃'}
 .bank-account-list{display:grid;gap:8px;padding:0 12px 12px;border-top:1px solid #e4e8e4}
-.bank-account-link{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 10px;border-radius:12px;color:inherit;text-decoration:none;background:#fff}
+.bank-account-link{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 10px;border:1px solid #e5dccf;border-radius:12px;color:inherit;text-decoration:none;background:#fff}
 .bank-account-link:hover,.bank-account-link:focus{background:#edf7f0;outline:2px solid #b8d4c2}
 .bank-account-link small{display:block;margin-top:3px}
 .bank-account-link strong:last-child{white-space:nowrap}
 .account-filter-note{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin:0 16px 16px;border-radius:14px;background:#edf7f0}
-@media(max-width:700px){.bank-account-link{align-items:stretch;flex-direction:column;padding:14px}.bank-account-link>span{min-width:0}.bank-account-link>span>strong{display:block;line-height:1.25;overflow-wrap:anywhere}.bank-account-link>strong:last-child{display:block;width:100%;padding-top:10px;border-top:1px solid #eee5d9;font-size:22px;line-height:1.15;text-align:left;opacity:1}.account-filter-note{align-items:flex-start;flex-direction:column}}
+@media(max-width:700px){.bank-account-list{gap:8px;padding:8px}.bank-account-link{align-items:stretch;flex-direction:column;gap:7px;padding:12px}.bank-account-link>span{display:block;min-width:0;line-height:1.2}.bank-account-link>span>strong{display:block;margin:0!important;font-size:16px!important;line-height:1.25!important;overflow-wrap:anywhere}.bank-account-link>span>small{margin:3px 0 0!important;font-size:12px;line-height:1.2}.bank-account-link>strong:last-child{display:block;width:100%;margin:0!important;padding:8px 0 0!important;border-top:1px solid #eee5d9;font-size:20px!important;line-height:1.15!important;text-align:left;opacity:1}.account-filter-note{align-items:flex-start;flex-direction:column}}
 </style>
 <section class="stats-grid four">
   <a class="stat-card account-summary-link" href="#hesap-listesi" aria-label="Tüm kasa ve banka hesaplarını göster"><span>Toplam bakiye</span><strong class="<?php echo $summary['total'] >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($summary['total'])); ?></strong><small>Kasa + banka toplamı</small></a>
