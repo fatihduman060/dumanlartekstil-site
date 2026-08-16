@@ -307,7 +307,7 @@ function page_footer(): void
   <script src="assets/maas-puantaj-toplu-excel.js?v=2"></script>
   <script src="assets/maas-puantaj-toplu-liste.js?v=2"></script>
   <script src="assets/maas-personel-secim.js?v=1"></script>
-  <script src="assets/hesap-banka-detay.js?v=1"></script>
+  <script src="assets/hesap-banka-detay.js?v=2"></script>
   <?php endif; ?>
   <script src="assets/mobil-panel.js?v=<?php echo (int)(@filemtime(__DIR__ . '/assets/mobil-panel.js') ?: 1); ?>"></script>
 </body>
