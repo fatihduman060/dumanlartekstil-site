@@ -62,7 +62,7 @@ try {
         rd_add_rows($rows, $stmt->fetchAll(), 'Çek');
     } elseif ($type === 'open_receivables') {
         $title = 'Açıkta kalan alacaklar';
-        $aggregate = dashboard_cari_aggregate($start, $end);
+        $aggregate = dashboard_cari_aggregate(null, $end);
         foreach ($aggregate['positions'] as $positionRow) {
             $amount = (float)$positionRow['alacak'] - (float)$positionRow['tahsilat']
                 - (float)$positionRow['verecek'] + (float)$positionRow['odeme'];

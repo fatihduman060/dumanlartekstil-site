@@ -159,7 +159,9 @@ if ($movementReady) {
         /* Açık pozisyonlar toplu hareket farkından değil, her cari kendi içinde
          * mahsup edildikten sonra hesaplanır. Böylece aynı carinin alış/borcu
          * açık alacak toplamını yapay olarak büyütmez. */
-        $positionTotals = dashboard_cari_aggregate($yearStart, $yearEnd);
+        /* Açık bakiye dönem cirosu değildir; seçilen yıl sonuna kadar taşınan
+         * geçmiş dönem bakiyeleri de cari pozisyona dahildir. */
+        $positionTotals = dashboard_cari_aggregate(null, $yearEnd);
         $netReceivable = 0.0;
         $netPayable = 0.0;
         foreach ($positionTotals['positions'] as $positionRow) {
