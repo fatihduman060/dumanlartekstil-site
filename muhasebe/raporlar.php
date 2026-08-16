@@ -152,8 +152,30 @@ if ($movementReady) {
 } else {
     $missingItems[] = 'Cari Analizi: hareket tablosu ile tutar, tarih ve hareket türü alanları birlikte bulunamadı.';
 }
-$netReceivable = ($receivable === null || $collection === null) ? null : max(0, $receivable - $collection);
-$netPayable = ($payable === null || $payment === null) ? null : max(0, $payable - $payment);
+$netReceivable = $netPayable = null;
+if ($movementReady) {
+    try {
+        /* Açık pozisyonlar toplu hareket farkından değil, her cari kendi içinde
+         * mahsup edildikten sonra hesaplanır. Böylece aynı carinin alış/borcu
+         * açık alacak toplamını yapay olarak büyütmez. */
+        $positionSql = 'SELECT SUM(CASE WHEN net_position>0 THEN net_position ELSE 0 END) AS receivable, '
+            . 'SUM(CASE WHEN net_position<0 THEN -net_position ELSE 0 END) AS payable FROM ('
+            . 'SELECT COALESCE(SUM(CASE '
+            . 'WHEN ' . $typeIdent . '=\'alacak\' THEN CAST(' . ym_ident($movementAmount) . ' AS REAL) '
+            . 'WHEN ' . $typeIdent . '=\'tahsilat\' THEN -CAST(' . ym_ident($movementAmount) . ' AS REAL) '
+            . 'WHEN ' . $typeIdent . '=\'verecek\' THEN -CAST(' . ym_ident($movementAmount) . ' AS REAL) '
+            . 'WHEN ' . $typeIdent . '=\'odeme\' THEN CAST(' . ym_ident($movementAmount) . ' AS REAL) ELSE 0 END),0) AS net_position '
+            . 'FROM ' . ym_ident($movementTable) . ' WHERE ' . $cancelSql . ym_ident($movementDate) . ' BETWEEN ? AND ? '
+            . 'GROUP BY cari_id) cari_positions';
+        $positionStmt = $pdo->prepare($positionSql);
+        $positionStmt->execute(array($yearStart, $yearEnd));
+        $positionTotals = $positionStmt->fetch();
+        $netReceivable = (float)($positionTotals['receivable'] ?? 0);
+        $netPayable = (float)($positionTotals['payable'] ?? 0);
+    } catch (Throwable $e) {
+        $netReceivable = $netPayable = null;
+    }
+}
 
 /* Kasa ve banka */
 $accountTable = ym_first_table($pdo, array('accounts', 'hesaplar'));

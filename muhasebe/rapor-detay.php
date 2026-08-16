@@ -61,7 +61,7 @@ try {
         rd_add_rows($rows, $stmt->fetchAll(), 'Çek');
     } elseif ($type === 'open_receivables') {
         $title = 'Açıkta kalan alacaklar';
-        $stmt = $pdo->prepare("SELECT MAX(m.movement_date) AS date, COALESCE(c.name,'Cari belirtilmedi') AS source, 'Yıllık alacak eksi tahsilat' AS description, SUM(CASE WHEN m.movement_type='alacak' THEN m.amount WHEN m.movement_type='tahsilat' THEN -m.amount ELSE 0 END) AS amount FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? AND m.movement_type IN ('alacak','tahsilat') GROUP BY m.cari_id,c.name HAVING amount>0.005 ORDER BY amount DESC LIMIT 1000");
+        $stmt = $pdo->prepare("SELECT MAX(m.movement_date) AS date, COALESCE(c.name,'Cari belirtilmedi') AS source, 'Cari bazında net açık alacak' AS description, SUM(CASE WHEN m.movement_type='alacak' THEN m.amount WHEN m.movement_type='tahsilat' THEN -m.amount WHEN m.movement_type='verecek' THEN -m.amount WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END) AS amount FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE COALESCE(m.is_cancelled,0)=0 AND m.movement_date BETWEEN ? AND ? AND m.movement_type IN ('alacak','tahsilat','verecek','odeme') GROUP BY m.cari_id,c.name HAVING amount>0.005 ORDER BY amount DESC LIMIT 1000");
         $stmt->execute([$start, $end]);
         rd_add_rows($rows, $stmt->fetchAll(), 'Açık alacak');
     } elseif (in_array($type, ['paid_sgk','paid_taxes'], true)) {
