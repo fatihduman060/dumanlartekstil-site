@@ -187,19 +187,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 }
 
 $q = trim((string)($_GET['q'] ?? ''));
-$params = [];
-$where = 'p.is_active=1';
+$people = [];
 if ($q !== '') {
-    $where .= ' AND p.search_name LIKE ?';
-    $params[] = '%' . pv_normalize_name($q) . '%';
+    $normalizedQuery = pv_normalize_name($q);
+    $stmt = db()->prepare("SELECT p.*, COALESCE(SUM(CASE WHEN e.is_cancelled=0 AND e.entry_type='debt' THEN e.amount WHEN e.is_cancelled=0 AND e.entry_type='payment' THEN -e.amount ELSE 0 END),0) AS balance
+        FROM store_credit_people p LEFT JOIN store_credit_entries e ON e.person_id=p.id
+        WHERE p.is_active=1 AND p.search_name LIKE ?
+        GROUP BY p.id
+        ORDER BY CASE WHEN p.search_name=? THEN 0 ELSE 1 END, LENGTH(p.search_name) ASC, p.full_name ASC
+        LIMIT 1");
+    $stmt->execute(['%' . $normalizedQuery . '%', $normalizedQuery]);
+    $found = $stmt->fetch();
+    if ($found) $people[] = $found;
+} else {
+    $stmt = db()->query("SELECT p.*, COALESCE(SUM(CASE WHEN e.is_cancelled=0 AND e.entry_type='debt' THEN e.amount WHEN e.is_cancelled=0 AND e.entry_type='payment' THEN -e.amount ELSE 0 END),0) AS balance
+        FROM store_credit_people p LEFT JOIN store_credit_entries e ON e.person_id=p.id
+        WHERE p.is_active=1 GROUP BY p.id ORDER BY p.full_name");
+    $people = $stmt->fetchAll() ?: [];
 }
-$stmt = db()->prepare("SELECT p.*, COALESCE(SUM(CASE WHEN e.is_cancelled=0 AND e.entry_type='debt' THEN e.amount WHEN e.is_cancelled=0 AND e.entry_type='payment' THEN -e.amount ELSE 0 END),0) AS balance
-    FROM store_credit_people p LEFT JOIN store_credit_entries e ON e.person_id=p.id
-    WHERE $where GROUP BY p.id ORDER BY p.full_name");
-$stmt->execute($params);
-$people = $stmt->fetchAll() ?: [];
 
 $selectedId = (int)($_GET['person'] ?? 0);
+if ($selectedId <= 0 && $q !== '' && count($people) === 1) $selectedId = (int)$people[0]['id'];
 $selected = $selectedId ? pv_person($selectedId) : null;
 $entries = [];
 if ($selected) {
@@ -207,6 +215,32 @@ if ($selected) {
     $stmt->execute([$selectedId]);
     $entries = $stmt->fetchAll() ?: [];
 }
+
+$dailySql = "SELECT e.*, p.full_name, u.display_name AS user_name
+    FROM store_credit_entries e
+    JOIN store_credit_people p ON p.id=e.person_id
+    LEFT JOIN users u ON u.id=e.created_by
+    WHERE e.is_cancelled=0";
+$dailyParams = [];
+if ($selectedId > 0) {
+    $dailySql .= ' AND e.person_id=?';
+    $dailyParams[] = $selectedId;
+}
+$dailySql .= ' ORDER BY e.entry_date DESC, e.id DESC LIMIT 200';
+$stmt = db()->prepare($dailySql);
+$stmt->execute($dailyParams);
+$dailyRows = $stmt->fetchAll() ?: [];
+$dailyGroups = [];
+foreach ($dailyRows as $dailyRow) {
+    $day = (string)$dailyRow['entry_date'];
+    if (!isset($dailyGroups[$day])) {
+        $dailyGroups[$day] = ['debt'=>0.0, 'payment'=>0.0, 'items'=>[]];
+    }
+    if (($dailyRow['entry_type'] ?? '') === 'debt') $dailyGroups[$day]['debt'] += (float)$dailyRow['amount'];
+    else $dailyGroups[$day]['payment'] += (float)$dailyRow['amount'];
+    $dailyGroups[$day]['items'][] = $dailyRow;
+}
+
 $totals = db()->query("SELECT COUNT(DISTINCT p.id) AS people,
     COALESCE(SUM(CASE WHEN e.is_cancelled=0 AND e.entry_type='debt' THEN e.amount WHEN e.is_cancelled=0 AND e.entry_type='payment' THEN -e.amount ELSE 0 END),0) AS balance
     FROM store_credit_people p LEFT JOIN store_credit_entries e ON e.person_id=p.id WHERE p.is_active=1")->fetch() ?: ['people'=>0,'balance'=>0];
@@ -217,8 +251,9 @@ page_header('Personel Veresiye', 'magaza');
 body.store-sales-user .main>.pv-head{display:flex!important}
 body.store-sales-user .main>.pv-summary{display:grid!important}
 body.store-sales-user .main>.pv-grid{display:grid!important}
+body.store-sales-user .main>.pv-daily{display:grid!important}
 body.store-sales-user .main>.alert{display:block!important}
-.pv-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}.pv-head h2{margin:0}.pv-head p{margin:5px 0 0;color:#67736b}.pv-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}.pv-summary article{padding:15px;border:1px solid #dbe5de;border-radius:15px;background:#fff}.pv-summary span{font-size:12px;font-weight:850;color:#68756d}.pv-summary strong{display:block;margin-top:6px;font-size:24px}.pv-grid{display:grid;grid-template-columns:minmax(290px,.72fr) minmax(460px,1.28fr);gap:16px}.pv-form{display:grid;gap:10px;padding:16px}.pv-form label{display:grid;gap:5px;font-size:12px;font-weight:850}.pv-form input,.pv-form select,.pv-form textarea{width:100%;min-height:42px;border:1px solid #d8e1da;border-radius:11px;padding:8px 10px;box-sizing:border-box}.pv-search{display:grid;grid-template-columns:1fr auto;gap:8px;padding:14px}.pv-person-list{display:grid;gap:8px;padding:0 14px 14px}.pv-person{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #e0e7e2;border-radius:12px;text-decoration:none;color:inherit}.pv-person:hover{background:#f4faf6}.pv-person strong,.pv-person span{display:block}.pv-person small{color:#6a766e}.pv-debt{color:#a33f35}.pv-paid{color:#176536}.pv-cancelled{opacity:.55;background:#faf8f4}@media(max-width:760px){body.store-sales-user .main>.pv-grid,.pv-grid,.pv-summary{grid-template-columns:1fr}.pv-head{align-items:flex-start;flex-direction:column}.pv-search{grid-template-columns:1fr}}
+.pv-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}.pv-head h2{margin:0}.pv-head p{margin:5px 0 0;color:#67736b}.pv-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}.pv-summary article{padding:15px;border:1px solid #dbe5de;border-radius:15px;background:#fff}.pv-summary span{font-size:12px;font-weight:850;color:#68756d}.pv-summary strong{display:block;margin-top:6px;font-size:24px}.pv-grid{display:grid;grid-template-columns:minmax(290px,.72fr) minmax(460px,1.28fr);gap:16px}.pv-form{display:grid;gap:10px;padding:16px}.pv-form label{display:grid;gap:5px;font-size:12px;font-weight:850}.pv-form input,.pv-form select,.pv-form textarea{width:100%;min-height:42px;border:1px solid #d8e1da;border-radius:11px;padding:8px 10px;box-sizing:border-box}.pv-search{display:grid;grid-template-columns:1fr auto;gap:8px;padding:14px}.pv-person-list{display:grid;gap:8px;padding:0 14px 14px}.pv-person{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #e0e7e2;border-radius:12px;text-decoration:none;color:inherit}.pv-person:hover{background:#f4faf6}.pv-person strong,.pv-person span{display:block}.pv-person small{color:#6a766e}.pv-debt{color:#a33f35}.pv-paid{color:#176536}.pv-cancelled{opacity:.55;background:#faf8f4}.pv-daily{display:grid;gap:12px;margin-top:16px}.pv-daily-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}.pv-daily-head h3{margin:0}.pv-daily-head p{margin:4px 0 0;color:#6a766e}.pv-day{border:1px solid #dce5df;border-radius:14px;background:#fff;overflow:hidden}.pv-day-head{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:12px 14px;background:#f5f9f6}.pv-day-head strong{font-size:14px}.pv-day-head span{font-size:11px;font-weight:850}.pv-day-net{color:#704c26}.pv-day-items{display:grid}.pv-day-item{display:grid;grid-template-columns:minmax(150px,1fr) 120px minmax(180px,1.4fr) 110px;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid #edf1ee}.pv-day-item small{display:block;color:#78837c;margin-top:2px}.pv-day-item .right{text-align:right;font-weight:900}.pv-type-debt{color:#a33f35}.pv-type-payment{color:#176536}@media(max-width:760px){body.store-sales-user .main>.pv-grid,.pv-grid,.pv-summary{grid-template-columns:1fr}.pv-head{align-items:flex-start;flex-direction:column}.pv-search{grid-template-columns:1fr}.pv-search .btn{width:100%}.pv-day-head{grid-template-columns:1fr 1fr}.pv-day-item{grid-template-columns:1fr auto}.pv-day-item .pv-day-desc{grid-column:1/-1}.pv-day-item .right{grid-column:2;grid-row:1}.pv-daily-head{align-items:flex-start;flex-direction:column}}
 </style>
 <section class="pv-head"><div><h2>Personel Veresiye</h2><p>Fabrika çalışanlarının mağazadan veresiye alışverişlerini ve ödemelerini kişi bazında takip et.</p></div><a class="btn btn-secondary" href="magaza.php">Mağazaya dön</a></section>
 <section class="pv-summary">
@@ -261,6 +296,34 @@ body.store-sales-user .main>.alert{display:block!important}
       </tbody></table></div>
     <?php endif; ?>
   </article>
+</section>
+
+<section class="panel-card pv-daily">
+  <div class="pv-daily-head">
+    <div><h3>Günlük Personel Veresiye Hareketleri</h3><p><?php echo $selected ? e($selected['full_name']) . ' için günlük veresiye alışveriş ve tahsilat hareketleri.' : 'Tüm personelin günlük veresiye alışveriş ve tahsilat hareketleri.'; ?></p></div>
+    <?php if($selected): ?><a class="btn btn-secondary" href="magaza-veresiye.php">Tüm personeli göster</a><?php endif; ?>
+  </div>
+  <?php if(!$dailyGroups): ?><p class="empty">Gösterilecek günlük hareket yok.</p><?php endif; ?>
+  <?php foreach($dailyGroups as $day=>$group): $net=(float)$group['debt']-(float)$group['payment']; ?>
+    <article class="pv-day">
+      <div class="pv-day-head">
+        <strong><?php echo e(tr_date($day)); ?></strong>
+        <span class="pv-debt">Veresiye: <?php echo e(money((float)$group['debt'])); ?></span>
+        <span class="pv-paid">Tahsilat: <?php echo e(money((float)$group['payment'])); ?></span>
+        <span class="pv-day-net">Net: <?php echo e(money($net)); ?></span>
+      </div>
+      <div class="pv-day-items">
+        <?php foreach($group['items'] as $item): ?>
+          <div class="pv-day-item">
+            <div><strong><?php echo e($item['full_name']); ?></strong><small><?php echo e($item['user_name'] ?: '-'); ?></small></div>
+            <div class="<?php echo $item['entry_type']==='debt'?'pv-type-debt':'pv-type-payment'; ?>"><strong><?php echo $item['entry_type']==='debt'?'Veresiye alışveriş':'Tahsilat'; ?></strong><?php if($item['entry_type']==='payment'): ?><small><?php echo ($item['payment_method'] ?? '')==='cash'?'Nakit':'Kart / POS'; ?></small><?php endif; ?></div>
+            <div class="pv-day-desc"><?php echo e($item['description'] ?: '-'); ?></div>
+            <div class="right <?php echo $item['entry_type']==='debt'?'pv-type-debt':'pv-type-payment'; ?>"><?php echo e(money((float)$item['amount'])); ?></div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </article>
+  <?php endforeach; ?>
 </section>
 <script>
 (function(){
