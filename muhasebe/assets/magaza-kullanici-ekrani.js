@@ -1,6 +1,31 @@
 (function(){
   if(!window.BITKE_STORE_SALES_ONLY) return;
-  if(!/\/faturalar\.php$/i.test(location.pathname)) return;
+
+  var path=location.pathname||'';
+
+  // Mağaza kullanıcısı Personel Veresiye ekranında günlük hareketleri de görebilsin.
+  if(/\/magaza-veresiye\.php$/i.test(path)){
+    ['.pv-head','.pv-summary','.pv-grid','.pv-daily','.alert'].forEach(function(selector){
+      document.querySelectorAll(selector).forEach(function(el){
+        el.style.setProperty('display', selector==='.pv-head' ? 'flex' : (selector==='.alert' ? 'block' : 'grid'), 'important');
+      });
+    });
+
+    var style=document.createElement('style');
+    style.textContent=''
+      +'body.store-sales-user .main>.pv-daily{display:grid!important}'
+      +'.pv-daily{width:100%;max-width:100%;box-sizing:border-box}'
+      +'.pv-day{width:100%;box-sizing:border-box}'
+      +'@media(max-width:760px){'
+      +'.pv-day-head{grid-template-columns:1fr 1fr!important}'
+      +'.pv-day-item{grid-template-columns:1fr auto!important}'
+      +'.pv-day-item .pv-day-desc{grid-column:1/-1!important}'
+      +'}';
+    document.head.appendChild(style);
+    return;
+  }
+
+  if(!/\/faturalar\.php$/i.test(path)) return;
 
   function periodValue(){
     var value=new URLSearchParams(location.search).get('period')||'';
