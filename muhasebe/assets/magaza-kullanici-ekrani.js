@@ -3,6 +3,84 @@
 
   var path=location.pathname||'';
 
+  function storeMoney(value){
+    return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
+  }
+
+  function trDateToIso(value){
+    var parts=String(value||'').trim().split('.');
+    if(parts.length!==3) return '';
+    return parts[2]+'-'+parts[1]+'-'+parts[0];
+  }
+
+  function setCashLabel(span){
+    if(!span) return;
+    var node=span.firstChild;
+    if(node&&node.nodeType===3){
+      if(String(node.nodeValue||'').trim()!=='Nakit toplam') node.nodeValue='Nakit toplam ';
+      return;
+    }
+    if(span.dataset.cashTotalLabel!=='1'){
+      span.insertBefore(document.createTextNode('Nakit toplam '),span.firstChild||null);
+      span.dataset.cashTotalLabel='1';
+    }
+  }
+
+  function syncMobileCashTotals(){
+    if(!/\/(?:magaza|faturalar)\.php$/i.test(path)) return;
+
+    var rows={};
+    document.querySelectorAll('[data-magaza-odeme-row]').forEach(function(row){
+      var date=String(row.getAttribute('data-date')||'');
+      if(!date) return;
+      rows[date]={
+        cash:Number(row.getAttribute('data-cash')||0),
+        collection:Number(row.getAttribute('data-cash-collection')||0)
+      };
+    });
+
+    var latest=document.querySelector('[data-magaza-mobile-latest]');
+    if(latest){
+      var latestDate=trDateToIso((latest.querySelector('[data-magaza-latest-date]')||{}).textContent||'');
+      var latestData=rows[latestDate];
+      var latestCash=latest.querySelector('[data-magaza-latest-cash]');
+      if(latestData&&latestCash){
+        var latestValue=storeMoney(latestData.cash+latestData.collection);
+        if(latestCash.textContent!==latestValue) latestCash.textContent=latestValue;
+        setCashLabel(latestCash.parentElement);
+      }
+    }
+
+    document.querySelectorAll('.magaza-mobile-payment-card').forEach(function(card){
+      var date=trDateToIso((card.querySelector('.magaza-mobile-payment-head strong')||{}).textContent||'');
+      var data=rows[date];
+      var cashSpan=card.querySelector('.magaza-mobile-payment-breakdown span:first-child');
+      var cashStrong=cashSpan?cashSpan.querySelector('strong'):null;
+      if(!data||!cashStrong) return;
+      var value=storeMoney(data.cash+data.collection);
+      if(cashStrong.textContent!==value) cashStrong.textContent=value;
+      setCashLabel(cashSpan);
+    });
+  }
+
+  if(/\/(?:magaza|faturalar)\.php$/i.test(path)){
+    var cashSyncQueued=false;
+    function queueCashSync(){
+      if(cashSyncQueued) return;
+      cashSyncQueued=true;
+      window.setTimeout(function(){
+        cashSyncQueued=false;
+        syncMobileCashTotals();
+      },30);
+    }
+    document.addEventListener('bitke:magaza-odeme-updated',queueCashSync);
+    if(document.body){
+      new MutationObserver(queueCashSync).observe(document.body,{childList:true,subtree:true});
+    }
+    window.setTimeout(syncMobileCashTotals,100);
+    window.setTimeout(syncMobileCashTotals,500);
+  }
+
   // Mağaza kullanıcısı Personel Veresiye ekranında günlük hareketleri de görebilsin.
   if(/\/magaza-veresiye\.php$/i.test(path)){
     ['.pv-head','.pv-summary','.pv-grid','.pv-daily','.alert'].forEach(function(selector){
