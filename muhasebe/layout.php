@@ -301,6 +301,7 @@ function page_footer(): void
   <script src="assets/nakliye-gider-modu.js?v=1"></script>
   <script src="assets/cari-hareket-kaynak.js?v=6"></script>
   <script src="assets/cek-liste-toplam.js?v=2"></script>
+  <script src="assets/hareket-cek-senet-tek-kayit.js?v=1"></script>
   <script src="assets/cek-kapali-ayir.js?v=1"></script>
   <script src="assets/maas-excel-aktar.js?v=6"></script>
   <script src="assets/maas-haciz.js?v=2"></script>
