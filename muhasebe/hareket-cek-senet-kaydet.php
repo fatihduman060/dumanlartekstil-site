@@ -26,6 +26,30 @@ function hcs_linked_check(int $movementId): ?array
     return $row ?: null;
 }
 
+function hcs_recent_duplicate(PDO $pdo, int $cariId, string $type, float $amount, string $date, string $dueDate, string $paymentMethod, string $instrumentNo, int $userId): ?array
+{
+    $cutoff = date('Y-m-d H:i:s', time() - 180);
+    $stmt = $pdo->prepare("SELECT ch.id AS check_id, ch.movement_id
+        FROM checks ch
+        JOIN movements m ON m.id=ch.movement_id
+        WHERE COALESCE(ch.is_cancelled,0)=0
+          AND COALESCE(m.is_cancelled,0)=0
+          AND ch.cari_id=?
+          AND m.movement_type=?
+          AND ABS(ch.amount-?)<0.005
+          AND COALESCE(ch.issue_date,'')=?
+          AND ch.due_date=?
+          AND UPPER(COALESCE(m.payment_method,''))=?
+          AND TRIM(COALESCE(ch.check_no,''))=?
+          AND COALESCE(ch.created_by,0)=?
+          AND ch.created_at>=?
+        ORDER BY ch.id DESC
+        LIMIT 1");
+    $stmt->execute([$cariId, $type, $amount, $date, $dueDate, strtoupper($paymentMethod), $instrumentNo, $userId, $cutoff]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $movementId = (int)($_GET['movement_id'] ?? 0);
@@ -97,20 +121,38 @@ try {
         ];
     }
 
-    try {
-        $doc = handle_upload('instrument_document', $oldDoc);
-    } catch (Throwable $e) {
-        throw new RuntimeException($e->getMessage());
-    }
-
     if ($categoryId <= 0) $categoryId = (int)(check_category_id(db()) ?: 0);
     $paymentMethod = $kind === 'senet' ? 'SENET' : 'ÇEK';
     $documentType = $kind === 'senet' ? 'senet_gorseli' : 'cek_gorseli';
     $direction = $type === 'odeme' ? 'verilecek' : 'alinacak';
-    $userId = current_user()['id'] ?? null;
+    $userId = (int)(current_user()['id'] ?? 0);
     $pdo = db();
-    $pdo->beginTransaction();
+
+    // Aynı form iki kez tetiklense bile ikinci istek, ilk kayıt tamamlanana kadar bekler.
+    // Böylece aynı çek/senet için iki ayrı cari hareketi oluşmaz.
+    $pdo->exec('BEGIN IMMEDIATE');
     try {
+        if ($id <= 0) {
+            $duplicate = hcs_recent_duplicate($pdo, $cariId, $type, $amount, $date, $dueDate, $paymentMethod, $instrumentNo, $userId);
+            if ($duplicate) {
+                $pdo->commit();
+                echo json_encode([
+                    'ok'=>true,
+                    'deduplicated'=>true,
+                    'movement_id'=>(int)($duplicate['movement_id'] ?? 0),
+                    'check_id'=>(int)($duplicate['check_id'] ?? 0),
+                    'redirect'=>'hareketler.php',
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+        }
+
+        try {
+            $doc = handle_upload('instrument_document', $oldDoc);
+        } catch (Throwable $e) {
+            throw new RuntimeException($e->getMessage());
+        }
+
         if ($id > 0) {
             $pdo->prepare("UPDATE movements SET cari_id=?, category_id=?, account_id=NULL, movement_type=?, amount=?, currency='TL',
                     movement_date=?, due_date=?, payment_method=?, description=?, document_type=?, document_path=?, document_name=?, document_mime=?, updated_at=?
@@ -124,7 +166,7 @@ try {
                  document_type, document_path, document_name, document_mime, created_by, created_at, updated_at)
                 VALUES (?, ?, NULL, ?, ?, 'TL', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
                 ->execute([$cariId, $categoryId ?: null, $type, $amount, $date, $dueDate, $paymentMethod, $description,
-                    $documentType, $doc['path'], $doc['name'], $doc['mime'], $userId, now(), now()]);
+                    $documentType, $doc['path'], $doc['name'], $doc['mime'], $userId ?: null, now(), now()]);
             $movementId = (int)$pdo->lastInsertId();
         }
 
@@ -146,7 +188,7 @@ try {
                  description, document_path, document_name, document_mime, created_by, created_at, updated_at)
                 VALUES (?, ?, ?, 'bekliyor', ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?)")
                 ->execute([$cariId, $movementId, $direction, $amount, $date, $dueDate, $bankName, $instrumentNo,
-                    $description, $doc['path'], $doc['name'], $doc['mime'], $userId, now(), now()]);
+                    $description, $doc['path'], $doc['name'], $doc['mime'], $userId ?: null, now(), now()]);
             $checkId = (int)$pdo->lastInsertId();
         }
 
