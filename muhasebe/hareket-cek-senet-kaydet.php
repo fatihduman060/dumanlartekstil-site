@@ -50,6 +50,8 @@ function hcs_recent_duplicate(PDO $pdo, int $cariId, string $type, float $amount
     return $row ?: null;
 }
 
+$transactionOpen = false;
+
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $movementId = (int)($_GET['movement_id'] ?? 0);
@@ -128,14 +130,17 @@ try {
     $userId = (int)(current_user()['id'] ?? 0);
     $pdo = db();
 
-    // Aynı form iki kez tetiklense bile ikinci istek, ilk kayıt tamamlanana kadar bekler.
-    // Böylece aynı çek/senet için iki ayrı cari hareketi oluşmaz.
+    // PDO SQLite, elle başlatılan BEGIN IMMEDIATE işlemini inTransaction()/commit()
+    // ile güvenilir biçimde takip etmiyor. Kilidi yine BEGIN IMMEDIATE ile al,
+    // fakat kapanışı da doğrudan SQL COMMIT/ROLLBACK ile yap.
     $pdo->exec('BEGIN IMMEDIATE');
+    $transactionOpen = true;
     try {
         if ($id <= 0) {
             $duplicate = hcs_recent_duplicate($pdo, $cariId, $type, $amount, $date, $dueDate, $paymentMethod, $instrumentNo, $userId);
             if ($duplicate) {
-                $pdo->commit();
+                $pdo->exec('COMMIT');
+                $transactionOpen = false;
                 echo json_encode([
                     'ok'=>true,
                     'deduplicated'=>true,
@@ -196,9 +201,14 @@ try {
             ->execute([$checkId, now(), $movementId]);
         sync_movement_account_transaction($movementId);
         sync_check_account_transaction($checkId);
-        $pdo->commit();
+
+        $pdo->exec('COMMIT');
+        $transactionOpen = false;
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($transactionOpen) {
+            try { $pdo->exec('ROLLBACK'); } catch (Throwable $rollbackError) {}
+            $transactionOpen = false;
+        }
         throw $e;
     }
 
@@ -229,7 +239,14 @@ try {
         'redirect'=>'hareketler.php',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
-    if (db()->inTransaction()) db()->rollBack();
+    if ($transactionOpen) {
+        try { db()->exec('ROLLBACK'); } catch (Throwable $rollbackError) {}
+        $transactionOpen = false;
+    }
+    $message = $e->getMessage();
+    if (stripos($message, 'no active transaction') !== false) {
+        $message = 'Çek/senet kaydı tamamlanırken işlem oturumu kapandı. Sayfayı yenileyip tekrar deneyin.';
+    }
     http_response_code(400);
-    echo json_encode(['ok'=>false, 'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['ok'=>false, 'error'=>$message], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
