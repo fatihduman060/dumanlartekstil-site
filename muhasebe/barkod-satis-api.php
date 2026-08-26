@@ -13,8 +13,16 @@ function pos_json(array $payload, int $status = 200): void
     exit;
 }
 
+function pos_product_display_name(array $product): string
+{
+    $name = trim((string)($product['name'] ?? ''));
+    $variant = trim((string)($product['variant_name'] ?? ''));
+    return $variant !== '' ? $name . ' - ' . $variant : $name;
+}
+
 try {
     pos_db_ensure();
+    ensure_column(db(), 'pos_products', 'variant_name', 'TEXT');
     $action = trim((string)($_REQUEST['action'] ?? 'products'));
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -33,6 +41,7 @@ try {
         $id = (int)($_POST['id'] ?? 0);
         $barcode = preg_replace('/\s+/', '', trim((string)($_POST['barcode'] ?? '')));
         $name = trim((string)($_POST['name'] ?? ''));
+        $variant = trim((string)($_POST['variant_name'] ?? ''));
         $price = max(0, decimal_from_input($_POST['sale_price'] ?? 0));
         $vatRate = max(0, min(100, decimal_from_input($_POST['vat_rate'] ?? 10)));
         $stock = max(0, decimal_from_input($_POST['stock_quantity'] ?? 0));
@@ -41,14 +50,15 @@ try {
         if ($price <= 0) throw new RuntimeException('Satış fiyatı sıfırdan büyük olmalıdır.');
         $now = now();
         if ($id > 0) {
-            db()->prepare("UPDATE pos_products SET barcode=?,name=?,sale_price=?,vat_rate=?,stock_quantity=?,track_stock=?,updated_at=? WHERE id=?")
-                ->execute([$barcode,$name,$price,$vatRate,$stock,$trackStock,$now,$id]);
+            db()->prepare("UPDATE pos_products SET barcode=?,name=?,variant_name=?,sale_price=?,vat_rate=?,stock_quantity=?,track_stock=?,updated_at=? WHERE id=?")
+                ->execute([$barcode,$name,$variant,$price,$vatRate,$stock,$trackStock,$now,$id]);
         } else {
-            db()->prepare("INSERT INTO pos_products (barcode,name,sale_price,vat_rate,stock_quantity,track_stock,is_active,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,1,?,?,?)")
-                ->execute([$barcode,$name,$price,$vatRate,$stock,$trackStock,current_user()['id'] ?? null,$now,$now]);
+            db()->prepare("INSERT INTO pos_products (barcode,name,variant_name,sale_price,vat_rate,stock_quantity,track_stock,is_active,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,1,?,?,?)")
+                ->execute([$barcode,$name,$variant,$price,$vatRate,$stock,$trackStock,current_user()['id'] ?? null,$now,$now]);
             $id = (int)db()->lastInsertId();
         }
-        audit_action('pos_product', $id, 'kaydedildi', null, ['barcode'=>$barcode,'name'=>$name,'sale_price'=>$price,'stock_quantity'=>$stock], $name);
+        $displayName = $variant !== '' ? $name . ' - ' . $variant : $name;
+        audit_action('pos_product', $id, 'kaydedildi', null, ['barcode'=>$barcode,'name'=>$name,'variant_name'=>$variant,'sale_price'=>$price,'stock_quantity'=>$stock], $displayName);
         pos_json(['ok'=>true,'message'=>'Ürün kaydedildi.','products'=>pos_products()]);
     }
 
@@ -83,14 +93,15 @@ try {
             $stmt->execute([$productId]);
             $product = $stmt->fetch();
             if (!$product) throw new RuntimeException('Sepetteki ürünlerden biri artık aktif değil.');
+            $displayName = pos_product_display_name($product);
             if ((int)$product['track_stock'] === 1 && $quantity > (float)$product['stock_quantity'] + 0.0001) {
-                throw new RuntimeException($product['name'] . ' için stok yetersiz. Mevcut: ' . number_format((float)$product['stock_quantity'], 0, ',', '.'));
+                throw new RuntimeException($displayName . ' için stok yetersiz. Mevcut: ' . number_format((float)$product['stock_quantity'], 0, ',', '.'));
             }
             $lineTotal = round($quantity * (float)$product['sale_price'], 2);
             $lineVat = round($lineTotal - ($lineTotal / (1 + ((float)$product['vat_rate'] / 100))), 2);
             $subtotal += $lineTotal;
             $vatAmount += $lineVat;
-            $items[] = ['product'=>$product,'quantity'=>$quantity,'line_total'=>$lineTotal];
+            $items[] = ['product'=>$product,'quantity'=>$quantity,'line_total'=>$lineTotal,'display_name'=>$displayName];
         }
         if (!$items) throw new RuntimeException('Satışa uygun ürün bulunamadı.');
         $discount = min(round($discount, 2), round($subtotal, 2));
@@ -111,7 +122,7 @@ try {
         $lineStmt = $pdo->prepare("INSERT INTO pos_sale_items (sale_id,product_id,barcode,product_name,quantity,unit_price,vat_rate,line_total) VALUES (?,?,?,?,?,?,?,?)");
         foreach ($items as $item) {
             $p = $item['product'];
-            $lineStmt->execute([$saleId,(int)$p['id'],$p['barcode'],$p['name'],$item['quantity'],(float)$p['sale_price'],(float)$p['vat_rate'],$item['line_total']]);
+            $lineStmt->execute([$saleId,(int)$p['id'],$p['barcode'],$item['display_name'],$item['quantity'],(float)$p['sale_price'],(float)$p['vat_rate'],$item['line_total']]);
             if ((int)$p['track_stock'] === 1) {
                 $pdo->prepare("UPDATE pos_products SET stock_quantity=stock_quantity-?,updated_at=? WHERE id=?")
                     ->execute([$item['quantity'],now(),(int)$p['id']]);
@@ -136,8 +147,6 @@ try {
             $userId
         );
 
-        // 26.08.2026 itibarıyla veresiye tutarları yalnızca Personel Veresiye
-        // hareketlerinden hesaplanır. Eski manuel alan günlük toplamı etkileyemez.
         magaza_veresiye_auto_only_sync_date($saleDate, $userId);
 
         if ($creditEntryId > 0) {
