@@ -1,0 +1,77 @@
+<?php
+require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/barkod-satis-lib.php';
+require_login();
+if (!can_manage_store_sales()) { flash('error', 'Barkodlu satış için mağaza satış yetkisi gerekiyor.'); redirect('dashboard.php'); }
+pos_db_ensure();
+$products = pos_products();
+$cariler = db()->query("SELECT id,name FROM cariler ORDER BY name ASC")->fetchAll() ?: [];
+$recentSales = pos_recent_sales(20);
+page_header('Barkodlu Satış', 'barkod_satis');
+?>
+<link rel="stylesheet" href="assets/barkod-satis.css?v=1" />
+<div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
+  <section class="pos-main panel-card">
+    <div class="pos-title-row">
+      <div><span class="pos-kicker">MAĞAZA KASASI</span><h2>Yeni Satış</h2><p>Barkodu okut veya ürün adına göre ara.</p></div>
+      <div class="pos-clock"><strong data-pos-clock>--:--</strong><span><?php echo e(tr_date(date('Y-m-d'))); ?></span></div>
+    </div>
+
+    <div class="pos-scan-row">
+      <label class="pos-scan"><span>Barkod / ürün ara</span><input type="text" inputmode="none" autocomplete="off" placeholder="Barkodu okutun…" data-pos-scan autofocus /></label>
+      <button class="btn btn-secondary" type="button" data-pos-search>Ara</button>
+    </div>
+    <div class="pos-search-results" data-pos-results hidden></div>
+
+    <div class="pos-cart-head"><h3>Sepet</h3><button type="button" class="pos-link danger" data-pos-clear>Sepeti temizle</button></div>
+    <div class="pos-cart" data-pos-cart><div class="pos-empty">Henüz ürün okutulmadı.</div></div>
+  </section>
+
+  <aside class="pos-checkout panel-card">
+    <div class="pos-total-box"><span>ÖDENECEK TOPLAM</span><strong data-pos-total>0,00 TL</strong><small data-pos-count>0 ürün</small></div>
+    <label><span>İskonto tutarı</span><input type="number" min="0" step="0.01" value="0" data-pos-discount /></label>
+    <fieldset class="pos-payments"><legend>Ödeme şekli</legend>
+      <label><input type="radio" name="pos_payment" value="cash" checked /><span>💵 Nakit</span></label>
+      <label><input type="radio" name="pos_payment" value="card" /><span>💳 Kart</span></label>
+      <label><input type="radio" name="pos_payment" value="credit" /><span>🧾 Veresiye</span></label>
+    </fieldset>
+    <label class="pos-cari" data-pos-cari-wrap hidden><span>Veresiye carisi</span><select data-pos-cari><option value="">Cari seçin</option><?php foreach ($cariler as $c): ?><option value="<?php echo e($c['id']); ?>"><?php echo e($c['name']); ?></option><?php endforeach; ?></select></label>
+    <label><span>Not</span><input type="text" maxlength="160" placeholder="İsteğe bağlı" data-pos-note /></label>
+    <button type="button" class="btn btn-primary pos-complete" data-pos-complete>Satışı Tamamla ve Fiş Yazdır</button>
+    <p class="pos-status" data-pos-status></p>
+  </aside>
+
+  <section class="panel-card pos-products-panel">
+    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">İlk kullanımda ürün barkodunu okut, adını ve fiyatını kaydet.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
+    <form class="pos-product-form" data-product-form>
+      <input type="hidden" name="id" value="" />
+      <label><span>Barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" /></label>
+      <label class="wide"><span>Ürün adı</span><input name="name" required placeholder="Ürün adı" /></label>
+      <label><span>Satış fiyatı</span><input name="sale_price" type="number" min="0.01" step="0.01" required /></label>
+      <label><span>KDV %</span><input name="vat_rate" type="number" min="0" max="100" step="1" value="10" /></label>
+      <label><span>Başlangıç stoku</span><input name="stock_quantity" type="number" min="0" step="1" value="0" /></label>
+      <label class="pos-check"><input name="track_stock" type="checkbox" value="1" checked /><span>Stok takip edilsin</span></label>
+      <button class="btn btn-primary" type="submit">Ürünü Kaydet</button>
+    </form>
+    <div class="pos-product-list" data-product-list>
+      <?php foreach ($products as $p): ?>
+      <button type="button" class="pos-product-row" data-product-edit='<?php echo e(json_encode($p, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>'>
+        <span><strong><?php echo e($p['name']); ?></strong><small><?php echo e($p['barcode']); ?></small></span>
+        <span><strong><?php echo e(money((float)$p['sale_price'])); ?></strong><small>Stok: <?php echo e(number_format((float)$p['stock_quantity'], 0, ',', '.')); ?></small></span>
+      </button>
+      <?php endforeach; ?>
+    </div>
+  </section>
+
+  <section class="panel-card pos-history">
+    <div class="card-head"><h3>Son Satışlar</h3><span>Fişi yeniden yazdır</span></div>
+    <div class="pos-history-list">
+      <?php if (!$recentSales): ?><p class="muted">Henüz barkodlu satış yok.</p><?php endif; ?>
+      <?php foreach ($recentSales as $sale): ?>
+      <a href="barkod-fis.php?id=<?php echo e($sale['id']); ?>" target="_blank" class="pos-history-row"><span><strong><?php echo e($sale['receipt_no']); ?></strong><small><?php echo e(tr_date($sale['sale_date'])); ?> <?php echo e(substr($sale['sale_time'],0,5)); ?> · <?php echo e($sale['customer_name']); ?></small></span><strong><?php echo e(money((float)$sale['grand_total'])); ?></strong></a>
+      <?php endforeach; ?>
+    </div>
+  </section>
+</div>
+<script src="assets/barkod-satis.js?v=1"></script>
+<?php page_footer(); ?>

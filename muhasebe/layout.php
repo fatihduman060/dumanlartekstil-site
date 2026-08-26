@@ -152,6 +152,7 @@ function page_header(string $title, string $active = ''): void
 
     if ($storeOnly) {
         $nav = [
+            ['barkod_satis', 'barkod-satis.php', 'Barkodlu Satış', '▣'],
             ['magaza', 'magaza.php', 'Mağaza', '▤'],
         ];
     } elseif ($muratLimited) {
@@ -166,6 +167,7 @@ function page_header(string $title, string $active = ''): void
         if ($fullAdmin) $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
         if (can_access_private_finance_modules()) $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa / Banka', '▣'];
         if (can_write()) {
+            $nav[] = ['barkod_satis', 'barkod-satis.php', 'Barkodlu Satış', '▣'];
             $nav[] = ['uretim_takibi', 'uretim-takibi.php', 'Üretim Takibi', '⚙'];
             $nav[] = ['stok_takibi', 'stok-takibi.php', 'Stok Takibi', '▦'];
         }
@@ -217,7 +219,7 @@ function page_header(string $title, string $active = ''): void
   <link rel="stylesheet" href="assets/muhasebe.css?v=515" />
   <link rel="stylesheet" href="assets/cek-renkleri.css?v=1" />
   <link rel="stylesheet" href="assets/mobil-panel.css?v=<?php echo (int)(@filemtime(__DIR__ . '/assets/mobil-panel.css') ?: 1); ?>" />
-  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"],a[href^="vergi-odemeleri.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell):not(.pv-head):not(.pv-summary):not(.pv-grid):not(.alert){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?><?php if ($muratLimited): ?>body.murat-limited-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
+  <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"],a[href^="vergi-odemeleri.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell):not(.pos-shell):not(.pv-head):not(.pv-summary):not(.pv-grid):not(.alert){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?><?php if ($muratLimited): ?>body.murat-limited-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
 </head>
 <body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ($muratLimited ? ' murat-limited-user' : ''); ?>">
   <div class="app-shell">
