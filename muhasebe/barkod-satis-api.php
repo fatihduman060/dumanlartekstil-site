@@ -56,8 +56,14 @@ try {
     if (!is_array($rawItems) || !$rawItems) throw new RuntimeException('Sepette ürün bulunmuyor.');
     $paymentMethod = trim((string)($_POST['payment_method'] ?? 'cash'));
     if (!in_array($paymentMethod, ['cash','card','credit'], true)) throw new RuntimeException('Ödeme şekli geçersiz.');
-    $cariId = (int)($_POST['cari_id'] ?? 0);
-    if ($paymentMethod === 'credit' && $cariId <= 0) throw new RuntimeException('Veresiye satışta cari seçilmelidir.');
+    $personId = (int)($_POST['person_id'] ?? 0);
+    $creditPerson = null;
+    if ($paymentMethod === 'credit') {
+        $creditPerson = pos_credit_person($personId);
+        if (!$creditPerson) throw new RuntimeException('Veresiye satışta Personel Veresiye Takibi listesinden aktif bir personel seçmelisiniz.');
+    } else {
+        $personId = 0;
+    }
     $discount = max(0, decimal_from_input($_POST['discount_amount'] ?? 0));
     $saleDate = date('Y-m-d');
     $saleTime = date('H:i:s');
@@ -90,17 +96,17 @@ try {
         $grandTotal = round($subtotal - $discount, 2);
         if ($grandTotal <= 0) throw new RuntimeException('Satış toplamı sıfır olamaz.');
         if ($subtotal > 0 && $discount > 0) $vatAmount = round($vatAmount * ($grandTotal / $subtotal), 2);
-        $customerName = 'Perakende Müşteri';
-        if ($cariId > 0) {
-            $stmt = $pdo->prepare("SELECT name FROM cariler WHERE id=? LIMIT 1");
-            $stmt->execute([$cariId]);
-            $customerName = (string)($stmt->fetchColumn() ?: $customerName);
-        }
-        $pdo->prepare("INSERT INTO pos_sales (sale_date,sale_time,customer_name,cari_id,payment_method,subtotal,discount_amount,vat_amount,grand_total,note,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-            ->execute([$saleDate,$saleTime,$customerName,$cariId ?: null,$paymentMethod,round($subtotal,2),$discount,round($vatAmount,2),$grandTotal,trim((string)($_POST['note'] ?? '')),$userId,now()]);
+
+        $customerName = $paymentMethod === 'credit' && $creditPerson
+            ? (string)$creditPerson['full_name']
+            : 'Perakende Müşteri';
+
+        $pdo->prepare("INSERT INTO pos_sales (sale_date,sale_time,customer_name,cari_id,credit_person_id,payment_method,subtotal,discount_amount,vat_amount,grand_total,note,created_by,created_at) VALUES (?,?,?,NULL,?,?,?,?,?,?,?,?,?)")
+            ->execute([$saleDate,$saleTime,$customerName,$personId ?: null,$paymentMethod,round($subtotal,2),$discount,round($vatAmount,2),$grandTotal,trim((string)($_POST['note'] ?? '')),$userId,now()]);
         $saleId = (int)$pdo->lastInsertId();
         $receiptNo = pos_receipt_no($saleId, $saleDate);
         $pdo->prepare("UPDATE pos_sales SET receipt_no=? WHERE id=?")->execute([$receiptNo,$saleId]);
+
         $lineStmt = $pdo->prepare("INSERT INTO pos_sale_items (sale_id,product_id,barcode,product_name,quantity,unit_price,vat_rate,line_total) VALUES (?,?,?,?,?,?,?,?)");
         foreach ($items as $item) {
             $p = $item['product'];
@@ -110,15 +116,54 @@ try {
                     ->execute([$item['quantity'],now(),(int)$p['id']]);
             }
         }
-        if ($paymentMethod === 'credit') {
-            $categoryId = magaza_odeme_dagilim_satis_kategori_id();
-            $pdo->prepare("INSERT INTO movements (cari_id,category_id,account_id,movement_type,amount,currency,movement_date,due_date,payment_method,description,created_by,created_at,updated_at,is_cancelled) VALUES (?,?,NULL,'alacak',?,'TL',?,NULL,'Veresiye',?,?,?, ?,0)")
-                ->execute([$cariId,$categoryId ?: null,$grandTotal,$saleDate,'Barkodlu mağaza satışı / '.$receiptNo,$userId,now(),now()]);
-            $movementId = (int)$pdo->lastInsertId();
-            $pdo->prepare("UPDATE pos_sales SET cari_movement_id=? WHERE id=?")->execute([$movementId,$saleId]);
+
+        $creditEntryId = 0;
+        if ($paymentMethod === 'credit' && $creditPerson) {
+            $description = 'Barkodlu mağaza veresiye satışı / ' . $receiptNo;
+            $pdo->prepare("INSERT INTO store_credit_entries (person_id,entry_type,amount,entry_date,payment_method,daily_breakdown_id,description,is_cancelled,created_by,created_at,updated_at) VALUES (?,'debt',?,?,NULL,NULL,?,0,?,?,?)")
+                ->execute([$personId,$grandTotal,$saleDate,$description,$userId,now(),now()]);
+            $creditEntryId = (int)$pdo->lastInsertId();
+            $pdo->prepare("UPDATE pos_sales SET credit_entry_id=? WHERE id=?")->execute([$creditEntryId,$saleId]);
         }
-        pos_daily_totals_delta($saleDate,$grandTotal,$paymentMethod==='cash'?$grandTotal:0,$paymentMethod==='card'?$grandTotal:0,$paymentMethod==='credit'?$grandTotal:0,$userId);
-        audit_action('pos_sale', $saleId, 'satildi', null, ['receipt_no'=>$receiptNo,'payment_method'=>$paymentMethod,'grand_total'=>$grandTotal], $receiptNo);
+
+        // Veresiye satış store_credit_entries içine yazıldıktan sonra günlük toplam yenilenir.
+        // creditDelta=0 bırakılır; aksi halde personel veresiyesi ikinci kez sayılır.
+        pos_daily_totals_delta(
+            $saleDate,
+            $grandTotal,
+            $paymentMethod==='cash' ? $grandTotal : 0,
+            $paymentMethod==='card' ? $grandTotal : 0,
+            0,
+            $userId
+        );
+
+        if ($creditEntryId > 0) {
+            $stmt = $pdo->prepare("SELECT id FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1");
+            $stmt->execute([$saleDate]);
+            $dailyBreakdownId = (int)($stmt->fetchColumn() ?: 0);
+            if ($dailyBreakdownId > 0) {
+                $pdo->prepare("UPDATE store_credit_entries SET daily_breakdown_id=?,updated_at=? WHERE id=?")
+                    ->execute([$dailyBreakdownId,now(),$creditEntryId]);
+            }
+        }
+
+        audit_action('pos_sale', $saleId, 'satildi', null, [
+            'receipt_no'=>$receiptNo,
+            'payment_method'=>$paymentMethod,
+            'grand_total'=>$grandTotal,
+            'credit_person_id'=>$personId ?: null,
+            'credit_entry_id'=>$creditEntryId ?: null,
+        ], $receiptNo);
+        if ($creditEntryId > 0) {
+            audit_action('magaza_personel_veresiye_hareketi', $creditEntryId, 'eklendi', null, [
+                'person_id'=>$personId,
+                'type'=>'debt',
+                'amount'=>$grandTotal,
+                'date'=>$saleDate,
+                'source'=>'barkod_satis',
+                'sale_id'=>$saleId,
+            ], (string)$creditPerson['full_name']);
+        }
         $pdo->commit();
         pos_json(['ok'=>true,'message'=>'Satış tamamlandı.','sale_id'=>$saleId,'receipt_no'=>$receiptNo,'receipt_url'=>'barkod-fis.php?id='.$saleId]);
     } catch (Throwable $e) {
