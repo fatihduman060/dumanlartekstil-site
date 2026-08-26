@@ -73,5 +73,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
   </section>
 </div>
+<script src="https://unpkg.com/@zxing/browser@0.2.1"></script>
+<script src="assets/iphone-barkod.js?v=1"></script>
 <script src="assets/barkod-satis.js?v=3"></script>
 <?php page_footer(); ?>
