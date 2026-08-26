@@ -157,6 +157,30 @@ body.store-sales-user .magaza-period-filter,
 body.store-sales-user [data-magaza-odeme-dagilimi-body]{display:none!important}
 body.store-sales-user .magaza-mobile-latest,
 body.store-sales-user .magaza-mobile-payment-history{display:grid!important}
+body.store-sales-user .magaza-mobile-latest,
+body.store-sales-user .magaza-mobile-payment-card{gap:10px;padding:16px;border:1px solid #d7bd83;border-radius:16px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 10px 22px rgba(15,45,32,.15)}
+body.store-sales-user .magaza-mobile-latest-head,
+body.store-sales-user .magaza-mobile-payment-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+body.store-sales-user .magaza-mobile-latest-head span,
+body.store-sales-user .magaza-mobile-payment-head span{font-size:10px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:#e6c782}
+body.store-sales-user .magaza-mobile-latest-total,
+body.store-sales-user .magaza-mobile-payment-total{font-size:27px;line-height:1.1;color:#fff}
+body.store-sales-user .magaza-mobile-latest-breakdown,
+body.store-sales-user .magaza-mobile-payment-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+body.store-sales-user .magaza-mobile-latest-breakdown span,
+body.store-sales-user .magaza-mobile-payment-breakdown span{display:grid;gap:3px;padding:9px;border:1px solid rgba(255,255,255,.13);border-radius:10px;background:rgba(255,255,255,.06);font-size:9px;color:rgba(255,255,255,.72)}
+body.store-sales-user .magaza-mobile-latest-breakdown strong,
+body.store-sales-user .magaza-mobile-payment-breakdown strong{font-size:12px;color:#fff}
+body.store-sales-user .magaza-mobile-latest-collections,
+body.store-sales-user .magaza-mobile-payment-collections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)}
+body.store-sales-user .magaza-mobile-latest-collections span,
+body.store-sales-user .magaza-mobile-payment-collections span{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:9px;background:rgba(230,199,130,.1);font-size:9px;color:#e6c782}
+body.store-sales-user .magaza-mobile-latest-collections strong,
+body.store-sales-user .magaza-mobile-payment-collections strong{color:#fff;white-space:nowrap}
+body.store-sales-user .magaza-mobile-cash-left{display:grid;grid-template-columns:1fr auto;gap:3px 12px;align-items:center;padding:10px 12px;border:1px solid rgba(230,199,130,.35);border-radius:11px;background:rgba(230,199,130,.16)}
+body.store-sales-user .magaza-mobile-cash-left span{font-size:10px;font-weight:900;color:#e6c782}
+body.store-sales-user .magaza-mobile-cash-left strong{font-size:15px;color:#fff}
+body.store-sales-user .magaza-mobile-cash-left small{grid-column:1/-1;font-size:9px;color:rgba(255,255,255,.68)}
 body.store-sales-user .magaza-satis-head{display:flex!important}
 body.store-sales-user .magaza-satis-form{display:grid!important}
 body.store-sales-user .magaza-satis-summary{display:grid!important}
