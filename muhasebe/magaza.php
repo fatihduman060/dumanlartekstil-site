@@ -156,8 +156,6 @@ body.store-sales-user .magaza-report-panel,
 body.store-sales-user .magaza-period-filter{display:none!important}
 body.store-sales-user [data-magaza-odeme-dagilimi-body]{display:grid!important}
 body.store-sales-user .magaza-mobile-latest,
-body.store-sales-user .magaza-mobile-payment-history{display:grid!important}
-body.store-sales-user .magaza-mobile-latest,
 body.store-sales-user .magaza-mobile-payment-card{gap:10px;padding:16px;border:1px solid #d7bd83;border-radius:16px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 10px 22px rgba(15,45,32,.15)}
 body.store-sales-user .magaza-mobile-latest-head,
 body.store-sales-user .magaza-mobile-payment-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -188,6 +186,8 @@ body.store-sales-user .magaza-satis-list{display:block!important}
 @media(max-width:980px){.magaza-report-months{grid-template-columns:repeat(2,minmax(0,1fr))}.magaza-report-year-card{grid-template-columns:1fr}}
 @media(max-width:700px){
 body.store-sales-user .magaza-satis-head{display:none!important}
+body.store-sales-user .magaza-mobile-latest,
+body.store-sales-user .magaza-mobile-payment-history{display:grid!important}
 body.store-sales-user .magaza-mobile-latest{order:1}
 body.store-sales-user .magaza-mobile-payment-history{order:2}
 body.store-sales-user .magaza-satis-summary{order:3}
