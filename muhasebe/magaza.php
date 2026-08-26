@@ -187,6 +187,12 @@ body.store-sales-user .magaza-satis-summary{display:grid!important}
 body.store-sales-user .magaza-satis-list{display:block!important}
 @media(max-width:980px){.magaza-report-months{grid-template-columns:repeat(2,minmax(0,1fr))}.magaza-report-year-card{grid-template-columns:1fr}}
 @media(max-width:700px){
+body.store-sales-user .magaza-satis-head{display:none!important}
+body.store-sales-user .magaza-mobile-latest{order:1}
+body.store-sales-user .magaza-mobile-payment-history{order:2}
+body.store-sales-user .magaza-satis-summary{order:3}
+body.store-sales-user .magaza-satis-form{order:4}
+body.store-sales-user .magaza-satis-list{order:5}
 body.store-sales-user .magaza-satis-list table{min-width:0!important;width:100%}
 body.store-sales-user .magaza-satis-list thead,
 body.store-sales-user .magaza-satis-list tfoot{display:none}
