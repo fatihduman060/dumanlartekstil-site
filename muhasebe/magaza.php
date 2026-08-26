@@ -231,7 +231,7 @@ body.store-sales-user .magaza-satis-list td:before{content:attr(data-label);font
 }
 </style>
 <script src="assets/magaza-odeme-dagilimi.js?v=7"></script>
-<script src="assets/magaza-veresiye-manuel.js?v=2"></script>
+<script src="assets/magaza-veresiye-manuel.js?v=3"></script>
 <script src="assets/magaza-nakit-toplam-fix.js?v=1"></script>
 <script src="assets/magaza-gunluk-satis.js?v=11"></script>
 <?php page_footer(); ?>
