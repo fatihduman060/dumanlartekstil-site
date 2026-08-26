@@ -152,6 +152,15 @@ page_header('Mağaza', 'magaza');
 .magaza-report-head{display:flex;align-items:end;justify-content:space-between;gap:16px}.magaza-report-head>div{display:grid;gap:3px}.magaza-report-head span{font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.06em;color:#9a6b16}.magaza-report-head h3{margin:0;color:#173f29;font-size:22px}.magaza-report-head p{margin:0;color:#746b5f;font-size:12px}.magaza-report-year-form label{display:grid;gap:5px;font-size:11px;font-weight:900;color:#6b5b45}.magaza-report-year-form select{min-width:116px;height:43px;border:1px solid #d7c89f;border-radius:12px;background:#fff;padding:0 12px;font-weight:900;color:#173f29}
 .magaza-report-year-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.9fr);gap:18px;align-items:center;padding:20px 22px;border-radius:20px;background:#123f2b;color:#fff;border:1px solid #d4aa54}.magaza-report-year-card>div:first-child{display:grid;gap:5px}.magaza-report-year-card span{color:#f1cf85;font-size:12px;font-weight:850}.magaza-report-year-card>div:first-child>strong{font-size:36px;line-height:1.05;letter-spacing:-.03em}.magaza-report-year-card small{color:#c7d8cd}.magaza-report-year-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.magaza-report-year-breakdown span{display:grid;gap:4px;padding:11px 12px;border:1px solid rgba(255,255,255,.14);border-radius:13px;background:rgba(255,255,255,.07);color:#c9d7ce}.magaza-report-year-breakdown strong{color:#fff;font-size:13px}
 .magaza-report-months{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.magaza-report-month-card{display:grid;gap:10px;padding:14px;border:1px solid #e2d7bf;border-radius:16px;background:#fff}.magaza-report-month-card.is-empty{opacity:.55}.magaza-report-month-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.magaza-report-month-top>div{display:grid;gap:2px}.magaza-report-month-top span{font-size:13px;font-weight:950;color:#173f29;text-transform:none;letter-spacing:0}.magaza-report-month-top small{font-size:10px;color:#8d8275}.magaza-report-month-top>strong{font-size:17px;color:#173f29;text-align:right}.magaza-report-bar{height:6px;border-radius:999px;background:#f1ecdf;overflow:hidden}.magaza-report-bar i{display:block;height:100%;border-radius:inherit;background:#b9862e}.magaza-report-month-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.magaza-report-month-breakdown span{display:grid;gap:2px;font-size:9px;color:#8a7d6c;text-transform:none;letter-spacing:0}.magaza-report-month-breakdown strong{font-size:10px;color:#4c4031}
+body.store-sales-user .magaza-report-panel,
+body.store-sales-user .magaza-period-filter,
+body.store-sales-user [data-magaza-odeme-dagilimi-body]{display:none!important}
+body.store-sales-user .magaza-mobile-latest,
+body.store-sales-user .magaza-mobile-payment-history{display:grid!important}
+body.store-sales-user .magaza-satis-head{display:flex!important}
+body.store-sales-user .magaza-satis-form{display:grid!important}
+body.store-sales-user .magaza-satis-summary,
+body.store-sales-user .magaza-satis-list{display:none!important}
 @media(max-width:980px){.magaza-report-months{grid-template-columns:repeat(2,minmax(0,1fr))}.magaza-report-year-card{grid-template-columns:1fr}}
 @media(max-width:700px){
 .magaza-page-shell .dashboard-section-head{order:1}
@@ -186,7 +195,5 @@ page_header('Mağaza', 'magaza');
 <script src="assets/magaza-odeme-dagilimi.js?v=6"></script>
 <script src="assets/magaza-veresiye-manuel.js?v=2"></script>
 <script src="assets/magaza-nakit-toplam-fix.js?v=1"></script>
-<?php if (!is_store_sales_user()): ?>
-<script src="assets/magaza-gunluk-satis.js?v=10"></script>
-<?php endif; ?>
+<script src="assets/magaza-gunluk-satis.js?v=11"></script>
 <?php page_footer(); ?>

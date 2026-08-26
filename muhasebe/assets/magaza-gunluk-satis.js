@@ -179,7 +179,8 @@
     card.querySelector('[data-magaza-latest-card-collection]').textContent=money(cardCollection);
     card.querySelector('[data-magaza-latest-cash-left]').textContent=money(cashLeft);
 
-    history.innerHTML=rows.slice(1).map(function(item){
+    var historyRows=window.BITKE_STORE_SALES_ONLY?rows.slice(1,2):rows.slice(1);
+    history.innerHTML=historyRows.map(function(item){
       var itemCash=Number(item.getAttribute('data-cash')||0);
       var itemCard=Number(item.getAttribute('data-card')||0);
       var itemCredit=Number(item.getAttribute('data-credit')||0);
