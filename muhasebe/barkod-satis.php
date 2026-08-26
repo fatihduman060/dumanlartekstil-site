@@ -7,6 +7,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 if (!can_manage_store_sales()) { flash('error', 'Barkodlu satış için mağaza satış yetkisi gerekiyor.'); redirect('dashboard.php'); }
 pos_db_ensure();
+ensure_column(db(), 'pos_products', 'variant_name', 'TEXT');
 $products = pos_products();
 $creditPeople = pos_credit_people();
 $recentSales = pos_recent_sales(20);
@@ -45,11 +46,12 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </aside>
 
   <section class="panel-card pos-products-panel">
-    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">İlk kullanımda ürün barkodunu okut, adını ve fiyatını kaydet.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
+    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Aynı ürünün S / M / L gibi bedenlerini ayrı barkodla, aynı satış fiyatıyla tanımlayabilirsin.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
     <form class="pos-product-form" data-product-form>
       <input type="hidden" name="id" value="" />
       <label><span>Barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" data-barcode-input /></label>
-      <label class="wide"><span>Ürün adı</span><input name="name" required placeholder="Ürün adı" /></label>
+      <label class="wide"><span>Ürün adı</span><input name="name" required placeholder="Örn. Bitke Erkek Patik" /></label>
+      <label><span>Beden / Varyant</span><input name="variant_name" autocomplete="off" maxlength="40" placeholder="Örn. S, M, L, XL" /></label>
       <label><span>Satış fiyatı</span><input name="sale_price" type="number" min="0.01" step="0.01" required /></label>
       <label><span>KDV %</span><input name="vat_rate" type="number" min="0" max="100" step="1" value="10" /></label>
       <label><span>Başlangıç stoku</span><input name="stock_quantity" type="number" min="0" step="1" value="0" /></label>
@@ -57,9 +59,9 @@ page_header('Barkodlu Satış', 'barkod_satis');
       <button class="btn btn-primary" type="submit">Ürünü Kaydet</button>
     </form>
     <div class="pos-product-list" data-product-list>
-      <?php foreach ($products as $p): ?>
+      <?php foreach ($products as $p): $variant = trim((string)($p['variant_name'] ?? '')); ?>
       <button type="button" class="pos-product-row" data-product-edit='<?php echo e(json_encode($p, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>'>
-        <span><strong><?php echo e($p['name']); ?></strong><small><?php echo e($p['barcode']); ?></small></span>
+        <span><strong><?php echo e($p['name'] . ($variant !== '' ? ' - ' . $variant : '')); ?></strong><small><?php echo e($p['barcode']); ?></small></span>
         <span><strong><?php echo e(money((float)$p['sale_price'])); ?></strong><small>Stok: <?php echo e(number_format((float)$p['stock_quantity'], 0, ',', '.')); ?></small></span>
       </button>
       <?php endforeach; ?>
@@ -78,5 +80,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
 </div>
 <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 <script src="assets/barkod-fotograf.js?v=1"></script>
-<script src="assets/barkod-satis.js?v=6"></script>
+<script src="assets/barkod-satis.js?v=7"></script>
 <?php page_footer(); ?>
