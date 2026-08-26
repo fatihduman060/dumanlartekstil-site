@@ -76,7 +76,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
   </section>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.7/html5-qrcode.min.js"></script>
-<script src="assets/iphone-barkod-v3.js?v=1"></script>
-<script src="assets/barkod-satis.js?v=5"></script>
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+<script src="assets/barkod-fotograf.js?v=1"></script>
+<script src="assets/barkod-satis.js?v=6"></script>
 <?php page_footer(); ?>
