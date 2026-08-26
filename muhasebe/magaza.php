@@ -159,10 +159,18 @@ body.store-sales-user .magaza-mobile-latest,
 body.store-sales-user .magaza-mobile-payment-history{display:grid!important}
 body.store-sales-user .magaza-satis-head{display:flex!important}
 body.store-sales-user .magaza-satis-form{display:grid!important}
-body.store-sales-user .magaza-satis-summary,
-body.store-sales-user .magaza-satis-list{display:none!important}
+body.store-sales-user .magaza-satis-summary{display:grid!important}
+body.store-sales-user .magaza-satis-list{display:block!important}
 @media(max-width:980px){.magaza-report-months{grid-template-columns:repeat(2,minmax(0,1fr))}.magaza-report-year-card{grid-template-columns:1fr}}
 @media(max-width:700px){
+body.store-sales-user .magaza-satis-list table{min-width:0!important;width:100%}
+body.store-sales-user .magaza-satis-list thead,
+body.store-sales-user .magaza-satis-list tfoot{display:none}
+body.store-sales-user .magaza-satis-list tbody,
+body.store-sales-user .magaza-satis-list tr{display:grid;width:100%}
+body.store-sales-user .magaza-satis-list tr{margin-bottom:9px;padding:10px;border:1px solid #dfd2b8;border-radius:13px;background:#fff}
+body.store-sales-user .magaza-satis-list td{display:flex!important;justify-content:space-between;gap:12px;width:100%;padding:6px 2px!important;border:0}
+body.store-sales-user .magaza-satis-list td:before{content:attr(data-label);font-weight:850;color:var(--muted)}
 .magaza-page-shell .dashboard-section-head{order:1}
 .magaza-page-shell .dashboard-section-head p{display:none}
 .magaza-page-shell>*,
