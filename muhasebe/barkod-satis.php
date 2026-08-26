@@ -2,6 +2,9 @@
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/barkod-satis-lib.php';
 require_login();
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 if (!can_manage_store_sales()) { flash('error', 'Barkodlu satış için mağaza satış yetkisi gerekiyor.'); redirect('dashboard.php'); }
 pos_db_ensure();
 $products = pos_products();
@@ -73,7 +76,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
   </section>
 </div>
-<script src="https://unpkg.com/@zxing/browser@0.2.1"></script>
-<script src="assets/iphone-barkod.js?v=1"></script>
-<script src="assets/barkod-satis.js?v=3"></script>
+<script src="https://unpkg.com/@zxing/browser@0.2.1/umd/zxing-browser.min.js" data-bitke-zxing></script>
+<script src="assets/iphone-barkod.js?v=2"></script>
+<script src="assets/barkod-satis.js?v=4"></script>
 <?php page_footer(); ?>
