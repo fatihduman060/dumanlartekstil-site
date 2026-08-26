@@ -18,7 +18,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
 
     <div class="pos-scan-row">
-      <label class="pos-scan"><span>Barkod / ürün ara</span><input type="text" inputmode="none" autocomplete="off" placeholder="Barkodu okutun…" data-pos-scan autofocus /></label>
+      <label class="pos-scan"><span>Barkod / ürün ara</span><input type="text" name="barcode_scan" inputmode="none" autocomplete="off" placeholder="Barkodu okutun…" data-pos-scan data-barcode-input autofocus /></label>
       <button class="btn btn-secondary" type="button" data-pos-search>Ara</button>
     </div>
     <div class="pos-search-results" data-pos-results hidden></div>
@@ -73,5 +73,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
   </section>
 </div>
-<script src="assets/barkod-satis.js?v=2"></script>
+<script src="assets/barkod-satis.js?v=3"></script>
 <?php page_footer(); ?>
