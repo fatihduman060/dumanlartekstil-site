@@ -40,7 +40,10 @@
       return sideNav.querySelector('a[href="' + href + '"]');
     };
 
-    var items = [
+    var items = window.BITKE_STORE_SALES_ONLY ? [
+      { href: 'barkod-satis.php', label: 'Satış', icon: '▣' },
+      { href: 'magaza.php', label: 'Mağaza', icon: '▥' }
+    ] : [
       { href: 'dashboard.php', label: 'Genel', icon: '⌂' },
       { href: 'cariler.php', label: 'Cariler', icon: '◎' },
       { href: 'magaza.php', label: 'Mağaza', icon: '▥' },
