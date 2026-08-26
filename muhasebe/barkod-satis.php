@@ -5,7 +5,7 @@ require_login();
 if (!can_manage_store_sales()) { flash('error', 'Barkodlu satış için mağaza satış yetkisi gerekiyor.'); redirect('dashboard.php'); }
 pos_db_ensure();
 $products = pos_products();
-$cariler = db()->query("SELECT id,name FROM cariler ORDER BY name ASC")->fetchAll() ?: [];
+$creditPeople = pos_credit_people();
 $recentSales = pos_recent_sales(20);
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
@@ -35,7 +35,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
       <label><input type="radio" name="pos_payment" value="card" /><span>💳 Kart</span></label>
       <label><input type="radio" name="pos_payment" value="credit" /><span>🧾 Veresiye</span></label>
     </fieldset>
-    <label class="pos-cari" data-pos-cari-wrap hidden><span>Veresiye carisi</span><select data-pos-cari><option value="">Cari seçin</option><?php foreach ($cariler as $c): ?><option value="<?php echo e($c['id']); ?>"><?php echo e($c['name']); ?></option><?php endforeach; ?></select></label>
+    <label class="pos-cari" data-pos-person-wrap hidden><span>Personel</span><select data-pos-person><option value="">Personel seçin</option><?php foreach ($creditPeople as $person): ?><option value="<?php echo e($person['id']); ?>"><?php echo e($person['full_name']); ?></option><?php endforeach; ?></select><small>Yalnızca Personel Veresiye Takibi'ndeki aktif personeller gösterilir.</small></label>
     <label><span>Not</span><input type="text" maxlength="160" placeholder="İsteğe bağlı" data-pos-note /></label>
     <button type="button" class="btn btn-primary pos-complete" data-pos-complete>Satışı Tamamla ve Fiş Yazdır</button>
     <p class="pos-status" data-pos-status></p>
@@ -73,5 +73,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
   </section>
 </div>
-<script src="assets/barkod-satis.js?v=1"></script>
+<script src="assets/barkod-satis.js?v=2"></script>
 <?php page_footer(); ?>
