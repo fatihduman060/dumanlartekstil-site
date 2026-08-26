@@ -3,9 +3,61 @@
 require_once __DIR__ . '/magaza-satis-lib.php';
 require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
 
+function pos_store_credit_ensure(): void
+{
+    $pdo = db();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS store_credit_people (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        full_name TEXT NOT NULL,
+        search_name TEXT NOT NULL UNIQUE,
+        notes TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+    )");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS store_credit_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_id INTEGER NOT NULL,
+        entry_type TEXT NOT NULL,
+        amount REAL NOT NULL DEFAULT 0,
+        entry_date TEXT NOT NULL,
+        payment_method TEXT,
+        daily_breakdown_id INTEGER,
+        description TEXT,
+        is_cancelled INTEGER NOT NULL DEFAULT 0,
+        cancelled_at TEXT,
+        cancelled_by INTEGER,
+        cancel_reason TEXT,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(person_id) REFERENCES store_credit_people(id) ON DELETE RESTRICT,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+    )");
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_store_credit_person_date ON store_credit_entries(person_id,entry_date)');
+}
+
+function pos_credit_people(): array
+{
+    pos_store_credit_ensure();
+    return db()->query("SELECT id, full_name FROM store_credit_people WHERE is_active=1 ORDER BY full_name ASC")->fetchAll() ?: [];
+}
+
+function pos_credit_person(int $personId): ?array
+{
+    if ($personId <= 0) return null;
+    pos_store_credit_ensure();
+    $stmt = db()->prepare("SELECT id, full_name FROM store_credit_people WHERE id=? AND is_active=1 LIMIT 1");
+    $stmt->execute([$personId]);
+    return $stmt->fetch() ?: null;
+}
+
 function pos_db_ensure(): void
 {
     $pdo = db();
+    pos_store_credit_ensure();
     $pdo->exec("CREATE TABLE IF NOT EXISTS pos_products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         barcode TEXT NOT NULL UNIQUE,
@@ -30,6 +82,7 @@ function pos_db_ensure(): void
         sale_time TEXT NOT NULL,
         customer_name TEXT,
         cari_id INTEGER,
+        credit_person_id INTEGER,
         payment_method TEXT NOT NULL,
         subtotal REAL NOT NULL DEFAULT 0,
         discount_amount REAL NOT NULL DEFAULT 0,
@@ -37,13 +90,19 @@ function pos_db_ensure(): void
         grand_total REAL NOT NULL DEFAULT 0,
         note TEXT,
         cari_movement_id INTEGER,
+        credit_entry_id INTEGER,
         is_cancelled INTEGER NOT NULL DEFAULT 0,
         created_by INTEGER,
         created_at TEXT NOT NULL,
         FOREIGN KEY(cari_id) REFERENCES cariler(id) ON DELETE SET NULL,
+        FOREIGN KEY(credit_person_id) REFERENCES store_credit_people(id) ON DELETE SET NULL,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
+    ensure_column($pdo, 'pos_sales', 'credit_person_id', 'INTEGER');
+    ensure_column($pdo, 'pos_sales', 'credit_entry_id', 'INTEGER');
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_date ON pos_sales(sale_date, id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_credit_person ON pos_sales(credit_person_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_credit_entry ON pos_sales(credit_entry_id)");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS pos_sale_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,7 +205,12 @@ function pos_daily_totals_delta(string $saleDate, float $grossDelta, float $cash
 function pos_sale(int $id): ?array
 {
     pos_db_ensure();
-    $stmt = db()->prepare("SELECT s.*, c.name AS cari_name, u.display_name AS user_name FROM pos_sales s LEFT JOIN cariler c ON c.id=s.cari_id LEFT JOIN users u ON u.id=s.created_by WHERE s.id=? LIMIT 1");
+    $stmt = db()->prepare("SELECT s.*, c.name AS cari_name, p.full_name AS credit_person_name, u.display_name AS user_name
+        FROM pos_sales s
+        LEFT JOIN cariler c ON c.id=s.cari_id
+        LEFT JOIN store_credit_people p ON p.id=s.credit_person_id
+        LEFT JOIN users u ON u.id=s.created_by
+        WHERE s.id=? LIMIT 1");
     $stmt->execute([$id]);
     $sale = $stmt->fetch();
     if (!$sale) return null;
@@ -160,5 +224,10 @@ function pos_recent_sales(int $limit = 30): array
 {
     pos_db_ensure();
     $limit = max(1, min(100, $limit));
-    return db()->query("SELECT s.*, c.name AS cari_name FROM pos_sales s LEFT JOIN cariler c ON c.id=s.cari_id WHERE s.is_cancelled=0 ORDER BY s.sale_date DESC,s.sale_time DESC,s.id DESC LIMIT " . $limit)->fetchAll() ?: [];
+    return db()->query("SELECT s.*, c.name AS cari_name, p.full_name AS credit_person_name
+        FROM pos_sales s
+        LEFT JOIN cariler c ON c.id=s.cari_id
+        LEFT JOIN store_credit_people p ON p.id=s.credit_person_id
+        WHERE s.is_cancelled=0
+        ORDER BY s.sale_date DESC,s.sale_time DESC,s.id DESC LIMIT " . $limit)->fetchAll() ?: [];
 }
