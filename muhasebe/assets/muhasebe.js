@@ -274,3 +274,13 @@ document.addEventListener('change', function (event) {
     })
     .catch(() => {});
 })();
+
+// Çek ciro ekranını yalnızca Çekler sayfasında ihtiyaç olduğunda yükle.
+(function loadCheckEndorsementUi(){
+  if(!/cekler\.php$/i.test(location.pathname)) return;
+  if(document.querySelector('script[data-cek-ciro-ui]')) return;
+  const script=document.createElement('script');
+  script.src='assets/cek-ciro.js?v=1';
+  script.dataset.cekCiroUi='1';
+  document.body.appendChild(script);
+})();
