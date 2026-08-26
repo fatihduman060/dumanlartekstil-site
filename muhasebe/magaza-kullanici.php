@@ -172,6 +172,9 @@ if (is_logged_in() && is_store_sales_user()) {
     }
 
     $allowedStoreScripts = [
+        'barkod-satis.php',
+        'barkod-satis-api.php',
+        'barkod-fis.php',
         'magaza.php',
         'magaza-gunluk-satis.php',
         'magaza-odeme-dagilimi.php',
