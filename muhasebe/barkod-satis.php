@@ -48,7 +48,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">İlk kullanımda ürün barkodunu okut, adını ve fiyatını kaydet.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
     <form class="pos-product-form" data-product-form>
       <input type="hidden" name="id" value="" />
-      <label><span>Barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" /></label>
+      <label><span>Barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" data-barcode-input /></label>
       <label class="wide"><span>Ürün adı</span><input name="name" required placeholder="Ürün adı" /></label>
       <label><span>Satış fiyatı</span><input name="sale_price" type="number" min="0.01" step="0.01" required /></label>
       <label><span>KDV %</span><input name="vat_rate" type="number" min="0" max="100" step="1" value="10" /></label>
@@ -76,7 +76,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
   </section>
 </div>
-<script src="https://unpkg.com/@zxing/browser@0.2.1/umd/zxing-browser.min.js" data-bitke-zxing></script>
-<script src="assets/iphone-barkod.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=4"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.7/html5-qrcode.min.js"></script>
+<script src="assets/iphone-barkod-v3.js?v=1"></script>
+<script src="assets/barkod-satis.js?v=5"></script>
 <?php page_footer(); ?>
