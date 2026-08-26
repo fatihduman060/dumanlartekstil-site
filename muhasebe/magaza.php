@@ -153,8 +153,8 @@ page_header('Mağaza', 'magaza');
 .magaza-report-year-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.9fr);gap:18px;align-items:center;padding:20px 22px;border-radius:20px;background:#123f2b;color:#fff;border:1px solid #d4aa54}.magaza-report-year-card>div:first-child{display:grid;gap:5px}.magaza-report-year-card span{color:#f1cf85;font-size:12px;font-weight:850}.magaza-report-year-card>div:first-child>strong{font-size:36px;line-height:1.05;letter-spacing:-.03em}.magaza-report-year-card small{color:#c7d8cd}.magaza-report-year-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.magaza-report-year-breakdown span{display:grid;gap:4px;padding:11px 12px;border:1px solid rgba(255,255,255,.14);border-radius:13px;background:rgba(255,255,255,.07);color:#c9d7ce}.magaza-report-year-breakdown strong{color:#fff;font-size:13px}
 .magaza-report-months{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.magaza-report-month-card{display:grid;gap:10px;padding:14px;border:1px solid #e2d7bf;border-radius:16px;background:#fff}.magaza-report-month-card.is-empty{opacity:.55}.magaza-report-month-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.magaza-report-month-top>div{display:grid;gap:2px}.magaza-report-month-top span{font-size:13px;font-weight:950;color:#173f29;text-transform:none;letter-spacing:0}.magaza-report-month-top small{font-size:10px;color:#8d8275}.magaza-report-month-top>strong{font-size:17px;color:#173f29;text-align:right}.magaza-report-bar{height:6px;border-radius:999px;background:#f1ecdf;overflow:hidden}.magaza-report-bar i{display:block;height:100%;border-radius:inherit;background:#b9862e}.magaza-report-month-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.magaza-report-month-breakdown span{display:grid;gap:2px;font-size:9px;color:#8a7d6c;text-transform:none;letter-spacing:0}.magaza-report-month-breakdown strong{font-size:10px;color:#4c4031}
 body.store-sales-user .magaza-report-panel,
-body.store-sales-user .magaza-period-filter,
-body.store-sales-user [data-magaza-odeme-dagilimi-body]{display:none!important}
+body.store-sales-user .magaza-period-filter{display:none!important}
+body.store-sales-user [data-magaza-odeme-dagilimi-body]{display:grid!important}
 body.store-sales-user .magaza-mobile-latest,
 body.store-sales-user .magaza-mobile-payment-history{display:grid!important}
 body.store-sales-user .magaza-mobile-latest,
@@ -224,7 +224,7 @@ body.store-sales-user .magaza-satis-list td:before{content:attr(data-label);font
 [data-magaza-odeme-dagilimi-body]{order:5}
 }
 </style>
-<script src="assets/magaza-odeme-dagilimi.js?v=6"></script>
+<script src="assets/magaza-odeme-dagilimi.js?v=7"></script>
 <script src="assets/magaza-veresiye-manuel.js?v=2"></script>
 <script src="assets/magaza-nakit-toplam-fix.js?v=1"></script>
 <script src="assets/magaza-gunluk-satis.js?v=11"></script>

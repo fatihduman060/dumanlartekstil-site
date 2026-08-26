@@ -72,6 +72,7 @@
     var panel=buildPanel();if(!panel) return;var form=qs('[data-magaza-odeme-form]',panel);if(form) form.hidden=!state.canWrite;
     var summary=data.summary||{};qs('[data-magaza-odeme-cash]',panel).textContent=money(summary.cash);qs('[data-magaza-odeme-card]',panel).textContent=money(summary.card);qs('[data-magaza-odeme-credit]',panel).textContent=money(summary.credit);qs('[data-magaza-odeme-cash-collection]',panel).textContent=money(summary.cash_credit_collection);qs('[data-magaza-odeme-card-collection]',panel).textContent=money(summary.card_credit_collection);qs('[data-magaza-odeme-total]',panel).textContent=money(summary.daily_total);
     var list=qs('[data-magaza-odeme-list]',panel),items=Array.isArray(data.items)?data.items:[];
+    if(window.BITKE_STORE_SALES_ONLY) items=items.slice(0,2);
     if(!items.length) list.innerHTML='<p class="muted">Bu dönemde henüz günlük satış dağılımı kaydı yok.</p>';
     else list.innerHTML='<div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Mağaza Kasa</th><th>Garanti Dumanlar</th><th>Veresiye satış</th><th>Nakit veresiye tahsilatı</th><th>Kart veresiye tahsilatı</th><th>Kasada bırakılan bozuk para</th><th>Günlük satış toplamı</th><th></th></tr></thead><tbody>'
       +items.map(function(item){
