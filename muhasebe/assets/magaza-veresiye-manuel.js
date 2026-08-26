@@ -1,8 +1,35 @@
 (function(){
   'use strict';
 
+  function localDate(){
+    var d=new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  function repairBarcodeCreditDuplicate(){
+    var date=localDate();
+    var key='bitke-credit-repair-'+date;
+    if(sessionStorage.getItem(key)==='done') return;
+    fetch('magaza-veresiye-tekerrur-duzelt.php?sale_date='+encodeURIComponent(date)+'&_='+Date.now(),{
+      credentials:'same-origin',
+      cache:'no-store',
+      headers:{'Accept':'application/json'}
+    })
+      .then(function(response){return response.json();})
+      .then(function(data){
+        if(!data||!data.ok) return;
+        sessionStorage.setItem(key,'done');
+        if(data.repaired){
+          location.reload();
+        }
+      })
+      .catch(function(){});
+  }
+
   function init(){
     if(!/\/magaza\.php$/i.test(location.pathname)) return;
+
+    repairBarcodeCreditDuplicate();
 
     var panel=document.querySelector('[data-magaza-odeme-dagilimi]');
     var form=panel&&panel.querySelector('[data-magaza-odeme-form]');
@@ -13,7 +40,7 @@
     if(autoNote){
       var label=document.createElement('label');
       label.className='magaza-manual-credit-field';
-      label.innerHTML='Veresiye satış<input type="text" inputmode="decimal" name="credit_amount" placeholder="0,00"><small>Geçici manuel giriş açık. Personel Veresiye bölümündeki satışlar ayrıca otomatik eklenir; aynı satışı iki yere birden girme.</small>';
+      label.innerHTML='Veresiye satış<input type="text" inputmode="decimal" name="credit_amount" placeholder="0,00"><small>Geçici manuel giriş açık. Bu alan sadece barkodlu satış dışında kalan ek veresiye içindir. Barkodlu Personel Veresiye satışı otomatik eklenir.</small>';
       autoNote.replaceWith(label);
     }
 
