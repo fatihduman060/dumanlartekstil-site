@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
+require_once __DIR__ . '/magaza-veresiye-auto-only.php';
 require_login();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -9,7 +10,7 @@ $processedDueCount = magaza_odeme_dagilim_vadesi_gelenleri_isle();
 
 function magaza_odeme_dagilim_payload(string $period): array
 {
-    magaza_odeme_dagilim_veresiye_period_senkronla($period);
+    magaza_veresiye_auto_only_sync_period($period);
     $items = [];
     foreach (magaza_odeme_dagilim_satirlari($period) as $row) {
         $cash = (float)($row['cash_amount'] ?? 0);
@@ -18,7 +19,6 @@ function magaza_odeme_dagilim_payload(string $period): array
         $cardCollection = (float)($row['card_credit_collection_amount'] ?? 0);
         $saleDate = (string)$row['sale_date'];
         $settlementDate = magaza_odeme_dagilim_kart_hesaba_gecis_tarihi($saleDate);
-        $manualCredit = (float)($row['manual_credit_amount'] ?? 0);
         $personnelCredit = magaza_odeme_dagilim_personel_veresiye_toplami($saleDate);
         $items[] = [
             'id' => (int)$row['id'],
@@ -26,7 +26,7 @@ function magaza_odeme_dagilim_payload(string $period): array
             'cash_amount' => $cash,
             'card_amount' => $card,
             'credit_amount' => (float)$row['credit_amount'],
-            'manual_credit_amount' => $manualCredit,
+            'manual_credit_amount' => 0.0,
             'personnel_credit_amount' => $personnelCredit,
             'cash_credit_collection_amount' => $cashCollection,
             'card_credit_collection_amount' => $cardCollection,
@@ -47,6 +47,7 @@ function magaza_odeme_dagilim_payload(string $period): array
         'items' => $items,
         'can_write' => can_manage_store_sales(),
         'csrf_token' => csrf_token(),
+        'credit_mode' => 'personnel_auto',
     ];
 }
 
@@ -88,26 +89,28 @@ try {
             $saleDate = trim((string)($_POST['sale_date'] ?? date('Y-m-d')));
             $cash = decimal_from_input($_POST['cash_amount'] ?? '0');
             $card = decimal_from_input($_POST['card_amount'] ?? '0');
-            $manualCredit = decimal_from_input($_POST['credit_amount'] ?? '0');
-            $cashCollection = 0.0;
-            $cardCollection = 0.0;
+            $submittedManualCredit = decimal_from_input($_POST['credit_amount'] ?? '0');
             $cashChangeLeft = decimal_from_input($_POST['cash_change_left_amount'] ?? '0');
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) throw new RuntimeException('Satış tarihini kontrol etmelisin.');
-            foreach ([$cash,$card,$manualCredit,$cashCollection,$cardCollection,$cashChangeLeft] as $amount) if ($amount < 0) throw new RuntimeException('Tutarlar negatif olamaz.');
+            foreach ([$cash,$card,$submittedManualCredit,$cashChangeLeft] as $amount) if ($amount < 0) throw new RuntimeException('Tutarlar negatif olamaz.');
+            if ($saleDate >= magaza_veresiye_auto_only_cutoff() && $submittedManualCredit > 0) {
+                throw new RuntimeException('Manuel veresiye girişi kapatıldı. Veresiye satışını Personel Veresiye veya Barkodlu Satış bölümünden kaydetmelisin.');
+            }
 
+            $manualCredit = $saleDate >= magaza_veresiye_auto_only_cutoff() ? 0.0 : $submittedManualCredit;
             $personnelCredit = magaza_odeme_dagilim_personel_veresiye_toplami($saleDate);
             $credit = round($manualCredit + $personnelCredit, 2);
-            if (($cash+$card+$credit+$cashCollection+$cardCollection+$cashChangeLeft) <= 0) throw new RuntimeException('En az bir alana sıfırdan büyük tutar girmelisin.');
 
             $userId = current_user()['id'] ?? null;
             $stmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1');
             $stmt->execute([$saleDate]);
             $old = $stmt->fetch();
-            if ($old) {
-                $cashCollection = (float)($old['cash_credit_collection_amount'] ?? 0);
-                $cardCollection = (float)($old['card_credit_collection_amount'] ?? 0);
-            }
+            $cashCollection = $old ? (float)($old['cash_credit_collection_amount'] ?? 0) : 0.0;
+            $cardCollection = $old ? (float)($old['card_credit_collection_amount'] ?? 0) : 0.0;
+
+            if (($cash+$card+$credit+$cashCollection+$cardCollection+$cashChangeLeft) <= 0) throw new RuntimeException('En az bir alana sıfırdan büyük tutar girmelisin.');
+
             $dailyTotal = magaza_odeme_dagilim_gunluk_toplam($cash, $card, $credit);
             $legacyCollectionTotal = round($cashCollection + $cardCollection, 2);
 
@@ -123,7 +126,12 @@ try {
                     $id = (int)db()->lastInsertId();
                 }
 
-                magaza_odeme_dagilim_hareketlerini_senkronla($id);
+                if ($saleDate >= magaza_veresiye_auto_only_cutoff()) {
+                    magaza_veresiye_auto_only_sync_date($saleDate, $userId ? (int)$userId : null);
+                } else {
+                    magaza_odeme_dagilim_hareketlerini_senkronla($id);
+                }
+
                 $newStmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
                 $newStmt->execute([$id]);
                 $saved = $newStmt->fetch() ?: [];
@@ -133,6 +141,7 @@ try {
                 throw $e;
             }
 
+            $dailyTotal = (float)($saved['daily_total'] ?? $dailyTotal);
             $cardSettlementDate = magaza_odeme_dagilim_kart_hesaba_gecis_tarihi($saleDate);
             if ($old) {
                 log_action('Mağaza günlük ödeme dağılımı güncellendi', $saleDate . ' · ' . number_format($dailyTotal, 2, ',', '.') . ' TL satış');
