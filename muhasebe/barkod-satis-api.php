@@ -2,6 +2,7 @@
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/magaza-kullanici.php';
 require_once __DIR__ . '/barkod-satis-lib.php';
+require_once __DIR__ . '/magaza-veresiye-auto-only.php';
 require_login();
 header('Content-Type: application/json; charset=utf-8');
 
@@ -126,8 +127,6 @@ try {
             $pdo->prepare("UPDATE pos_sales SET credit_entry_id=? WHERE id=?")->execute([$creditEntryId,$saleId]);
         }
 
-        // Veresiye satış store_credit_entries içine yazıldıktan sonra günlük toplam yenilenir.
-        // creditDelta=0 bırakılır; aksi halde personel veresiyesi ikinci kez sayılır.
         pos_daily_totals_delta(
             $saleDate,
             $grandTotal,
@@ -136,6 +135,10 @@ try {
             0,
             $userId
         );
+
+        // 26.08.2026 itibarıyla veresiye tutarları yalnızca Personel Veresiye
+        // hareketlerinden hesaplanır. Eski manuel alan günlük toplamı etkileyemez.
+        magaza_veresiye_auto_only_sync_date($saleDate, $userId);
 
         if ($creditEntryId > 0) {
             $stmt = $pdo->prepare("SELECT id FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1");
