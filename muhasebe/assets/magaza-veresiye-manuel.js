@@ -1,83 +1,39 @@
 (function(){
   'use strict';
 
-  function localDate(){
-    var d=new Date();
-    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  }
-
-  function repairBarcodeCreditDuplicate(){
-    var date=localDate();
-    var key='bitke-credit-repair-'+date;
-    if(sessionStorage.getItem(key)==='done') return;
-    fetch('magaza-veresiye-tekerrur-duzelt.php?sale_date='+encodeURIComponent(date)+'&_='+Date.now(),{
-      credentials:'same-origin',
-      cache:'no-store',
-      headers:{'Accept':'application/json'}
-    })
-      .then(function(response){return response.json();})
-      .then(function(data){
-        if(!data||!data.ok) return;
-        sessionStorage.setItem(key,'done');
-        if(data.repaired){
-          location.reload();
-        }
-      })
-      .catch(function(){});
-  }
-
   function init(){
     if(!/\/magaza\.php$/i.test(location.pathname)) return;
 
-    repairBarcodeCreditDuplicate();
-
     var panel=document.querySelector('[data-magaza-odeme-dagilimi]');
     var form=panel&&panel.querySelector('[data-magaza-odeme-form]');
-    if(!panel||!form||form.dataset.manualCreditReady==='1') return;
-    form.dataset.manualCreditReady='1';
+    if(!panel||!form) return;
 
-    var autoNote=form.querySelector('.magaza-auto-credit-note');
-    if(autoNote){
-      var label=document.createElement('label');
-      label.className='magaza-manual-credit-field';
-      label.innerHTML='Veresiye satış<input type="text" inputmode="decimal" name="credit_amount" placeholder="0,00"><small>Geçici manuel giriş açık. Bu alan sadece barkodlu satış dışında kalan ek veresiye içindir. Barkodlu Personel Veresiye satışı otomatik eklenir.</small>';
-      autoNote.replaceWith(label);
+    var manual=form.querySelector('[name="credit_amount"]');
+    if(manual){
+      var label=manual.closest('label');
+      if(label) label.remove();
+      else manual.remove();
     }
 
-    panel.addEventListener('click',function(event){
-      var editButton=event.target.closest('[data-magaza-odeme-edit]');
-      if(!editButton) return;
-      var row=editButton.closest('[data-magaza-odeme-row]');
-      var input=form.querySelector('[name="credit_amount"]');
-      if(!row||!input) return;
-      var rowId=Number(row.getAttribute('data-id')||0);
-      var periodInput=document.querySelector('input[type="month"][name="period"]');
-      var period=periodInput&&periodInput.value?periodInput.value:new Date().toISOString().slice(0,7);
-      input.value='';
-      fetch('magaza-odeme-dagilimi.php?period='+encodeURIComponent(period)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}})
-        .then(function(response){return response.json();})
-        .then(function(data){
-          if(!data||!data.ok||!Array.isArray(data.items)) return;
-          var item=null;
-          data.items.some(function(candidate){
-            if(Number(candidate.id||0)===rowId){item=candidate;return true;}
-            return false;
-          });
-          if(!item) return;
-          var value=Number(item.manual_credit_amount||0);
-          input.value=value>0?value.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
-          try{input.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}
-        })
-        .catch(function(){});
-    });
+    var note=form.querySelector('.magaza-auto-credit-note');
+    if(!note){
+      note=document.createElement('div');
+      note.className='magaza-auto-credit-note';
+      var cashChange=form.querySelector('[name="cash_change_left_amount"]');
+      var target=cashChange&&cashChange.closest('label');
+      if(target) target.insertAdjacentElement('beforebegin',note);
+      else form.appendChild(note);
+    }
+    note.innerHTML='<strong>Veresiye otomatik</strong><small>Veresiye satışları Barkodlu Satış / Personel Veresiye bölümünden, tahsilatlar da Personel Veresiye bölümünden ilgili güne otomatik yansır. Manuel giriş kapalıdır.</small>';
 
-    if(!document.getElementById('magazaManualCreditStyle')){
+    if(!document.getElementById('magazaAutoCreditOnlyStyle')){
       var style=document.createElement('style');
-      style.id='magazaManualCreditStyle';
-      style.textContent='.magaza-manual-credit-field small{color:#9a5b24!important;font-weight:800!important}.magaza-manual-credit-field input{border-color:#d8b07a!important;background:#fffaf2!important}';
+      style.id='magazaAutoCreditOnlyStyle';
+      style.textContent='.magaza-auto-credit-note{display:grid;gap:4px;padding:11px 12px;border:1px solid #b8d8c2;border-radius:13px;background:#f1faf4}.magaza-auto-credit-note strong{color:#173f29}.magaza-auto-credit-note small{color:#52705d;line-height:1.4}';
       document.head.appendChild(style);
     }
   }
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+  document.addEventListener('bitke:magaza-odeme-updated',init);
 })();
