@@ -13,7 +13,7 @@ $creditPeople = pos_credit_people();
 $recentSales = pos_recent_sales(20);
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-satis.css?v=3" />
+<link rel="stylesheet" href="assets/barkod-satis.css?v=4" />
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <section class="pos-main panel-card">
     <div class="pos-title-row">
@@ -41,7 +41,9 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </fieldset>
     <label class="pos-cari" data-pos-person-wrap hidden><span>Personel</span><select data-pos-person><option value="">Personel seçin</option><?php foreach ($creditPeople as $person): ?><option value="<?php echo e($person['id']); ?>"><?php echo e($person['full_name']); ?></option><?php endforeach; ?></select><small>Yalnızca Personel Veresiye Takibi'ndeki aktif personeller gösterilir.</small></label>
     <label><span>Not</span><input type="text" maxlength="160" placeholder="İsteğe bağlı" data-pos-note /></label>
-    <button type="button" class="btn btn-primary pos-complete" data-pos-complete>Satışı Tamamla ve Fiş Yazdır</button>
+    <button type="button" class="btn btn-primary pos-complete" data-pos-complete>Satışı Tamamla ve Direkt Yazdır</button>
+    <a class="pos-direct-print-setup" href="windows-magaza-kasa.php">Windows sessiz yazdırma başlatıcısını indir</a>
+    <small class="muted">Başlatıcıyla açıldığında fiş, yazdırma penceresi gösterilmeden varsayılan XP-Q805K yazıcısına gönderilir.</small>
     <p class="pos-status" data-pos-status></p>
   </aside>
 
@@ -88,5 +90,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=1"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=8"></script>
+<script src="assets/barkod-satis.js?v=9"></script>
 <?php page_footer(); ?>

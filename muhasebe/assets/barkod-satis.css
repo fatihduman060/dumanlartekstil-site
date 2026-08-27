@@ -14,3 +14,5 @@
   .pos-product-form input,.pos-extra-barcode-add{min-width:0;width:100%}
   .pos-extra-barcode-add{grid-template-columns:minmax(220px,1fr) auto}
 }
+
+.pos-direct-print-setup{display:block;text-align:center;color:#18472e;font-size:12px;font-weight:850;text-decoration:underline;text-underline-offset:3px}
