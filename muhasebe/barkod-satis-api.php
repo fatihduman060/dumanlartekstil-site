@@ -98,6 +98,52 @@ try {
         pos_json(['ok'=>true,'message'=>'Ürün ve barkodları kaydedildi.','products'=>pos_products()]);
     }
 
+    if ($action === 'cart_event') {
+        $eventType = trim((string)($_POST['event_type'] ?? ''));
+        if (!in_array($eventType, ['cart_cleared','item_removed'], true)) throw new RuntimeException('Sepet işlemi geçersiz.');
+        $rawItems = json_decode((string)($_POST['items_json'] ?? ''), true);
+        if (!is_array($rawItems) || !$rawItems) throw new RuntimeException('Kaydedilecek sepet bilgisi bulunamadı.');
+        $rawItems = array_slice($rawItems, 0, 100);
+        $itemStmt = db()->prepare("SELECT id,name,variant_name,barcode,sale_price FROM pos_products WHERE id=? LIMIT 1");
+        $loggedItems = [];
+        $cartTotal = 0.0;
+        foreach ($rawItems as $rawItem) {
+            $productId = (int)($rawItem['product_id'] ?? 0);
+            $quantity = max(0, decimal_from_input($rawItem['quantity'] ?? 0));
+            if ($productId <= 0 || $quantity <= 0) continue;
+            $itemStmt->execute([$productId]);
+            $product = $itemStmt->fetch();
+            if (!$product) continue;
+            $productName = trim((string)$product['name']);
+            $variant = trim((string)($product['variant_name'] ?? ''));
+            if ($variant !== '') $productName .= ' - ' . $variant;
+            $lineTotal = round($quantity * (float)$product['sale_price'], 2);
+            $cartTotal += $lineTotal;
+            $loggedItems[] = [
+                'product_id'=>$productId,
+                'name'=>$productName,
+                'barcode'=>(string)$product['barcode'],
+                'quantity'=>$quantity,
+                'unit_price'=>(float)$product['sale_price'],
+                'line_total'=>$lineTotal,
+            ];
+        }
+        if (!$loggedItems) throw new RuntimeException('Kaydedilecek geçerli sepet ürünü bulunamadı.');
+        $discount = max(0, decimal_from_input($_POST['discount_amount'] ?? 0));
+        $paymentMethod = trim((string)($_POST['payment_method'] ?? 'cash'));
+        $eventLabel = $eventType === 'cart_cleared' ? 'Sepet temizlendi' : 'Ürün sepetten çıkarıldı';
+        audit_action('pos_cart', 0, $eventType === 'cart_cleared' ? 'sepet_temizlendi' : 'urun_cikarildi', null, [
+            'event'=>$eventType,
+            'items'=>$loggedItems,
+            'item_count'=>count($loggedItems),
+            'cart_total'=>round(max(0, $cartTotal - $discount), 2),
+            'discount_amount'=>$discount,
+            'payment_method'=>$paymentMethod,
+            'event_time'=>now(),
+        ], $eventLabel);
+        pos_json(['ok'=>true,'message'=>$eventLabel . ' ve denetim kaydına işlendi.']);
+    }
+
     if ($action === 'bulk_update_products') {
         $updates = json_decode((string)($_POST['updates_json'] ?? ''), true);
         if (!is_array($updates) || !$updates) throw new RuntimeException('Güncellenecek ürün bulunamadı.');
