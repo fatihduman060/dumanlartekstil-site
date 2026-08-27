@@ -1,3 +1,12 @@
+(function(){
+  if(/cari-detay\.php/i.test(location.pathname) && !document.querySelector('script[data-cari-mukerrer-cek]')){
+    var s=document.createElement('script');
+    s.src='assets/cari-mukerrer-cek-duzelt.js?v=1&_='+Date.now();
+    s.setAttribute('data-cari-mukerrer-cek','1');
+    document.body.appendChild(s);
+  }
+})();
+
 (function () {
   var title = document.querySelector('.topbar h1')?.textContent.trim() || '';
   if (title !== 'Çekler') return;
@@ -139,7 +148,6 @@
     (tabs || summary).insertAdjacentElement('afterend', panel);
   }
 
-  // İptal edilmiş çeklerde görünür ve güvenli geri alma butonunu yükle.
   if (!document.querySelector('script[data-check-restore-ui]')) {
     var restoreScript = document.createElement('script');
     restoreScript.src = 'assets/cek-iptal-geri-al-ui.js?v=1&_=' + Date.now();
