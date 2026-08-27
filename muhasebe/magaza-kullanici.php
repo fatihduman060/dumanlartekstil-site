@@ -123,11 +123,27 @@ function can_manage_store_sales(): bool
     return can_write() || is_store_sales_user();
 }
 
+// Barkodlu Satış içindeki ürün ekleme, düzenleme ve fiyat güncelleme yetkisi.
+// Mağaza kullanıcısına yalnız POS ürün havuzu için yazma izni verir;
+// genel muhasebe yazma yetkisini genişletmez.
+function can_manage_store_products(): bool
+{
+    return can_manage_store_sales();
+}
+
 function require_store_sales_write(): void
 {
     require_login();
     if (!can_manage_store_sales()) {
         throw new RuntimeException('Bu işlem yalnızca mağaza satış yetkisi olan kullanıcılar içindir.');
+    }
+}
+
+function require_store_product_write(): void
+{
+    require_login();
+    if (!can_manage_store_products()) {
+        throw new RuntimeException('Bu işlem yalnızca Barkodlu Satış ürün yönetimi yetkisi olan kullanıcılar içindir.');
     }
 }
 
@@ -174,6 +190,7 @@ if (is_logged_in() && is_store_sales_user()) {
     $allowedStoreScripts = [
         'barkod-satis.php',
         'barkod-satis-api.php',
+        'barkod-satis-fiyat.php',
         'barkod-fis.php',
         'magaza.php',
         'magaza-gunluk-satis.php',
