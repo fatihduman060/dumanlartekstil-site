@@ -2,6 +2,7 @@
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/magaza-kullanici.php';
 require_once __DIR__ . '/barkod-satis-lib.php';
+require_once __DIR__ . '/barkod-satis-urun-kaynagi.php';
 require_once __DIR__ . '/magaza-veresiye-auto-only.php';
 require_login();
 header('Content-Type: application/json; charset=utf-8');
@@ -22,6 +23,7 @@ function pos_product_display_name(array $product): string
 
 try {
     pos_db_ensure();
+    pos_product_source_harden();
     ensure_column(db(), 'pos_products', 'variant_name', 'TEXT');
     $action = trim((string)($_REQUEST['action'] ?? 'products'));
 
@@ -49,16 +51,34 @@ try {
         if ($barcode === '' || $name === '') throw new RuntimeException('Barkod ve ürün adı zorunludur.');
         if ($price <= 0) throw new RuntimeException('Satış fiyatı sıfırdan büyük olmalıdır.');
         $now = now();
+        $userId = current_user()['id'] ?? null;
+
         if ($id > 0) {
-            db()->prepare("UPDATE pos_products SET barcode=?,name=?,variant_name=?,sale_price=?,vat_rate=?,stock_quantity=?,track_stock=?,updated_at=? WHERE id=?")
-                ->execute([$barcode,$name,$variant,$price,$vatRate,$stock,$trackStock,$now,$id]);
+            $stmt = db()->prepare("UPDATE pos_products SET barcode=?,name=?,variant_name=?,sale_price=?,vat_rate=?,stock_quantity=?,track_stock=?,product_source='pos',is_active=1,updated_at=? WHERE id=? AND COALESCE(product_source,'pos')='pos'");
+            $stmt->execute([$barcode,$name,$variant,$price,$vatRate,$stock,$trackStock,$now,$id]);
+            if ($stmt->rowCount() < 1) throw new RuntimeException('Bu kayıt Barkodlu Satış ürününe ait değil. Yeni ürün olarak ekleyin.');
         } else {
-            db()->prepare("INSERT INTO pos_products (barcode,name,variant_name,sale_price,vat_rate,stock_quantity,track_stock,is_active,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,1,?,?,?)")
-                ->execute([$barcode,$name,$variant,$price,$vatRate,$stock,$trackStock,current_user()['id'] ?? null,$now,$now]);
-            $id = (int)db()->lastInsertId();
+            $existingStmt = db()->prepare("SELECT id, COALESCE(product_source,'pos') AS product_source, is_active FROM pos_products WHERE barcode=? LIMIT 1");
+            $existingStmt->execute([$barcode]);
+            $existing = $existingStmt->fetch();
+            if ($existing) {
+                if ((string)$existing['product_source'] !== 'pos' || (int)$existing['is_active'] !== 1) {
+                    // Aynı barkod geçmişte teklif ürününden otomatik kopyalandıysa artık
+                    // kullanıcının bilinçli eklediği Barkodlu Satış ürününe dönüştür.
+                    $id = (int)$existing['id'];
+                    db()->prepare("UPDATE pos_products SET name=?,variant_name=?,sale_price=?,vat_rate=?,stock_quantity=?,track_stock=?,product_source='pos',is_active=1,created_by=?,updated_at=? WHERE id=?")
+                        ->execute([$name,$variant,$price,$vatRate,$stock,$trackStock,$userId,$now,$id]);
+                } else {
+                    throw new RuntimeException('Bu barkod Barkodlu Satış ürünlerinde zaten kayıtlı. Ürün listesinden mevcut kaydı düzenleyin.');
+                }
+            } else {
+                db()->prepare("INSERT INTO pos_products (barcode,name,variant_name,sale_price,vat_rate,stock_quantity,track_stock,is_active,product_source,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,1,'pos',?,?,?)")
+                    ->execute([$barcode,$name,$variant,$price,$vatRate,$stock,$trackStock,$userId,$now,$now]);
+                $id = (int)db()->lastInsertId();
+            }
         }
         $displayName = $variant !== '' ? $name . ' - ' . $variant : $name;
-        audit_action('pos_product', $id, 'kaydedildi', null, ['barcode'=>$barcode,'name'=>$name,'variant_name'=>$variant,'sale_price'=>$price,'stock_quantity'=>$stock], $displayName);
+        audit_action('pos_product', $id, 'kaydedildi', null, ['barcode'=>$barcode,'name'=>$name,'variant_name'=>$variant,'sale_price'=>$price,'stock_quantity'=>$stock,'product_source'=>'pos'], $displayName);
         pos_json(['ok'=>true,'message'=>'Ürün kaydedildi.','products'=>pos_products()]);
     }
 
@@ -89,10 +109,10 @@ try {
             $productId = (int)($raw['product_id'] ?? 0);
             $quantity = max(0, decimal_from_input($raw['quantity'] ?? 0));
             if ($productId <= 0 || $quantity <= 0) continue;
-            $stmt = $pdo->prepare("SELECT * FROM pos_products WHERE id=? AND is_active=1 LIMIT 1");
+            $stmt = $pdo->prepare("SELECT * FROM pos_products WHERE id=? AND is_active=1 AND COALESCE(product_source,'pos')='pos' LIMIT 1");
             $stmt->execute([$productId]);
             $product = $stmt->fetch();
-            if (!$product) throw new RuntimeException('Sepetteki ürünlerden biri artık aktif değil.');
+            if (!$product) throw new RuntimeException('Sepetteki ürünlerden biri Barkodlu Satış ürün havuzunda değil veya artık aktif değil.');
             $displayName = pos_product_display_name($product);
             if ((int)$product['track_stock'] === 1 && $quantity > (float)$product['stock_quantity'] + 0.0001) {
                 throw new RuntimeException($displayName . ' için stok yetersiz. Mevcut: ' . number_format((float)$product['stock_quantity'], 0, ',', '.'));
