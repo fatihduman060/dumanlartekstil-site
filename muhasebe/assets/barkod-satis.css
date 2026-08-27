@@ -4,3 +4,13 @@
 
 .pos-field-label{display:block;font-size:12px;font-weight:800;margin-bottom:6px}.pos-extra-barcodes{align-self:end}.pos-extra-barcode-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.pos-extra-barcode-list{display:flex;flex-wrap:wrap;gap:7px;min-height:32px;margin:8px 0 5px}.pos-extra-barcode-list>small{color:var(--muted);align-self:center}.pos-barcode-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 7px 5px 10px;border-radius:999px;background:#e6f3ea;color:#17462d}.pos-barcode-chip button{width:25px;height:25px;border:0;border-radius:50%;background:#fff;color:#a33;font-size:18px;line-height:1}.pos-extra-barcodes>small{display:block;color:var(--muted);font-size:11px}
 @media(max-width:640px){.pos-extra-barcode-add{grid-template-columns:1fr}.pos-extra-barcode-add .btn{width:100%}}
+
+@media(min-width:981px){
+  .pos-product-form{grid-template-columns:repeat(12,minmax(0,1fr));gap:14px 12px;align-items:end}
+  .pos-product-form>label{grid-column:span 2;min-width:0}
+  .pos-product-form>.wide{grid-column:span 4}
+  .pos-product-form>.pos-extra-barcodes{grid-column:span 6;min-width:0}
+  .pos-product-form>button[type="submit"]{grid-column:span 2;min-height:44px}
+  .pos-product-form input,.pos-extra-barcode-add{min-width:0;width:100%}
+  .pos-extra-barcode-add{grid-template-columns:minmax(220px,1fr) auto}
+}

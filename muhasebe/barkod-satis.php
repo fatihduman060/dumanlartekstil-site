@@ -13,7 +13,7 @@ $creditPeople = pos_credit_people();
 $recentSales = pos_recent_sales(20);
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-satis.css?v=2" />
+<link rel="stylesheet" href="assets/barkod-satis.css?v=3" />
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <section class="pos-main panel-card">
     <div class="pos-title-row">
