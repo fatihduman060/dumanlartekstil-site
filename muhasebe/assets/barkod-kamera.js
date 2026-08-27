@@ -23,6 +23,7 @@
       '.bitke-camera-status{margin:12px 0 0;min-height:24px;color:#4d5551}',
       '.bitke-camera-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}',
       '.bitke-camera-actions .btn{min-height:48px}',
+      '.mobile-barcode-button{display:none!important}',
       '@media(min-width:800px){.bitke-camera-button{width:auto}}'
     ].join('');
     document.head.appendChild(style);
