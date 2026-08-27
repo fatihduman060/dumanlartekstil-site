@@ -2,6 +2,20 @@
   var root=document.querySelector('[data-pos-root]');if(!root)return;
   var api=root.dataset.api,csrf=root.dataset.csrf,cart=[],scan=root.querySelector('[data-pos-scan]'),cartBox=root.querySelector('[data-pos-cart]'),results=root.querySelector('[data-pos-results]'),discount=root.querySelector('[data-pos-discount]'),status=root.querySelector('[data-pos-status]');
   var lookupBusy=false,lastLookup='';
+  var priceCheck=document.querySelector('[data-price-check]'),priceCheckInput=priceCheck&&priceCheck.querySelector('[data-price-check-input]'),priceCheckResults=priceCheck&&priceCheck.querySelector('[data-price-check-results]'),priceCheckStatus=priceCheck&&priceCheck.querySelector('[data-price-check-status]'),priceCheckItems=[];
+  function renderPriceProduct(p){priceCheckResults.innerHTML='<article class="pos-price-check-product"><span>'+esc(productName(p))+'</span><strong>'+money(p.sale_price)+'</strong><small>Barkod: '+esc(p.barcode)+' · Stok: '+Number(p.stock_quantity||0)+'</small></article>';priceCheckStatus.textContent='';}
+  function renderPriceChoices(items){priceCheckItems=items;if(!items.length){priceCheckResults.innerHTML='';priceCheckStatus.textContent='Ürün bulunamadı.';return;}priceCheckStatus.textContent=items.length+' ürün bulundu. Ürünü seçin.';priceCheckResults.innerHTML=items.map(function(p){return '<button type="button" data-price-check-id="'+p.id+'"><span><b>'+esc(productName(p))+'</b><small>'+esc(p.barcode)+'</small></span><strong>'+money(p.sale_price)+'</strong></button>';}).join('');}
+  function lookupPrice(){var q=String(priceCheckInput.value||'').trim();if(!q){priceCheckStatus.textContent='Barkod veya ürün adı girin.';priceCheckInput.focus();return;}priceCheckStatus.textContent='Fiyat aranıyor…';priceCheckResults.innerHTML='';fetch(api+'?action=barcode&barcode='+encodeURIComponent(q)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(d.product){renderPriceProduct(d.product);return null;}return fetch(api+'?action=products&q='+encodeURIComponent(q)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(x){renderPriceChoices(x.products||[]);});}).catch(function(){priceCheckStatus.textContent='Fiyat bilgisi alınamadı.';});}
+  if(priceCheck){
+    root.querySelector('[data-price-check-open]').onclick=function(){priceCheck.hidden=false;priceCheckInput.value='';priceCheckResults.innerHTML='';priceCheckStatus.textContent='';setTimeout(function(){priceCheckInput.focus();},80);};
+    priceCheck.querySelector('[data-price-check-close]').onclick=function(){priceCheck.hidden=true;scan.focus();};
+    priceCheck.addEventListener('click',function(e){if(e.target===priceCheck){priceCheck.hidden=true;scan.focus();}});
+    priceCheck.querySelector('[data-price-check-search]').onclick=lookupPrice;
+    priceCheckInput.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();lookupPrice();}});
+    priceCheckInput.addEventListener('change',function(){if(priceCheckInput.value.trim())lookupPrice();});
+    priceCheckResults.addEventListener('click',function(e){var button=e.target.closest('[data-price-check-id]');if(!button)return;var p=priceCheckItems.find(function(item){return Number(item.id)===Number(button.dataset.priceCheckId);});if(p)renderPriceProduct(p);});
+  }
+
   function money(v){return new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(v||0))+' TL';}
   function esc(s){return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];});}
   function productName(p){var name=String((p&&p.name)||'').trim(),variant=String((p&&p.variant_name)||'').trim();return variant?name+' - '+variant:name;}

@@ -14,11 +14,20 @@ $recentSales = pos_recent_sales(20);
 $canDeleteSales = pos_can_delete_sales();
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-satis.css?v=6" />
+<link rel="stylesheet" href="assets/barkod-satis.css?v=7" />
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
+  <div class="pos-price-check" data-price-check hidden role="dialog" aria-modal="true" aria-labelledby="posPriceCheckTitle">
+    <div class="pos-price-check-card">
+      <div class="pos-price-check-head"><div><span class="pos-kicker">HIZLI SORGULAMA</span><h3 id="posPriceCheckTitle">Fiyat Bak</h3></div><button type="button" data-price-check-close aria-label="Kapat">×</button></div>
+      <label><span>Barkod veya ürün adı</span><input type="text" autocomplete="off" placeholder="Barkodu okutun veya ürün adını yazın" data-price-check-input data-barcode-input /></label>
+      <button type="button" class="btn btn-primary" data-price-check-search>Fiyatı Göster</button>
+      <p class="pos-price-check-status" data-price-check-status></p>
+      <div class="pos-price-check-results" data-price-check-results></div>
+    </div>
+  </div>
   <section class="pos-main panel-card">
     <div class="pos-title-row">
-      <div><span class="pos-kicker">MAĞAZA KASASI</span><h2>Yeni Satış</h2><p>Barkodu okut veya ürün adına göre ara.</p></div>
+      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button></div><p>Barkodu okut veya ürün adına göre ara.</p></div>
       <div class="pos-clock"><strong data-pos-clock>--:--</strong><span><?php echo e(tr_date(date('Y-m-d'))); ?></span></div>
     </div>
 
@@ -94,5 +103,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=1"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=10"></script>
+<script src="assets/barkod-satis.js?v=11"></script>
 <?php page_footer(); ?>
