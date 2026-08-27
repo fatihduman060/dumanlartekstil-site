@@ -62,6 +62,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <form class="pos-product-form" data-product-form>
       <input type="hidden" name="id" value="" />
       <label><span>Ana barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" data-barcode-input /></label>
+      <label class="wide"><span>Ürün adı</span><input name="name" required placeholder="Örn. Bitke Erkek Patik" /></label>
       <div class="wide pos-extra-barcodes">
         <span class="pos-field-label">Ek barkodlar</span>
         <div class="pos-extra-barcode-add"><input type="text" autocomplete="off" placeholder="Diğer barkodu okutun" data-extra-barcode-input data-barcode-input /><button class="btn btn-secondary" type="button" data-extra-barcode-add>Ekle</button></div>
@@ -69,12 +70,11 @@ page_header('Barkodlu Satış', 'barkod_satis');
         <div class="pos-extra-barcode-list" data-extra-barcode-list><small>Henüz ek barkod yok.</small></div>
         <small>Eklediğiniz barkodların tamamı aynı ürünü, fiyatı ve stoğu kullanır.</small>
       </div>
-      <label class="wide"><span>Ürün adı</span><input name="name" required placeholder="Örn. Bitke Erkek Patik" /></label>
-      <label><span>Beden / Varyant</span><input name="variant_name" autocomplete="off" maxlength="40" placeholder="Örn. S, M, L, XL" /></label>
       <label><span>Satış fiyatı</span><input name="sale_price" type="number" min="0.01" step="0.01" required /></label>
       <label><span>KDV %</span><input name="vat_rate" type="number" min="0" max="100" step="1" value="10" /></label>
       <label><span>Başlangıç stoku</span><input name="stock_quantity" type="number" min="0" step="1" value="0" /></label>
       <label class="pos-check"><input name="track_stock" type="checkbox" value="1" checked /><span>Stok takip edilsin</span></label>
+      <label><span>Beden / Varyant <small>(isteğe bağlı)</small></span><input name="variant_name" autocomplete="off" maxlength="40" placeholder="Örn. S, M, L, XL" /></label>
       <button class="btn btn-primary" type="submit">Ürünü Kaydet</button>
     </form>
     <div class="pos-product-list" data-product-list>
