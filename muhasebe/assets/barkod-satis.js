@@ -2,6 +2,36 @@
   var root=document.querySelector('[data-pos-root]');if(!root)return;
   var api=root.dataset.api,csrf=root.dataset.csrf,cart=[],scan=root.querySelector('[data-pos-scan]'),cartBox=root.querySelector('[data-pos-cart]'),results=root.querySelector('[data-pos-results]'),discount=root.querySelector('[data-pos-discount]'),status=root.querySelector('[data-pos-status]');
   var lookupBusy=false,lastLookup='';
+  var launcherLink=root.querySelector('[data-windows-launcher]');
+  if(launcherLink)launcherLink.addEventListener('click',function(e){
+    e.preventDefault();
+    var lines=[
+      '@echo off',
+      'setlocal',
+      'set "KASA_URL=https://bitke.com.tr/muhasebe/barkod-satis.php"',
+      'set "KASA_PROFILE=%LOCALAPPDATA%\\DumanlarMagazaKasa"',
+      'set "CHROME=%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe"',
+      'if exist "%CHROME%" goto chrome',
+      'set "CHROME=%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe"',
+      'if exist "%CHROME%" goto chrome',
+      'set "EDGE=%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe"',
+      'if exist "%EDGE%" goto edge',
+      'echo Chrome veya Microsoft Edge bulunamadi.',
+      'pause',
+      'exit /b 1',
+      ':chrome',
+      'start "" "%CHROME%" --app="%KASA_URL%" --kiosk-printing --user-data-dir="%KASA_PROFILE%"',
+      'exit /b 0',
+      ':edge',
+      'start "" "%EDGE%" --app="%KASA_URL%" --kiosk-printing --user-data-dir="%KASA_PROFILE%"',
+      'exit /b 0'
+    ];
+    var blob=new Blob([lines.join('\r\n')+'\r\n'],{type:'application/octet-stream'});
+    var url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download='Dumanlar-Magaza-Kasa.cmd';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);
+    status.textContent='Windows mağaza kasa başlatıcısı indirildi.';
+  });
+
   var priceCheck=document.querySelector('[data-price-check]'),priceCheckInput=priceCheck&&priceCheck.querySelector('[data-price-check-input]'),priceCheckResults=priceCheck&&priceCheck.querySelector('[data-price-check-results]'),priceCheckStatus=priceCheck&&priceCheck.querySelector('[data-price-check-status]'),priceCheckItems=[];
   function renderPriceProduct(p){priceCheckResults.innerHTML='<article class="pos-price-check-product"><span>'+esc(productName(p))+'</span><strong>'+money(p.sale_price)+'</strong><small>Barkod: '+esc(p.barcode)+' · Stok: '+Number(p.stock_quantity||0)+'</small></article>';priceCheckStatus.textContent='';}
   function renderPriceChoices(items){priceCheckItems=items;if(!items.length){priceCheckResults.innerHTML='';priceCheckStatus.textContent='Ürün bulunamadı.';return;}priceCheckStatus.textContent=items.length+' ürün bulundu. Ürünü seçin.';priceCheckResults.innerHTML=items.map(function(p){return '<button type="button" data-price-check-id="'+p.id+'"><span><b>'+esc(productName(p))+'</b><small>'+esc(p.barcode)+'</small></span><strong>'+money(p.sale_price)+'</strong></button>';}).join('');}
