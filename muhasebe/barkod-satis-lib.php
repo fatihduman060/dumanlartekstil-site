@@ -54,6 +54,30 @@ function pos_credit_person(int $personId): ?array
     return $stmt->fetch() ?: null;
 }
 
+function pos_mark_old_offer_products(): void
+{
+    $pdo = db();
+    $migrationKey = 'migration_pos_offer_product_source_v1';
+    if (setting_get($migrationKey, '0') === '1') return;
+
+    $offerProductsExist = (bool)$pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='offer_products' LIMIT 1")->fetchColumn();
+    if ($offerProductsExist) {
+        // Eski sistem teklif ürünlerini POS'a otomatik kopyalıyordu. Yalnızca otomatik
+        // oluştuğu güvenle anlaşılabilen kayıtları ayır; satış geçmişini silme.
+        $pdo->exec("UPDATE pos_products
+            SET product_source='offer_import', updated_at=COALESCE(updated_at, datetime('now'))
+            WHERE COALESCE(created_by,0)=0
+              AND COALESCE(product_source,'pos')='pos'
+              AND EXISTS (
+                  SELECT 1 FROM offer_products op
+                  WHERE TRIM(COALESCE(op.barcode,''))=TRIM(COALESCE(pos_products.barcode,''))
+                    AND TRIM(COALESCE(op.name,''))=TRIM(COALESCE(pos_products.name,''))
+                    AND ABS(COALESCE(op.default_unit_price,0)-COALESCE(pos_products.sale_price,0))<0.01
+              )");
+    }
+    setting_set($migrationKey, '1');
+}
+
 function pos_db_ensure(): void
 {
     $pdo = db();
@@ -72,8 +96,11 @@ function pos_db_ensure(): void
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )");
+    ensure_column($pdo, 'pos_products', 'variant_name', 'TEXT');
+    ensure_column($pdo, 'pos_products', 'product_source', "TEXT NOT NULL DEFAULT 'pos'");
     $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_products_barcode ON pos_products(barcode)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_products_name ON pos_products(name)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_products_source ON pos_products(product_source,is_active)");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS pos_sales (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,12 +146,9 @@ function pos_db_ensure(): void
     )");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sale_items_sale ON pos_sale_items(sale_id)");
 
-    $offerProductsExist = (bool)$pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='offer_products' LIMIT 1")->fetchColumn();
-    if ($offerProductsExist) {
-        $pdo->exec("INSERT OR IGNORE INTO pos_products (barcode,name,unit,sale_price,vat_rate,stock_quantity,track_stock,is_active,created_at,updated_at)
-            SELECT TRIM(barcode),name,'Adet',COALESCE(default_unit_price,0),10,0,0,1,COALESCE(created_at,datetime('now')),COALESCE(updated_at,datetime('now'))
-            FROM offer_products WHERE TRIM(COALESCE(barcode,''))<>'' AND TRIM(COALESCE(name,''))<>'' AND COALESCE(default_unit_price,0)>0");
-    }
+    // ÖNEMLİ: offer_products artık pos_products içine aktarılmaz.
+    // Barkodlu Satış kendi ürün havuzunu kullanır.
+    pos_mark_old_offer_products();
 }
 
 function pos_products(string $query = ''): array
@@ -132,17 +156,17 @@ function pos_products(string $query = ''): array
     pos_db_ensure();
     $query = trim($query);
     if ($query === '') {
-        return db()->query("SELECT * FROM pos_products WHERE is_active=1 ORDER BY name ASC LIMIT 300")->fetchAll() ?: [];
+        return db()->query("SELECT * FROM pos_products WHERE is_active=1 AND COALESCE(product_source,'pos')='pos' ORDER BY name ASC, COALESCE(variant_name,'') ASC LIMIT 300")->fetchAll() ?: [];
     }
-    $stmt = db()->prepare("SELECT * FROM pos_products WHERE is_active=1 AND (barcode=? OR name LIKE ?) ORDER BY CASE WHEN barcode=? THEN 0 ELSE 1 END, name ASC LIMIT 50");
-    $stmt->execute([$query, '%' . $query . '%', $query]);
+    $stmt = db()->prepare("SELECT * FROM pos_products WHERE is_active=1 AND COALESCE(product_source,'pos')='pos' AND (barcode=? OR name LIKE ? OR COALESCE(variant_name,'') LIKE ?) ORDER BY CASE WHEN barcode=? THEN 0 ELSE 1 END, name ASC, COALESCE(variant_name,'') ASC LIMIT 50");
+    $stmt->execute([$query, '%' . $query . '%', '%' . $query . '%', $query]);
     return $stmt->fetchAll() ?: [];
 }
 
 function pos_product_by_barcode(string $barcode): ?array
 {
     pos_db_ensure();
-    $stmt = db()->prepare("SELECT * FROM pos_products WHERE barcode=? AND is_active=1 LIMIT 1");
+    $stmt = db()->prepare("SELECT * FROM pos_products WHERE barcode=? AND is_active=1 AND COALESCE(product_source,'pos')='pos' LIMIT 1");
     $stmt->execute([trim($barcode)]);
     return $stmt->fetch() ?: null;
 }
