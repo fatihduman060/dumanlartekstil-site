@@ -16,3 +16,6 @@
 }
 
 .pos-direct-print-setup{display:block;text-align:center;color:#18472e;font-size:12px;font-weight:850;text-decoration:underline;text-underline-offset:3px}
+
+.pos-history-item{position:relative;display:grid}.pos-history-item .pos-history-row{padding-right:70px}.pos-sale-delete{position:absolute;right:10px;bottom:10px;min-width:48px;min-height:34px;border:1px solid #e1aaaa;border-radius:9px;background:#fff3f3;color:#a52828;font-weight:900;cursor:pointer}.pos-sale-delete:hover{background:#a52828;color:#fff}.pos-sale-delete:disabled{opacity:.6;cursor:wait}
+@media(max-width:640px){.pos-history-item .pos-history-row{padding-right:64px}.pos-sale-delete{right:8px;bottom:8px}}

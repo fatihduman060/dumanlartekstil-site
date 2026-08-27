@@ -307,6 +307,16 @@ function pos_sale(int $id): ?array
     return $sale;
 }
 
+function pos_can_delete_sales(): bool
+{
+    $user = current_user();
+    if (!$user) return false;
+    $username = mb_strtolower(trim((string)($user['username'] ?? '')), 'UTF-8');
+    $displayName = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)($user['display_name'] ?? ''))), 'UTF-8');
+    return $displayName === 'fatih duman'
+        || in_array($username, ['fatih', 'fatihduman', 'fatih.duman', 'fatihduman060'], true);
+}
+
 function pos_recent_sales(int $limit = 30): array
 {
     pos_db_ensure();

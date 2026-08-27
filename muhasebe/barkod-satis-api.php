@@ -95,6 +95,64 @@ try {
         pos_json(['ok'=>true,'message'=>'Ürün ve barkodları kaydedildi.','products'=>pos_products()]);
     }
 
+    if ($action === 'delete_sale') {
+        if (!pos_can_delete_sales()) throw new RuntimeException('Satış silme yetkisi yalnızca Fatih kullanıcısına aittir.');
+        $saleId = (int)($_POST['sale_id'] ?? 0);
+        if ($saleId <= 0) throw new RuntimeException('Silinecek satış seçilmedi.');
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM pos_sales WHERE id=? AND is_cancelled=0 LIMIT 1");
+            $stmt->execute([$saleId]);
+            $sale = $stmt->fetch();
+            if (!$sale) throw new RuntimeException('Satış bulunamadı veya daha önce silinmiş.');
+
+            $itemStmt = $pdo->prepare("SELECT i.product_id,i.quantity,p.track_stock FROM pos_sale_items i LEFT JOIN pos_products p ON p.id=i.product_id WHERE i.sale_id=?");
+            $itemStmt->execute([$saleId]);
+            foreach ($itemStmt->fetchAll() ?: [] as $item) {
+                if ((int)($item['track_stock'] ?? 0) === 1) {
+                    $pdo->prepare("UPDATE pos_products SET stock_quantity=stock_quantity+?,updated_at=? WHERE id=?")
+                        ->execute([(float)$item['quantity'],now(),(int)$item['product_id']]);
+                }
+            }
+
+            $creditEntryId = (int)($sale['credit_entry_id'] ?? 0);
+            if ($creditEntryId > 0) {
+                $pdo->prepare("UPDATE store_credit_entries SET is_cancelled=1,cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=? AND is_cancelled=0")
+                    ->execute([now(),current_user()['id'] ?? null,'Barkodlu satış Fatih kullanıcısı tarafından silindi',now(),$creditEntryId]);
+            }
+
+            $pdo->prepare("UPDATE pos_sales SET is_cancelled=1 WHERE id=?")->execute([$saleId]);
+            $grandTotal = (float)$sale['grand_total'];
+            $paymentMethod = (string)$sale['payment_method'];
+            pos_daily_totals_delta(
+                (string)$sale['sale_date'],
+                -$grandTotal,
+                $paymentMethod === 'cash' ? -$grandTotal : 0,
+                $paymentMethod === 'card' ? -$grandTotal : 0,
+                0,
+                (int)(current_user()['id'] ?? 0) ?: null
+            );
+            magaza_veresiye_auto_only_sync_date((string)$sale['sale_date'], (int)(current_user()['id'] ?? 0) ?: null);
+
+            audit_action('pos_sale', $saleId, 'silindi', [
+                'receipt_no'=>$sale['receipt_no'],
+                'payment_method'=>$paymentMethod,
+                'grand_total'=>$grandTotal,
+                'is_cancelled'=>0,
+            ], [
+                'is_cancelled'=>1,
+                'stock_restored'=>true,
+                'totals_reversed'=>true,
+            ], (string)$sale['receipt_no']);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+        pos_json(['ok'=>true,'message'=>'Satış silindi; stok ve mağaza toplamları geri alındı.']);
+    }
+
     if ($action !== 'complete_sale') throw new RuntimeException('Geçersiz işlem.');
     $rawItems = json_decode((string)($_POST['items_json'] ?? ''), true);
     if (!is_array($rawItems) || !$rawItems) throw new RuntimeException('Sepette ürün bulunmuyor.');

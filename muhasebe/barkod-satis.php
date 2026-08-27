@@ -11,9 +11,10 @@ ensure_column(db(), 'pos_products', 'variant_name', 'TEXT');
 $products = pos_products();
 $creditPeople = pos_credit_people();
 $recentSales = pos_recent_sales(20);
+$canDeleteSales = pos_can_delete_sales();
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-satis.css?v=5" />
+<link rel="stylesheet" href="assets/barkod-satis.css?v=6" />
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <section class="pos-main panel-card">
     <div class="pos-title-row">
@@ -82,7 +83,10 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <div class="pos-history-list">
       <?php if (!$recentSales): ?><p class="muted">Henüz barkodlu satış yok.</p><?php endif; ?>
       <?php foreach ($recentSales as $sale): ?>
-      <a href="barkod-fis.php?id=<?php echo e($sale['id']); ?>" target="_blank" class="pos-history-row"><span><strong><?php echo e($sale['receipt_no']); ?></strong><small><?php echo e(tr_date($sale['sale_date'])); ?> <?php echo e(substr($sale['sale_time'],0,5)); ?> · <?php echo e($sale['customer_name']); ?></small></span><strong><?php echo e(money((float)$sale['grand_total'])); ?></strong></a>
+      <div class="pos-history-item">
+        <a href="barkod-fis.php?id=<?php echo e($sale['id']); ?>" target="_blank" class="pos-history-row"><span><strong><?php echo e($sale['receipt_no']); ?></strong><small><?php echo e(tr_date($sale['sale_date'])); ?> <?php echo e(substr($sale['sale_time'],0,5)); ?> · <?php echo e($sale['customer_name']); ?></small></span><strong><?php echo e(money((float)$sale['grand_total'])); ?></strong></a>
+        <?php if ($canDeleteSales): ?><button type="button" class="pos-sale-delete" data-sale-delete="<?php echo e($sale['id']); ?>" data-receipt-no="<?php echo e($sale['receipt_no']); ?>">Sil</button><?php endif; ?>
+      </div>
       <?php endforeach; ?>
     </div>
   </section>
@@ -90,5 +94,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=1"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=9"></script>
+<script src="assets/barkod-satis.js?v=10"></script>
 <?php page_footer(); ?>
