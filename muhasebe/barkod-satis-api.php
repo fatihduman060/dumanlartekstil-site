@@ -127,9 +127,6 @@ try {
             $product = $stmt->fetch();
             if (!$product) throw new RuntimeException('Sepetteki ürünlerden biri Barkodlu Satış ürün havuzunda değil veya artık aktif değil.');
             $displayName = pos_product_display_name($product);
-            if ((int)$product['track_stock'] === 1 && $quantity > (float)$product['stock_quantity'] + 0.0001) {
-                throw new RuntimeException($displayName . ' için stok yetersiz. Mevcut: ' . number_format((float)$product['stock_quantity'], 0, ',', '.'));
-            }
             $lineTotal = round($quantity * (float)$product['sale_price'], 2);
             $lineVat = round($lineTotal - ($lineTotal / (1 + ((float)$product['vat_rate'] / 100))), 2);
             $subtotal += $lineTotal;
