@@ -1,12 +1,14 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/barkod-satis-lib.php';
+require_once __DIR__ . '/barkod-satis-urun-kaynagi.php';
 require_login();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 if (!can_manage_store_sales()) { flash('error', 'Barkodlu satış için mağaza satış yetkisi gerekiyor.'); redirect('dashboard.php'); }
 pos_db_ensure();
+pos_product_source_harden();
 ensure_column(db(), 'pos_products', 'variant_name', 'TEXT');
 $products = pos_products();
 $creditPeople = pos_credit_people();
@@ -46,7 +48,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </aside>
 
   <section class="panel-card pos-products-panel">
-    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Aynı ürünün S / M / L gibi bedenlerini ayrı barkodla, aynı satış fiyatıyla tanımlayabilirsin.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
+    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Bu liste yalnızca Barkodlu Satış içinde eklediğin ürünlere aittir. Teklif ve diğer modüllerdeki ürünler burada gösterilmez.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
     <form class="pos-product-form" data-product-form>
       <input type="hidden" name="id" value="" />
       <label><span>Barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" data-barcode-input /></label>
@@ -80,5 +82,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
 </div>
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=7"></script>
+<script src="assets/barkod-satis.js?v=8"></script>
 <?php page_footer(); ?>
