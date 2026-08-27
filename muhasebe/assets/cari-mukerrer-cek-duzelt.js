@@ -55,8 +55,9 @@
     var rows=Array.prototype.slice.call(table.querySelectorAll('tbody tr')).filter(isActive);
     var candidates=[];
     rows.forEach(function(row){
-      if(hasDocument(row)||hasCheckLink(row)||!checkLike(row)) return;
-      var keepers=rows.filter(function(other){return other!==row&&sameKey(row,other)&&(hasDocument(other)||hasCheckLink(other));});
+      // Hedef her zaman görselsiz kopyadır. Çek bağlantısı yanlışlıkla bu satırdaysa endpoint onu görselli harekete taşır.
+      if(hasDocument(row)||!checkLike(row)) return;
+      var keepers=rows.filter(function(other){return other!==row&&sameKey(row,other)&&hasDocument(other);});
       if(keepers.length!==1) return;
       candidates.push({row:row,keep:keepers[0],amount:moneyNumber(txt(row.children[6]))});
 
@@ -64,10 +65,10 @@
       if(actions&&!actions.querySelector('.cari-mukerrer-cek-btn')){
         var btn=document.createElement('button');
         btn.type='button';btn.className='cari-mukerrer-cek-btn';btn.textContent='Mükerrer çek hareketini iptal et';
-        btn.title='Görselli/çek kaydına bağlı gerçek hareket korunur; yalnızca bu görselsiz mükerrer cari hareketi iptal edilir.';
-        btn.onclick=function(){if(confirm('Bu görselsiz mükerrer çek hareketi iptal edilsin mi? Görselli gerçek çek kaydı korunacak.'))postFix(row,false).catch(function(){});};
+        btn.title='Görselli gerçek hareket korunur. Çek bağlantısı bu görselsiz satırdaysa önce görselli harekete taşınır.';
+        btn.onclick=function(){if(confirm('Bu görselsiz mükerrer çek hareketi iptal edilsin mi? Görselli gerçek hareket ve tek çek kaydı korunacak.'))postFix(row,false).catch(function(){});};
         actions.appendChild(btn);
-        var note=document.createElement('small');note.className='cari-mukerrer-note';note.textContent='Aynı tutarda gerçek çek hareketi bulundu';actions.appendChild(note);
+        var note=document.createElement('small');note.className='cari-mukerrer-note';note.textContent='Aynı tutarda görselli gerçek hareket bulundu';actions.appendChild(note);
       }
     });
 
