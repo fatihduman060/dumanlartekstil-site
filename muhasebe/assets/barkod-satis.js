@@ -85,5 +85,30 @@
   function bindProductRows(){root.querySelectorAll('[data-product-edit]').forEach(function(b){b.onclick=function(){var p=JSON.parse(this.dataset.productEdit);Object.keys(p).forEach(function(k){var el=form.elements[k];if(!el||k==='extra_barcodes')return;if(el.type==='checkbox')el.checked=Number(p[k])===1;else el.value=p[k] == null?'':p[k];});setExtraBarcodes(p.extra_barcodes||'');form.scrollIntoView({behavior:'smooth',block:'center'});form.elements.barcode.focus();};});}
   root.querySelector('[data-product-new]').onclick=function(){form.reset();form.elements.id.value='';form.elements.vat_rate.value='10';form.elements.track_stock.checked=true;if(form.elements.variant_name)form.elements.variant_name.value='';setExtraBarcodes('');form.elements.barcode.focus();};
   form.addEventListener('submit',function(e){e.preventDefault();var body=new FormData(form);body.set('action','save_product');body.set('csrf_token',csrf);fetch(api,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(!d.ok)throw new Error(d.error||'Ürün kaydedilemedi.');status.textContent=d.message;location.reload();}).catch(function(e){status.textContent=e.message;});});
+  var productManager=root.querySelector('[data-product-manager]'),productListToggle=root.querySelector('[data-product-list-toggle]'),productListSearch=root.querySelector('[data-product-list-search]'),productManagerStatus=root.querySelector('[data-product-manager-status]');
+  if(productManager&&productListToggle){
+    productListToggle.addEventListener('click',function(){
+      var opening=productManager.hidden;
+      productManager.hidden=!opening;
+      productListToggle.setAttribute('aria-expanded',opening?'true':'false');
+      productListToggle.textContent=opening?'Ürün Listesini Kapat':'Ürün Listesi ('+productManager.querySelectorAll('[data-bulk-product]').length+')';
+      if(opening)setTimeout(function(){if(productListSearch)productListSearch.focus();},60);
+    });
+    if(productListSearch)productListSearch.addEventListener('input',function(){
+      var q=String(this.value||'').toLocaleLowerCase('tr-TR').trim();
+      productManager.querySelectorAll('[data-bulk-product]').forEach(function(row){row.hidden=q!==''&&String(row.dataset.productSearch||'').indexOf(q)===-1;});
+    });
+    productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(button){button.addEventListener('click',function(){
+      var updates=[];
+      productManager.querySelectorAll('[data-bulk-product]').forEach(function(row){updates.push({id:Number(row.dataset.bulkProduct),sale_price:row.querySelector('[data-bulk-price]').value,stock_quantity:row.querySelector('[data-bulk-stock]').value});});
+      if(!updates.length){productManagerStatus.textContent='Güncellenecek ürün bulunamadı.';return;}
+      if(!confirm(updates.length+' ürünün fiyat ve stok bilgileri kaydedilsin mi?'))return;
+      productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn){btn.disabled=true;btn.textContent='Kaydediliyor…';});
+      productManagerStatus.textContent='';
+      var body=new FormData();body.set('action','bulk_update_products');body.set('csrf_token',csrf);body.set('updates_json',JSON.stringify(updates));
+      fetch(api,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(!d.ok)throw new Error(d.error||'Ürünler güncellenemedi.');productManagerStatus.textContent=d.message;setTimeout(function(){location.reload();},700);}).catch(function(error){productManagerStatus.textContent=error.message;productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn){btn.disabled=false;btn.textContent='Tüm Değişiklikleri Kaydet';});});
+    });});
+  }
+
   setInterval(function(){var d=new Date(),el=root.querySelector('[data-pos-clock]');if(el)el.textContent=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});},1000);setExtraBarcodes('');bindProductRows();render();setTimeout(function(){scan.focus();},250);
 })();

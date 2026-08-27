@@ -14,7 +14,7 @@ $recentSales = pos_recent_sales(20);
 $canDeleteSales = pos_can_delete_sales();
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-satis.css?v=8" />
+<link rel="stylesheet" href="assets/barkod-satis.css?v=9" />
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <div class="pos-price-check" data-price-check hidden role="dialog" aria-modal="true" aria-labelledby="posPriceCheckTitle">
     <div class="pos-price-check-card">
@@ -58,7 +58,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </aside>
 
   <section class="panel-card pos-products-panel">
-    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Aynı ürünün S / M / L gibi bedenlerini ayrı barkodla, aynı satış fiyatıyla tanımlayabilirsin.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
+    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Yeni ürün ekleyebilir veya ürün listesinden fiyat ve stokları topluca düzenleyebilirsin.</p></div><div class="pos-product-head-actions"><button type="button" class="btn btn-secondary" data-product-list-toggle aria-expanded="false">Ürün Listesi (<?php echo e(count($products)); ?>)</button><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div></div>
     <form class="pos-product-form" data-product-form>
       <input type="hidden" name="id" value="" />
       <label><span>Ana barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" data-barcode-input /></label>
@@ -77,13 +77,29 @@ page_header('Barkodlu Satış', 'barkod_satis');
       <label><span>Beden / Varyant <small>(isteğe bağlı)</small></span><input name="variant_name" autocomplete="off" maxlength="40" placeholder="Örn. S, M, L, XL" /></label>
       <button class="btn btn-primary" type="submit">Ürünü Kaydet</button>
     </form>
-    <div class="pos-product-list" data-product-list>
-      <?php foreach ($products as $p): $variant = trim((string)($p['variant_name'] ?? '')); ?>
-      <button type="button" class="pos-product-row" data-product-edit='<?php echo e(json_encode($p, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>'>
-        <span><strong><?php echo e($p['name'] . ($variant !== '' ? ' - ' . $variant : '')); ?></strong><small><?php echo e($p['barcode']); ?><?php if ((int)($p['barcode_count'] ?? 1) > 1): ?> · <?php echo e((int)$p['barcode_count']); ?> barkod<?php endif; ?></small></span>
-        <span><strong><?php echo e(money((float)$p['sale_price'])); ?></strong><small>Stok: <?php echo e(number_format((float)$p['stock_quantity'], 0, ',', '.')); ?></small></span>
-      </button>
-      <?php endforeach; ?>
+    <div class="pos-product-manager" data-product-manager hidden>
+      <div class="pos-product-manager-toolbar">
+        <label><span>Ürünlerde ara</span><input type="search" autocomplete="off" placeholder="Ürün adı, barkod veya artikel" data-product-list-search /></label>
+        <button type="button" class="btn btn-primary" data-product-bulk-save>Tüm Değişiklikleri Kaydet</button>
+      </div>
+      <p class="pos-product-manager-status" data-product-manager-status></p>
+      <div class="pos-product-table-wrap">
+        <table class="pos-product-table">
+          <thead><tr><th>Ürün</th><th>Barkod</th><th>Satış fiyatı</th><th>Stok adedi</th><th>İşlem</th></tr></thead>
+          <tbody>
+          <?php foreach ($products as $p): $variant = trim((string)($p['variant_name'] ?? '')); $searchText = mb_strtolower($p['name'] . ' ' . $variant . ' ' . implode(' ', $p['barcodes'] ?? [$p['barcode']]), 'UTF-8'); ?>
+            <tr data-bulk-product="<?php echo e($p['id']); ?>" data-product-search="<?php echo e($searchText); ?>">
+              <td data-label="Ürün"><strong><?php echo e($p['name'] . ($variant !== '' ? ' - ' . $variant : '')); ?></strong></td>
+              <td data-label="Barkod"><span><?php echo e($p['barcode']); ?></span><?php if ((int)($p['barcode_count'] ?? 1) > 1): ?><small><?php echo e((int)$p['barcode_count']); ?> barkod</small><?php endif; ?></td>
+              <td data-label="Satış fiyatı"><input type="number" min="0.01" step="0.01" value="<?php echo e(number_format((float)$p['sale_price'], 2, '.', '')); ?>" data-bulk-price /></td>
+              <td data-label="Stok adedi"><input type="number" step="1" value="<?php echo e(number_format((float)$p['stock_quantity'], 0, '.', '')); ?>" data-bulk-stock /></td>
+              <td data-label="İşlem"><button type="button" class="btn btn-secondary pos-product-edit-button" data-product-edit='<?php echo e(json_encode($p, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>'>Düzenle</button></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <div class="pos-product-manager-footer"><button type="button" class="btn btn-primary" data-product-bulk-save>Tüm Değişiklikleri Kaydet</button></div>
     </div>
   </section>
 
@@ -103,5 +119,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=13"></script>
+<script src="assets/barkod-satis.js?v=14"></script>
 <?php page_footer(); ?>

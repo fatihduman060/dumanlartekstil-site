@@ -98,6 +98,48 @@ try {
         pos_json(['ok'=>true,'message'=>'Ürün ve barkodları kaydedildi.','products'=>pos_products()]);
     }
 
+    if ($action === 'bulk_update_products') {
+        $updates = json_decode((string)($_POST['updates_json'] ?? ''), true);
+        if (!is_array($updates) || !$updates) throw new RuntimeException('Güncellenecek ürün bulunamadı.');
+        if (count($updates) > 500) throw new RuntimeException('Tek işlemde en fazla 500 ürün güncellenebilir.');
+        $pdo = db();
+        $now = now();
+        $stmt = $pdo->prepare("SELECT id,name,variant_name,sale_price,stock_quantity FROM pos_products WHERE id=? AND is_active=1 AND COALESCE(product_source,'pos')='pos' LIMIT 1");
+        $updateStmt = $pdo->prepare("UPDATE pos_products SET sale_price=?,stock_quantity=?,updated_at=? WHERE id=?");
+        $pdo->beginTransaction();
+        $changed = 0;
+        try {
+            foreach ($updates as $update) {
+                $productId = (int)($update['id'] ?? 0);
+                $price = decimal_from_input($update['sale_price'] ?? 0);
+                $stock = decimal_from_input($update['stock_quantity'] ?? 0);
+                if ($productId <= 0) continue;
+                if ($price <= 0) throw new RuntimeException('Satış fiyatı sıfırdan büyük olmalıdır.');
+                $stmt->execute([$productId]);
+                $product = $stmt->fetch();
+                if (!$product) throw new RuntimeException('Güncellenecek ürünlerden biri bulunamadı.');
+                $oldPrice = (float)$product['sale_price'];
+                $oldStock = (float)$product['stock_quantity'];
+                if (abs($oldPrice - $price) < 0.001 && abs($oldStock - $stock) < 0.001) continue;
+                $updateStmt->execute([$price,$stock,$now,$productId]);
+                $displayName = trim((string)$product['name']);
+                $variant = trim((string)($product['variant_name'] ?? ''));
+                if ($variant !== '') $displayName .= ' - ' . $variant;
+                audit_action('pos_product', $productId, 'toplu_guncellendi',
+                    ['sale_price'=>$oldPrice,'stock_quantity'=>$oldStock],
+                    ['sale_price'=>$price,'stock_quantity'=>$stock],
+                    $displayName
+                );
+                $changed++;
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+        pos_json(['ok'=>true,'message'=>$changed . ' ürünün fiyat/stok bilgisi güncellendi.','changed'=>$changed]);
+    }
+
     if ($action === 'delete_sale') {
         if (!pos_can_delete_sales()) throw new RuntimeException('Satış silme yetkisi yalnızca Fatih kullanıcısına aittir.');
         $saleId = (int)($_POST['sale_id'] ?? 0);

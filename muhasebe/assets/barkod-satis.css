@@ -25,3 +25,33 @@
 
 /* Telefon kamerası yalnız mobil/tablet kasada gösterilir. */
 @media(min-width:800px){.bitke-camera-button{display:none!important}}
+
+
+/* Açılır ürün yönetimi: fiyat ve stokları tek ekranda düzenleme */
+.pos-product-head-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.pos-product-manager{margin-top:20px;border-top:1px solid var(--line,#e2d8c7);padding-top:18px}
+.pos-product-manager[hidden]{display:none!important}
+.pos-product-manager-toolbar{display:flex;align-items:end;justify-content:space-between;gap:14px;margin-bottom:12px}
+.pos-product-manager-toolbar label{display:grid;gap:5px;flex:1;max-width:460px;font-size:12px;font-weight:900;color:#284332}
+.pos-product-manager-toolbar input{min-height:44px;border:1px solid #d9c79e;border-radius:12px;padding:9px 12px;background:#fff;font-size:15px}
+.pos-product-manager-status{min-height:22px;margin:5px 0;color:#295d3e;font-weight:800}
+.pos-product-table-wrap{overflow:auto;border:1px solid #e0d4bd;border-radius:16px;background:#fff}
+.pos-product-table{width:100%;border-collapse:collapse;min-width:760px}
+.pos-product-table th,.pos-product-table td{padding:11px 12px;text-align:left;border-bottom:1px solid #eee6d7;vertical-align:middle}
+.pos-product-table th{position:sticky;top:0;background:#f7f1e5;color:#5d594f;font-size:12px;z-index:1}
+.pos-product-table td:nth-child(3),.pos-product-table td:nth-child(4){width:150px}
+.pos-product-table td:last-child{width:110px}
+.pos-product-table td small{display:block;color:#7a7469;margin-top:3px}
+.pos-product-table input{width:100%;min-height:42px;border:1px solid #d9c79e;border-radius:10px;padding:7px 9px;font-size:15px}
+.pos-product-manager-footer{display:flex;justify-content:flex-end;margin-top:12px}
+@media(max-width:720px){
+ .pos-product-head-actions{width:100%}.pos-product-head-actions .btn{flex:1}
+ .pos-product-manager-toolbar{align-items:stretch;flex-direction:column}.pos-product-manager-toolbar label{max-width:none}
+ .pos-product-table-wrap{border:0;background:transparent;overflow:visible}
+ .pos-product-table{min-width:0;display:block}.pos-product-table thead{display:none}.pos-product-table tbody{display:grid;gap:12px}
+ .pos-product-table tr{display:grid;gap:8px;padding:14px;border:1px solid #e0d4bd;border-radius:15px;background:#fff}
+ .pos-product-table td{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:center;padding:3px 0;border:0;width:auto!important}
+ .pos-product-table td:before{content:attr(data-label);font-size:11px;font-weight:900;color:#6e695f;text-transform:uppercase}
+ .pos-product-table td input,.pos-product-table td .btn{width:100%}
+ .pos-product-manager-footer .btn{width:100%}
+}
