@@ -78,7 +78,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
   </section>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
-<script src="assets/barkod-fotograf.js?v=1"></script>
+<script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
+<script src="assets/barkod-kamera.js?v=1"></script>
 <script src="assets/barkod-satis.js?v=7"></script>
 <?php page_footer(); ?>
