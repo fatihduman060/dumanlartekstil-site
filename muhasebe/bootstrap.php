@@ -1137,6 +1137,22 @@ function sync_movement_to_check(int $movementId, bool $allowCreate = true): void
     $checkId = !empty($m['check_id']) ? (int)$m['check_id'] : 0;
     if ((int)($m['is_cancelled'] ?? 0) === 1) {
         if ($checkId > 0) {
+            $survivorStmt = $pdo->prepare("SELECT id FROM movements
+                WHERE check_id=? AND id<>? AND COALESCE(is_cancelled,0)=0
+                ORDER BY CASE WHEN COALESCE(description,'')<>'' THEN 0 ELSE 1 END, id DESC
+                LIMIT 1");
+            $survivorStmt->execute([$checkId, $movementId]);
+            $survivorId = (int)($survivorStmt->fetchColumn() ?: 0);
+            if ($survivorId > 0) {
+                $pdo->prepare("UPDATE checks
+                    SET movement_id=?, is_cancelled=0, cancelled_at=NULL, cancelled_by=NULL,
+                        cancel_reason=NULL, updated_at=?
+                    WHERE id=?")
+                    ->execute([$survivorId, now(), $checkId]);
+                sync_movement_to_check($survivorId, false);
+                return;
+            }
+
             $cStmt = $pdo->prepare('SELECT * FROM checks WHERE id=?');
             $cStmt->execute([$checkId]);
             $ch = $cStmt->fetch();
