@@ -90,52 +90,60 @@
     });
   }
 
-  if (!warnings.length) return;
+  if (warnings.length) {
+    var counts = warnings.reduce(function (acc, item) {
+      acc[item.type] = (acc[item.type] || 0) + 1;
+      return acc;
+    }, {});
 
-  var counts = warnings.reduce(function (acc, item) {
-    acc[item.type] = (acc[item.type] || 0) + 1;
-    return acc;
-  }, {});
-
-  var panel = document.createElement('section');
-  panel.className = 'due-warning-panel';
-  panel.innerHTML = `
-    <div class="due-warning-head">
-      <div>
-        <h3>Vade uyarıları</h3>
-        <small>${warnings.length} çek dikkat istiyor · geciken, bugün vadeli ve 7 gün içindeki çekler</small>
+    var panel = document.createElement('section');
+    panel.className = 'due-warning-panel';
+    panel.innerHTML = `
+      <div class="due-warning-head">
+        <div>
+          <h3>Vade uyarıları</h3>
+          <small>${warnings.length} çek dikkat istiyor · geciken, bugün vadeli ve 7 gün içindeki çekler</small>
+        </div>
+        <div class="due-warning-chips">
+          <a href="${urlWithDueFilter('overdue')}">Geciken: ${counts.overdue || 0}</a>
+          <a href="${urlWithDueFilter('today')}">Bugün: ${counts.today || 0}</a>
+          <a href="${urlWithDueFilter('week')}">7 gün: ${counts.week || 0}</a>
+        </div>
       </div>
-      <div class="due-warning-chips">
-        <a href="${urlWithDueFilter('overdue')}">Geciken: ${counts.overdue || 0}</a>
-        <a href="${urlWithDueFilter('today')}">Bugün: ${counts.today || 0}</a>
-        <a href="${urlWithDueFilter('week')}">7 gün: ${counts.week || 0}</a>
-      </div>
-    </div>
-    <div class="due-warning-list"></div>
-  `;
-
-  var list = panel.querySelector('.due-warning-list');
-  warnings.slice(0, 8).forEach(function (item) {
-    var tagClass = item.type === 'overdue' ? 'danger' : (item.type === 'today' ? 'today' : '');
-    var div = document.createElement('div');
-    div.className = 'due-warning-item';
-    div.innerHTML = `
-      <span class="due-warning-tag ${tagClass}">${item.dueText}</span>
-      <div><strong>${item.cari || '-'}</strong><span>${item.bank || '-'} · ${item.due || '-'} · ${item.amount || '-'}</span><span>${item.collection || ''}</span></div>
-      <button type="button" class="due-warning-go" data-row="${item.rowId}">Göster</button>
+      <div class="due-warning-list"></div>
     `;
-    list.appendChild(div);
-  });
 
-  list.addEventListener('click', function (event) {
-    var btn = event.target.closest('[data-row]');
-    if (!btn) return;
-    var row = document.getElementById(btn.getAttribute('data-row'));
-    if (!row) return;
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    row.classList.add('due-row-focus');
-    setTimeout(function () { row.classList.remove('due-row-focus'); }, 3200);
-  });
+    var list = panel.querySelector('.due-warning-list');
+    warnings.slice(0, 8).forEach(function (item) {
+      var tagClass = item.type === 'overdue' ? 'danger' : (item.type === 'today' ? 'today' : '');
+      var div = document.createElement('div');
+      div.className = 'due-warning-item';
+      div.innerHTML = `
+        <span class="due-warning-tag ${tagClass}">${item.dueText}</span>
+        <div><strong>${item.cari || '-'}</strong><span>${item.bank || '-'} · ${item.due || '-'} · ${item.amount || '-'}</span><span>${item.collection || ''}</span></div>
+        <button type="button" class="due-warning-go" data-row="${item.rowId}">Göster</button>
+      `;
+      list.appendChild(div);
+    });
 
-  (tabs || summary).insertAdjacentElement('afterend', panel);
+    list.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-row]');
+      if (!btn) return;
+      var row = document.getElementById(btn.getAttribute('data-row'));
+      if (!row) return;
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.add('due-row-focus');
+      setTimeout(function () { row.classList.remove('due-row-focus'); }, 3200);
+    });
+
+    (tabs || summary).insertAdjacentElement('afterend', panel);
+  }
+
+  // İptal edilmiş çeklerde görünür ve güvenli geri alma butonunu yükle.
+  if (!document.querySelector('script[data-check-restore-ui]')) {
+    var restoreScript = document.createElement('script');
+    restoreScript.src = 'assets/cek-iptal-geri-al-ui.js?v=1&_=' + Date.now();
+    restoreScript.setAttribute('data-check-restore-ui','1');
+    document.body.appendChild(restoreScript);
+  }
 })();
