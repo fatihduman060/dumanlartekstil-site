@@ -192,13 +192,20 @@ function pos_products(string $query = ''): array
         return pos_products_with_barcodes($products);
     }
     $suffix = '%' . $query;
-    $stmt = db()->prepare("SELECT * FROM pos_products p WHERE p.is_active=1 AND COALESCE(p.product_source,'pos')='pos' AND (p.barcode=? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb WHERE pb.product_id=p.id AND pb.barcode=?) OR p.barcode LIKE ? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb WHERE pb.product_id=p.id AND pb.barcode LIKE ?) OR p.name LIKE ? OR COALESCE(p.variant_name,'') LIKE ?) ORDER BY CASE WHEN p.barcode=? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb2 WHERE pb2.product_id=p.id AND pb2.barcode=?) THEN 0 WHEN p.barcode LIKE ? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb3 WHERE pb3.product_id=p.id AND pb3.barcode LIKE ?) THEN 1 ELSE 2 END, p.name ASC, COALESCE(p.variant_name,'') ASC LIMIT 50");
-    $stmt->execute([$query, $query, $suffix, $suffix, '%' . $query . '%', '%' . $query . '%', $query, $query, $suffix, $suffix]);
+    // EAN barkodlarında en sondaki karakter kontrol hanesidir. Artikel numarası
+    // kontrol hanesinin hemen önündeyse kullanıcı yalnız artikeli yazarak da bulabilsin.
+    $eanArticle = '%' . $query . '_';
+    $stmt = db()->prepare("SELECT * FROM pos_products p WHERE p.is_active=1 AND COALESCE(p.product_source,'pos')='pos' AND (p.barcode=? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb WHERE pb.product_id=p.id AND pb.barcode=?) OR p.barcode LIKE ? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb WHERE pb.product_id=p.id AND pb.barcode LIKE ?) OR p.barcode LIKE ? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb WHERE pb.product_id=p.id AND pb.barcode LIKE ?) OR p.name LIKE ? OR COALESCE(p.variant_name,'') LIKE ?) ORDER BY CASE WHEN p.barcode=? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb2 WHERE pb2.product_id=p.id AND pb2.barcode=?) THEN 0 WHEN p.barcode LIKE ? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb3 WHERE pb3.product_id=p.id AND pb3.barcode LIKE ?) THEN 1 WHEN p.barcode LIKE ? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb4 WHERE pb4.product_id=p.id AND pb4.barcode LIKE ?) THEN 2 ELSE 3 END, p.name ASC, COALESCE(p.variant_name,'') ASC LIMIT 50");
+    $stmt->execute([$query, $query, $suffix, $suffix, $eanArticle, $eanArticle, '%' . $query . '%', '%' . $query . '%', $query, $query, $suffix, $suffix, $eanArticle, $eanArticle]);
     $products = pos_products_with_barcodes($stmt->fetchAll() ?: []);
+    $queryLength = strlen($query);
     foreach ($products as &$product) {
         $product['matched_barcode'] = (string)$product['barcode'];
         foreach ($product['barcodes'] as $candidate) {
-            if ($candidate === $query || substr($candidate, -strlen($query)) === $query) {
+            $isExactOrSuffix = $candidate === $query || substr($candidate, -$queryLength) === $query;
+            $isEanArticle = strlen($candidate) > $queryLength
+                && substr($candidate, -($queryLength + 1), $queryLength) === $query;
+            if ($isExactOrSuffix || $isEanArticle) {
                 $product['matched_barcode'] = $candidate;
                 break;
             }
