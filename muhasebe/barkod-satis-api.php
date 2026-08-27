@@ -56,14 +56,17 @@ try {
         $pdo = db();
 
         if ($id <= 0) {
-            $existingStmt = $pdo->prepare("SELECT id, COALESCE(product_source,'pos') AS product_source, is_active FROM pos_products WHERE barcode=? LIMIT 1");
+            $existingStmt = $pdo->prepare("SELECT id,name,variant_name,COALESCE(product_source,'pos') AS product_source,is_active FROM pos_products WHERE barcode=? LIMIT 1");
             $existingStmt->execute([$barcode]);
             $existing = $existingStmt->fetch();
             if ($existing) {
                 if ((string)$existing['product_source'] !== 'pos' || (int)$existing['is_active'] !== 1) {
                     $id = (int)$existing['id'];
                 } else {
-                    throw new RuntimeException('Bu barkod Barkodlu Satış ürünlerinde zaten kayıtlı. Ürün listesinden mevcut kaydı düzenleyin.');
+                    $existingName = trim((string)$existing['name']);
+                    $existingVariant = trim((string)($existing['variant_name'] ?? ''));
+                    if ($existingVariant !== '') $existingName .= ' - ' . $existingVariant;
+                    throw new RuntimeException('Bu barkod daha önce kullanıldı. ' . $barcode . ' barkodu “' . $existingName . '” ürününde ana barkod olarak kullanılıyor.');
                 }
             }
         }

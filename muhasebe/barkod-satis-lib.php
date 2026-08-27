@@ -221,16 +221,26 @@ function pos_normalize_extra_barcodes(string $raw, string $primaryBarcode): arra
 function pos_assert_barcodes_available(array $barcodes, int $productId): void
 {
     $pdo = db();
-    $primaryStmt = $pdo->prepare("SELECT id,name FROM pos_products WHERE barcode=? AND id<>? LIMIT 1");
-    $aliasStmt = $pdo->prepare("SELECT p.id,p.name FROM pos_product_barcodes pb JOIN pos_products p ON p.id=pb.product_id WHERE pb.barcode=? AND p.id<>? LIMIT 1");
+    $primaryStmt = $pdo->prepare("SELECT id,name,variant_name FROM pos_products WHERE barcode=? AND id<>? LIMIT 1");
+    $aliasStmt = $pdo->prepare("SELECT p.id,p.name,p.variant_name FROM pos_product_barcodes pb JOIN pos_products p ON p.id=pb.product_id WHERE pb.barcode=? AND p.id<>? LIMIT 1");
     foreach ($barcodes as $barcode) {
+        $usage = 'ana barkod';
         $primaryStmt->execute([$barcode, $productId]);
         $conflict = $primaryStmt->fetch();
         if (!$conflict) {
             $aliasStmt->execute([$barcode, $productId]);
             $conflict = $aliasStmt->fetch();
+            $usage = 'ek barkod';
         }
-        if ($conflict) throw new RuntimeException($barcode . ' barkodu başka bir üründe kayıtlı: ' . $conflict['name']);
+        if ($conflict) {
+            $productName = trim((string)$conflict['name']);
+            $variant = trim((string)($conflict['variant_name'] ?? ''));
+            if ($variant !== '') $productName .= ' - ' . $variant;
+            throw new RuntimeException(
+                'Bu barkod daha önce kullanıldı. ' . $barcode
+                . ' barkodu “' . $productName . '” ürününde ' . $usage . ' olarak kullanılıyor.'
+            );
+        }
     }
 }
 
