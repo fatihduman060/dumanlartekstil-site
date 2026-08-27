@@ -101,6 +101,17 @@ function pos_db_ensure(): void
     $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_products_barcode ON pos_products(barcode)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_products_name ON pos_products(name)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_products_source ON pos_products(product_source,is_active)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS pos_product_barcodes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        barcode TEXT NOT NULL UNIQUE,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(product_id) REFERENCES pos_products(id) ON DELETE CASCADE,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+    )");
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_product_barcodes_barcode ON pos_product_barcodes(barcode)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_product_barcodes_product ON pos_product_barcodes(product_id)");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS pos_sales (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -151,24 +162,76 @@ function pos_db_ensure(): void
     pos_mark_old_offer_products();
 }
 
+function pos_products_with_barcodes(array $products): array
+{
+    if (!$products) return [];
+    $ids = array_map(static function ($product) { return (int)$product['id']; }, $products);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = db()->prepare("SELECT product_id,barcode FROM pos_product_barcodes WHERE product_id IN (" . $placeholders . ") ORDER BY id ASC");
+    $stmt->execute($ids);
+    $aliases = [];
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $aliases[(int)$row['product_id']][] = (string)$row['barcode'];
+    }
+    foreach ($products as &$product) {
+        $extra = $aliases[(int)$product['id']] ?? [];
+        $product['extra_barcodes'] = implode("\n", $extra);
+        $product['barcodes'] = array_merge([(string)$product['barcode']], $extra);
+        $product['barcode_count'] = count($product['barcodes']);
+    }
+    unset($product);
+    return $products;
+}
+
 function pos_products(string $query = ''): array
 {
     pos_db_ensure();
     $query = trim($query);
     if ($query === '') {
-        return db()->query("SELECT * FROM pos_products WHERE is_active=1 AND COALESCE(product_source,'pos')='pos' ORDER BY name ASC, COALESCE(variant_name,'') ASC LIMIT 300")->fetchAll() ?: [];
+        $products = db()->query("SELECT * FROM pos_products WHERE is_active=1 AND COALESCE(product_source,'pos')='pos' ORDER BY name ASC, COALESCE(variant_name,'') ASC LIMIT 300")->fetchAll() ?: [];
+        return pos_products_with_barcodes($products);
     }
-    $stmt = db()->prepare("SELECT * FROM pos_products WHERE is_active=1 AND COALESCE(product_source,'pos')='pos' AND (barcode=? OR name LIKE ? OR COALESCE(variant_name,'') LIKE ?) ORDER BY CASE WHEN barcode=? THEN 0 ELSE 1 END, name ASC, COALESCE(variant_name,'') ASC LIMIT 50");
-    $stmt->execute([$query, '%' . $query . '%', '%' . $query . '%', $query]);
-    return $stmt->fetchAll() ?: [];
+    $stmt = db()->prepare("SELECT * FROM pos_products p WHERE p.is_active=1 AND COALESCE(p.product_source,'pos')='pos' AND (p.barcode=? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb WHERE pb.product_id=p.id AND pb.barcode=?) OR p.name LIKE ? OR COALESCE(p.variant_name,'') LIKE ?) ORDER BY CASE WHEN p.barcode=? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb2 WHERE pb2.product_id=p.id AND pb2.barcode=?) THEN 0 ELSE 1 END, p.name ASC, COALESCE(p.variant_name,'') ASC LIMIT 50");
+    $stmt->execute([$query, $query, '%' . $query . '%', '%' . $query . '%', $query, $query]);
+    return pos_products_with_barcodes($stmt->fetchAll() ?: []);
 }
 
 function pos_product_by_barcode(string $barcode): ?array
 {
     pos_db_ensure();
-    $stmt = db()->prepare("SELECT * FROM pos_products WHERE barcode=? AND is_active=1 AND COALESCE(product_source,'pos')='pos' LIMIT 1");
-    $stmt->execute([trim($barcode)]);
-    return $stmt->fetch() ?: null;
+    $barcode = preg_replace('/\s+/', '', trim($barcode));
+    $stmt = db()->prepare("SELECT * FROM pos_products p WHERE p.is_active=1 AND COALESCE(p.product_source,'pos')='pos' AND (p.barcode=? OR EXISTS (SELECT 1 FROM pos_product_barcodes pb WHERE pb.product_id=p.id AND pb.barcode=?)) LIMIT 1");
+    $stmt->execute([$barcode, $barcode]);
+    $products = pos_products_with_barcodes($stmt->fetchAll() ?: []);
+    return $products[0] ?? null;
+}
+
+function pos_normalize_extra_barcodes(string $raw, string $primaryBarcode): array
+{
+    $parts = preg_split('/[\r\n,;]+/', $raw) ?: [];
+    $barcodes = [];
+    foreach ($parts as $part) {
+        $value = preg_replace('/\s+/', '', trim((string)$part));
+        if ($value === '' || $value === $primaryBarcode) continue;
+        $barcodes[$value] = $value;
+    }
+    return array_values($barcodes);
+}
+
+function pos_assert_barcodes_available(array $barcodes, int $productId): void
+{
+    $pdo = db();
+    $primaryStmt = $pdo->prepare("SELECT id,name FROM pos_products WHERE barcode=? AND id<>? LIMIT 1");
+    $aliasStmt = $pdo->prepare("SELECT p.id,p.name FROM pos_product_barcodes pb JOIN pos_products p ON p.id=pb.product_id WHERE pb.barcode=? AND p.id<>? LIMIT 1");
+    foreach ($barcodes as $barcode) {
+        $primaryStmt->execute([$barcode, $productId]);
+        $conflict = $primaryStmt->fetch();
+        if (!$conflict) {
+            $aliasStmt->execute([$barcode, $productId]);
+            $conflict = $aliasStmt->fetch();
+        }
+        if ($conflict) throw new RuntimeException($barcode . ' barkodu başka bir üründe kayıtlı: ' . $conflict['name']);
+    }
 }
 
 function pos_receipt_no(int $saleId, string $saleDate): string

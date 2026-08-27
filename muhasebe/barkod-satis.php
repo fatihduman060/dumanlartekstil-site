@@ -1,21 +1,19 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/barkod-satis-lib.php';
-require_once __DIR__ . '/barkod-satis-urun-kaynagi.php';
 require_login();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 if (!can_manage_store_sales()) { flash('error', 'Barkodlu satış için mağaza satış yetkisi gerekiyor.'); redirect('dashboard.php'); }
 pos_db_ensure();
-pos_product_source_harden();
 ensure_column(db(), 'pos_products', 'variant_name', 'TEXT');
 $products = pos_products();
 $creditPeople = pos_credit_people();
 $recentSales = pos_recent_sales(20);
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-satis.css?v=1" />
+<link rel="stylesheet" href="assets/barkod-satis.css?v=2" />
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <section class="pos-main panel-card">
     <div class="pos-title-row">
@@ -48,10 +46,17 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </aside>
 
   <section class="panel-card pos-products-panel">
-    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Bu liste yalnızca Barkodlu Satış içinde eklediğin ürünlere aittir. Teklif ve diğer modüllerdeki ürünler burada gösterilmez.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
+    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Aynı ürünün S / M / L gibi bedenlerini ayrı barkodla, aynı satış fiyatıyla tanımlayabilirsin.</p></div><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div>
     <form class="pos-product-form" data-product-form>
       <input type="hidden" name="id" value="" />
-      <label><span>Barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" data-barcode-input /></label>
+      <label><span>Ana barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" data-barcode-input /></label>
+      <div class="wide pos-extra-barcodes">
+        <span class="pos-field-label">Ek barkodlar</span>
+        <div class="pos-extra-barcode-add"><input type="text" autocomplete="off" placeholder="Diğer barkodu okutun" data-extra-barcode-input data-barcode-input /><button class="btn btn-secondary" type="button" data-extra-barcode-add>Ekle</button></div>
+        <input type="hidden" name="extra_barcodes" value="" />
+        <div class="pos-extra-barcode-list" data-extra-barcode-list><small>Henüz ek barkod yok.</small></div>
+        <small>Eklediğiniz barkodların tamamı aynı ürünü, fiyatı ve stoğu kullanır.</small>
+      </div>
       <label class="wide"><span>Ürün adı</span><input name="name" required placeholder="Örn. Bitke Erkek Patik" /></label>
       <label><span>Beden / Varyant</span><input name="variant_name" autocomplete="off" maxlength="40" placeholder="Örn. S, M, L, XL" /></label>
       <label><span>Satış fiyatı</span><input name="sale_price" type="number" min="0.01" step="0.01" required /></label>
@@ -63,7 +68,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <div class="pos-product-list" data-product-list>
       <?php foreach ($products as $p): $variant = trim((string)($p['variant_name'] ?? '')); ?>
       <button type="button" class="pos-product-row" data-product-edit='<?php echo e(json_encode($p, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>'>
-        <span><strong><?php echo e($p['name'] . ($variant !== '' ? ' - ' . $variant : '')); ?></strong><small><?php echo e($p['barcode']); ?></small></span>
+        <span><strong><?php echo e($p['name'] . ($variant !== '' ? ' - ' . $variant : '')); ?></strong><small><?php echo e($p['barcode']); ?><?php if ((int)($p['barcode_count'] ?? 1) > 1): ?> · <?php echo e((int)$p['barcode_count']); ?> barkod<?php endif; ?></small></span>
         <span><strong><?php echo e(money((float)$p['sale_price'])); ?></strong><small>Stok: <?php echo e(number_format((float)$p['stock_quantity'], 0, ',', '.')); ?></small></span>
       </button>
       <?php endforeach; ?>
