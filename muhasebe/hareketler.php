@@ -53,6 +53,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $action = $_POST['action'] ?? '';
 
+    if ($action === 'date_only') {
+        $id = (int)($_POST['id'] ?? 0);
+        $newDate = trim((string)($_POST['movement_date'] ?? ''));
+        $stmt = db()->prepare('SELECT * FROM movements WHERE id=?');
+        $stmt->execute([$id]);
+        $oldMovement = $stmt->fetch();
+        if (!$oldMovement || (int)($oldMovement['is_cancelled'] ?? 0) === 1) {
+            flash('error', 'Hareket bulunamadı veya iptal edilmiş.');
+            redirect('hareketler.php?include_cancelled=1');
+        }
+        $dateParts = explode('-', $newDate);
+        if (count($dateParts) !== 3 || !checkdate((int)$dateParts[1], (int)$dateParts[2], (int)$dateParts[0])) {
+            flash('error', 'Geçerli bir işlem tarihi seçmelisin.');
+            redirect('hareketler.php?edit=' . $id);
+        }
+        db()->prepare('UPDATE movements SET movement_date=?, updated_at=? WHERE id=?')
+            ->execute([$newDate, now(), $id]);
+        sync_movement_account_transaction($id);
+        audit_action('hareket', $id, 'tarih_duzeltildi', $oldMovement, ['movement_date'=>$newDate], movement_label((string)$oldMovement['movement_type']));
+        log_action('Hareket tarihi düzeltildi', '#' . $id . ' / ' . tr_date((string)$oldMovement['movement_date']) . ' → ' . tr_date($newDate));
+        flash('success', 'Yalnızca işlem tarihi düzeltildi; çek, vade, tutar ve bakiye bağlantıları değiştirilmedi.');
+        redirect('hareketler.php?edit=' . $id);
+    }
+
     if ($action === 'save') {
         $id = (int)($_POST['id'] ?? 0);
         $type = $_POST['movement_type'] ?? '';
@@ -378,6 +402,18 @@ page_header('Hareketler', 'hareketler');
       <?php if (!empty($edit['document_path'])): ?><p class="muted">Mevcut belge: <a href="belge-indir.php?id=<?php echo e($edit['id']); ?>" target="_blank"><?php echo e($edit['document_name'] ?: 'Belge'); ?></a></p><?php endif; ?>
       <div class="form-actions"><button class="btn btn-primary" type="submit"><?php echo $edit ? 'Güncelle' : 'Hareket ekle'; ?></button><?php if ($edit): ?><a class="btn btn-secondary" href="hareketler.php">Vazgeç</a><?php endif; ?></div>
     </form>
+    <?php if ($edit && !empty($edit['check_id'])): ?>
+    <form method="post" class="date-only-correction">
+      <?php echo csrf_field(); ?>
+      <input type="hidden" name="action" value="date_only">
+      <input type="hidden" name="id" value="<?php echo e($edit['id']); ?>">
+      <label>Yalnızca işlem tarihini düzelt
+        <input type="date" name="movement_date" required value="<?php echo e($edit['movement_date']); ?>">
+        <small>Çek kaydını, vadeyi, tutarı ve bakiye bağlantılarını değiştirmez.</small>
+      </label>
+      <button class="btn btn-secondary" type="submit">İşlem tarihini düzelt</button>
+    </form>
+    <?php endif; ?>
     <?php else: ?><p class="muted">Görüntüleme yetkisindesiniz. Hareket ekleme/düzenleme kapalı.</p><?php endif; ?>
   </article>
 
