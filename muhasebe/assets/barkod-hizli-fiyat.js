@@ -35,12 +35,6 @@
     +'@media(max-width:720px){.pos-quick-price-grid{grid-template-columns:1fr}.pos-quick-price-launch{width:100%}.pos-price-action{margin-left:0!important;margin-top:5px!important}}';
   document.head.appendChild(style);
 
-  var launch=document.createElement('button');
-  launch.type='button';
-  launch.className='btn btn-secondary pos-quick-price-launch';
-  launch.innerHTML='⚡ Hızlı fiyat değiştir';
-  scanRow.appendChild(launch);
-
   var panel=document.createElement('section');
   panel.className='pos-quick-price';
   panel.innerHTML=''
@@ -114,7 +108,6 @@
       .catch(function(e){stateText.textContent=e.message||'Fiyat güncellenemedi.';save.disabled=false;save.textContent='Fiyatı Kaydet';});
   }
 
-  launch.addEventListener('click',function(){if(panel.classList.contains('open')){panel.classList.remove('open');}else openPanel();});
   panel.querySelector('.pos-quick-price-close').addEventListener('click',function(){panel.classList.remove('open');resetSelection(false);});
   barcode.addEventListener('change',scheduleLookup);
   barcode.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();lookup();}});
