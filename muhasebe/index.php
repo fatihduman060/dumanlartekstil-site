@@ -1,8 +1,9 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/magaza-kullanici.php';
 
 if (is_logged_in() && current_user()) {
-    redirect('dashboard.php');
+    redirect(is_store_sales_user(current_user()) ? 'barkod-satis.php' : 'dashboard.php');
 }
 
 $error = '';
@@ -39,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             db()->prepare('UPDATE users SET last_login = ?, updated_at = ? WHERE id = ?')->execute([now(), now(), $user['id']]);
             log_action('Giriş', 'Panel girişi yapıldı');
-            redirect('dashboard.php');
+            redirect(is_store_sales_user($user) ? 'barkod-satis.php' : 'dashboard.php');
         }
     }
 }
