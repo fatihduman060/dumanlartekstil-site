@@ -58,7 +58,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </aside>
 
   <section class="panel-card pos-products-panel">
-    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Yeni ürün ekleyebilir veya ürün listesinden fiyat ve stokları topluca düzenleyebilirsin.</p></div><div class="pos-product-head-actions"><button type="button" class="btn btn-secondary" data-product-list-toggle aria-expanded="false">Ürün Listesi (<?php echo e(count($products)); ?>)</button><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div></div>
+    <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Yeni ürün ekleyebilir veya ürün listesinden fiyat ve stokları topluca düzenleyebilirsin.</p></div><div class="pos-product-head-actions"><a class="btn btn-secondary" href="barkod-stok-raporu.php">Stok ve Satış Dökümü</a><button type="button" class="btn btn-secondary" data-product-list-toggle aria-expanded="false">Ürün Listesi (<?php echo e(count($products)); ?>)</button><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div></div>
     <form class="pos-product-form" data-product-form>
       <input type="hidden" name="id" value="" />
       <label><span>Ana barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun" data-barcode-input /></label>

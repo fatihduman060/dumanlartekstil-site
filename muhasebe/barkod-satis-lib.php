@@ -263,6 +263,30 @@ function pos_assert_barcodes_available(array $barcodes, int $productId): void
     }
 }
 
+function pos_inventory_report(): array
+{
+    pos_db_ensure();
+    $stmt = db()->query("SELECT p.*,
+        COALESCE(SUM(CASE WHEN s.is_cancelled=0 THEN i.quantity ELSE 0 END),0) AS sold_quantity,
+        COALESCE(SUM(CASE WHEN s.is_cancelled=0 AND s.sale_date>=date('now','-29 days') THEN i.quantity ELSE 0 END),0) AS sold_last_30_days
+        FROM pos_products p
+        LEFT JOIN pos_sale_items i ON i.product_id=p.id
+        LEFT JOIN pos_sales s ON s.id=i.sale_id
+        WHERE p.is_active=1 AND COALESCE(p.product_source,'pos')='pos'
+        GROUP BY p.id
+        ORDER BY sold_quantity DESC,p.name ASC,COALESCE(p.variant_name,'') ASC");
+    $products = pos_products_with_barcodes($stmt->fetchAll() ?: []);
+    foreach ($products as &$product) {
+        $currentStock = (float)$product['stock_quantity'];
+        $sold = (float)$product['sold_quantity'];
+        // Başlangıç ve sonradan elle girilen stoklar ayrı hareket tablosunda tutulmadığı
+        // için toplam giriş, mevcut stok + iptal edilmemiş satışlar olarak hesaplanır.
+        $product['received_quantity'] = $currentStock + $sold;
+    }
+    unset($product);
+    return $products;
+}
+
 function pos_receipt_no(int $saleId, string $saleDate): string
 {
     return 'POS-' . str_replace('-', '', $saleDate) . '-' . str_pad((string)$saleId, 6, '0', STR_PAD_LEFT);
