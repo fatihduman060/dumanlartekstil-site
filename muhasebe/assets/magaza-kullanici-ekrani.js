@@ -3,6 +3,31 @@
 
   var path=location.pathname||'';
 
+  // Mağaza kullanıcısında Barkodlu Satış ve Mağaza ekranlarına daha fazla çalışma alanı bırak.
+  // Sadece geniş masaüstünde uygulanır; tablet/telefon menü davranışı aynen korunur.
+  if(/\/(?:barkod-satis|magaza)\.php$/i.test(path)){
+    var compactStoreStyle=document.createElement('style');
+    compactStoreStyle.id='bitkeStoreCompactLayout';
+    compactStoreStyle.textContent=''
+      +'@media(min-width:1101px){'
+      +'body.store-sales-user .app-shell{grid-template-columns:210px minmax(0,1fr)!important}'
+      +'body.store-sales-user .sidebar{padding:18px 14px!important;gap:18px!important}'
+      +'body.store-sales-user .sidebar .brand{gap:9px!important;font-size:17px!important}'
+      +'body.store-sales-user .sidebar .brand img{width:38px!important;height:38px!important;border-radius:10px!important;padding:4px!important}'
+      +'body.store-sales-user .sidebar .brand span{font-size:17px!important}'
+      +'body.store-sales-user .sidebar .brand span small{display:block!important;width:max-content;margin:4px 0 0!important;padding:2px 6px!important;font-size:9px!important}'
+      +'body.store-sales-user .side-nav{gap:6px!important}'
+      +'body.store-sales-user .side-nav a{gap:8px!important;padding:11px 10px!important;border-radius:12px!important;font-size:14px!important}'
+      +'body.store-sales-user .nav-ico{width:20px!important;min-width:20px!important}'
+      +'body.store-sales-user .side-footer{padding:12px!important;border-radius:14px!important}'
+      +'body.store-sales-user .side-footer span{font-size:10px!important}'
+      +'body.store-sales-user .side-footer strong{font-size:13px!important}'
+      +'body.store-sales-user .main{padding:24px 20px!important}'
+      +'body.store-sales-user .topbar{margin-bottom:18px!important}'
+      +'}';
+    document.head.appendChild(compactStoreStyle);
+  }
+
   function storeMoney(value){
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
   }
