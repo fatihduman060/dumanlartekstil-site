@@ -27,7 +27,7 @@
     var wrap=document.createElement('nav');
     wrap.id='cekDurumHizliSekmeler';
     wrap.className='cek-durum-tabs';
-    wrap.innerHTML='<a class="'+(st===''?'active':'')+'" href="'+buildUrl({status:''})+'">Açık çekler<small>Ana listede bekleyenler</small></a><a class="'+(st===closedStatus?'active':'')+'" href="'+buildUrl({status:closedStatus})+'">'+closedLabel+'<small>Kapalı kayıtlar</small></a><a class="'+(st==='iptal'?'active':'')+'" href="'+buildUrl({status:'iptal',include_cancelled:'1'})+'">İptaller<small>İptal edilen çekler</small></a>';
+    wrap.innerHTML='<a class="'+(st===''?'active':'')+'" href="'+buildUrl({status:'',include_cancelled:null})+'">Açık çekler<small>Ana listede bekleyenler</small></a><a class="'+(st===closedStatus?'active':'')+'" href="'+buildUrl({status:closedStatus,include_cancelled:null})+'">'+closedLabel+'<small>Kapalı kayıtlar</small></a>'+(dir==='verilecek'?'<a class="'+(st==='ciro_toplami'?'active':'')+'" href="'+buildUrl({status:'ciro_toplami',include_cancelled:'1'})+'">Ciro edilen tutarlar<small>Müşteri çekleriyle kapatılan toplu kayıtlar</small></a>':'')+'<a class="'+(st==='iptal'?'active':'')+'" href="'+buildUrl({status:'iptal',include_cancelled:'1'})+'">İptaller<small>Gerçekten iptal edilen çekler</small></a>';
     list.parentNode.insertBefore(wrap,list);
   }
   function hideClosedOnMain(){

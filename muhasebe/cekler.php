@@ -21,8 +21,21 @@ function cek_status_meta2(string $status): array
         'karsiliksiz'=>['label'=>'Karşılıksız','tone'=>'danger'],
         'protestolu'=>['label'=>'Protestolu','tone'=>'danger'],
         'iptal'=>['label'=>'İptal','tone'=>'neutral'],
+        'ciro_toplami'=>['label'=>'Ciro edilen tutar','tone'=>'warning'],
     ];
     return $map[$status] ?? ['label'=>$status ?: 'Bekliyor','tone'=>'neutral'];
+}
+function cek_is_endorsement_summary(array $check): bool
+{
+    if ((int)($check['is_cancelled'] ?? 0) !== 1) return false;
+    $haystack = mb_strtolower(
+        trim((string)($check['check_no'] ?? '')) . ' '
+        . trim((string)($check['description'] ?? '')) . ' '
+        . trim((string)($check['cancel_reason'] ?? '')),
+        'UTF-8'
+    );
+    return mb_strpos($haystack, 'müşteri çek') !== false
+        || mb_strpos($haystack, 'ciro edilerek kapat') !== false;
 }
 function cek_status_label2(string $status): string { return cek_status_meta2($status)['label']; }
 function cek_status_tone2(string $status): string { return cek_status_meta2($status)['tone']; }
@@ -208,6 +221,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ch = $stmt->fetch();
         if ($ch && (int)($ch['is_cancelled'] ?? 0) === 0) {
             $reason = trim($_POST['cancel_reason'] ?? 'Liste üzerinden iptal');
+            $ciroSummaryText = mb_strtolower(trim((string)($ch['check_no'] ?? '')) . ' ' . trim((string)($ch['description'] ?? '')), 'UTF-8');
+            if ((string)($ch['direction'] ?? '') === 'verilecek' && mb_strpos($ciroSummaryText, 'müşteri çek') !== false) {
+                $reason = 'Müşteri çekleri ciro edilerek kapatıldı';
+            }
             db()->prepare('UPDATE checks SET is_cancelled=1, status=?, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')->execute(['iptal', now(), current_user()['id'], $reason, now(), $id]);
             sync_check_to_movement($id, false);
             log_action('Çek iptal edildi', '#' . $id . ' ' . money($ch['amount']));
@@ -252,7 +269,17 @@ if ($q !== '') {
     array_push($params, "%$q%", "%$q%", "%$q%", "%$q%", "%$q%", "%$q%", "%$q%", "%$q%");
 }
 if ($cariId !== '') { $where[] = 'ch.cari_id=?'; $params[] = (int)$cariId; }
-if ($statusFilter !== '') { $where[] = 'ch.status=?'; $params[] = $statusFilter; }
+if ($statusFilter === 'ciro_toplami') {
+    $where[] = 'COALESCE(ch.is_cancelled,0)=1';
+    $where[] = "(ch.check_no LIKE '%MÜŞTERİ ÇEK%' OR ch.description LIKE '%MÜŞTERİ ÇEK%' OR ch.cancel_reason LIKE '%ciro edilerek kapat%')";
+} elseif ($statusFilter === 'iptal') {
+    $where[] = 'ch.status=?';
+    $params[] = 'iptal';
+    $where[] = "NOT (ch.check_no LIKE '%MÜŞTERİ ÇEK%' OR ch.description LIKE '%MÜŞTERİ ÇEK%' OR ch.cancel_reason LIKE '%ciro edilerek kapat%')";
+} elseif ($statusFilter !== '') {
+    $where[] = 'ch.status=?';
+    $params[] = $statusFilter;
+}
 if ($accountId !== '') { $where[] = 'ch.account_id=?'; $params[] = (int)$accountId; }
 if ($start !== '') { $where[] = 'ch.due_date>=?'; $params[] = $start; }
 if ($end !== '') { $where[] = 'ch.due_date<=?'; $params[] = $end; }
@@ -323,7 +350,7 @@ page_header('Çekler', 'cekler');
     <div class="check-table-wrap"><table class="check-table"><thead><tr><th>Tür / Cari</th><th>Çek bankası / No</th><th>Vade</th><th>Tutar</th><th>Durum / Tahsil hesabı</th><th>Görseller</th><th>İşlem</th></tr></thead><tbody>
       <?php if(!$checks): ?><tr><td colspan="7" class="empty">Çek kaydı yok.</td></tr><?php endif; ?>
       <?php foreach($checks as $ch):
-        $id=(int)$ch['id']; $cancelled=(int)($ch['is_cancelled'] ?? 0)===1; $status=$cancelled?'iptal':(string)($ch['status'] ?? 'bekliyor');
+        $id=(int)$ch['id']; $cancelled=(int)($ch['is_cancelled'] ?? 0)===1; $ciroSummary=$cancelled && cek_is_endorsement_summary($ch); $status=$ciroSummary?'ciro_toplami':($cancelled?'iptal':(string)($ch['status'] ?? 'bekliyor'));
         $isOverdue=!$cancelled && cek_is_open_status($status) && $ch['due_date'] < $today;
         $rowClass=($ch['direction']==='alinacak'?'is-receivable ':'is-payable ') . ($status==='ciro_edildi'?'is-endorsed ':'') . ($isOverdue?'is-overdue':'');
         $docs=$extraDocs[$id] ?? []; $frontDocs=array_values(array_filter($docs, fn($d)=>($d['document_type'] ?? '')==='cek_on_gorseli')); $backDocs=array_values(array_filter($docs, fn($d)=>($d['document_type'] ?? '')==='cek_arka_gorseli'));
@@ -338,7 +365,7 @@ page_header('Çekler', 'cekler');
         <td><b><?php echo e(money($ch['amount'])); ?></b><span>TRY</span></td>
         <td><span class="status-badge tone-<?php echo e($tone); ?>"><?php echo e(cek_status_label2($status)); ?></span><?php echo $ch['description'] ? '<small>'.e($ch['description']).'</small>' : ''; ?><?php if($ch['direction']==='alinacak'): ?><small class="collection-bank <?php echo $collectionLabel===''?'missing':''; ?>"><?php echo $collectionLabel!=='' ? 'Tahsil bankası: '.e($collectionLabel) : 'Tahsil bankası seçilmedi'; ?></small><?php endif; ?><div class="check-life"><em><?php echo e(tr_date(substr((string)($ch['created_at'] ?? $today),0,10))); ?> · Kayda alındı</em><?php if($status !== 'bekliyor'): ?><em><?php echo e(tr_date($ch['closed_at'] ?: substr((string)($ch['updated_at'] ?? $today),0,10))); ?> · <?php echo e(cek_status_label2($status)); ?></em><?php endif; ?></div></td>
         <td><div class="doc-pills"><?php if($frontDocs): ?><a href="serbest-belge-indir.php?id=<?php echo e($frontDocs[0]['id']); ?>" target="_blank">Ön</a><?php elseif(!empty($ch['document_path'])): ?><a href="cek-belge-indir.php?id=<?php echo e($id); ?>" target="_blank">Ana</a><?php else: ?><span>Ön yok</span><?php endif; ?><?php if($backDocs): ?><a href="serbest-belge-indir.php?id=<?php echo e($backDocs[0]['id']); ?>" target="_blank">Arka</a><?php else: ?><span>Arka yok</span><?php endif; ?><?php if(count($docs)>2): ?><a href="cek-ek-belge.php?id=<?php echo e($id); ?>"><?php echo e(count($docs)); ?> belge</a><?php endif; ?></div></td>
-        <td><div class="row-control"><?php if(!$cancelled): ?><form method="post" class="status-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?php echo e($id); ?>"><select name="status"><?php foreach(cek_status_options_for_direction((string)$ch['direction']) as $value=>$label): ?><option value="<?php echo e($value); ?>" <?php echo $status===$value?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><button type="submit">Kaydet</button></form><div class="row-links"><a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($id); ?>#cek-form">Düzenle</a><a href="cek-ek-belge.php?id=<?php echo e($id); ?>">Ek belge</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Çek silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($id); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button class="danger" type="submit">İptal</button></form><?php endif; ?></div><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?></div></td>
+        <td><div class="row-control"><?php if(!$cancelled): ?><form method="post" class="status-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?php echo e($id); ?>"><select name="status"><?php foreach(cek_status_options_for_direction((string)$ch['direction']) as $value=>$label): ?><option value="<?php echo e($value); ?>" <?php echo $status===$value?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><button type="submit">Kaydet</button></form><div class="row-links"><a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($id); ?>#cek-form">Düzenle</a><a href="cek-ek-belge.php?id=<?php echo e($id); ?>">Ek belge</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Çek silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($id); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button class="danger" type="submit">İptal</button></form><?php endif; ?></div><?php else: ?><?php if($ciroSummary): ?><span class="muted">Ciro edilen müşteri çeklerinin toplu karşılığı</span><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?><?php endif; ?></div></td>
       </tr>
       <?php endforeach; ?>
     </tbody></table></div>
