@@ -134,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $accountId = ($_POST['account_id'] ?? '') !== '' ? (int)$_POST['account_id'] : null;
         if (cek_needs_collection_account($direction, $status) && !cek_collection_account_ok($accountId)) {
             flash('error', 'Çekin tahsil/ödeme işlemi için kendi banka hesabını seçmelisin. Çek bankası ile bizim ödeme hesabımız farklı alanlardır.');
-            redirect('cekler.php?direction=alinacak' . ($id > 0 ? '&edit=' . $id . '#cek-form' : '#cek-form'));
+            redirect('cekler.php?direction=' . urlencode($direction) . ($id > 0 ? '&edit=' . $id . '#cek-form' : '#cek-form'));
         }
 
         $cariIdForExtra = ($_POST['cari_id'] ?? '') !== '' ? (int)$_POST['cari_id'] : null;
@@ -202,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (cek_needs_collection_account($direction, $newStatus) && !cek_collection_account_ok(!empty($old['account_id']) ? (int)$old['account_id'] : null)) {
                 flash('error', 'Bu duruma geçmeden önce çek düzenle kısmından kendi tahsil/ödeme banka hesabını seçmelisin. Ödendi dediğinde tutar seçilen hesaptan otomatik düşer.');
-                redirect('cekler.php?direction=alinacak&edit=' . $id . '#cek-form');
+                redirect('cekler.php?direction=' . urlencode($direction) . '&edit=' . $id . '#cek-form');
             }
             $closedAt = cek_is_open_status($newStatus) ? null : date('Y-m-d');
             db()->prepare('UPDATE checks SET status=?, closed_at=?, updated_at=? WHERE id=?')->execute([$newStatus, $closedAt, now(), $id]);
