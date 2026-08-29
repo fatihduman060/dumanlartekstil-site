@@ -1001,9 +1001,42 @@ function sync_movement_account_transaction(int $movementId): void
 }
 function sync_check_account_transaction(int $checkId): void
 {
-    // v50.22: Çeklerde manuel "bekliyor/tahsil edildi" takibi kaldırıldı.
-    // Çek cari bakiyeye bağlı hareket üzerinden işler; kasa/banka hareketi ayrıca girilmelidir.
-    db()->prepare("DELETE FROM account_transactions WHERE source_type='check' AND source_id=?")->execute([$checkId]);
+    $pdo = db();
+    $pdo->prepare("DELETE FROM account_transactions WHERE source_type='check' AND source_id=?")->execute([$checkId]);
+
+    $stmt = $pdo->prepare('SELECT ch.*, c.name AS cari_name, a.name AS account_name
+        FROM checks ch
+        LEFT JOIN cariler c ON c.id=ch.cari_id
+        LEFT JOIN accounts a ON a.id=ch.account_id
+        WHERE ch.id=?');
+    $stmt->execute([$checkId]);
+    $ch = $stmt->fetch();
+    if (!$ch || (int)($ch['is_cancelled'] ?? 0) === 1 || empty($ch['account_id'])) return;
+
+    $direction = null;
+    if ((string)$ch['direction'] === 'verilecek' && (string)$ch['status'] === 'odendi') $direction = 'out';
+    if ((string)$ch['direction'] === 'alinacak' && (string)$ch['status'] === 'tahsil_edildi') $direction = 'in';
+    if ($direction === null) return;
+
+    $description = $direction === 'out' ? 'Verilen çek ödendi' : 'Alınan çek tahsil edildi';
+    if (!empty($ch['cari_name'])) $description .= ' - ' . trim((string)$ch['cari_name']);
+    if (!empty($ch['check_no'])) $description .= ' / Çek no: ' . trim((string)$ch['check_no']);
+    $transactionDate = $ch['closed_at'] ?: date('Y-m-d');
+
+    $pdo->prepare('INSERT INTO account_transactions
+        (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        ->execute([
+            (int)$ch['account_id'],
+            $direction,
+            (float)$ch['amount'],
+            $transactionDate,
+            'check',
+            $checkId,
+            $description,
+            $ch['created_by'] ?: (current_user()['id'] ?? null),
+            now()
+        ]);
 }
 
 function normalize_check_no(?string $value): string

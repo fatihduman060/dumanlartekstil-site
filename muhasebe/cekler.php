@@ -49,7 +49,8 @@ function cek_status_options_for_direction(string $direction): array
 function cek_is_open_status(string $status): bool { return in_array($status, ['bekliyor','bankaya_verildi'], true); }
 function cek_needs_collection_account(string $direction, string $status): bool
 {
-    return $direction === 'alinacak' && in_array($status, ['bankaya_verildi','tahsil_edildi'], true);
+    if ($direction === 'alinacak') return in_array($status, ['bankaya_verildi','tahsil_edildi'], true);
+    return $direction === 'verilecek' && $status === 'odendi';
 }
 function cek_collection_account_ok(?int $accountId): bool
 {
@@ -132,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $accountId = ($_POST['account_id'] ?? '') !== '' ? (int)$_POST['account_id'] : null;
         if (cek_needs_collection_account($direction, $status) && !cek_collection_account_ok($accountId)) {
-            flash('error', 'Bu alınan çek bankada/tahsilde görünecekse kendi tahsil banka hesabını seçmelisin. Çek bankası ayrı, tahsil bankası ayrı.');
+            flash('error', 'Çekin tahsil/ödeme işlemi için kendi banka hesabını seçmelisin. Çek bankası ile bizim ödeme hesabımız farklı alanlardır.');
             redirect('cekler.php?direction=alinacak' . ($id > 0 ? '&edit=' . $id . '#cek-form' : '#cek-form'));
         }
 
@@ -200,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirect('cekler.php?direction=' . urlencode($direction));
             }
             if (cek_needs_collection_account($direction, $newStatus) && !cek_collection_account_ok(!empty($old['account_id']) ? (int)$old['account_id'] : null)) {
-                flash('error', 'Bankaya verildi / tahsil edildi yapmadan önce çek düzenle kısmından kendi tahsil banka hesabını seçmelisin. Üstteki çek bankası karşı tarafın bankasıdır.');
+                flash('error', 'Bu duruma geçmeden önce çek düzenle kısmından kendi tahsil/ödeme banka hesabını seçmelisin. Ödendi dediğinde tutar seçilen hesaptan otomatik düşer.');
                 redirect('cekler.php?direction=alinacak&edit=' . $id . '#cek-form');
             }
             $closedAt = cek_is_open_status($newStatus) ? null : date('Y-m-d');
@@ -363,7 +364,7 @@ page_header('Çekler', 'cekler');
         <td><b><?php echo e($ch['bank_name'] ?: '-'); ?></b><span><?php echo e($ch['check_no'] ?: '-'); ?></span><?php echo $ch['drawer'] ? '<small>'.e($ch['drawer']).'</small>' : ''; ?><small>Bu karşı tarafın çek bankasıdır</small></td>
         <td><b><?php echo e(tr_date($ch['due_date'])); ?></b><span><?php echo e(cek_due_text($ch, $today)); ?></span><?php echo $ch['issue_date'] ? '<small>Çek: '.e(tr_date($ch['issue_date'])).'</small>' : ''; ?></td>
         <td><b><?php echo e(money($ch['amount'])); ?></b><span>TRY</span></td>
-        <td><span class="status-badge tone-<?php echo e($tone); ?>"><?php echo e(cek_status_label2($status)); ?></span><?php echo $ch['description'] ? '<small>'.e($ch['description']).'</small>' : ''; ?><?php if($ch['direction']==='alinacak'): ?><small class="collection-bank <?php echo $collectionLabel===''?'missing':''; ?>"><?php echo $collectionLabel!=='' ? 'Tahsil bankası: '.e($collectionLabel) : 'Tahsil bankası seçilmedi'; ?></small><?php endif; ?><div class="check-life"><em><?php echo e(tr_date(substr((string)($ch['created_at'] ?? $today),0,10))); ?> · Kayda alındı</em><?php if($status !== 'bekliyor'): ?><em><?php echo e(tr_date($ch['closed_at'] ?: substr((string)($ch['updated_at'] ?? $today),0,10))); ?> · <?php echo e(cek_status_label2($status)); ?></em><?php endif; ?></div></td>
+        <td><span class="status-badge tone-<?php echo e($tone); ?>"><?php echo e(cek_status_label2($status)); ?></span><?php echo $ch['description'] ? '<small>'.e($ch['description']).'</small>' : ''; ?><small class="collection-bank <?php echo $collectionLabel===''?'missing':''; ?>"><?php echo $collectionLabel!=='' ? ($ch['direction']==='verilecek' ? 'Ödeme hesabı: ' : 'Tahsil hesabı: ').e($collectionLabel) : ($ch['direction']==='verilecek' ? 'Ödeme hesabı seçilmedi' : 'Tahsil hesabı seçilmedi'); ?></small><div class="check-life"><em><?php echo e(tr_date(substr((string)($ch['created_at'] ?? $today),0,10))); ?> · Kayda alındı</em><?php if($status !== 'bekliyor'): ?><em><?php echo e(tr_date($ch['closed_at'] ?: substr((string)($ch['updated_at'] ?? $today),0,10))); ?> · <?php echo e(cek_status_label2($status)); ?></em><?php endif; ?></div></td>
         <td><div class="doc-pills"><?php if($frontDocs): ?><a href="serbest-belge-indir.php?id=<?php echo e($frontDocs[0]['id']); ?>" target="_blank">Ön</a><?php elseif(!empty($ch['document_path'])): ?><a href="cek-belge-indir.php?id=<?php echo e($id); ?>" target="_blank">Ana</a><?php else: ?><span>Ön yok</span><?php endif; ?><?php if($backDocs): ?><a href="serbest-belge-indir.php?id=<?php echo e($backDocs[0]['id']); ?>" target="_blank">Arka</a><?php else: ?><span>Arka yok</span><?php endif; ?><?php if(count($docs)>2): ?><a href="cek-ek-belge.php?id=<?php echo e($id); ?>"><?php echo e(count($docs)); ?> belge</a><?php endif; ?></div></td>
         <td><div class="row-control"><?php if(!$cancelled): ?><form method="post" class="status-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?php echo e($id); ?>"><select name="status"><?php foreach(cek_status_options_for_direction((string)$ch['direction']) as $value=>$label): ?><option value="<?php echo e($value); ?>" <?php echo $status===$value?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><button type="submit">Kaydet</button></form><div class="row-links"><a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($id); ?>#cek-form">Düzenle</a><a href="cek-ek-belge.php?id=<?php echo e($id); ?>">Ek belge</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Çek silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($id); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button class="danger" type="submit">İptal</button></form><?php endif; ?></div><?php else: ?><?php if($ciroSummary): ?><span class="muted">Ciro edilen müşteri çeklerinin toplu karşılığı</span><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?><?php endif; ?></div></td>
       </tr>
@@ -387,14 +388,14 @@ page_header('Çekler', 'cekler');
           <label><span>Çek no</span><input name="check_no" value="<?php echo e($edit['check_no'] ?? ''); ?>" placeholder="Çek no"></label>
           <label><span>Şube</span><input name="branch_name" value="<?php echo e($edit['branch_name'] ?? ''); ?>"></label>
           <label><span>Keşideci / Veren</span><input name="drawer" value="<?php echo e($edit['drawer'] ?? ''); ?>"></label>
-          <label class="wide"><span>Tahsil/ödeme bankası (bizim hesap)</span><select name="account_id"><option value="">Bizim banka hesabı seçilmedi</option><?php foreach($bankAccounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo ((string)($edit['account_id'] ?? '')===(string)$a['id'])?'selected':''; ?>><?php echo e($a['name']); ?><?php echo !empty($a['bank_name']) ? ' / '.e($a['bank_name']) : ''; ?></option><?php endforeach; ?></select><small>Alınan çek bankaya verilecekse burası bizim tahsil hesabımızdır.</small></label>
+          <label class="wide"><span><?php echo $direction === 'verilecek' ? 'Ödemenin düşeceği banka hesabı' : 'Tahsilatın yatacağı banka hesabı'; ?></span><select name="account_id"><option value="">Bizim banka hesabımızı seç</option><?php foreach($bankAccounts as $a): ?><option value="<?php echo e($a['id']); ?>" <?php echo ((string)($edit['account_id'] ?? '')===(string)$a['id'])?'selected':''; ?>><?php echo e($a['name']); ?><?php echo !empty($a['bank_name']) ? ' / '.e($a['bank_name']) : ''; ?></option><?php endforeach; ?></select><small><?php echo $direction === 'verilecek' ? 'Çek Ödendi yapıldığında tutar seçilen hesabın bakiyesinden otomatik düşer.' : 'Çek tahsil edildiğinde tutar seçilen hesabın bakiyesine otomatik eklenir.'; ?></small></label>
           <label class="wide"><span>Açıklama</span><textarea name="description" rows="2" placeholder="Opsiyonel not"><?php echo e($edit['description'] ?? ''); ?></textarea></label>
           <label><span>Çek ön görsel</span><input name="front_document" type="file" accept="image/*,application/pdf"></label>
           <label><span>Çek arka görsel</span><input name="back_document" type="file" accept="image/*,application/pdf"></label>
           <label class="wide"><span>Ana çek belgesi</span><input name="document" type="file" accept="image/*,application/pdf"></label>
           <label class="full check"><input type="checkbox" name="is_opening_balance_check" value="1" <?php echo ((int)($edit['is_opening_balance_check'] ?? 0)===1)?'checked':''; ?>> Bu çek eski/devir çek; cari bakiyesi daha önce net girildi</label>
         </div>
-        <p class="check-note">Çek bankası karşı tarafın bankasıdır. Tahsil/ödeme bankası ise bizim hesabımızdır; otomatik tahsil sadece seçilen bizim banka hesabına yatar.</p>
+        <p class="check-note">Çek bankası çekin üzerindeki bankadır. Bizim banka hesabımız ise tahsilatın yatacağı veya verilen çek ödendiğinde paranın düşeceği hesaptır.</p>
         <div class="form-actions"><button class="btn btn-primary" type="submit"><?php echo $edit ? 'Çek Güncelle' : 'Çek Kaydet'; ?></button><?php if($edit): ?><a class="btn btn-secondary" href="cekler.php?direction=<?php echo e($direction); ?>">Vazgeç</a><?php endif; ?></div>
       </form>
       <?php else: ?><p class="muted">Görüntüleme yetkisindesiniz. Çek ekleme/düzenleme kapalı.</p><?php endif; ?>
