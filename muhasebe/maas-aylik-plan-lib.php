@@ -51,28 +51,19 @@ function maas_aylik_plan_effective(int $employeeId, string $period, ?array $empl
     $stmt->execute([$employeeId, $period]);
     $previous = $stmt->fetch() ?: null;
     if ($previous) {
+        $sourcePeriod = (string)$previous['period'];
         $previous['id'] = 0;
         $previous['period'] = $period;
         $previous['is_inherited'] = 1;
-        $previous['source_period'] = (string)($previous['period_original'] ?? '');
-        // Kaynak dönemi sorgu satırından kaybetmemek için yeniden bul.
-        $srcStmt = db()->prepare('SELECT period FROM salary_monthly_payment_plans WHERE employee_id=? AND period<? ORDER BY period DESC, id DESC LIMIT 1');
-        $srcStmt->execute([$employeeId, $period]);
-        $previous['source_period'] = (string)($srcStmt->fetchColumn() ?: '');
+        $previous['source_period'] = $sourcePeriod;
         return $previous;
     }
 
-    if (!$employee) {
-        $stmt = db()->prepare('SELECT * FROM salary_employees WHERE id=? LIMIT 1');
-        $stmt->execute([$employeeId]);
-        $employee = $stmt->fetch() ?: [];
-    }
-    $baseSalary = max(0, (float)($employee['base_salary'] ?? 0));
     return [
         'id' => 0,
         'employee_id' => $employeeId,
         'period' => $period,
-        'daily_wage' => $baseSalary > 0 ? round($baseSalary / 30, 2) : 0,
+        'daily_wage' => 0,
         'bank_amount' => 0,
         'cash_amount' => 0,
         'note' => '',
