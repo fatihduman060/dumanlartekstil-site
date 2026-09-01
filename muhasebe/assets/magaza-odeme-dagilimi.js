@@ -1,7 +1,7 @@
 (function(){
   if(!/\/magaza\.php$/i.test(location.pathname)) return;
 
-  var state={period:'',csrf:'',canWrite:false,previousRequest:0};
+  var state={period:'',csrf:'',canWrite:false,canQuickCashLeft:false,previousRequest:0};
   function qs(selector,root){return (root||document).querySelector(selector);}
   function esc(value){return String(value==null?'':value).replace(/[&<>\"]/g,function(char){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[char];});}
   function numberValue(value){var text=String(value||'').trim().replace(/\s/g,'');if(text.indexOf(',')!==-1) text=text.replace(/\./g,'').replace(',','.');var number=parseFloat(text);return Number.isFinite(number)?number:0;}
@@ -68,7 +68,7 @@
     updatePreview();loadPreviousCashChange(dateInput.value);return panel;
   }
   function render(data){
-    state.csrf=String(data.csrf_token||state.csrf);state.canWrite=!!data.can_write;
+    state.csrf=String(data.csrf_token||state.csrf);state.canWrite=!!data.can_write;state.canQuickCashLeft=!!data.can_quick_edit_cash_left;window.BITKE_FATIH_CASH_LEFT_EDIT=state.canQuickCashLeft;
     var panel=buildPanel();if(!panel) return;var form=qs('[data-magaza-odeme-form]',panel);if(form) form.hidden=!state.canWrite;
     var summary=data.summary||{};qs('[data-magaza-odeme-cash]',panel).textContent=money(summary.cash);qs('[data-magaza-odeme-card]',panel).textContent=money(summary.card);qs('[data-magaza-odeme-credit]',panel).textContent=money(summary.credit);qs('[data-magaza-odeme-cash-collection]',panel).textContent=money(summary.cash_credit_collection);qs('[data-magaza-odeme-card-collection]',panel).textContent=money(summary.card_credit_collection);qs('[data-magaza-odeme-total]',panel).textContent=money(summary.daily_total);
     var list=qs('[data-magaza-odeme-list]',panel),items=Array.isArray(data.items)?data.items:[];
@@ -86,6 +86,36 @@
   function editEntry(button){var row=button.closest('[data-magaza-odeme-row]'),form=qs('[data-magaza-odeme-form]');if(!row||!form) return;['cash','card'].forEach(function(name){qs('[name="'+name+'_amount"]',form).value=Number(row.getAttribute('data-'+name)||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});});qs('[name="sale_date"]',form).value=row.getAttribute('data-date')||defaultDate(state.period);qs('[name="cash_change_left_amount"]',form).value=Number(row.getAttribute('data-cash-change-left')||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});qs('[data-magaza-odeme-save]',form).textContent='Günü güncelle';updatePreview();loadPreviousCashChange(qs('[name="sale_date"]',form).value);form.scrollIntoView({behavior:'smooth',block:'center'});}
   function load(){fetch('magaza-odeme-dagilimi.php?period='+encodeURIComponent(state.period)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(response){return response.json();}).then(function(data){if(!data.ok) throw new Error(data.error||'Günlük satış dağılımı yüklenemedi.');render(data);}).catch(function(error){setStatus(error.message||'Günlük satış dağılımı yüklenemedi.','danger');});}
   function saveEntry(event){event.preventDefault();var form=event.target,button=qs('[data-magaza-odeme-save]',form);button.disabled=true;button.textContent='Kaydediliyor...';var body=new FormData(form);body.set('action','save');body.set('period',state.period);body.set('csrf_token',state.csrf);fetch('magaza-odeme-dagilimi.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'}).then(function(response){return response.json();}).then(function(data){if(!data.ok) throw new Error(data.error||'Günlük satış dağılımı kaydedilemedi.');form.reset();var dateInput=qs('[name="sale_date"]',form);dateInput.value=defaultDate(state.period);render(data);setStatus('Kayıt tamamlandı. Nakit aynı gün Mağaza Kasa’ya işlendi; kart tutarı 13 günlük Garanti geçiş planına alındı.','success');}).catch(function(error){setStatus(error.message||'Günlük satış dağılımı kaydedilemedi.','danger');}).finally(function(){button.disabled=false;button.textContent='Günü kaydet';});}
+  function quickEditCashLeft(){
+    if(!state.canQuickCashLeft||!window.matchMedia('(max-width: 700px)').matches) return;
+    var rows=Array.from(document.querySelectorAll('[data-magaza-odeme-row]')).sort(function(a,b){return String(b.getAttribute('data-date')||'').localeCompare(String(a.getAttribute('data-date')||''));});
+    var row=rows[0]||null;
+    if(!row){setStatus('Düzeltilecek günlük mağaza kaydı bulunamadı.','danger');return;}
+    var saleDate=String(row.getAttribute('data-date')||'');
+    var current=Number(row.getAttribute('data-cash-change-left')||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var entered=window.prompt(displayDate(saleDate)+' için kasada kalan parayı yaz:',current);
+    if(entered===null) return;
+    var amount=numberValue(entered);
+    if(amount<0){setStatus('Kasada kalan tutar negatif olamaz.','danger');return;}
+    var body=new FormData();
+    body.set('action','quick_cash_left');
+    body.set('sale_date',saleDate);
+    body.set('cash_change_left_amount',String(entered));
+    body.set('period',state.period);
+    body.set('csrf_token',state.csrf);
+    fetch('magaza-odeme-dagilimi.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
+      .then(function(response){return response.json();})
+      .then(function(data){if(!data.ok) throw new Error(data.error||'Kasada kalan para güncellenemedi.');render(data);setStatus('Kasada kalan para güncellendi.','success');})
+      .catch(function(error){setStatus(error.message||'Kasada kalan para güncellenemedi.','danger');});
+  }
+  document.addEventListener('click',function(event){
+    var target=event.target.closest('[data-magaza-mobile-latest] .magaza-mobile-cash-left');
+    if(target) quickEditCashLeft();
+  });
+  document.addEventListener('keydown',function(event){
+    var target=event.target.closest&&event.target.closest('[data-magaza-mobile-latest] .magaza-mobile-cash-left');
+    if(target&&(event.key==='Enter'||event.key===' ')){event.preventDefault();quickEditCashLeft();}
+  });
   function deleteEntry(id){if(!id||!window.confirm('Bu günlük satış dağılımı ve bağlı otomatik kasa/banka hareketleri silinsin mi?')) return;var body=new FormData();body.set('action','delete');body.set('id',String(id));body.set('period',state.period);body.set('csrf_token',state.csrf);fetch('magaza-odeme-dagilimi.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'}).then(function(response){return response.json();}).then(function(data){if(!data.ok) throw new Error(data.error||'Kayıt silinemedi.');render(data);setStatus('Günlük satış dağılımı ve bağlı otomatik hareketler silindi.','success');}).catch(function(error){setStatus(error.message||'Kayıt silinemedi.','danger');});}
 
   var style=document.createElement('style');style.textContent=''
@@ -95,6 +125,7 @@
     +'.magaza-onceki-bozuk{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center;padding:10px 12px;border:1px dashed #d5b879;border-radius:12px;background:#fffaf0}.magaza-onceki-bozuk span{font-size:9px;font-weight:850;color:#80642d}.magaza-onceki-bozuk strong{font-size:12px}.magaza-onceki-bozuk small{grid-column:2;font-size:8px;color:var(--muted)}'
     +'.magaza-odeme-form{display:grid;grid-template-columns:140px repeat(6,minmax(115px,1fr));gap:9px;align-items:end;padding:12px;border:1px solid #dce5df;border-radius:13px;background:#fff}.magaza-auto-credit-note{display:grid;gap:3px;padding:10px;border:1px solid #b8d8c2;border-radius:11px;background:#f1faf4}.magaza-auto-credit-note strong{color:#173f29}.magaza-auto-credit-note small{color:#5f7165}.magaza-odeme-form label{display:grid;gap:5px;font-size:10px;font-weight:850}.magaza-odeme-form label small{font-size:8px;color:var(--muted);font-weight:700}.magaza-odeme-form input{width:100%}.magaza-odeme-preview{grid-column:1/-2;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:9px 11px;border-radius:10px;background:#f1f6f3}.magaza-odeme-preview span{display:grid;gap:2px}.magaza-odeme-preview small{font-size:8px;color:var(--muted)}.magaza-odeme-preview strong{font-size:12px}.magaza-odeme-preview em{grid-column:1/-1;font-size:9px;color:var(--muted);font-style:normal}'
     +'.magaza-odeme-list .table-wrap{margin:0}.magaza-odeme-list table{width:100%;min-width:1280px}.magaza-odeme-list th,.magaza-odeme-list td{font-size:10px}.magaza-odeme-list td small{display:block;margin-top:3px;font-size:8px;color:var(--muted);white-space:nowrap}.magaza-odeme-list .magaza-flow-status{color:#1f6b3d;font-weight:850}.magaza-bozuk-cell{background:#fffaf0}.magaza-odeme-actions{white-space:nowrap}.magaza-odeme-actions button{border:0;background:transparent;padding:3px 5px;font-size:9px;font-weight:800;color:#745f3e;text-decoration:underline;cursor:pointer}.magaza-odeme-total-row td{background:#f3f7f4;border-top:2px solid #cad8ce}'
+    +'@media(max-width:700px){.magaza-mobile-cash-left.is-fatih-editable{cursor:pointer;outline:2px dashed rgba(239,199,116,.72);outline-offset:-5px}.magaza-mobile-cash-left.is-fatih-editable:active{transform:scale(.99)}}'
     +'@media(max-width:1350px){.magaza-odeme-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.magaza-odeme-form{grid-template-columns:repeat(3,minmax(0,1fr))}.magaza-odeme-preview{grid-column:1/-1}}@media(max-width:650px){.magaza-odeme-head{display:grid}.magaza-odeme-summary,.magaza-odeme-form,.magaza-odeme-preview{grid-template-columns:1fr}.magaza-odeme-preview em{grid-column:1}.magaza-odeme-form .btn{width:100%}.magaza-onceki-bozuk{grid-template-columns:1fr}.magaza-onceki-bozuk small{grid-column:1}}';document.head.appendChild(style);
   state.period=periodValue();buildPanel();load();
 })();

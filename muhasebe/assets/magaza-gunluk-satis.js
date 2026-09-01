@@ -178,6 +178,24 @@
     card.querySelector('[data-magaza-latest-cash-collection]').textContent=money(cashCollection);
     card.querySelector('[data-magaza-latest-card-collection]').textContent=money(cardCollection);
     card.querySelector('[data-magaza-latest-cash-left]').textContent=money(cashLeft);
+    var cashLeftBox=card.querySelector('.magaza-mobile-cash-left');
+    var quickCashLeft=!!window.BITKE_FATIH_CASH_LEFT_EDIT&&window.matchMedia('(max-width: 700px)').matches&&!!row;
+    if(cashLeftBox){
+      cashLeftBox.classList.toggle('is-fatih-editable',quickCashLeft);
+      if(quickCashLeft){
+        cashLeftBox.setAttribute('role','button');
+        cashLeftBox.setAttribute('tabindex','0');
+        cashLeftBox.setAttribute('title','Kasada kalan parayı düzelt');
+        var cashLeftHint=cashLeftBox.querySelector('small');
+        if(cashLeftHint) cashLeftHint.textContent='Düzeltmek için dokun';
+      }else{
+        var cashLeftHintDefault=cashLeftBox.querySelector('small');
+        if(cashLeftHintDefault) cashLeftHintDefault.textContent='Gün sonunda mağaza kasasında bırakılan tutar';
+        cashLeftBox.removeAttribute('role');
+        cashLeftBox.removeAttribute('tabindex');
+        cashLeftBox.removeAttribute('title');
+      }
+    }
 
     var historyRows=window.BITKE_STORE_SALES_ONLY?rows.slice(1,2):rows.slice(1);
     history.innerHTML=historyRows.map(function(item){

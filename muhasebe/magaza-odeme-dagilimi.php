@@ -46,6 +46,7 @@ function magaza_odeme_dagilim_payload(string $period): array
         'summary' => magaza_odeme_dagilim_ozeti($period),
         'items' => $items,
         'can_write' => can_manage_store_sales(),
+        'can_quick_edit_cash_left' => is_fatih_user(),
         'csrf_token' => csrf_token(),
         'credit_mode' => 'personnel_auto',
     ];
@@ -66,7 +67,31 @@ try {
         require_csrf();
         $action = trim((string)($_POST['action'] ?? 'save'));
 
-        if ($action === 'delete') {
+        if ($action === 'quick_cash_left') {
+            if (!is_fatih_user()) throw new RuntimeException('Bu hızlı düzeltme yalnızca Fatih kullanıcısına açıktır.');
+
+            $saleDate = trim((string)($_POST['sale_date'] ?? ''));
+            $cashChangeLeft = decimal_from_input($_POST['cash_change_left_amount'] ?? '0');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) {
+                throw new RuntimeException('Düzeltilecek gün bulunamadı.');
+            }
+            if ($cashChangeLeft < 0) throw new RuntimeException('Kasada kalan tutar negatif olamaz.');
+
+            $stmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1');
+            $stmt->execute([$saleDate]);
+            $old = $stmt->fetch();
+            if (!$old) throw new RuntimeException('Bu güne ait mağaza kaydı bulunamadı.');
+
+            $userId = current_user()['id'] ?? null;
+            db()->prepare('UPDATE store_daily_payment_breakdown SET cash_change_left_amount=?, updated_by=?, updated_at=? WHERE id=?')
+                ->execute([$cashChangeLeft, $userId, now(), (int)$old['id']]);
+
+            $newStmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
+            $newStmt->execute([(int)$old['id']]);
+            $saved = $newStmt->fetch() ?: [];
+            log_action('Kasada kalan para hızlı düzeltildi', $saleDate . ' · ' . number_format($cashChangeLeft, 2, ',', '.') . ' TL');
+            audit_action('magaza_odeme_dagilimi', (int)$old['id'], 'kasada_kalan_duzeltildi', $old, $saved, $saleDate);
+        } elseif ($action === 'delete') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('Mağaza ödeme kaydı seçimi geçersiz.');
             $stmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
