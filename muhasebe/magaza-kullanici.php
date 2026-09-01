@@ -173,6 +173,7 @@ if (is_logged_in() && is_salary_only_user()) {
         'maas-bordro-yazdir.php',
         'maas-excel-aktar.php',
         'maas-aylik-kayit.php',
+        'maas-yevmiye-api.php',
         'logout.php',
         'index.php',
     ];
