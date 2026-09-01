@@ -584,6 +584,16 @@ page_header('Maaşlar', 'maaslar');
   </section>
 </div>
 <script>
+(function(){
+  if(!window.matchMedia('(max-width: 900px)').matches) return;
+  var grid=document.querySelector('.salary-grid');
+  var hero=grid&&grid.querySelector('.salary-hero');
+  var monthly=grid&&grid.querySelector('.salary-records-card');
+  if(grid&&monthly){
+    if(hero) hero.insertAdjacentElement('afterend',monthly);
+    else grid.insertAdjacentElement('afterbegin',monthly);
+  }
+})();
 document.addEventListener('click', function(e){
   var toggle=e.target.closest('[data-personel-form-toggle]');
   if(!toggle) return;
