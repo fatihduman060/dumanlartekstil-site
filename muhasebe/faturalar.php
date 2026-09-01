@@ -369,10 +369,22 @@ if (!empty($_GET['edit'])) {
 $stockProducts = stok_urunler(true);
 $editStockLines = $edit ? stok_fatura_satirlari((int)$edit['id']) : [];
 
-$period = trim((string)($_GET['period'] ?? date('Y-m')));
+$selectedPeriodYear = trim((string)($_GET['period_year'] ?? ''));
+$selectedPeriodMonth = trim((string)($_GET['period_month'] ?? ''));
+$periodFromSelects = '';
+if (preg_match('/^\d{4}$/', $selectedPeriodYear) && preg_match('/^(0[1-9]|1[0-2])$/', $selectedPeriodMonth)) {
+    $periodFromSelects = $selectedPeriodYear . '-' . $selectedPeriodMonth;
+}
+$period = trim((string)($periodFromSelects !== '' ? $periodFromSelects : ($_GET['period'] ?? date('Y-m'))));
 if (!preg_match('/^\d{4}-\d{2}$/', $period)) $period = date('Y-m');
 $periodStart = $period . '-01';
 $periodEnd = date('Y-m-t', strtotime($periodStart));
+$periodYear = (int)substr($period, 0, 4);
+$periodMonth = substr($period, 5, 2);
+$invoiceYearBounds = db()->query("SELECT MIN(CAST(substr(invoice_date,1,4) AS INTEGER)) AS min_year, MAX(CAST(substr(invoice_date,1,4) AS INTEGER)) AS max_year FROM invoices WHERE invoice_date GLOB '[0-9][0-9][0-9][0-9]-*'")->fetch();
+$periodMinYear = min($periodYear, (int)($invoiceYearBounds['min_year'] ?? $periodYear), (int)date('Y'));
+$periodMaxYear = max($periodYear, (int)($invoiceYearBounds['max_year'] ?? $periodYear), (int)date('Y')) + 1;
+$periodMonthNames = ['01'=>'Ocak','02'=>'Şubat','03'=>'Mart','04'=>'Nisan','05'=>'Mayıs','06'=>'Haziran','07'=>'Temmuz','08'=>'Ağustos','09'=>'Eylül','10'=>'Ekim','11'=>'Kasım','12'=>'Aralık'];
 
 $summaryStmt = db()->prepare("SELECT
     COALESCE(SUM(CASE WHEN direction='gelen' AND currency='TL' THEN vat_amount ELSE 0 END),0) AS incoming_vat,
@@ -459,6 +471,7 @@ page_header('Faturalar', 'faturalar');
 .fatura-direction-tabs a{flex:1;display:grid;gap:3px;text-align:center;text-decoration:none;border-radius:12px;padding:11px 14px;background:#fbf6ed;color:#16482e}
 .fatura-direction-tabs a.active{background:#c49a4f;color:#102818}.fatura-direction-tabs strong{font-size:13px}.fatura-direction-tabs small{font-size:9px;font-weight:700;opacity:.72}
 .fatura-entry-open{margin-left:auto;white-space:nowrap}
+.fatura-period-filter select{min-width:150px}
 .kdv-devir-panel{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(420px,1.6fr);gap:14px;align-items:end;margin:14px 0 16px;padding:14px 16px;border:1px solid #d8c6a5;background:linear-gradient(135deg,#fff7e8,#fff);border-radius:16px}.kdv-devir-copy{display:grid;gap:4px}.kdv-devir-copy small{font-size:11px;color:var(--muted)}.kdv-devir-form{display:grid;grid-template-columns:150px minmax(220px,1fr) auto;gap:9px;align-items:end}.kdv-devir-form label{display:grid;gap:5px;font-size:11px;font-weight:800}.kdv-devir-form input{width:100%;border:1px solid var(--border);background:#fff;border-radius:11px;padding:10px 11px}.kdv-devir-status{grid-column:1/-1;margin:0;font-size:11px;color:var(--muted)}
 .fatura-tur-auto-status{display:flex;gap:10px;align-items:center;flex-wrap:wrap;min-height:38px;margin:10px 0 12px;padding:10px 12px;border:1px solid #c8d8ea;background:#f1f7ff;border-radius:12px;font-size:10px}.fatura-tur-summary{min-height:58px;margin:12px 0 14px;padding:13px 14px;border:1px solid #d9e3dc;background:#f7fbf8;border-radius:15px;display:grid;gap:10px}.fatura-tur-summary-head{display:grid;gap:3px}.fatura-tur-summary-head small{font-size:10px;color:var(--muted)}
 .fatura-alt-kontroller{display:grid;gap:12px;margin-top:18px;padding:16px}.fatura-alt-kontrol-body{display:grid;gap:12px}
@@ -474,8 +487,9 @@ page_header('Faturalar', 'faturalar');
     <div><span>Fatura ve KDV Takibi</span><h3><?php echo e(date('m.Y', strtotime($periodStart))); ?> dönemi</h3></div>
     <p>Gelen ve giden faturaların basit KDV görünümü. Resmî KDV beyannamesi yerine geçmez.</p>
   </div>
-  <form class="filterbar" method="get">
-    <input type="month" name="period" value="<?php echo e($period); ?>">
+  <form class="filterbar fatura-period-filter" method="get">
+    <label>Ay<select name="period_month" aria-label="Fatura ayı"><?php foreach($periodMonthNames as $monthValue=>$monthName): ?><option value="<?php echo e($monthValue); ?>" <?php echo $periodMonth===$monthValue?'selected':''; ?>><?php echo e($monthName); ?></option><?php endforeach; ?></select></label>
+    <label>Yıl<select name="period_year" aria-label="Fatura yılı"><?php for($year=$periodMaxYear;$year>=$periodMinYear;$year--): ?><option value="<?php echo e((string)$year); ?>" <?php echo $periodYear===$year?'selected':''; ?>><?php echo e((string)$year); ?></option><?php endfor; ?></select></label>
     <input type="hidden" name="direction" value="<?php echo e($directionFilter); ?>">
     <button class="btn btn-secondary" type="submit">Dönemi göster</button>
     <a class="btn btn-primary" href="fatura-toplu-yukle.php" data-toplu-fatura-link>Toplu PDF yükle</a>
