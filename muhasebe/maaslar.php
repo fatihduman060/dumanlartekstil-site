@@ -2,6 +2,7 @@
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/maas-puantaj-lib.php';
 require_once __DIR__ . '/maas-aylik-kayit-lib.php';
+require_once __DIR__ . '/maas-aylik-plan-lib.php';
 require_admin();
 
 function salary_db_ensure(): void
@@ -110,9 +111,8 @@ function salary_refresh_after_advance(int $employeeId, string $period): ?string
 
 salary_db_ensure();
 maas_aylik_kayit_db_ensure();
+maas_aylik_plan_db_ensure();
 
-// Temmuz 2026 ve sonrasındaki mevcut ödenen maaşları da idempotent olarak
-// Garanti Dumanlar hesabına bağlar; manuel toplamda yalnızca eksik farkı işler.
 try {
     maas_garanti_odeme_sync('2026-07');
 } catch (Throwable $e) {
@@ -122,6 +122,33 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
     $action = $_POST['action'] ?? '';
+
+    if ($action === 'save_monthly_payment_plans') {
+        $planPeriod = maas_aylik_plan_period((string)($_POST['plan_period'] ?? date('Y-m')));
+        $dailyRows = isset($_POST['daily_wage']) && is_array($_POST['daily_wage']) ? $_POST['daily_wage'] : [];
+        $bankRows = isset($_POST['bank_amount']) && is_array($_POST['bank_amount']) ? $_POST['bank_amount'] : [];
+        $cashRows = isset($_POST['cash_amount']) && is_array($_POST['cash_amount']) ? $_POST['cash_amount'] : [];
+        $noteRows = isset($_POST['plan_note']) && is_array($_POST['plan_note']) ? $_POST['plan_note'] : [];
+        $saved = 0;
+        try {
+            foreach ($dailyRows as $employeeIdRaw => $dailyRaw) {
+                $employeeId = (int)$employeeIdRaw;
+                if ($employeeId <= 0) continue;
+                $dailyText = trim((string)$dailyRaw);
+                if ($dailyText === '') continue;
+                $dailyWage = decimal_from_input($dailyText);
+                $bankAmount = decimal_from_input((string)($bankRows[$employeeIdRaw] ?? '0'));
+                $cashAmount = decimal_from_input((string)($cashRows[$employeeIdRaw] ?? '0'));
+                $note = trim((string)($noteRows[$employeeIdRaw] ?? ''));
+                maas_aylik_plan_save($employeeId, $planPeriod, $dailyWage, $bankAmount, $cashAmount, $note);
+                $saved++;
+            }
+            flash('success', month_label($planPeriod) . ' için ' . $saved . ' personelin yevmiye / banka / elden planı kaydedildi.');
+        } catch (Throwable $e) {
+            flash('error', 'Aylık yevmiye planı kaydedilemedi: ' . $e->getMessage());
+        }
+        redirect('maaslar.php?period=' . urlencode($planPeriod) . '#aylik-yevmiye-plani');
+    }
 
     if (!empty($_POST['deduct_manual_period'])) {
         $manualPeriod = trim((string)$_POST['deduct_manual_period']);
@@ -139,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $manualAmount = max(0, decimal_from_input($manualRaw));
             maas_manual_aylik_toplam_kaydet($manualPeriod, $manualAmount);
-            $syncResult = maas_garanti_odeme_sync('2026-07', true, $manualPeriod);
+            maas_garanti_odeme_sync('2026-07', true, $manualPeriod);
             $linkStmt = db()->prepare('SELECT amount FROM salary_manual_account_links WHERE period=? LIMIT 1');
             $linkStmt->execute([$manualPeriod]);
             $deductedAmount = (float)($linkStmt->fetchColumn() ?: 0);
@@ -305,8 +332,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $periodForSalary = trim($_POST['period'] ?? date('Y-m'));
         if (!preg_match('/^\d{4}-\d{2}$/', $periodForSalary)) $periodForSalary = date('Y-m');
         try {
+            $plan = maas_aylik_plan_effective($employeeId, $periodForSalary);
+            if ((float)($plan['daily_wage'] ?? 0) > 0) {
+                $_POST['salary_amount'] = round((float)$plan['daily_wage'] * 30, 2);
+            }
             maas_aylik_kayit_save($employeeId, $periodForSalary, $_POST, true);
-            flash('success', 'Maaş, avans toplamı, puantaj ve bordro kaydı güncellendi.');
+            flash('success', 'Maaş, avans toplamı, puantaj ve bordro kaydı güncellendi. Yevmiye tanımlıysa aylık hesap yevmiye × 30 üzerinden alındı.');
         } catch (Throwable $e) {
             flash('error', $e->getMessage());
         }
@@ -350,6 +381,14 @@ $accounts = accounts_for_select(true);
 $activeEmployees = array_values(array_filter($employees, fn($e) => (int)($e['is_active'] ?? 0) === 1));
 $inactiveEmployees = array_values(array_filter($employees, fn($e) => (int)($e['is_active'] ?? 0) === 0));
 $visibleEmployees = $employeeView === 'inactive' ? $inactiveEmployees : $activeEmployees;
+$monthlyPlans = maas_aylik_plan_rows($activeEmployees, $period);
+$planBankTotal = $planCashTotal = $planWageMonthlyTotal = 0.0;
+foreach ($activeEmployees as $employee) {
+    $plan = $monthlyPlans[(int)$employee['id']] ?? [];
+    $planBankTotal += (float)($plan['bank_amount'] ?? 0);
+    $planCashTotal += (float)($plan['cash_amount'] ?? 0);
+    $planWageMonthlyTotal += (float)($plan['daily_wage'] ?? 0) * 30;
+}
 
 $editEmployee = null;
 if (!empty($_GET['edit_employee'])) { $stmt=db()->prepare('SELECT * FROM salary_employees WHERE id=?'); $stmt->execute([(int)$_GET['edit_employee']]); $editEmployee=$stmt->fetch() ?: null; }
@@ -376,7 +415,9 @@ foreach ($records as $r) { $sumSalary += (float)$r['salary_amount']; $sumAdvance
 page_header('Maaşlar', 'maaslar');
 ?>
 <style>
-.salary-grid{display:grid;gap:16px;max-width:1500px;margin:0 auto}.salary-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.salary-hero h2{margin:4px 0 6px;color:#fff;font-size:clamp(24px,3vw,36px)}.salary-hero p{margin:0;color:#e9f5ed}.salary-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.salary-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.salary-summary article{background:#fff;border:1px solid #e5dccf;border-radius:18px;padding:15px 16px;box-shadow:0 12px 30px rgba(7,27,63,.06)}.salary-summary span{font-size:11px;color:#8a6a26;font-weight:950;text-transform:uppercase}.salary-summary strong{display:block;margin-top:7px;color:#102818;font-size:22px}.salary-manual-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.salary-manual-month{display:grid;gap:6px;padding:13px;border:1px solid #e5dccf;border-radius:16px;background:#fff}.salary-manual-month>span{font-size:12px;font-weight:950;color:#102818}.salary-manual-month input{width:100%;min-height:42px;border:1px solid #e5dccf;border-radius:12px;padding:9px 11px}.salary-manual-month small{color:#776b5c;line-height:1.35}.salary-manual-deduct{min-height:34px;border:0;border-radius:10px;padding:7px 9px;background:#16482e;color:#fff;font-size:11px;font-weight:950;cursor:pointer}.salary-manual-deduct.done{background:#8a6a26}.salary-manual-tools{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-top:14px}.salary-manual-tools label{display:grid;gap:5px;font-size:12px;font-weight:850}.salary-manual-tools select{min-height:42px;border:1px solid #e5dccf;border-radius:12px;padding:8px 10px;background:#fff}.salary-columns{display:grid;grid-template-columns:380px 1fr;gap:16px}.salary-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.salary-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.salary-card-head h3{margin:0;color:#102818}.salary-card-head span{color:#8a6a26;font-size:12px;font-weight:900}.salary-body{padding:16px 18px}.salary-form{display:grid;gap:11px}.salary-form label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.salary-form input,.salary-form select,.salary-form textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.salary-form input[readonly]{background:#f2f0ea;color:#5f665f}.salary-form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.salary-form label small{color:#776b5c;font-size:10px;font-weight:650}.salary-filter{display:grid;grid-template-columns:150px 1fr 160px auto;gap:8px;padding:12px 14px;border-bottom:1px solid #e5dccf}.salary-filter input,.salary-filter select,.salary-filter button{min-height:38px;border:1px solid #e5dccf;border-radius:999px;padding:7px 11px;background:#fff;color:#102818;font-weight:800}.salary-table-wrap{overflow:auto}.salary-table{width:100%;min-width:1050px;border-collapse:separate;border-spacing:0}.salary-table th{background:#16482e;color:#fff;text-align:left;padding:11px 12px;font-size:11px;text-transform:uppercase}.salary-table td{padding:12px;border-bottom:1px solid #e5dccf;vertical-align:top;font-size:13px}.salary-table b{display:block;color:#102818}.salary-table small{display:block;color:#776b5c;margin-top:3px}.salary-table tfoot td{background:#102818;color:#fff;font-weight:900}.salary-actions{display:flex;gap:6px;flex-wrap:wrap}.salary-actions a,.salary-actions button{border:1px solid #e5dccf;border-radius:999px;padding:6px 10px;background:#fff;color:#102818;text-decoration:none;font-size:12px;font-weight:900}.salary-actions button.danger{color:#b64242}.text-right{text-align:right}.salary-person-list{display:grid;gap:8px}.salary-person{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid #e5dccf;border-radius:14px;background:#fff}.salary-person strong{color:#102818}.salary-person small{display:block;color:#776b5c}.salary-person a{text-decoration:none;font-weight:900;color:#16482e}.salary-advance-card,.salary-garnishment-card{grid-column:1/-1;border-color:#d8bd7d}.salary-advance-card .salary-card-head{background:#fff8e7}.salary-garnishment-card .salary-card-head{background:#fff0f0}.garnishment-amount{color:#a33f35;font-size:15px}.garnishment-cancelled{opacity:.62;background:#faf8f4}.advance-layout{display:grid;grid-template-columns:390px minmax(0,1fr);gap:16px}.advance-info{margin:0;padding:10px 12px;border-radius:12px;background:#edf5ef;color:#16482e;font-size:11px}.advance-table{min-width:760px}.advance-amount{color:#8a6114;font-size:15px}@media(max-width:1180px){.salary-columns{grid-template-columns:1fr}.salary-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.salary-filter{grid-template-columns:1fr 1fr}.advance-layout{grid-template-columns:1fr}}@media(max-width:1000px){.salary-manual-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.salary-manual-grid{grid-template-columns:1fr}.salary-manual-tools{align-items:stretch;flex-direction:column}.salary-manual-tools .btn{width:100%}.salary-hero{display:block}.salary-summary{grid-template-columns:1fr}.salary-form .two,.salary-filter{grid-template-columns:1fr}}
+.salary-grid{display:grid;gap:16px;max-width:1500px;margin:0 auto}.salary-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.salary-hero h2{margin:4px 0 6px;color:#fff;font-size:clamp(24px,3vw,36px)}.salary-hero p{margin:0;color:#e9f5ed}.salary-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.salary-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.salary-summary article{background:#fff;border:1px solid #e5dccf;border-radius:18px;padding:15px 16px;box-shadow:0 12px 30px rgba(7,27,63,.06)}.salary-summary span{font-size:11px;color:#8a6a26;font-weight:950;text-transform:uppercase}.salary-summary strong{display:block;margin-top:7px;color:#102818;font-size:22px}.salary-manual-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.salary-manual-month{display:grid;gap:6px;padding:13px;border:1px solid #e5dccf;border-radius:16px;background:#fff}.salary-manual-month>span{font-size:12px;font-weight:950;color:#102818}.salary-manual-month input{width:100%;min-height:42px;border:1px solid #e5dccf;border-radius:12px;padding:9px 11px}.salary-manual-month small{color:#776b5c;line-height:1.35}.salary-manual-deduct{min-height:34px;border:0;border-radius:10px;padding:7px 9px;background:#16482e;color:#fff;font-size:11px;font-weight:950;cursor:pointer}.salary-manual-deduct.done{background:#8a6a26}.salary-manual-tools{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-top:14px}.salary-manual-tools label{display:grid;gap:5px;font-size:12px;font-weight:850}.salary-manual-tools select{min-height:42px;border:1px solid #e5dccf;border-radius:12px;padding:8px 10px;background:#fff}.salary-columns{display:grid;grid-template-columns:380px 1fr;gap:16px}.salary-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.salary-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.salary-card-head h3{margin:0;color:#102818}.salary-card-head span{color:#8a6a26;font-size:12px;font-weight:900}.salary-body{padding:16px 18px}.salary-form{display:grid;gap:11px}.salary-form label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.salary-form input,.salary-form select,.salary-form textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.salary-form input[readonly]{background:#f2f0ea;color:#5f665f}.salary-form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.salary-form label small{color:#776b5c;font-size:10px;font-weight:650}.salary-filter{display:grid;grid-template-columns:150px 1fr 160px auto;gap:8px;padding:12px 14px;border-bottom:1px solid #e5dccf}.salary-filter input,.salary-filter select,.salary-filter button{min-height:38px;border:1px solid #e5dccf;border-radius:999px;padding:7px 11px;background:#fff;color:#102818;font-weight:800}.salary-table-wrap{overflow:auto}.salary-table{width:100%;min-width:1050px;border-collapse:separate;border-spacing:0}.salary-table th{background:#16482e;color:#fff;text-align:left;padding:11px 12px;font-size:11px;text-transform:uppercase}.salary-table td{padding:12px;border-bottom:1px solid #e5dccf;vertical-align:top;font-size:13px}.salary-table b{display:block;color:#102818}.salary-table small{display:block;color:#776b5c;margin-top:3px}.salary-table tfoot td{background:#102818;color:#fff;font-weight:900}.salary-actions{display:flex;gap:6px;flex-wrap:wrap}.salary-actions a,.salary-actions button{border:1px solid #e5dccf;border-radius:999px;padding:6px 10px;background:#fff;color:#102818;text-decoration:none;font-size:12px;font-weight:900}.salary-actions button.danger{color:#b64242}.text-right{text-align:right}.salary-person-list{display:grid;gap:8px}.salary-person{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px;border:1px solid #e5dccf;border-radius:14px;background:#fff}.salary-person strong{color:#102818}.salary-person small{display:block;color:#776b5c}.salary-person a{text-decoration:none;font-weight:900;color:#16482e}.salary-advance-card,.salary-garnishment-card{grid-column:1/-1;border-color:#d8bd7d}.salary-advance-card .salary-card-head{background:#fff8e7}.salary-garnishment-card .salary-card-head{background:#fff0f0}.garnishment-amount{color:#a33f35;font-size:15px}.garnishment-cancelled{opacity:.62;background:#faf8f4}.advance-layout{display:grid;grid-template-columns:390px minmax(0,1fr);gap:16px}.advance-info{margin:0;padding:10px 12px;border-radius:12px;background:#edf5ef;color:#16482e;font-size:11px}.advance-table{min-width:760px}.advance-amount{color:#8a6114;font-size:15px}
+.salary-plan-card{border-color:#b7d6c1}.salary-plan-card .salary-card-head{background:linear-gradient(135deg,#edf8f0,#fff)}.salary-plan-head-tools{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.salary-plan-head-tools label{display:grid;gap:4px;font-size:10px;font-weight:900;color:#66736b}.salary-plan-head-tools input{min-height:38px;border:1px solid #bad2c1;border-radius:11px;padding:7px 10px;background:#fff;font-weight:900}.salary-plan-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}.salary-plan-total{padding:13px 14px;border-radius:15px;background:#123f2b;color:#fff}.salary-plan-total span{display:block;color:#c9dfd0;font-size:10px;font-weight:900;text-transform:uppercase}.salary-plan-total strong{display:block;margin-top:5px;font-size:20px}.salary-plan-table{min-width:930px}.salary-plan-table input{width:100%;min-width:120px;min-height:40px;border:1px solid #d8dfd9;border-radius:10px;padding:8px 10px;background:#fff;font-weight:800}.salary-plan-table input:focus{outline:none;border-color:#2d754d;box-shadow:0 0 0 3px rgba(45,117,77,.12)}.salary-plan-source{color:#8a6a26!important;font-weight:850}.salary-plan-save{display:flex;justify-content:space-between;gap:14px;align-items:center;padding-top:14px}.salary-plan-save small{max-width:760px;color:#66736b}.salary-plan-row-total{white-space:nowrap;font-weight:900;color:#16482e}
+@media(max-width:1180px){.salary-columns{grid-template-columns:1fr}.salary-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.salary-filter{grid-template-columns:1fr 1fr}.advance-layout{grid-template-columns:1fr}}@media(max-width:1000px){.salary-manual-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.salary-plan-totals{grid-template-columns:1fr}}@media(max-width:700px){.salary-manual-grid{grid-template-columns:1fr}.salary-manual-tools{align-items:stretch;flex-direction:column}.salary-manual-tools .btn{width:100%}.salary-hero{display:block}.salary-summary{grid-template-columns:1fr}.salary-form .two,.salary-filter{grid-template-columns:1fr}.salary-plan-head-tools{width:100%}.salary-plan-head-tools label{width:100%}.salary-plan-head-tools input{width:100%}.salary-plan-save{align-items:stretch;flex-direction:column}.salary-plan-save .btn{width:100%}}
 </style>
 <style>
 .salary-grid.salary-pending{visibility:hidden;height:0;overflow:hidden}.salary-page-loading{display:grid;place-items:center;min-height:220px;border:1px solid #e5dccf;border-radius:22px;background:#fff;color:#16482e;font-weight:900}.salary-hero-tools{display:grid;gap:9px;justify-items:end}.salary-excel-link{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 13px;border-radius:999px;background:#fff;color:#16482e;text-decoration:none;font-size:12px;font-weight:950}.salary-person-tabs{display:flex;gap:7px;margin:10px 0 13px}.salary-person-tabs a{padding:7px 11px;border:1px solid #e5dccf;border-radius:999px;color:#16482e;text-decoration:none;font-size:12px;font-weight:900}.salary-person-tabs a.active{background:#16482e;color:#fff;border-color:#16482e}.salary-person-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.salary-person-actions>a,.salary-person-actions button{border:1px solid #e5dccf;border-radius:999px;padding:6px 9px;background:#fff;color:#16482e;text-decoration:none;font-size:11px;font-weight:900}.salary-person-actions button.exit{color:#a33f35}.salary-exit-form{display:flex;gap:5px;align-items:center;flex-wrap:wrap;grid-column:1/-1;padding-top:8px;border-top:1px dashed #e5dccf}.salary-exit-form input{min-height:34px;border:1px solid #e5dccf;border-radius:10px;padding:6px 8px;font-size:11px}.salary-exit-form input[type=date]{width:132px}.salary-exit-form input[type=text]{flex:1;min-width:130px}.salary-exited{background:#faf8f4}.salary-exited-label{color:#a33f35;font-weight:900}.salary-person-empty{margin:0;color:#776b5c}@media(max-width:700px){.salary-hero-tools{justify-items:start;margin-top:14px}.salary-person{grid-template-columns:1fr}.salary-person-actions{justify-content:flex-start}.salary-exit-form input{width:100%!important}}
@@ -384,7 +425,7 @@ page_header('Maaşlar', 'maaslar');
 <div class="salary-page-loading" id="salaryPageLoading">Maaş ve personel ekranı hazırlanıyor…</div>
 <noscript><style>.salary-page-loading{display:none}.salary-grid.salary-pending{visibility:visible;height:auto;overflow:visible}</style></noscript>
 <div class="salary-grid salary-pending">
-  <section class="salary-hero"><div><span>PERSONEL MAAŞ TAKİBİ</span><h2>Maaş, avans ve ödeme durumunu takip et.</h2><p>Avanslar tarihli ayrı hareket olarak girilir; aynı ayın bordrosuna otomatik düşer.</p></div><div class="salary-hero-tools"><strong><?php echo e(month_label($period)); ?></strong><a class="salary-excel-link" href="maas-puantaj-toplu-excel.php?period=<?php echo e(urlencode($period)); ?>&amp;include_inactive=1" download>Tüm personeli Excel indir</a></div></section>
+  <section class="salary-hero"><div><span>PERSONEL MAAŞ TAKİBİ</span><h2>Maaş, avans ve ödeme durumunu takip et.</h2><p>Net maaş referansları sistemde korunur; aylık hesap yevmiye planıyla yönetilir.</p></div><div class="salary-hero-tools"><strong><?php echo e(month_label($period)); ?></strong><a class="salary-excel-link" href="maas-puantaj-toplu-excel.php?period=<?php echo e(urlencode($period)); ?>&amp;include_inactive=1" download>Tüm personeli Excel indir</a></div></section>
   <section class="salary-summary">
     <article><span>Personel</span><strong><?php echo count($activeEmployees); ?></strong></article>
     <article><span>Bu ay maaş</span><strong><?php echo e(money($sumSalary)); ?></strong></article>
@@ -392,8 +433,39 @@ page_header('Maaşlar', 'maaslar');
     <article><span>Ödenen</span><strong><?php echo e(money($sumPaid)); ?></strong></article>
     <article><span>Kalan</span><strong><?php echo e(money($sumRemaining)); ?></strong></article>
   </section>
+
+  <section class="salary-card salary-plan-card" id="aylik-yevmiye-plani">
+    <div class="salary-card-head">
+      <div><h3>Aylık yevmiye ve ödeme planı</h3><span>Yevmiyeyi, bankaya yatacak ve elden verilecek tutarı personel bazında elle gir.</span></div>
+      <div class="salary-plan-head-tools"><label>Dönem<input type="month" value="<?php echo e($period); ?>" onchange="location.href='maaslar.php?period='+this.value+'#aylik-yevmiye-plani'"></label></div>
+    </div>
+    <div class="salary-body">
+      <div class="salary-plan-totals">
+        <div class="salary-plan-total"><span>30 günlük yevmiye karşılığı</span><strong><?php echo e(money($planWageMonthlyTotal)); ?></strong></div>
+        <div class="salary-plan-total"><span>Bankaya yatacak toplam</span><strong><?php echo e(money($planBankTotal)); ?></strong></div>
+        <div class="salary-plan-total"><span>Elden verilecek toplam</span><strong><?php echo e(money($planCashTotal)); ?></strong></div>
+      </div>
+      <form method="post"><?php echo csrf_field(); ?><input type="hidden" name="action" value="save_monthly_payment_plans"><input type="hidden" name="plan_period" value="<?php echo e($period); ?>">
+        <div class="salary-table-wrap"><table class="salary-table salary-plan-table"><thead><tr><th>Personel</th><th>Günlük yevmiye</th><th>Bankaya yatacak</th><th>Elden verilecek</th><th>Plan toplamı</th><th>Not</th></tr></thead><tbody>
+          <?php if(!$activeEmployees): ?><tr><td colspan="6" class="empty">Aktif personel bulunmuyor.</td></tr><?php endif; ?>
+          <?php foreach($activeEmployees as $emp): $plan=$monthlyPlans[(int)$emp['id']] ?? []; $planInherited=(int)($plan['is_inherited'] ?? 0)===1; $sourcePeriod=(string)($plan['source_period'] ?? ''); $planTotal=(float)($plan['bank_amount'] ?? 0)+(float)($plan['cash_amount'] ?? 0); ?>
+          <tr>
+            <td><b><?php echo e($emp['full_name']); ?></b><small><?php echo e(trim(($emp['department'] ?? '').' '.($emp['position'] ?? '')) ?: '-'); ?></small><?php if($planInherited): ?><small class="salary-plan-source"><?php echo $sourcePeriod !== '' ? e(month_label($sourcePeriod)).' ayından getirildi' : 'İlk değer referans net maaştan önerildi'; ?></small><?php else: ?><small>Bu aya kaydedildi</small><?php endif; ?></td>
+            <td><input name="daily_wage[<?php echo e($emp['id']); ?>]" inputmode="decimal" value="<?php echo e(number_format((float)($plan['daily_wage'] ?? 0),2,',','.')); ?>" required></td>
+            <td><input name="bank_amount[<?php echo e($emp['id']); ?>]" inputmode="decimal" value="<?php echo e(number_format((float)($plan['bank_amount'] ?? 0),2,',','.')); ?>"></td>
+            <td><input name="cash_amount[<?php echo e($emp['id']); ?>]" inputmode="decimal" value="<?php echo e(number_format((float)($plan['cash_amount'] ?? 0),2,',','.')); ?>"></td>
+            <td class="salary-plan-row-total"><?php echo e(money($planTotal)); ?></td>
+            <td><input name="plan_note[<?php echo e($emp['id']); ?>]" value="<?php echo e($plan['note'] ?? ''); ?>" placeholder="İsteğe bağlı"></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody></table></div>
+        <div class="salary-plan-save"><small>Bu alan ödeme hareketi oluşturmaz. Sadece o ayın yevmiye ve banka/elden dağılım planını kaydeder. Sonraki ay açıldığında son kaydettiğin değerler otomatik gelir.</small><button class="btn btn-primary" type="submit"><?php echo e(month_label($period)); ?> planını kaydet</button></div>
+      </form>
+    </div>
+  </section>
+
   <section class="salary-card" id="manuel-aylik-maaslar">
-    <div class="salary-card-head"><div><h3>Aylık manuel ödenen maaşlar</h3><span>Personel maaş kayıtları tamamlanana kadar ay ay toplam girebilirsin.</span></div><strong><?php echo e($salaryYear); ?> toplamı: <?php echo e(money($salaryAnnualSummary['total'])); ?></strong></div>
+    <div class="salary-card-head"><div><h3>Aylık manuel ödenen maaşlar</h3><span>Eski dönem raporlama yapısı; kayıtlar korunur.</span></div><strong><?php echo e($salaryYear); ?> toplamı: <?php echo e(money($salaryAnnualSummary['total'])); ?></strong></div>
     <div class="salary-body">
       <form method="post"><?php echo csrf_field(); ?><input type="hidden" name="action" value="save_manual_monthly_totals">
         <input type="hidden" name="manual_year" value="<?php echo e($salaryYear); ?>">
@@ -459,7 +531,7 @@ page_header('Maaşlar', 'maaslar');
         <label>Ad soyad<input name="full_name" required value="<?php echo e($editEmployee['full_name'] ?? ''); ?>"></label>
         <div class="two"><label>Bölüm<input name="department" value="<?php echo e($editEmployee['department'] ?? ''); ?>"></label><label>Görev<input name="position" value="<?php echo e($editEmployee['position'] ?? ''); ?>"></label></div>
         <div class="two"><label>Telefon<input name="phone" value="<?php echo e($editEmployee['phone'] ?? ''); ?>"></label><label>Başlama tarihi<input type="date" name="start_date" value="<?php echo e($editEmployee['start_date'] ?? ''); ?>"></label></div>
-        <label>Varsayılan maaş<input name="base_salary" value="<?php echo e(isset($editEmployee['base_salary']) ? number_format((float)$editEmployee['base_salary'], 2, ',', '.') : ''); ?>" placeholder="0,00"></label>
+        <label>Referans net maaş <small>Sadece sistemde referans olarak saklanır; aylık hesap yevmiyeden yapılır.</small><input name="base_salary" value="<?php echo e(isset($editEmployee['base_salary']) ? number_format((float)$editEmployee['base_salary'], 2, ',', '.') : ''); ?>" placeholder="0,00"></label>
         <?php if($editEmployee && (int)($editEmployee['is_active'] ?? 1) === 0): ?><div class="two"><label>Çıkış tarihi<input type="date" name="exit_date" value="<?php echo e($editEmployee['exit_date'] ?? ''); ?>"></label><label>Çıkış nedeni<input name="exit_reason" value="<?php echo e($editEmployee['exit_reason'] ?? ''); ?>"></label></div><?php endif; ?>
         <label>Not<textarea name="note" rows="2"><?php echo e($editEmployee['note'] ?? ''); ?></textarea></label>
         <label class="check"><input type="checkbox" name="is_active" <?php echo !isset($editEmployee['is_active']) || (int)$editEmployee['is_active']===1 ? 'checked' : ''; ?>> Aktif personel</label>
@@ -468,7 +540,7 @@ page_header('Maaşlar', 'maaslar');
       <div class="salary-body" style="border-top:1px solid #e5dccf"><h3>Personel listesi</h3>
         <nav class="salary-person-tabs"><a class="<?php echo $employeeView === 'active' ? 'active' : ''; ?>" href="maaslar.php">Aktif (<?php echo count($activeEmployees); ?>)</a><a class="<?php echo $employeeView === 'inactive' ? 'active' : ''; ?>" href="maaslar.php?employee_view=inactive">Çıkış yapanlar (<?php echo count($inactiveEmployees); ?>)</a></nav>
         <div class="salary-person-list">
-          <?php foreach($visibleEmployees as $emp): ?><div class="salary-person <?php echo (int)$emp['is_active'] === 0 ? 'salary-exited' : ''; ?>"><div><strong><?php echo e($emp['full_name']); ?></strong><small><?php echo e(trim(($emp['department'] ?? '') . ' ' . ($emp['position'] ?? '')) ?: '-'); ?> · <?php echo e(money($emp['base_salary'] ?? 0)); ?></small><?php if((int)$emp['is_active'] === 0): ?><small class="salary-exited-label">Çıkış yaptı<?php echo !empty($emp['exit_date']) ? ' · '.e(tr_date($emp['exit_date'])) : ''; ?><?php echo !empty($emp['exit_reason']) ? ' · '.e($emp['exit_reason']) : ''; ?></small><?php endif; ?></div><div class="salary-person-actions"><a href="maaslar.php?employee_view=<?php echo e($employeeView); ?>&amp;edit_employee=<?php echo e($emp['id']); ?>">Düzenle</a><?php if((int)$emp['is_active'] === 0): ?><form method="post" onsubmit="return confirm('Personel yeniden aktif listeye alınsın mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="reactivate_employee"><input type="hidden" name="id" value="<?php echo e($emp['id']); ?>"><button>Aktife al</button></form><?php endif; ?></div><?php if((int)$emp['is_active'] === 1): ?><form class="salary-exit-form" method="post" onsubmit="return confirm('Personel çıkış yaptı olarak pasife alınsın mı? Geçmiş maaş kayıtları korunacaktır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="deactivate_employee"><input type="hidden" name="id" value="<?php echo e($emp['id']); ?>"><input type="date" name="exit_date" value="<?php echo e(date('Y-m-d')); ?>" required><input type="text" name="exit_reason" placeholder="Çıkış nedeni (isteğe bağlı)"><button class="exit">Çıkış yaptı</button></form><?php endif; ?></div><?php endforeach; ?>
+          <?php foreach($visibleEmployees as $emp): ?><div class="salary-person <?php echo (int)$emp['is_active'] === 0 ? 'salary-exited' : ''; ?>"><div><strong><?php echo e($emp['full_name']); ?></strong><small><?php echo e(trim(($emp['department'] ?? '') . ' ' . ($emp['position'] ?? '')) ?: '-'); ?></small><?php if((int)$emp['is_active'] === 0): ?><small class="salary-exited-label">Çıkış yaptı<?php echo !empty($emp['exit_date']) ? ' · '.e(tr_date($emp['exit_date'])) : ''; ?><?php echo !empty($emp['exit_reason']) ? ' · '.e($emp['exit_reason']) : ''; ?></small><?php endif; ?></div><div class="salary-person-actions"><a href="maaslar.php?employee_view=<?php echo e($employeeView); ?>&amp;edit_employee=<?php echo e($emp['id']); ?>">Düzenle</a><?php if((int)$emp['is_active'] === 0): ?><form method="post" onsubmit="return confirm('Personel yeniden aktif listeye alınsın mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="reactivate_employee"><input type="hidden" name="id" value="<?php echo e($emp['id']); ?>"><button>Aktife al</button></form><?php endif; ?></div><?php if((int)$emp['is_active'] === 1): ?><form class="salary-exit-form" method="post" onsubmit="return confirm('Personel çıkış yaptı olarak pasife alınsın mı? Geçmiş maaş kayıtları korunacaktır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="deactivate_employee"><input type="hidden" name="id" value="<?php echo e($emp['id']); ?>"><input type="date" name="exit_date" value="<?php echo e(date('Y-m-d')); ?>" required><input type="text" name="exit_reason" placeholder="Çıkış nedeni (isteğe bağlı)"><button class="exit">Çıkış yaptı</button></form><?php endif; ?></div><?php endforeach; ?>
           <?php if(!$visibleEmployees): ?><p class="salary-person-empty"><?php echo $employeeView === 'inactive' ? 'Henüz çıkış yapan personel yok.' : 'Henüz aktif personel yok.'; ?></p><?php endif; ?>
         </div>
       </div>
@@ -476,8 +548,8 @@ page_header('Maaşlar', 'maaslar');
     <div class="salary-card">
       <div class="salary-card-head"><h3><?php echo $editSalary ? 'Maaş kaydı düzenle' : 'Aylık maaş kaydı'; ?></h3><?php if($editSalary): ?><a class="btn btn-secondary" href="maaslar.php?period=<?php echo e($period); ?>">Yeni kayıt</a><?php endif; ?></div>
       <div class="salary-body"><form class="salary-form" method="post"><?php echo csrf_field(); ?><input type="hidden" name="action" value="save_salary"><input type="hidden" name="id" value="<?php echo e($editSalary['id'] ?? 0); ?>">
-        <div class="two"><label>Dönem<input type="month" name="period" value="<?php echo e($editSalary['period'] ?? $period); ?>"></label><label>Personel<select name="employee_id" required><option value="">Personel seç</option><?php foreach($activeEmployees as $emp): ?><option value="<?php echo e($emp['id']); ?>" data-salary="<?php echo e((float)$emp['base_salary']); ?>" <?php echo (int)($editSalary['employee_id'] ?? 0)===(int)$emp['id']?'selected':''; ?>><?php echo e($emp['full_name']); ?></option><?php endforeach; ?></select></label></div>
-        <div class="two"><label>Maaş tutarı<input name="salary_amount" value="<?php echo e(isset($editSalary['salary_amount']) ? number_format((float)$editSalary['salary_amount'], 2, ',', '.') : ''); ?>" placeholder="0,00" required></label><label>Avans toplamı (otomatik)<input name="advance_amount" readonly value="<?php echo e(isset($editSalary['employee_id']) ? number_format(maas_avans_period_total((int)$editSalary['employee_id'], (string)($editSalary['period'] ?? $period)), 2, ',', '.') : '0,00'); ?>"><small>Tarihli avans hareketlerinden otomatik gelir.</small></label></div>
+        <div class="two"><label>Dönem<input type="month" name="period" value="<?php echo e($editSalary['period'] ?? $period); ?>"></label><label>Personel<select name="employee_id" required><option value="">Personel seç</option><?php foreach($activeEmployees as $emp): $empPlan=$monthlyPlans[(int)$emp['id']] ?? []; $empMonthly=(float)($empPlan['daily_wage'] ?? 0)*30; ?><option value="<?php echo e($emp['id']); ?>" data-salary="<?php echo e($empMonthly); ?>" <?php echo (int)($editSalary['employee_id'] ?? 0)===(int)$emp['id']?'selected':''; ?>><?php echo e($emp['full_name']); ?></option><?php endforeach; ?></select></label></div>
+        <div class="two"><label>Aylık hesap (yevmiye × 30)<input name="salary_amount" readonly value="<?php echo e(isset($editSalary['salary_amount']) ? number_format((float)$editSalary['salary_amount'], 2, ',', '.') : ''); ?>" placeholder="Yevmiye planından gelir" required><small>Bu tutar yukarıdaki aylık yevmiye planından hesaplanır.</small></label><label>Avans toplamı (otomatik)<input name="advance_amount" readonly value="<?php echo e(isset($editSalary['employee_id']) ? number_format(maas_avans_period_total((int)$editSalary['employee_id'], (string)($editSalary['period'] ?? $period)), 2, ',', '.') : '0,00'); ?>"><small>Tarihli avans hareketlerinden otomatik gelir.</small></label></div>
         <div class="two"><label>Kesinti<input name="deduction_amount" value="<?php echo e(isset($editSalary['deduction_amount']) ? number_format((float)$editSalary['deduction_amount'], 2, ',', '.') : ''); ?>" placeholder="0,00"></label><label>Ödenen<input name="paid_amount" value="<?php echo e(isset($editSalary['paid_amount']) ? number_format((float)$editSalary['paid_amount'], 2, ',', '.') : ''); ?>" placeholder="0,00"></label></div>
         <div class="two"><label>Ödeme tarihi<input type="date" name="payment_date" value="<?php echo e($editSalary['payment_date'] ?? date('Y-m-d')); ?>"></label><label>Kasa/Banka hesabı<select name="account_id"><option value="">Sadece kayıt, kasaya işleme</option><?php foreach($accounts as $acc): ?><option value="<?php echo e($acc['id']); ?>" <?php echo (int)($editSalary['account_id'] ?? 0)===(int)$acc['id']?'selected':''; ?>><?php echo e($acc['name']); ?><?php echo !empty($acc['bank_name']) ? ' / '.e($acc['bank_name']) : ''; ?></option><?php endforeach; ?></select></label></div>
         <label>Açıklama<textarea name="note" rows="2"><?php echo e($editSalary['note'] ?? ''); ?></textarea></label>
@@ -495,9 +567,15 @@ document.addEventListener('change', function(e){
     var salary = opt ? Number(opt.getAttribute('data-salary') || 0) : 0;
     var form = e.target.closest('form');
     var input = form && form.querySelector('input[name="salary_amount"]');
-    if(input && salary > 0 && !input.value){ input.value = new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(salary); }
+    if(input && salary > 0){ input.value = new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(salary); }
   }
+});
+document.addEventListener('input', function(e){
+  if(!e.target || (!e.target.name.startsWith('bank_amount[') && !e.target.name.startsWith('cash_amount['))) return;
+  var row=e.target.closest('tr'); if(!row) return;
+  function val(sel){var x=row.querySelector(sel); if(!x)return 0; var s=String(x.value||'').replace(/\./g,'').replace(',','.'); return Number(s)||0;}
+  var total=val('input[name^="bank_amount["]')+val('input[name^="cash_amount["]');
+  var cell=row.querySelector('.salary-plan-row-total'); if(cell) cell.textContent=new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(total)+' TL';
 });
 </script>
 <?php page_footer(); ?>
-
