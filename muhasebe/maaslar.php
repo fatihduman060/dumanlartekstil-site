@@ -424,7 +424,7 @@ page_header('Maaşlar', 'maaslar');
 @media(max-width:700px){
 .salary-hero-tools{justify-items:start;margin-top:14px}.salary-person{grid-template-columns:1fr}.salary-person-actions{justify-content:flex-start}.salary-exit-form input{width:100%!important}
 .salary-grid{display:flex!important;flex-direction:column;gap:14px}.salary-columns{display:contents!important}
-.salary-records-card{order:1;width:100%}.salary-hero{order:2}.salary-employee-card{order:3;width:100%}.salary-plan-card{order:4;width:100%}.salary-summary{order:5;width:100%}#manuel-aylik-maaslar{order:6;width:100%}.salary-advance-card{order:7;width:100%}.salary-garnishment-card{order:8;width:100%}
+.salary-hero{order:1}.salary-summary{order:2;width:100%}.salary-plan-card{order:3;width:100%}#manuel-aylik-maaslar{order:4;width:100%}.salary-employee-card{order:5;width:100%}.salary-records-card{order:6;width:100%}.salary-advance-card{order:7;width:100%}.salary-garnishment-card{order:8;width:100%}
 .salary-top-actions{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:8px}.salary-top-actions>*{width:100%;box-sizing:border-box;text-align:center}.salary-person-card-toggle{display:none!important}
 .salary-employee-card .salary-card-head{display:grid;align-items:stretch}
 .salary-person-form-body{display:none}.salary-person-form-body.is-open{display:block}
@@ -587,9 +587,9 @@ page_header('Maaşlar', 'maaslar');
 (function(){
   if(!window.matchMedia('(max-width: 900px)').matches) return;
   var grid=document.querySelector('.salary-grid');
-  var hero=grid&&grid.querySelector('.salary-hero');
   var monthly=grid&&grid.querySelector('.salary-records-card');
-  if(grid&&monthly) grid.insertAdjacentElement('afterbegin',monthly);
+  var advance=grid&&grid.querySelector('.salary-advance-card');
+  if(monthly&&advance&&advance.parentNode) advance.parentNode.insertBefore(monthly,advance);
 })();
 document.addEventListener('click', function(e){
   var toggle=e.target.closest('[data-personel-form-toggle]');
