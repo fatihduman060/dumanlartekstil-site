@@ -118,3 +118,57 @@
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
   else init();
 })();
+
+(function(){
+  'use strict';
+
+  if(!/kart-ekstre-takibi\.php/i.test(location.pathname)) return;
+
+  function normText(value){
+    return String(value||'').toLocaleLowerCase('tr-TR').replace(/ı/g,'i').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ö/g,'o').replace(/ş/g,'s').replace(/ü/g,'u');
+  }
+
+  function isAutoCreatedAccountLabel(text){
+    text=normText(text);
+    return text.indexOf('kart ekstresi')>=0 || text.indexOf('kart odendi')>=0 || text.indexOf('kart odemesi')>=0;
+  }
+
+  function fixPaymentAccounts(){
+    document.querySelectorAll('select[name="payment_account_id"]').forEach(function(select){
+      if(select.dataset.existingOnly==='1') return;
+      select.dataset.existingOnly='1';
+
+      Array.prototype.slice.call(select.options).forEach(function(option){
+        if(option.value!=='0' && isAutoCreatedAccountLabel(option.textContent||'')) option.remove();
+      });
+
+      var zero=select.querySelector('option[value="0"]');
+      var selectedReal=select.value && select.value!=='0';
+      if(zero){
+        zero.textContent='Hesap seçin';
+        zero.disabled=false;
+        if(!selectedReal) zero.selected=true;
+      }
+
+      var formId=select.getAttribute('form');
+      var form=formId?document.getElementById(formId):null;
+      if(!form) return;
+
+      form.addEventListener('submit',function(event){
+        if(String(select.value||'0')!=='0') return;
+        event.preventDefault();
+        window.alert('Bu kart için sistemde eşleşen banka hesabı yok. Lütfen ödeme yapılan mevcut banka hesabını seçin.');
+        select.focus();
+      },true);
+    });
+  }
+
+  function init(){
+    fixPaymentAccounts();
+    var observer=new MutationObserver(fixPaymentAccounts);
+    observer.observe(document.body,{childList:true,subtree:true});
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
+  else init();
+})();
