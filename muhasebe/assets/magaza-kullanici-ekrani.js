@@ -32,6 +32,35 @@
     document.head.appendChild(compactStoreStyle);
   }
 
+  // Eski mobil Z raporu stilinin form/özet/listeyi tekrar gizlemesini engelle.
+  // Inline !important kullanıldığı için sonradan yüklenen eski CSS de bu alanları kapatamaz.
+  if(/\/magaza\.php$/i.test(path)){
+    function keepZReportVisible(){
+      var panel=document.querySelector('[data-magaza-gunluk-satis]');
+      if(!panel) return;
+      var summary=panel.querySelector('.magaza-satis-summary');
+      var form=panel.querySelector('.magaza-satis-form');
+      var list=panel.querySelector('.magaza-satis-list');
+      if(summary) summary.style.setProperty('display','grid','important');
+      if(form) form.style.setProperty('display','grid','important');
+      if(list) list.style.setProperty('display','block','important');
+      panel.style.setProperty('display','grid','important');
+    }
+
+    var zReportQueued=false;
+    function queueZReportFix(){
+      if(zReportQueued) return;
+      zReportQueued=true;
+      window.setTimeout(function(){
+        zReportQueued=false;
+        keepZReportVisible();
+      },20);
+    }
+
+    if(document.body) new MutationObserver(queueZReportFix).observe(document.body,{childList:true,subtree:true});
+    [50,150,400,900,1600,3000].forEach(function(delay){window.setTimeout(keepZReportVisible,delay);});
+  }
+
   function storeMoney(value){
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
   }
