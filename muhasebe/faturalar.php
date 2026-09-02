@@ -488,8 +488,7 @@ page_header('Faturalar', 'faturalar');
     <p>Gelen ve giden faturaların basit KDV görünümü. Resmî KDV beyannamesi yerine geçmez.</p>
   </div>
   <form class="filterbar fatura-period-filter" method="get">
-    <label>Ay<select name="period_month" aria-label="Fatura ayı"><?php foreach($periodMonthNames as $monthValue=>$monthName): ?><option value="<?php echo e($monthValue); ?>" <?php echo $periodMonth===$monthValue?'selected':''; ?>><?php echo e($monthName); ?></option><?php endforeach; ?></select></label>
-    <label>Yıl<select name="period_year" aria-label="Fatura yılı"><?php for($year=$periodMaxYear;$year>=$periodMinYear;$year--): ?><option value="<?php echo e((string)$year); ?>" <?php echo $periodYear===$year?'selected':''; ?>><?php echo e((string)$year); ?></option><?php endfor; ?></select></label>
+    <input type="month" name="period" value="<?php echo e($period); ?>" aria-label="Fatura ayı">
     <input type="hidden" name="direction" value="<?php echo e($directionFilter); ?>">
     <button class="btn btn-secondary" type="submit">Dönemi göster</button>
     <a class="btn btn-primary" href="fatura-toplu-yukle.php" data-toplu-fatura-link>Toplu PDF yükle</a>
