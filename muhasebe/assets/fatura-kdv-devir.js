@@ -4,13 +4,27 @@
   var section=document.querySelector('.dashboard-section');
   if(!section) return;
 
-  var periodInput=section.querySelector('input[type="month"][name="period"]');
   var stats=section.querySelector('.stats-grid');
   var note=section.querySelector('.calc-note');
-  if(!periodInput||!stats) return;
+  if(!stats) return;
 
   var loading=false;
   var csrfToken='';
+
+  function periodValue(){
+    var monthInput=section.querySelector('input[type="month"][name="period"]');
+    var value=monthInput?String(monthInput.value||''):'';
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)){
+      var hiddenInput=section.querySelector('[data-kdv-devir-form] input[name="period"]');
+      value=hiddenInput?String(hiddenInput.value||''):'';
+    }
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)){
+      var params;
+      try{params=new URL(location.href).searchParams;}catch(e){params=null;}
+      value=params?String(params.get('period')||''):'';
+    }
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(value)?value:new Date().toISOString().slice(0,7);
+  }
 
   function money(value){
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
@@ -91,7 +105,7 @@
 
   function loadStoreLatestDate(data){
     renderStoreCard(data,'');
-    fetch('magaza-gunluk-satis.php?period='+encodeURIComponent(periodInput.value)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+    fetch('magaza-gunluk-satis.php?period='+encodeURIComponent(periodValue())+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
       .then(function(storeData){
         if(!storeData||!storeData.ok) return;
@@ -106,7 +120,7 @@
     csrfToken=String(data.csrf_token||'');
     var panel=ensureUi();
     var form=panel.querySelector('[data-kdv-devir-form]');
-    form.querySelector('[name="period"]').value=data.period||periodInput.value;
+    form.querySelector('[name="period"]').value=data.period||periodValue();
     form.querySelector('[name="amount"]').value=Number(data.carryover||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
     form.querySelector('[name="note"]').value=data.carryover_source==='manual'?(data.note||''):'';
 
@@ -154,7 +168,7 @@
     if(loading) return;
     loading=true;
     ensureUi();
-    fetch('fatura-kdv-devir.php?period='+encodeURIComponent(periodInput.value)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+    fetch('fatura-kdv-devir.php?period='+encodeURIComponent(periodValue())+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
       .then(function(data){
         if(!data.ok) throw new Error(data.error||'KDV devri yüklenemedi.');
@@ -176,7 +190,7 @@
     button.textContent='Kaydediliyor...';
 
     var body=new FormData(form);
-    body.set('period',periodInput.value);
+    body.set('period',periodValue());
     body.set('csrf_token',csrfToken);
 
     fetch('fatura-kdv-devir.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
