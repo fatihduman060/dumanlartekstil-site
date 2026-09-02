@@ -12,16 +12,22 @@
     form.dataset.oldPeriodRestored='1';
 
     var monthValue=String(monthSelect.value||'').padStart(2,'0');
-    var yearValue=String(yearSelect.value||'');
-    var currentPeriod=/^\d{4}$/.test(yearValue)&&/^(0[1-9]|1[0-2])$/.test(monthValue)
-      ? yearValue+'-'+monthValue
-      : new Date().toISOString().slice(0,7);
+    var now=new Date();
+    var currentYear=String(now.getFullYear());
+    var currentMonth=String(now.getMonth()+1).padStart(2,'0');
+    var params;
+    try{ params=new URL(location.href).searchParams; }catch(e){ params=null; }
+    var explicitPeriod=params ? String(params.get('period')||'') : '';
+    var hasExplicitPeriod=/^\d{4}-(0[1-9]|1[0-2])$/.test(explicitPeriod);
+    var safeMonth=/^(0[1-9]|1[0-2])$/.test(monthValue) ? monthValue : currentMonth;
+    var currentPeriod=hasExplicitPeriod ? explicitPeriod : currentYear+'-'+safeMonth;
 
     var monthInput=document.createElement('input');
     monthInput.type='month';
     monthInput.name='period';
     monthInput.value=currentPeriod;
     monthInput.setAttribute('aria-label','Fatura ayı');
+    monthInput.setAttribute('data-default-year',currentYear);
 
     var monthLabel=monthSelect.closest('label');
     var yearLabel=yearSelect.closest('label');
