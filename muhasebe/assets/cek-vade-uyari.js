@@ -1,4 +1,13 @@
 (function(){
+  if(/\/hareketler\.php$/i.test(location.pathname) && !document.querySelector('script[data-hareket-kredi-karti]')){
+    var cardScript=document.createElement('script');
+    cardScript.src='assets/hareket-kredi-karti.js?v=1&_='+Date.now();
+    cardScript.setAttribute('data-hareket-kredi-karti','1');
+    document.body.appendChild(cardScript);
+  }
+})();
+
+(function(){
   if(/\/(?:cekler|cek-senet-arsivi)\.php$/i.test(location.pathname) && !document.querySelector('script[data-cek-senet-excel]')){
     var excelScript=document.createElement('script');
     excelScript.src='assets/cek-senet-excel.js?v=1&_='+Date.now();
