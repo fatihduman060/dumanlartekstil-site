@@ -198,7 +198,7 @@
   function loadExpenseReceipts(){
     if(document.querySelector('script[data-masraf-fisleri-loader]')) return;
     var script=document.createElement('script');
-    script.src='assets/masraf-fisleri.js?v=2';
+    script.src='assets/masraf-fisleri.js?v=3&_='+Date.now();
     script.setAttribute('data-masraf-fisleri-loader','1');
     document.body.appendChild(script);
   }
