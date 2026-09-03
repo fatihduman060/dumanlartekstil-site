@@ -7,6 +7,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $pdo = db();
+ensure_column($pdo, 'movements', 'currency', "TEXT NOT NULL DEFAULT 'TL'");
 ensure_column($pdo, 'movements', 'card_key', 'TEXT');
 ensure_column($pdo, 'movements', 'report_excluded', 'INTEGER NOT NULL DEFAULT 0');
 $pdo->exec('CREATE INDEX IF NOT EXISTS idx_movements_card_key ON movements(card_key)');
