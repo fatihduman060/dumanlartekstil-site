@@ -2,20 +2,21 @@
   var path=location.pathname||'';
   if(!/\/(?:cekler|cek-senet-arsivi)\.php$/i.test(path)) return;
 
-  function button(href,label,title){
+  function button(href,label,title,download){
     var a=document.createElement('a');
     a.href=href;
     a.textContent=label;
     a.title=title;
-    a.setAttribute('download','');
+    if(download) a.setAttribute('download','');
     a.style.cssText='display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 13px;border-radius:999px;background:#fff;color:#16482e;border:1px solid #d8cdbb;text-decoration:none;font-size:11px;font-weight:950;white-space:nowrap;';
     return a;
   }
 
   function addButtons(wrap){
-    wrap.appendChild(button('cek-senet-excel.php?type=gelen','Excel · Gelen','Müşteriden alınan çek ve senetleri Excel olarak indir'));
-    wrap.appendChild(button('cek-senet-excel.php?type=giden','Excel · Giden / Ciro','Verilen ve ciro edilen çek ve senetleri Excel olarak indir'));
-    wrap.appendChild(button('kartli-odemeler-excel.php','Excel · Kart ile Ödemeler','Cari borçlara kredi kartı ile yapılan ödemeleri Excel olarak indir'));
+    wrap.appendChild(button('cek-senet-excel.php?type=gelen','Excel · Gelen','Müşteriden alınan çek ve senetleri Excel olarak indir',true));
+    wrap.appendChild(button('cek-senet-excel.php?type=giden','Excel · Giden / Ciro','Verilen ve ciro edilen çek ve senetleri Excel olarak indir',true));
+    wrap.appendChild(button('kartli-odemeler.php','Kart ile Ödemeler','Kredi kartı ile kapatılan cari borçlarını tablo halinde göster',false));
+    wrap.appendChild(button('kartli-odemeler-excel.php','Excel · Kart Ödemeleri','Kart ile yapılan cari ödemeleri doğrudan Excel olarak indir',true));
   }
 
   function addToChecks(){
