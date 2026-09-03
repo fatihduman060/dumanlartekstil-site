@@ -27,12 +27,12 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </div>
   <section class="pos-main panel-card">
     <div class="pos-title-row">
-      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button></div><p>Barkodu okut veya ürün adına göre ara.</p></div>
+      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button></div><p>Barkodu okut veya ürün adından herhangi bir kelimeyi yaz.</p></div>
       <div class="pos-clock"><strong data-pos-clock>--:--</strong><span><?php echo e(tr_date(date('Y-m-d'))); ?></span></div>
     </div>
 
     <div class="pos-scan-row">
-      <label class="pos-scan"><span>Barkod / ürün ara</span><input type="text" name="barcode_scan" inputmode="none" autocomplete="off" placeholder="Barkodu okutun…" data-pos-scan data-barcode-input autofocus /></label>
+      <label class="pos-scan"><span>Barkod / ürün ara</span><input type="text" name="barcode_scan" inputmode="none" autocomplete="off" placeholder="Ürün adından bir kelime yazın veya barkodu okutun…" data-pos-scan data-barcode-input autofocus /></label>
       <button class="btn btn-secondary" type="button" data-pos-search>Ara</button>
     </div>
     <div class="pos-search-results" data-pos-results hidden></div>
@@ -120,4 +120,5 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
 <script src="assets/barkod-satis.js?v=15"></script>
+<script src="assets/barkod-canli-arama.js?v=1"></script>
 <?php page_footer(); ?>
