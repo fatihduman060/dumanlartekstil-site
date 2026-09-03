@@ -4,7 +4,7 @@
   var input=root.querySelector('[data-pos-scan]');
   var results=root.querySelector('[data-pos-results]');
   var status=root.querySelector('[data-pos-status]');
-  var api=root.dataset.api||'barkod-satis-api.php';
+  var searchApi='barkod-satis-arama.php';
   if(!input||!results) return;
 
   var timer=null;
@@ -49,15 +49,16 @@
     if(!query){hide();if(status)status.textContent='';return;}
     var current=++requestNo;
     if(status) status.textContent='Ürünler aranıyor…';
-    fetch(api+'?action=products&q='+encodeURIComponent(query)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+    fetch(searchApi+'?q='+encodeURIComponent(query)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
       .then(function(data){
         if(current!==requestNo) return;
-        render(data&&data.products?data.products:[],query);
+        if(!data||data.ok===false) throw new Error((data&&data.error)||'Arama yapılamadı.');
+        render(data.products||[],query);
       })
-      .catch(function(){
+      .catch(function(error){
         if(current!==requestNo) return;
-        if(status) status.textContent='Ürün aranamadı.';
+        if(status) status.textContent=error&&error.message?error.message:'Ürün aranamadı.';
       });
   }
 
@@ -70,8 +71,8 @@
   });
 
   input.addEventListener('keydown',function(event){
-    if(event.key==='Enter'&&timer){clearTimeout(timer);timer=null;requestNo++;}
-  });
+    if(event.key==='Enter'&&timer){clearTimeout(timer);timer=null;searchNow();}
+  },true);
 
   results.addEventListener('click',function(event){
     var button=event.target.closest('[data-live-pos-barcode]');
