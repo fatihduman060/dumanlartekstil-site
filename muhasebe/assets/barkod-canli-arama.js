@@ -84,3 +84,74 @@
     input.dispatchEvent(new Event('change',{bubbles:true}));
   });
 })();
+
+(function(){
+  var root=document.querySelector('[data-pos-root]');
+  if(!root||root.querySelector('[data-pos-misc-box]')) return;
+  var scanRow=root.querySelector('.pos-scan-row');
+  var scan=root.querySelector('[data-pos-scan]');
+  var results=root.querySelector('[data-pos-results]');
+  var status=root.querySelector('[data-pos-status]');
+  if(!scanRow||!scan) return;
+
+  var style=document.createElement('style');
+  style.textContent=''
+    +'.pos-misc-box{display:grid;grid-template-columns:auto minmax(120px,190px) auto;gap:9px;align-items:end;margin:10px 0 4px;padding:10px 12px;border:1px solid #e3d9cb;border-radius:14px;background:#fffaf2}'
+    +'.pos-misc-box>span{font-size:12px;font-weight:900;color:#5f564b;align-self:center}.pos-misc-box label{margin:0}.pos-misc-box label span{display:block;font-size:11px;font-weight:800;color:#756b60;margin-bottom:4px}.pos-misc-box input{width:100%;min-height:40px;font-size:16px}.pos-misc-box button{min-height:40px;white-space:nowrap}'
+    +'.pos-misc-box small{grid-column:1/-1;color:#887b6d;font-size:10px}.pos-product-table tr[data-misc-system-row="1"]{display:none!important}'
+    +'@media(max-width:680px){.pos-misc-box{grid-template-columns:1fr 1fr}.pos-misc-box>span{grid-column:1/-1}.pos-misc-box small{grid-column:1/-1}}';
+  document.head.appendChild(style);
+
+  var box=document.createElement('div');
+  box.className='pos-misc-box';
+  box.setAttribute('data-pos-misc-box','1');
+  box.innerHTML='<span>Muhtelif satış</span><label><span>Tutar</span><input type="text" inputmode="decimal" autocomplete="off" placeholder="Örn. 275" data-pos-misc-amount></label><button type="button" class="btn btn-secondary" data-pos-misc-add>Sepete ekle</button><small>Ürün tanımlı değilse tutarı yaz; stoktan düşmeden “Muhtelif Satış” olarak sepete eklenir.</small>';
+  scanRow.insertAdjacentElement('afterend',box);
+
+  function hideSystemRows(){
+    root.querySelectorAll('.pos-product-table tbody tr').forEach(function(row){
+      var barcodeCell=row.querySelector('td:nth-child(2)');
+      if(barcodeCell&&/^MUHTELIF-/i.test(String(barcodeCell.textContent||'').trim())) row.setAttribute('data-misc-system-row','1');
+    });
+  }
+  hideSystemRows();
+
+  var amountInput=box.querySelector('[data-pos-misc-amount]');
+  var addButton=box.querySelector('[data-pos-misc-add]');
+
+  function normalizeAmount(value){
+    var text=String(value||'').trim().replace(/\s+/g,'');
+    if(!text) return 0;
+    if(text.indexOf(',')!==-1&&text.indexOf('.')!==-1){text=text.replace(/\./g,'').replace(',','.');}
+    else if(text.indexOf(',')!==-1){text=text.replace(',','.');}
+    var number=Number(text);
+    return Number.isFinite(number)?Math.round(number*100)/100:0;
+  }
+
+  function addMisc(){
+    var amount=normalizeAmount(amountInput.value);
+    if(amount<=0){if(status)status.textContent='Muhtelif satış için geçerli bir tutar yaz.';amountInput.focus();return;}
+    addButton.disabled=true;
+    addButton.textContent='Ekleniyor…';
+    if(status)status.textContent='Muhtelif satış hazırlanıyor…';
+    var body=new FormData();
+    body.set('action','muhtelif');
+    body.set('csrf_token',root.dataset.csrf||'');
+    body.set('amount',String(amount));
+    fetch('barkod-satis-arama.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
+      .then(function(response){return response.json();})
+      .then(function(data){
+        if(!data||!data.ok||!data.barcode) throw new Error((data&&data.error)||'Muhtelif satış hazırlanamadı.');
+        if(results){results.hidden=true;results.innerHTML='';}
+        scan.value=data.barcode;
+        amountInput.value='';
+        scan.dispatchEvent(new Event('change',{bubbles:true}));
+        setTimeout(hideSystemRows,250);
+      })
+      .catch(function(error){if(status)status.textContent=error&&error.message?error.message:'Muhtelif satış eklenemedi.';})
+      .finally(function(){addButton.disabled=false;addButton.textContent='Sepete ekle';});
+  }
+
+  addButton.addEventListener('click',addMisc);
+  amountInput.addEventListener('keydown',function(event){if(event.key==='Enter'){event.preventDefault();addMisc();}});
+})();
