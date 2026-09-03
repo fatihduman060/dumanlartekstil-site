@@ -1,4 +1,13 @@
 (function(){
+  if(/\/(?:cekler|cek-senet-arsivi)\.php$/i.test(location.pathname) && !document.querySelector('script[data-cek-senet-excel]')){
+    var excelScript=document.createElement('script');
+    excelScript.src='assets/cek-senet-excel.js?v=1&_='+Date.now();
+    excelScript.setAttribute('data-cek-senet-excel','1');
+    document.body.appendChild(excelScript);
+  }
+})();
+
+(function(){
   if(/cari-detay\.php/i.test(location.pathname) && !document.querySelector('script[data-cari-mukerrer-cek]')){
     var s=document.createElement('script');
     s.src='assets/cari-mukerrer-cek-duzelt.js?v=1&_='+Date.now();
