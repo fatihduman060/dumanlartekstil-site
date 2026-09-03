@@ -2,6 +2,7 @@
   if(!/\/faturalar\.php$/i.test(location.pathname)) return;
 
   var state={period:'',csrf:'',categories:{},canWrite:false};
+  var expenseEndpoint='fatura-masraf-fisleri.php';
 
   function esc(value){
     return String(value==null?'':value).replace(/[&<>\"]/g,function(char){
@@ -187,7 +188,7 @@
   }
 
   function load(){
-    fetch('masraf-fisleri.php?period='+encodeURIComponent(state.period)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+    fetch(expenseEndpoint+'?period='+encodeURIComponent(state.period)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
       .then(function(data){if(!data.ok) throw new Error(data.error||'Masraf fişleri yüklenemedi.');render(data);})
       .catch(function(error){setStatus(error.message||'Masraf fişleri yüklenemedi.','danger');});
@@ -207,7 +208,7 @@
     body.set('csrf_token',state.csrf);
     var includeInput=form.querySelector('[name="include_in_vat"]');
     if(!includeInput||!includeInput.checked) body.set('include_in_vat','0');
-    fetch('masraf-fisleri.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
+    fetch(expenseEndpoint,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
       .then(function(data){
         if(!data.ok) throw new Error(data.error||'Masraf fişi kaydedilemedi.');
@@ -229,7 +230,7 @@
     body.set('id',String(id));
     body.set('period',state.period);
     body.set('csrf_token',state.csrf);
-    fetch('masraf-fisleri.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
+    fetch(expenseEndpoint,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
       .then(function(response){return response.json();})
       .then(function(data){if(!data.ok) throw new Error(data.error||'Masraf fişi silinemedi.');render(data);setStatus('Masraf fişi silindi.','success');})
       .catch(function(error){setStatus(error.message||'Masraf fişi silinemedi.','danger');});
