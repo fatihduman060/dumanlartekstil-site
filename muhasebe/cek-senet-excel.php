@@ -3,7 +3,6 @@ require_once __DIR__ . '/layout.php';
 require_login();
 require_private_finance_modules();
 
-// Ciro alanları eski veritabanlarında da güvenle hazır olsun.
 $pdo = db();
 ensure_column($pdo, 'checks', 'endorsed_to_cari_id', 'INTEGER');
 ensure_column($pdo, 'checks', 'endorsement_movement_id', 'INTEGER');
@@ -28,15 +27,10 @@ function cek_senet_excel_date(?string $value): string
 function cek_senet_excel_status(string $status): string
 {
     $map = [
-        'bekliyor'=>'Bekliyor',
-        'bankaya_verildi'=>'Bankaya verildi',
-        'tahsil_edildi'=>'Tahsil edildi',
-        'odendi'=>'Ödendi',
-        'ciro_edildi'=>'Ciro edildi',
-        'iade'=>'İade',
-        'karsiliksiz'=>'Karşılıksız',
-        'protestolu'=>'Protestolu',
-        'iptal'=>'İptal',
+        'bekliyor'=>'Bekliyor', 'bankaya_verildi'=>'Bankaya verildi',
+        'tahsil_edildi'=>'Tahsil edildi', 'odendi'=>'Ödendi',
+        'ciro_edildi'=>'Ciro edildi', 'iade'=>'İade',
+        'karsiliksiz'=>'Karşılıksız', 'protestolu'=>'Protestolu', 'iptal'=>'İptal',
     ];
     return $map[$status] ?? $status;
 }
@@ -55,17 +49,14 @@ $baseSql = "SELECT ch.*,
 if ($type === 'gelen') {
     $where = " WHERE ch.direction='alinacak' AND COALESCE(ch.is_cancelled,0)=0";
 } else {
-    // Giden döküm: doğrudan verdiğimiz evraklar + müşteriden alıp başka cariye ciro ettiklerimiz.
-    $where = " WHERE COALESCE(ch.is_cancelled,0)=0 AND (ch.direction='verilecek' OR (ch.direction='alinacak' AND ch.endorsed_to_cari_id IS NOT NULL))";
+    $where = " WHERE COALESCE(ch.is_cancelled,0)=0
+        AND (ch.direction='verilecek' OR (ch.direction='alinacak' AND ch.endorsed_to_cari_id IS NOT NULL))";
 }
 
-$sql = $baseSql . $where . " ORDER BY COALESCE(ch.endorsed_at,ch.created_at) ASC, ch.due_date ASC, ch.id ASC";
-$rows = $pdo->query($sql)->fetchAll() ?: [];
+$rows = $pdo->query($baseSql . $where . " ORDER BY COALESCE(ch.endorsed_at,ch.created_at) ASC, ch.due_date ASC, ch.id ASC")->fetchAll() ?: [];
 
 $title = $type === 'gelen' ? 'Gelen Çek ve Senetler' : 'Giden / Ciro Edilen Çek ve Senetler';
-$filePrefix = $type === 'gelen' ? 'gelen-cek-senetler' : 'giden-ciro-cek-senetler';
-$filename = $filePrefix . '-' . date('Y-m-d') . '.xls';
-
+$filename = ($type === 'gelen' ? 'gelen-cek-senetler-' : 'giden-ciro-cek-senetler-') . date('Y-m-d') . '.xls';
 header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
 header('Content-Disposition: attachment; filename="' . $filename . '"');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -85,12 +76,12 @@ echo "<?mso-application progid=\"Excel.Sheet\"?>\n";
  <Styles>
   <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/></Style>
   <Style ss:ID="Title"><Font ss:Bold="1" ss:Size="14"/><Interior ss:Color="#D9EAD3" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#1F4E3D" ss:Pattern="Solid"/><Font ss:Bold="1" ss:Color="#FFFFFF"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>
+  <Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F4E3D" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>
   <Style ss:ID="Text"><Alignment ss:Vertical="Center" ss:WrapText="1"/></Style>
-  <Style ss:ID="Money"><NumberFormat ss:Format="#,##0.00 \&quot;TL\&quot;"/></Style>
-  <Style ss:ID="Total"><Font ss:Bold="1"/><Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00 \&quot;TL\&quot;"/></Style>
+  <Style ss:ID="Money"><NumberFormat ss:Format="#,##0.00"/></Style>
+  <Style ss:ID="Total"><Font ss:Bold="1"/><Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00"/></Style>
  </Styles>
- <Worksheet ss:Name="<?php echo cek_senet_excel_xml($type === 'gelen' ? 'Gelenler' : 'Gidenler'); ?>">
+ <Worksheet ss:Name="<?php echo $type === 'gelen' ? 'Gelenler' : 'Gidenler'; ?>">
   <Table>
    <Column ss:Width="85"/><Column ss:Width="115"/><Column ss:Width="105"/><Column ss:Width="105"/><Column ss:Width="170"/><Column ss:Width="160"/><Column ss:Width="120"/><Column ss:Width="110"/><Column ss:Width="95"/><Column ss:Width="90"/><Column ss:Width="110"/><Column ss:Width="105"/><Column ss:Width="180"/><Column ss:Width="115"/><Column ss:Width="120"/><Column ss:Width="220"/>
    <Row ss:Height="26"><Cell ss:MergeAcross="<?php echo count($columns)-1; ?>" ss:StyleID="Title"><Data ss:Type="String"><?php echo cek_senet_excel_xml($title); ?></Data></Cell></Row>
@@ -121,12 +112,15 @@ foreach ($rows as $row):
     $endorsedTo = trim((string)($row['endorsed_cari_name'] ?? ''));
     $endorsedAt = cek_senet_excel_date($row['endorsed_at'] ?? '');
     $description = trim((string)($row['description'] ?? ''));
+
+    $sourceForOutput = $sourceCari;
     if ($type === 'giden') {
         $isEndorsed = (string)($row['direction'] ?? '') === 'alinacak' && (int)($row['endorsed_to_cari_id'] ?? 0) > 0;
         $sendType = $isEndorsed ? 'Müşteri evrakı ciro' : 'Doğrudan verilen evrak';
         $destination = $isEndorsed ? $endorsedTo : $sourceCari;
-        $sendDate = $isEndorsed ? $endorsedAt : cek_senet_excel_date(substr((string)($row['created_at'] ?? ''), 0, 10));
-        if (!$isEndorsed && $city === '') $city = trim((string)($row['source_cari_city'] ?? ''));
+        $sendDate = $isEndorsed ? $endorsedAt : $receivedDate;
+        // Doğrudan verdiğimiz evrak müşteriden alınmadığı için bu kolon boş kalır.
+        $sourceForOutput = $isEndorsed ? $sourceCari : '';
     }
 ?>
    <Row>
@@ -137,7 +131,7 @@ foreach ($rows as $row):
     <Cell ss:StyleID="Text"><Data ss:Type="String"><?php echo cek_senet_excel_xml($receivedDate); ?></Data></Cell>
     <Cell ss:StyleID="Text"><Data ss:Type="String"><?php echo cek_senet_excel_xml($issueDate); ?></Data></Cell>
     <Cell ss:StyleID="Text"><Data ss:Type="String"><?php echo cek_senet_excel_xml($dueDate); ?></Data></Cell>
-    <Cell ss:StyleID="Text"><Data ss:Type="String"><?php echo cek_senet_excel_xml($sourceCari); ?></Data></Cell>
+    <Cell ss:StyleID="Text"><Data ss:Type="String"><?php echo cek_senet_excel_xml($sourceForOutput); ?></Data></Cell>
     <Cell ss:StyleID="Text"><Data ss:Type="String"><?php echo cek_senet_excel_xml($drawer); ?></Data></Cell>
     <Cell ss:StyleID="Text"><Data ss:Type="String"><?php echo cek_senet_excel_xml($bank); ?></Data></Cell>
     <Cell ss:StyleID="Text"><Data ss:Type="String"><?php echo cek_senet_excel_xml($branch); ?></Data></Cell>
