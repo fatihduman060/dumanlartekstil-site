@@ -185,6 +185,7 @@ if (is_logged_in() && is_store_sales_user()) {
         'barkod-satis-api.php',
         'barkod-satis-arama.php',
         'barkod-satis-fiyat.php',
+        'barkod-veresiye-kisi.php',
         'barkod-fis.php',
         'magaza.php',
         'magaza-gunluk-satis.php',
