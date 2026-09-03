@@ -75,8 +75,6 @@ function yonetici_yetkilerini_senkronla(): void
 
             if (is_salary_only_user($row)) {
                 $salaryOnlyIds[] = $userId;
-                // Mevcut maaş ekranları yönetici yazma altyapısını kullanıyor. Bu hesap
-                // yönetici rolünde tutulur; aşağıdaki rota kilidi diğer tüm modülleri kapatır.
                 if (($row['role'] ?? '') !== 'admin' || (int)($row['is_active'] ?? 0) !== 1) {
                     db()->prepare("UPDATE users SET role='admin', is_active=1, updated_at=? WHERE id=?")
                         ->execute([now(), $userId]);
@@ -89,8 +87,6 @@ function yonetici_yetkilerini_senkronla(): void
         if (!is_array($existingIds)) $existingIds = [];
         $existingIds = array_values(array_unique(array_filter(array_map('intval', $existingIds), fn($id) => $id > 0)));
 
-        // Süper yönetici yalnızca Fatih'tir. Fatih hesabı henüz bulunamazsa
-        // mevcut listeyi tamamen silmek yerine Mustafa ve maaş kullanıcısını listeden çıkar.
         if ($fatihIds) {
             $superAdminIds = array_values(array_unique($fatihIds));
         } else {
@@ -100,7 +96,6 @@ function yonetici_yetkilerini_senkronla(): void
 
         setting_set('super_admin_user_ids', json_encode($superAdminIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     } catch (Throwable $e) {
-        // Yetki eşleştirmesi uygulamanın açılmasını engellememeli.
     }
 }
 
@@ -123,9 +118,6 @@ function can_manage_store_sales(): bool
     return can_write() || is_store_sales_user();
 }
 
-// Barkodlu Satış içindeki ürün ekleme, düzenleme ve fiyat güncelleme yetkisi.
-// Mağaza kullanıcısına yalnız POS ürün havuzu için yazma izni verir;
-// genel muhasebe yazma yetkisini genişletmez.
 function can_manage_store_products(): bool
 {
     return can_manage_store_sales();
@@ -191,6 +183,7 @@ if (is_logged_in() && is_store_sales_user()) {
     $allowedStoreScripts = [
         'barkod-satis.php',
         'barkod-satis-api.php',
+        'barkod-satis-arama.php',
         'barkod-satis-fiyat.php',
         'barkod-fis.php',
         'magaza.php',
