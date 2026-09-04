@@ -149,14 +149,8 @@ function page_header(string $title, string $active = ''): void
     $storeOnly = is_store_sales_user($u);
     $muratLimited = is_murat_limited_user($u);
     $fullAdmin = is_admin();
-    $salesWorkspace = in_array($active, ['barkod_satis', 'barkod_urunler'], true);
 
-    if ($salesWorkspace) {
-        $nav = [
-            ['barkod_satis', 'barkod-satis.php', 'Hızlı Satış', '▣'],
-            ['barkod_urunler', 'barkod-urunler.php', 'Ürün', '▦'],
-        ];
-    } elseif ($storeOnly) {
+    if ($storeOnly) {
         $nav = [
             ['barkod_satis', 'barkod-satis.php', 'Barkodlu Satış', '▣'],
             ['magaza', 'magaza.php', 'Mağaza', '▤'],
@@ -227,10 +221,10 @@ function page_header(string $title, string $active = ''): void
   <link rel="stylesheet" href="assets/mobil-panel.css?v=<?php echo (int)(@filemtime(__DIR__ . '/assets/mobil-panel.css') ?: 1); ?>" />
   <style>.sidebar .brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:12px;padding:4px}.sidebar .brand span{line-height:1.05}<?php if (!can_access_private_finance_modules()): ?>a[href^="hesaplar.php"],a[href^="cekler.php"],a[href^="teklif-ver.php"],a[href^="tahsilat-makbuzu.php"],a[href^="vergi-odemeleri.php"]{display:none!important}<?php endif; ?><?php if ($storeOnly): ?>body.store-sales-user .main>:not(.topbar):not(.store-sales-shell):not(.magaza-page-shell):not(.pos-shell):not(.pv-head):not(.pv-summary):not(.pv-grid):not(.alert){display:none!important}body.store-sales-user .top-actions .ghost-link{display:none!important}<?php endif; ?><?php if ($muratLimited): ?>body.murat-limited-user .top-actions .ghost-link{display:none!important}<?php endif; ?></style>
 </head>
-<body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ($muratLimited ? ' murat-limited-user' : ''); ?><?php echo $salesWorkspace ? ' sales-workspace' : ''; ?>">
+<body class="app-page<?php echo $storeOnly ? ' store-sales-user' : ($muratLimited ? ' murat-limited-user' : ''); ?>">
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="<?php echo $salesWorkspace ? 'barkod-satis.php' : ($storeOnly ? 'magaza.php' : ($muratLimited ? 'faturalar.php' : 'dashboard.php')); ?>" aria-label="Dumanlar Muhasebe">
+      <a class="brand" href="<?php echo $storeOnly ? 'magaza.php' : ($muratLimited ? 'faturalar.php' : 'dashboard.php'); ?>" aria-label="Dumanlar Muhasebe">
         <img src="assets/dumanlar-logo-arkaplansiz.png?v=1" alt="Dumanlar" />
         <span>Muhasebe <small><?php echo e(APP_VERSION); ?></small></span>
       </a>

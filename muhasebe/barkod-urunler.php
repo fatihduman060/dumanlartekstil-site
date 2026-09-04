@@ -12,7 +12,7 @@ if (!can_manage_store_products()) {
 pos_db_ensure();
 ensure_column(db(), 'pos_products', 'variant_name', 'TEXT');
 $products = pos_products();
-page_header('Yeni Ürün Girişi', 'barkod_urunler');
+page_header('Yeni Ürün Girişi', 'barkod_satis');
 ?>
 <link rel="stylesheet" href="assets/barkod-satis.css?v=9" />
 <style>
