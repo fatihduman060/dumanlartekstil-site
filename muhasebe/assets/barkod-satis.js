@@ -150,3 +150,4 @@ productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn
 
   function updateClock(){var d=new Date(),el=root.querySelector('[data-pos-clock]');if(el)el.textContent=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});}
   updateClock();setInterval(updateClock,1000);setExtraBarcodes('');bindProductRows();render();setTimeout(function(){scan.focus();},250);
+})();
