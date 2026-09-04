@@ -1,50 +1,47 @@
 (function(){
   var root=document.querySelector('[data-pos-root]');
   if(!root) return;
-  var panel=root.querySelector('.pos-checkout');
-  if(!panel) return;
+  var main=root.querySelector('.pos-main');
+  var panel=root.querySelector('.pos-checkout')||document.querySelector('.pos-checkout');
+  if(!main||!panel) return;
 
   var desktopMin=981;
-  var anchor=document.querySelector('[data-pos-checkout-viewport-anchor]');
-  if(!anchor){
-    anchor=document.createElement('div');
-    anchor.setAttribute('data-pos-checkout-viewport-anchor','1');
-    anchor.style.minWidth='0';
-    anchor.style.width='100%';
-    anchor.style.alignSelf='start';
+  var placeholder=null;
+  var resizeTimer=null;
 
-    var oldPlaceholder=root.querySelector('.pos-checkout-fixed-placeholder');
-    if(oldPlaceholder){
-      oldPlaceholder.parentNode.insertBefore(anchor,oldPlaceholder);
-      oldPlaceholder.remove();
-    }else if(panel.parentNode){
-      panel.parentNode.insertBefore(anchor,panel);
-    }
+  function clearPanelStyles(){
+    panel.classList.remove('pos-checkout-fixed');
+    ['position','top','left','right','width','max-height','height','overflow-y','z-index','margin','transform','transition','box-sizing'].forEach(function(name){
+      panel.style.removeProperty(name);
+    });
   }
 
-  function clearInline(){
-    panel.classList.remove('pos-checkout-fixed');
-    panel.style.position='';
-    panel.style.top='';
-    panel.style.left='';
-    panel.style.right='';
-    panel.style.width='';
-    panel.style.maxHeight='';
-    panel.style.height='';
-    panel.style.overflowY='';
-    panel.style.zIndex='';
-    panel.style.margin='';
-    panel.style.transform='';
-    panel.style.transition='';
-    panel.style.boxSizing='';
+  function removeOldPlaceholders(){
+    document.querySelectorAll('.pos-checkout-fixed-placeholder,[data-pos-checkout-viewport-anchor]').forEach(function(el){
+      if(el!==placeholder) el.remove();
+    });
+  }
+
+  function putBackInRightColumn(){
+    clearPanelStyles();
+    removeOldPlaceholders();
+    if(panel.parentNode!==root || panel.previousElementSibling!==main){
+      root.insertBefore(panel,main.nextSibling);
+    }
+    panel.style.setProperty('grid-column','2');
+    panel.style.setProperty('grid-row','1');
+    panel.style.setProperty('align-self','start');
   }
 
   function mobileMode(){
-    clearInline();
-    if(panel.parentNode!==root){
-      anchor.parentNode.insertBefore(panel,anchor.nextSibling);
+    if(placeholder){
+      placeholder.remove();
+      placeholder=null;
     }
-    anchor.style.display='none';
+    putBackInRightColumn();
+    panel.style.removeProperty('grid-column');
+    panel.style.removeProperty('grid-row');
+    panel.style.removeProperty('align-self');
   }
 
   function desktopMode(){
@@ -53,29 +50,52 @@
       return;
     }
 
-    anchor.style.display='block';
+    if(placeholder){
+      placeholder.remove();
+      placeholder=null;
+    }
 
-    // Panel griddeyken/önceki sabitlemeden kalan konumdan gerçek kolon ölçüsünü al.
-    var rect=anchor.getBoundingClientRect();
-    if(rect.width<220){
+    // Önce paneli gerçek sağ kolonuna geri koy ve tüm eski sabitlemeleri temizle.
+    putBackInRightColumn();
+
+    // Tarayıcı grid yerleşimini tamamlasın.
+    void panel.offsetWidth;
+    var rect=panel.getBoundingClientRect();
+    if(rect.width<220 || rect.left<main.getBoundingClientRect().right-5){
+      // CSS geç yüklenmişse sağ kolon genişliğini ana grid üzerinden tekrar hesapla.
       var rootRect=root.getBoundingClientRect();
-      var computedWidth=Math.min(340,Math.max(290,window.innerWidth-rootRect.right+340));
-      rect={left:Math.max(12,rootRect.right-computedWidth),width:computedWidth,top:rootRect.top};
+      var width=Math.min(340,Math.max(290,rootRect.width*0.25));
+      rect={
+        width:width,
+        left:rootRect.right-width,
+        right:rootRect.right,
+        top:rootRect.top,
+        height:panel.offsetHeight
+      };
     }
 
-    if(panel.parentNode!==document.body){
-      document.body.appendChild(panel);
-    }
+    placeholder=document.createElement('div');
+    placeholder.className='pos-checkout-fixed-placeholder';
+    placeholder.setAttribute('aria-hidden','true');
+    placeholder.style.gridColumn='2';
+    placeholder.style.gridRow='1';
+    placeholder.style.width='100%';
+    placeholder.style.minWidth='0';
+    placeholder.style.height=Math.max(rect.height||panel.offsetHeight,1)+'px';
+    root.insertBefore(placeholder,panel);
 
-    var top=Math.max(12,Math.min(rect.top,80));
-    var width=Math.max(290,Math.min(340,rect.width||320));
-    var left=Math.min(window.innerWidth-width-12,Math.max(12,rect.left));
+    // Paneli transformed/scroll edilen kapsayıcıların dışına çıkar.
+    document.body.appendChild(panel);
+
+    var top=Math.max(12,Math.min(rect.top,90));
+    var width=Math.max(290,Math.min(340,rect.width));
+    var right=Math.max(12,window.innerWidth-rect.right);
 
     panel.classList.add('pos-checkout-fixed');
     panel.style.setProperty('position','fixed','important');
     panel.style.setProperty('top',top+'px','important');
-    panel.style.setProperty('left',left+'px','important');
-    panel.style.setProperty('right','auto','important');
+    panel.style.setProperty('right',right+'px','important');
+    panel.style.setProperty('left','auto','important');
     panel.style.setProperty('width',width+'px','important');
     panel.style.setProperty('max-height','calc(100vh - '+Math.ceil(top+12)+'px)','important');
     panel.style.setProperty('overflow-y','auto','important');
@@ -84,29 +104,20 @@
     panel.style.setProperty('transform','none','important');
     panel.style.setProperty('transition','none','important');
     panel.style.setProperty('box-sizing','border-box','important');
-
-    // Ana grid sağ kolonu panel body'ye taşınsa bile boş kalmasın.
-    anchor.style.height=Math.max(panel.scrollHeight,panel.offsetHeight,1)+'px';
   }
 
-  function sync(){
-    window.requestAnimationFrame(desktopMode);
+  function resync(){
+    clearTimeout(resizeTimer);
+    resizeTimer=setTimeout(function(){
+      window.requestAnimationFrame(desktopMode);
+    },80);
   }
 
-  // Önceki sabitleme kodu çalıştıktan sonra bu modül son sözü söyler.
+  // Son çalışan modül olarak önceki sabitleme girişimlerini temizleyip doğru sağ konumu uygula.
   window.requestAnimationFrame(function(){
     window.requestAnimationFrame(desktopMode);
   });
-  window.addEventListener('resize',sync,{passive:true});
-  window.addEventListener('orientationchange',sync,{passive:true});
 
-  // İçerik değiştiğinde boyunu güncelle; konumu scroll'a göre değiştirme.
-  if(window.ResizeObserver){
-    var ro=new ResizeObserver(function(){
-      if(window.innerWidth>=desktopMin && panel.parentNode===document.body){
-        anchor.style.height=Math.max(panel.scrollHeight,panel.offsetHeight,1)+'px';
-      }
-    });
-    ro.observe(panel);
-  }
+  window.addEventListener('resize',resync,{passive:true});
+  window.addEventListener('orientationchange',resync,{passive:true});
 })();
