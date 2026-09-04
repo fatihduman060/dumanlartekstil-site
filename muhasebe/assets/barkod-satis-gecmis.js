@@ -20,89 +20,8 @@
     +'.pos-history-item[data-pos-history-hidden="1"]{display:none!important}.pos-history-method{display:inline-flex!important;width:max-content;margin-top:4px!important;padding:3px 7px;border-radius:999px;background:#f7f1e7;color:#725b32!important;font-size:10px!important;font-weight:900}'
     +'.pos-history-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-right:6px}.pos-history-actions button{min-height:30px;border-radius:999px;padding:5px 9px;border:1px solid #dfd4c7;background:#fff;color:#16482e;font-size:10px;font-weight:900;cursor:pointer}.pos-history-actions button.danger{color:#b64242}.pos-history-actions button:disabled{opacity:.55;cursor:wait}'
     +'.pos-history-item{display:flex;align-items:center;gap:8px}.pos-history-row{flex:1;min-width:0}'
-    +'.pos-checkout-fixed-placeholder{min-width:0}.pos-checkout.pos-checkout-fixed{transition:none!important;transform:none!important;box-sizing:border-box;overscroll-behavior:contain;scrollbar-width:thin}'
-    +'@media(max-width:980px){.pos-history-cash-grid{grid-template-columns:1fr}.pos-checkout-fixed-placeholder{display:none!important}}@media(max-width:680px){.pos-history-toggle-inner{padding:14px}.pos-history-summary{display:grid;grid-template-columns:1fr}.pos-history-summary button{width:100%;min-width:0}.pos-history-item{align-items:stretch;flex-direction:column}.pos-history-actions{padding:0 10px 10px}.pos-history-actions button{flex:1}.pos-cash-left-entry{grid-template-columns:1fr}.pos-cash-left-entry button{width:100%}}';
+    +'@media(max-width:980px){.pos-history-cash-grid{grid-template-columns:1fr}}@media(max-width:680px){.pos-history-toggle-inner{padding:14px}.pos-history-summary{display:grid;grid-template-columns:1fr}.pos-history-summary button{width:100%;min-width:0}.pos-history-item{align-items:stretch;flex-direction:column}.pos-history-actions{padding:0 10px 10px}.pos-history-actions button{flex:1}.pos-cash-left-entry{grid-template-columns:1fr}.pos-cash-left-entry button{width:100%}}';
   document.head.appendChild(style);
-
-  var checkout=root.querySelector('.pos-checkout');
-  var checkoutPlaceholder=null;
-  var checkoutPinned=false;
-  var checkoutTop=18;
-
-  function clearCheckoutPin(){
-    if(!checkout) return;
-    checkoutPinned=false;
-    checkout.classList.remove('pos-checkout-fixed');
-    checkout.style.position='';
-    checkout.style.top='';
-    checkout.style.left='';
-    checkout.style.right='';
-    checkout.style.width='';
-    checkout.style.maxHeight='';
-    checkout.style.overflowY='';
-    checkout.style.zIndex='';
-    checkout.style.margin='';
-    if(checkoutPlaceholder){
-      checkoutPlaceholder.remove();
-      checkoutPlaceholder=null;
-    }
-  }
-
-  function pinCheckout(){
-    if(!checkout) return;
-    if(window.innerWidth<=980){
-      clearCheckoutPin();
-      return;
-    }
-
-    if(!checkoutPinned){
-      var rect=checkout.getBoundingClientRect();
-      checkoutTop=Math.max(12,rect.top);
-      checkoutPlaceholder=document.createElement('div');
-      checkoutPlaceholder.className='pos-checkout-fixed-placeholder';
-      checkoutPlaceholder.setAttribute('aria-hidden','true');
-      checkoutPlaceholder.style.gridColumn='2';
-      checkoutPlaceholder.style.gridRow='1';
-      checkoutPlaceholder.style.height=Math.max(rect.height,1)+'px';
-      checkout.parentNode.insertBefore(checkoutPlaceholder,checkout.nextSibling);
-
-      checkout.classList.add('pos-checkout-fixed');
-      checkout.style.position='fixed';
-      checkout.style.top=checkoutTop+'px';
-      checkout.style.left=rect.left+'px';
-      checkout.style.width=rect.width+'px';
-      checkout.style.maxHeight='calc(100vh - '+Math.ceil(checkoutTop+12)+'px)';
-      checkout.style.overflowY='auto';
-      checkout.style.zIndex='240';
-      checkout.style.margin='0';
-      checkoutPinned=true;
-      return;
-    }
-
-    if(checkoutPlaceholder){
-      var placeholderRect=checkoutPlaceholder.getBoundingClientRect();
-      checkout.style.left=placeholderRect.left+'px';
-      checkout.style.width=placeholderRect.width+'px';
-      checkoutPlaceholder.style.height=Math.max(checkout.scrollHeight,checkout.offsetHeight,1)+'px';
-    }
-  }
-
-  if(checkout){
-    window.requestAnimationFrame(function(){
-      window.requestAnimationFrame(pinCheckout);
-    });
-    window.addEventListener('resize',function(){
-      if(window.innerWidth<=980){
-        clearCheckoutPin();
-        return;
-      }
-      if(!checkoutPinned){
-        pinCheckout();
-        return;
-      }
-      window.requestAnimationFrame(pinCheckout);
-    });
-  }
 
   var cashGrid=document.createElement('div');
   cashGrid.className='pos-history-cash-grid';
@@ -124,7 +43,7 @@
   var cashStatus=cashCard.querySelector('[data-cash-left-status]');
 
   function esc(value){
-    return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c];});
+    return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];});
   }
   function money(value){
     return new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value||0))+' TL';
