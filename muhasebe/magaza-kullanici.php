@@ -182,6 +182,7 @@ if (is_logged_in() && is_store_sales_user()) {
 
     $allowedStoreScripts = [
         'barkod-satis.php',
+        'barkod-urunler.php',
         'barkod-satis-api.php',
         'barkod-satis-arama.php',
         'barkod-satis-fiyat.php',
