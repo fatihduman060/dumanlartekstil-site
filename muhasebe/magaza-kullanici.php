@@ -131,7 +131,7 @@ function can_process_warehouse_dispatch(): bool
 
 function can_manage_store_sales(): bool
 {
-    return can_write() || is_store_sales_user();
+    return can_write() || is_store_sales_user() || is_warehouse_user();
 }
 
 function can_manage_store_products(): bool
@@ -219,6 +219,20 @@ if (is_logged_in() && is_store_sales_user()) {
 
 if (is_logged_in() && is_warehouse_user()) {
     $allowedWarehouseScripts = [
+        'barkod-satis.php',
+        'barkod-urunler.php',
+        'barkod-satis-api.php',
+        'barkod-satis-arama.php',
+        'barkod-satis-fiyat.php',
+        'barkod-satis-odeme-duzelt.php',
+        'barkod-veresiye-kisi.php',
+        'barkod-kasa-parasi.php',
+        'barkod-fis.php',
+        'barkod-stok-raporu.php',
+        'magaza.php',
+        'magaza-gunluk-satis.php',
+        'magaza-odeme-dagilimi.php',
+        'magaza-veresiye.php',
         'depo-cikis.php',
         'depo-cikis-yazdir.php',
         'logout.php',

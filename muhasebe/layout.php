@@ -152,7 +152,11 @@ function page_header(string $title, string $active = ''): void
     $fullAdmin = is_admin();
 
     if ($warehouseOnly) {
-        $nav = [['depo_cikis', 'depo-cikis.php', 'Depo Çıkış', '⇥']];
+        $nav = [
+            ['barkod_satis', 'barkod-satis.php', 'Barkodlu Satış', '▣'],
+            ['magaza', 'magaza.php', 'Mağaza', '▤'],
+            ['depo_cikis', 'depo-cikis.php', 'Depo Çıkış', '⇥'],
+        ];
     } elseif ($storeOnly) {
         $nav = [
             ['barkod_satis', 'barkod-satis.php', 'Barkodlu Satış', '▣'],
