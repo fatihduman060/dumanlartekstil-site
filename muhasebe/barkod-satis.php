@@ -24,6 +24,9 @@ page_header('Barkodlu Satış', 'barkod_satis');
   .pos-checkout-slot>.pos-checkout{position:static!important;top:auto!important;align-self:start!important;max-height:none!important;height:max-content!important;overflow:visible!important;width:100%}
 }
 @media(max-width:980px){.pos-checkout-slot{position:static!important;grid-row:2}.pos-checkout-slot>.pos-checkout{position:static!important;top:auto!important}}
+/* Kasada bırakılan para sağ kolonda değil, Son Satışlar'ın altında tam genişlikte akar. */
+.pos-shell .pos-history-cash-grid{grid-template-columns:minmax(0,1fr)!important}
+.pos-shell .pos-history-cash-grid>.pos-history,.pos-shell .pos-history-cash-grid>.pos-cash-left-card{grid-column:1/-1!important;width:100%}
 </style>
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <div class="pos-price-check" data-price-check hidden role="dialog" aria-modal="true" aria-labelledby="posPriceCheckTitle">
