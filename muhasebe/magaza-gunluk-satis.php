@@ -18,6 +18,9 @@ function magaza_satis_payload(string $period): array
             'subtotal' => (float)$row['subtotal'],
             'vat_amount' => (float)$row['vat_amount'],
             'note' => (string)($row['note'] ?? ''),
+            'pos_card_amount' => (float)($row['pos_card_amount'] ?? 0),
+            'manual_adjustment' => (float)($row['manual_adjustment'] ?? 0),
+            'pos_card_sync' => (int)($row['pos_card_sync'] ?? 0),
         ];
     }
 
@@ -61,14 +64,21 @@ try {
             $vat = round($gross - $subtotal, 2);
             $userId = current_user()['id'] ?? null;
 
+            // 04.09.2026 ve sonrasında Z raporunun otomatik kaynağı Barkodlu Satış'taki
+            // kredi kartı toplamıdır. Elle düzeltme yapılırsa fark ayrı tutulur; sonraki
+            // barkodlu kart satışları bu düzeltmenin üzerine otomatik eklenmeye devam eder.
+            $posCardSync = $saleDate >= '2026-09-04' ? 1 : 0;
+            $posCardAmount = $posCardSync ? magaza_satis_pos_kart_toplami($saleDate) : 0.0;
+            $manualAdjustment = $posCardSync ? round($gross - $posCardAmount, 2) : 0.0;
+
             $stmt = db()->prepare('SELECT * FROM store_daily_sales WHERE sale_date=? LIMIT 1');
             $stmt->execute([$saleDate]);
             $old = $stmt->fetch();
 
             if ($old) {
                 $id = (int)$old['id'];
-                db()->prepare('UPDATE store_daily_sales SET gross_amount=?, vat_rate=?, subtotal=?, vat_amount=?, note=?, updated_by=?, updated_at=? WHERE id=?')
-                    ->execute([$gross, $vatRate, $subtotal, $vat, $note, $userId, now(), $id]);
+                db()->prepare('UPDATE store_daily_sales SET gross_amount=?, vat_rate=?, subtotal=?, vat_amount=?, note=?, pos_card_amount=?, manual_adjustment=?, pos_card_sync=?, updated_by=?, updated_at=? WHERE id=?')
+                    ->execute([$gross, $vatRate, $subtotal, $vat, $note, $posCardAmount, $manualAdjustment, $posCardSync, $userId, now(), $id]);
                 $new = db()->prepare('SELECT * FROM store_daily_sales WHERE id=?');
                 $new->execute([$id]);
                 $saved = $new->fetch() ?: [];
@@ -76,14 +86,15 @@ try {
                 audit_action('magaza_gunluk_satis', $id, 'guncellendi', $old, $saved, $saleDate);
             } else {
                 db()->prepare('INSERT INTO store_daily_sales
-                    (sale_date, gross_amount, vat_rate, subtotal, vat_amount, note, created_by, created_at, updated_by, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([$saleDate, $gross, $vatRate, $subtotal, $vat, $note, $userId, now(), $userId, now()]);
+                    (sale_date, gross_amount, vat_rate, subtotal, vat_amount, note, pos_card_amount, manual_adjustment, pos_card_sync, created_by, created_at, updated_by, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$saleDate, $gross, $vatRate, $subtotal, $vat, $note, $posCardAmount, $manualAdjustment, $posCardSync, $userId, now(), $userId, now()]);
                 $id = (int)db()->lastInsertId();
                 log_action('Mağaza günlük satışı eklendi', $saleDate . ' · ' . number_format($gross, 2, ',', '.') . ' TL');
                 audit_action('magaza_gunluk_satis', $id, 'eklendi', null, [
                     'sale_date'=>$saleDate,'gross_amount'=>$gross,'vat_rate'=>$vatRate,
                     'subtotal'=>$subtotal,'vat_amount'=>$vat,'note'=>$note,
+                    'pos_card_amount'=>$posCardAmount,'manual_adjustment'=>$manualAdjustment,'pos_card_sync'=>$posCardSync,
                 ], $saleDate);
             }
         }
