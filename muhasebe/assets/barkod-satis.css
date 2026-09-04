@@ -55,3 +55,39 @@
  .pos-product-table td input,.pos-product-table td .btn{width:100%}
  .pos-product-manager-footer .btn{width:100%}
 }
+
+/* Sade kasa yerlesimi: genis urun tablosu ve sabit odeme kolonu */
+@media(min-width:981px){
+  .pos-shell{grid-template-columns:minmax(0,1fr) minmax(290px,340px);gap:16px;max-width:1540px;margin:0 auto}
+  .pos-main{overflow:hidden}
+  .pos-checkout{position:sticky;top:18px}
+  .pos-cart-columns,.pos-cart-row{display:grid;grid-template-columns:minmax(180px,1fr) 118px 58px minmax(88px,.55fr) 66px 58px minmax(100px,.62fr) 34px;gap:8px;align-items:center}
+  .pos-cart-columns{margin-top:10px;padding:11px 12px;border:1px solid var(--border);border-radius:14px 14px 0 0;background:#f7f3eb;color:var(--muted);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.035em}
+  .pos-cart{display:grid;gap:0;margin-top:0;border:1px solid var(--border);border-top:0;border-radius:0 0 14px 14px;overflow:hidden}
+  .pos-cart-row{padding:11px 12px;border:0;border-bottom:1px solid var(--border);border-radius:0;background:#fff}
+  .pos-cart-row:last-child{border-bottom:0}
+  .pos-cart .pos-empty{border-radius:0;padding:54px 20px}
+  .pos-unit,.pos-unit-price,.pos-line-discount,.pos-line-tax{font-size:13px;color:#5d594f}
+  .pos-unit-price,.pos-line-total{text-align:right;white-space:nowrap}
+}
+.pos-customer-summary{display:grid;gap:4px;padding:14px 15px;border:1px solid var(--border);border-radius:14px;background:#faf8f3}
+.pos-customer-summary>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:var(--muted)}
+.pos-customer-summary>strong{font-size:16px;color:#173c27}
+.pos-customer-summary>small{font-size:11px;color:var(--muted)}
+@media(min-width:981px) and (max-width:1279px){
+  .pos-shell{grid-template-columns:1fr}
+  .pos-checkout{position:static;grid-row:2}
+  .pos-cart-columns,.pos-cart-row{grid-template-columns:minmax(160px,1fr) 112px 52px minmax(82px,.55fr) 58px 50px minmax(94px,.62fr) 32px;gap:6px}
+  .pos-cart-columns{font-size:10px}
+}
+@media(max-width:980px){.pos-cart-columns{display:none}}
+@media(max-width:640px){
+  .pos-unit,.pos-unit-price,.pos-line-discount,.pos-line-tax{display:none}
+}
+
+@media(min-width:1101px){
+  body.sales-workspace .app-shell{grid-template-columns:220px minmax(0,1fr)}
+  body.sales-workspace .sidebar{padding:22px 16px}
+  body.sales-workspace .main{padding:22px;min-width:0}
+  body.sales-workspace .side-nav a{padding:14px 12px}
+}
