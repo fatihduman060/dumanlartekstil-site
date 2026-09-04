@@ -10,6 +10,7 @@
   var timer=null;
   var requestNo=0;
   var activeIndex=-1;
+  var currentItems=[];
 
   function esc(value){
     return String(value||'').replace(/[&<>"']/g,function(c){
@@ -28,6 +29,7 @@
     results.hidden=true;
     results.innerHTML='';
     activeIndex=-1;
+    currentItems=[];
     delete results.dataset.liveSearch;
   }
   function buttons(){
@@ -46,6 +48,12 @@
   }
   function choose(button){
     if(!button) return;
+    var product=currentItems[Number(button.getAttribute('data-live-pos-index'))];
+    if(product){
+      hide();
+      root.dispatchEvent(new CustomEvent('pos:add-product',{detail:product}));
+      return;
+    }
     var barcode=button.getAttribute('data-live-pos-barcode')||'';
     if(!barcode) return;
     input.value=barcode;
@@ -56,13 +64,14 @@
     if(String(input.value||'').trim()!==query) return;
     results.hidden=false;
     results.dataset.liveSearch='1';
+    currentItems=items.slice();
     if(!items.length){
       results.innerHTML='<div class="pos-result-empty">Bu kelimeyle eşleşen ürün bulunamadı.</div>';
       if(status) status.textContent='';
       return;
     }
-    results.innerHTML=items.map(function(p){
-      return '<button type="button" role="option" aria-selected="false" data-live-pos-barcode="'+esc(p.matched_barcode||p.barcode)+'">'
+    results.innerHTML=items.map(function(p,index){
+      return '<button type="button" role="option" aria-selected="false" data-live-pos-index="'+index+'" data-live-pos-barcode="'+esc(p.matched_barcode||p.barcode)+'">'
         +'<span><strong>'+esc(productName(p))+'</strong><small>'+esc(p.matched_barcode||p.barcode)+' · Stok: '+Number(p.stock_quantity||0)+'</small></span>'
         +'<strong>'+money(p.sale_price)+'</strong></button>';
     }).join('');
@@ -113,7 +122,7 @@
 
   results.addEventListener('click',function(event){
     var button=event.target.closest('[data-live-pos-barcode]');
-    if(button) choose(button);
+    if(button){event.preventDefault();event.stopPropagation();choose(button);}
   });
   results.addEventListener('mousemove',function(event){
     var button=event.target.closest('[data-live-pos-barcode]');
