@@ -39,11 +39,11 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
     </div>
     <form class="pos-product-form" data-product-form>
       <input type="hidden" name="id" value="" />
-      <label><span>Ana barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun veya yazın" /></label>
+      <label><span>Ana barkod</span><input name="barcode" autocomplete="off" required placeholder="Barkodu okutun veya yazın" data-barcode-input /></label>
       <label class="wide"><span>Ürün adı</span><input name="name" required placeholder="Örn. Bitke Erkek Patik" /></label>
       <div class="wide pos-extra-barcodes">
         <span class="pos-field-label">Ek barkodlar</span>
-        <div class="pos-extra-barcode-add"><input type="text" autocomplete="off" placeholder="Diğer barkodu okutun" data-extra-barcode-input /><button class="btn btn-secondary" type="button" data-extra-barcode-add>Ekle</button></div>
+        <div class="pos-extra-barcode-add"><input type="text" autocomplete="off" placeholder="Diğer barkodu okutun" data-extra-barcode-input data-barcode-input /><button class="btn btn-secondary" type="button" data-extra-barcode-add>Ekle</button></div>
         <input type="hidden" name="extra_barcodes" value="" />
         <div class="pos-extra-barcode-list" data-extra-barcode-list><small>Henüz ek barkod yok.</small></div>
         <small>Ek barkodların tamamı aynı ürün, fiyat ve stok kaydını kullanır.</small>
@@ -90,4 +90,6 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
   </section>
 </div>
 <script src="assets/barkod-urun-yonetimi.js?v=1"></script>
+<script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
+<script src="assets/barkod-kamera.js?v=3"></script>
 <?php page_footer(); ?>
