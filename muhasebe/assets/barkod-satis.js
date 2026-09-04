@@ -1,7 +1,7 @@
 (function(){
   var root=document.querySelector('[data-pos-root]');if(!root)return;
   var api=root.dataset.api,csrf=root.dataset.csrf,cart=[],scan=root.querySelector('[data-pos-scan]'),cartBox=root.querySelector('[data-pos-cart]'),results=root.querySelector('[data-pos-results]'),discount=root.querySelector('[data-pos-discount]'),status=root.querySelector('[data-pos-status]');
-  var lookupBusy=false,lastLookup='';
+  var lookupBusy=false,lastLookup='',lastAddedProductId=null;
   var launcherLink=root.querySelector('[data-windows-launcher]');
   if(launcherLink)launcherLink.addEventListener('click',function(e){
     e.preventDefault();
@@ -55,11 +55,16 @@
     else cartBox.innerHTML=cart.map(function(x,i){return '<div class="pos-cart-row"><div class="pos-cart-product"><strong>'+esc(productName(x))+'</strong><small>'+esc(x.barcode)+'</small></div><div class="pos-qty"><button type="button" data-minus="'+i+'">−</button><input type="number" min="0.01" step="1" value="'+x.quantity+'" data-qty="'+i+'"><button type="button" data-plus="'+i+'">+</button></div><span class="pos-unit">Adet</span><span class="pos-unit-price">'+money(x.sale_price)+'</span><span class="pos-line-discount">—</span><span class="pos-line-tax">%'+Number(x.vat_rate||0)+'</span><strong class="pos-line-total">'+money(x.quantity*Number(x.sale_price))+'</strong><button type="button" class="pos-remove" data-remove="'+i+'">×</button></div>';}).join('');
     root.querySelector('[data-pos-total]').textContent=money(total());root.querySelector('[data-pos-count]').textContent=cart.reduce(function(s,x){return s+Number(x.quantity);},0)+' ürün';
   }
-  function add(p){var old=cart.find(function(x){return Number(x.id)===Number(p.id);});if(old)old.quantity+=1;else{p.quantity=1;cart.push(p);}render();scan.value='';lastLookup='';scan.focus();status.textContent='';}
+  function add(p){var old=cart.find(function(x){return Number(x.id)===Number(p.id);});if(old)old.quantity+=1;else{p.quantity=1;cart.push(p);}lastAddedProductId=Number(p.id);render();scan.value='';lastLookup='';scan.focus();status.textContent='';}
+  function addToLastProduct(amount){
+    var item=cart.find(function(x){return Number(x.id)===Number(lastAddedProductId);});
+    if(!item){status.textContent='Önce bir ürün okutun.';scan.value='';return;}
+    item.quantity+=amount;scan.value='';lastLookup='';results.hidden=true;results.innerHTML='';render();scan.focus();status.textContent=productName(item)+' adedi +'+amount+' artırıldı.';
+  }
   root.addEventListener('pos:add-product',function(event){if(event.detail)add(event.detail);});
   function showResults(items){results.hidden=false;if(!items.length){results.innerHTML='<div class="pos-result-empty">Ürün bulunamadı. Aşağıdan yeni ürün tanımlayabilirsiniz.</div>';return;}results.innerHTML=items.map(function(p){return '<button type="button" data-result-id="'+p.id+'"><span><strong>'+esc(productName(p))+'</strong><small>'+esc(p.matched_barcode||p.barcode)+' · Stok: '+Number(p.stock_quantity)+'</small></span><strong>'+money(p.sale_price)+'</strong></button>';}).join('');results._items=items;}
   function lookup(){var q=scan.value.trim();if(!q||lookupBusy||q===lastLookup)return;lookupBusy=true;lastLookup=q;status.textContent='Barkod aranıyor…';fetch(api+'?action=barcode&barcode='+encodeURIComponent(q)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(d.product){add(d.product);results.hidden=true;return null;}return fetch(api+'?action=products&q='+encodeURIComponent(q)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(x){showResults(x.products||[]);status.textContent='';});}).catch(function(){status.textContent='Ürün aranamadı.';lastLookup='';}).finally(function(){lookupBusy=false;});}
-  scan.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();lastLookup='';lookup();}});
+  scan.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var shortcut=scan.value.trim().match(/^\+(\d+)$/);if(shortcut){addToLastProduct(Number(shortcut[1]));return;}lastLookup='';lookup();}});
   scan.addEventListener('change',function(){if(scan.value.trim()){lastLookup='';lookup();}});
   root.querySelector('[data-pos-search]').onclick=function(){lastLookup='';lookup();};
   results.addEventListener('click',function(e){var b=e.target.closest('[data-result-id]');if(!b)return;var p=(results._items||[]).find(function(x){return Number(x.id)===Number(b.dataset.resultId);});if(p){add(p);results.hidden=true;}});
