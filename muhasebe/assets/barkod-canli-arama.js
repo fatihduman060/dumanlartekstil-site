@@ -73,6 +73,7 @@
     if(!items.length){
       results.innerHTML='<div class="pos-result-empty">Bu kelimeyle eşleşen ürün bulunamadı.</div>';
       if(status) status.textContent='';
+      root.dispatchEvent(new CustomEvent('pos:product-not-found'));
       return;
     }
     results.innerHTML=items.map(function(p,index){
