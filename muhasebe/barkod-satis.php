@@ -31,7 +31,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </div>
   <section class="pos-main panel-card">
     <div class="pos-title-row">
-      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button><a class="btn btn-secondary pos-product-entry-button" href="barkod-urunler.php">+ Yeni Ürün Ekle</a></div><p>Barkodu okut veya ürün adından herhangi bir kelimeyi yaz.</p></div>
+      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button><a class="btn btn-secondary pos-product-entry-button" href="barkod-urunler.php">+ Yeni Ürün Ekle</a></div><p>Barkodu okut veya ürün adından herhangi bir kelimeyi yaz. Son okutulan ürünü artırmak için örneğin +3 yazıp Enter'a bas.</p></div>
       <div class="pos-clock"><strong data-pos-clock>--:--</strong><span><?php echo e(tr_date(date('Y-m-d'))); ?></span></div>
     </div>
 
@@ -134,7 +134,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=18"></script>
+<script src="assets/barkod-satis.js?v=19"></script>
 <script src="assets/barkod-canli-arama.js?v=6"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>
