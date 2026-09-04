@@ -96,3 +96,26 @@
   body.sales-workspace .main{padding:22px;min-width:0}
   body.sales-workspace .side-nav a{padding:14px 12px}
 }
+
+/* 1366px sinifi kasa ekranlarinda tablo ve odeme paneli birlikte tam gorunsun. */
+@media(min-width:1280px) and (max-width:1500px){
+  body.sales-workspace .app-shell{grid-template-columns:184px minmax(0,1fr)}
+  body.sales-workspace .sidebar{padding:16px 10px}
+  body.sales-workspace .main{padding:14px;min-width:0}
+  body.sales-workspace .side-nav a{padding:11px 9px;font-size:12px}
+  .pos-shell{grid-template-columns:minmax(0,1fr) 280px;gap:12px;width:100%;max-width:none}
+  .pos-main,.pos-checkout{padding:16px}
+  .pos-title-row{margin-bottom:13px}
+  .pos-title-row h2{font-size:26px}
+  .pos-title-row p{font-size:12px}
+  .pos-scan,.pos-scan .mobile-barcode-field,.pos-scan input{width:100%;min-width:0}
+  .pos-cart-columns,.pos-cart-row{grid-template-columns:minmax(132px,1fr) 96px 43px minmax(68px,.48fr) 48px 44px minmax(78px,.55fr) 28px;gap:4px}
+  .pos-cart-columns{padding:9px 8px;font-size:9px}
+  .pos-cart-row{padding:10px 8px}
+  .pos-cart-product strong{font-size:13px}
+  .pos-cart-product small,.pos-unit,.pos-unit-price,.pos-line-discount,.pos-line-tax,.pos-line-total{font-size:11px}
+  .pos-qty button,.pos-remove{width:28px;height:30px}
+  .pos-qty input{width:40px;height:30px}
+  .pos-total-box{padding:16px}
+  .pos-total-box strong{font-size:29px}
+}
