@@ -137,15 +137,16 @@
     });
     productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(button){button.addEventListener('click',function(){
       var updates=[];
-      productManager.querySelectorAll('[data-bulk-product]').forEach(function(row){updates.push({id:Number(row.dataset.bulkProduct),sale_price:row.querySelector('[data-bulk-price]').value,stock_quantity:row.querySelector('[data-bulk-stock]').value});});
-      if(!updates.length){productManagerStatus.textContent='Güncellenecek ürün bulunamadı.';return;}
-      if(!confirm(updates.length+' ürünün fiyat ve stok bilgileri kaydedilsin mi?'))return;
-      productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn){btn.disabled=true;btn.textContent='Kaydediliyor…';});
+productManager.querySelectorAll('[data-bulk-product]').forEach(function(row){updates.push({id:Number(row.dataset.bulkProduct),sale_price:row.querySelector('[data-bulk-price]').value,stock_quantity:row.querySelector('[data-bulk-stock]').value});});
+      
+            if(!updates.length){productManagerStatus.textContent='Güncellenecek ürün bulunamadı.';return;}
+if(!confirm(updates.length+' ürünün fiyat ve stok bilgileri kaydedilsin mi?'))return;
+productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn){btn.disabled=true;btn.textContent='Kaydediliyor…';});
       productManagerStatus.textContent='';
       var body=new FormData();body.set('action','bulk_update_products');body.set('csrf_token',csrf);body.set('updates_json',JSON.stringify(updates));
       fetch(api,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(!d.ok)throw new Error(d.error||'Ürünler güncellenemedi.');productManagerStatus.textContent=d.message;setTimeout(function(){location.reload();},700);}).catch(function(error){productManagerStatus.textContent=error.message;productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn){btn.disabled=false;btn.textContent='Tüm Değişiklikleri Kaydet';});});
     });});
   }
 
-  [data-pos-function updateClock(){var d=new Date(),el=root.querySelector('[data-pos-clock]');if(el)el.textContent=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});} updateClock();setInterval(updateClock,1000);price-check-results]setExtraBarcodes('');bindProductRows();render();setTimeout(function(){scan.focus();},250);
-})();
+  function updateClock(){var d=new Date(),el=root.querySelector('[data-pos-clock]');if(el)el.textContent=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});}
+  updateClock();setInterval(updateClock,1000);setExtraBarcodes('');bindProductRows();render();setTimeout(function(){scan.focus();},250);
