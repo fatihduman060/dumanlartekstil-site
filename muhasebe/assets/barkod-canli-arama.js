@@ -9,6 +9,7 @@
 
   var timer=null;
   var requestNo=0;
+  var activeIndex=-1;
 
   function esc(value){
     return String(value||'').replace(/[&<>"']/g,function(c){
@@ -26,7 +27,30 @@
   function hide(){
     results.hidden=true;
     results.innerHTML='';
+    activeIndex=-1;
     delete results.dataset.liveSearch;
+  }
+  function buttons(){
+    return Array.prototype.slice.call(results.querySelectorAll('[data-live-pos-barcode]'));
+  }
+  function setActive(index,scroll){
+    var items=buttons();
+    if(!items.length){activeIndex=-1;return;}
+    activeIndex=(index+items.length)%items.length;
+    items.forEach(function(button,i){
+      var selected=i===activeIndex;
+      button.classList.toggle('pos-result-active',selected);
+      button.setAttribute('aria-selected',selected?'true':'false');
+    });
+    if(scroll!==false) items[activeIndex].scrollIntoView({block:'nearest'});
+  }
+  function choose(button){
+    if(!button) return;
+    var barcode=button.getAttribute('data-live-pos-barcode')||'';
+    if(!barcode) return;
+    input.value=barcode;
+    hide();
+    input.dispatchEvent(new Event('change',{bubbles:true}));
   }
   function render(items,query){
     if(String(input.value||'').trim()!==query) return;
@@ -38,10 +62,11 @@
       return;
     }
     results.innerHTML=items.map(function(p){
-      return '<button type="button" data-live-pos-barcode="'+esc(p.matched_barcode||p.barcode)+'">'
+      return '<button type="button" role="option" aria-selected="false" data-live-pos-barcode="'+esc(p.matched_barcode||p.barcode)+'">'
         +'<span><strong>'+esc(productName(p))+'</strong><small>'+esc(p.matched_barcode||p.barcode)+' · Stok: '+Number(p.stock_quantity||0)+'</small></span>'
         +'<strong>'+money(p.sale_price)+'</strong></button>';
     }).join('');
+    activeIndex=-1;
     if(status) status.textContent=items.length+' ürün bulundu.';
   }
   function searchNow(){
@@ -71,17 +96,30 @@
   });
 
   input.addEventListener('keydown',function(event){
+    var items=buttons();
+    if((event.key==='ArrowDown'||event.key==='ArrowUp')&&!results.hidden&&items.length){
+      event.preventDefault();event.stopImmediatePropagation();
+      setActive(activeIndex+(event.key==='ArrowDown'?1:-1));
+      return;
+    }
+    if(event.key==='Enter'&&!results.hidden&&items.length){
+      event.preventDefault();event.stopImmediatePropagation();
+      choose(items[activeIndex<0?0:activeIndex]);
+      return;
+    }
+    if(event.key==='Escape'&&!results.hidden){event.preventDefault();hide();return;}
     if(event.key==='Enter'&&timer){clearTimeout(timer);timer=null;searchNow();}
   },true);
 
   results.addEventListener('click',function(event){
     var button=event.target.closest('[data-live-pos-barcode]');
+    if(button) choose(button);
+  });
+  results.addEventListener('mousemove',function(event){
+    var button=event.target.closest('[data-live-pos-barcode]');
     if(!button) return;
-    var barcode=button.getAttribute('data-live-pos-barcode')||'';
-    if(!barcode) return;
-    input.value=barcode;
-    hide();
-    input.dispatchEvent(new Event('change',{bubbles:true}));
+    var index=buttons().indexOf(button);
+    if(index!==activeIndex) setActive(index,false);
   });
 })();
 
