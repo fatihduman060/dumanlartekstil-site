@@ -119,3 +119,15 @@
   .pos-total-box{padding:16px}
   .pos-total-box strong{font-size:29px}
 }
+
+/* Sepet basliklari ve urun degerleri ayni kolon ekseninde dursun. */
+@media(min-width:981px){
+  .pos-cart-columns>span:nth-child(2),
+  .pos-cart-columns>span:nth-child(3),
+  .pos-cart-columns>span:nth-child(5),
+  .pos-cart-columns>span:nth-child(6),
+  .pos-unit,.pos-line-discount,.pos-line-tax{text-align:center}
+  .pos-cart-columns>span:nth-child(4),
+  .pos-cart-columns>span:nth-child(7){text-align:right}
+  .pos-qty{justify-content:center}
+}
