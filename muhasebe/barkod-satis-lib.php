@@ -374,10 +374,12 @@ function pos_recent_sales(int $limit = 30): array
 {
     pos_db_ensure();
     $limit = max(1, min(100, $limit));
-    return db()->query("SELECT s.*, c.name AS cari_name, p.full_name AS credit_person_name
+    $stmt = db()->prepare("SELECT s.*, c.name AS cari_name, p.full_name AS credit_person_name
         FROM pos_sales s
         LEFT JOIN cariler c ON c.id=s.cari_id
         LEFT JOIN store_credit_people p ON p.id=s.credit_person_id
-        WHERE s.is_cancelled=0
-        ORDER BY s.sale_date DESC,s.sale_time DESC,s.id DESC LIMIT " . $limit)->fetchAll() ?: [];
+        WHERE s.is_cancelled=0 AND s.sale_date=?
+        ORDER BY s.sale_time DESC,s.id DESC LIMIT " . $limit);
+    $stmt->execute([date('Y-m-d')]);
+    return $stmt->fetchAll() ?: [];
 }
