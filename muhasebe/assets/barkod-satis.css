@@ -74,6 +74,7 @@
 .pos-customer-summary>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:var(--muted)}
 .pos-customer-summary>strong{font-size:16px;color:#173c27}
 .pos-customer-summary>small{font-size:11px;color:var(--muted)}
+.pos-product-entry-button{min-height:38px;padding:8px 14px;white-space:nowrap}
 @media(min-width:981px) and (max-width:1279px){
   .pos-shell{grid-template-columns:1fr}
   .pos-checkout{position:static;grid-row:2}
@@ -83,6 +84,7 @@
 @media(max-width:980px){.pos-cart-columns{display:none}}
 @media(max-width:640px){
   .pos-unit,.pos-unit-price,.pos-line-discount,.pos-line-tax{display:none}
+  .pos-product-entry-button{padding:7px 11px}
 }
 
 @media(min-width:1101px){
