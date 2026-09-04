@@ -14,10 +14,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     redirect('depo-cikis.php'.($id>0?'?edit='.$id:''));
 }
 $editId=(int)($_GET['edit']??0);$edit=$editId?depo_cikis_load($editId):null;
-if($edit && !depo_cikis_can_edit($edit) && is_warehouse_user()){$edit=null;flash('error','Bu fişi düzenleme yetkiniz yok.');}
+if($edit && !depo_cikis_can_edit($edit) && is_warehouse_dispatch_operator()){$edit=null;flash('error','Bu fişi düzenleme yetkiniz yok.');}
 $cariler=db()->query('SELECT id,name,city,address FROM cariler ORDER BY name')->fetchAll();
 $listSql='SELECT w.*,u.display_name AS creator_name FROM warehouse_dispatches w LEFT JOIN users u ON u.id=w.created_by';$params=[];
-if(is_warehouse_user()){$listSql.=' WHERE w.created_by=?';$params[]=(int)(current_user()['id']??0);}$listSql.=' ORDER BY w.dispatch_date DESC,w.id DESC LIMIT 150';
+if(is_warehouse_dispatch_operator()){$listSql.=' WHERE w.created_by=?';$params[]=(int)(current_user()['id']??0);}$listSql.=' ORDER BY w.dispatch_date DESC,w.id DESC LIMIT 150';
 $s=db()->prepare($listSql);$s->execute($params);$list=$s->fetchAll();$items=$edit['items']??[];$rows=max(6,count($items)+2);
 $cariJson=json_encode($cariler,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 page_header('Depo Çıkış','depo_cikis');

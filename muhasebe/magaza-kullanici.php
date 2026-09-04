@@ -119,9 +119,14 @@ function is_warehouse_user(?array $user = null): bool
     return $user && (string)($user['role'] ?? '') === 'warehouse';
 }
 
+function is_warehouse_dispatch_operator(?array $user = null): bool
+{
+    return is_warehouse_user($user) || is_store_sales_user($user);
+}
+
 function can_access_warehouse_dispatch(): bool
 {
-    return is_admin() || is_fatih_user() || is_mustafa_duman_user() || is_warehouse_user();
+    return is_admin() || is_fatih_user() || is_mustafa_duman_user() || is_warehouse_dispatch_operator();
 }
 
 function can_process_warehouse_dispatch(): bool
@@ -209,6 +214,8 @@ if (is_logged_in() && is_store_sales_user()) {
         'magaza-gunluk-satis.php',
         'magaza-odeme-dagilimi.php',
         'magaza-veresiye.php',
+        'depo-cikis.php',
+        'depo-cikis-yazdir.php',
         'logout.php',
         'index.php',
     ];

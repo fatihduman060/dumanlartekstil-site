@@ -41,7 +41,7 @@ function depo_cikis_load(int $id): ?array
 
 function depo_cikis_can_edit(array $row): bool
 {
-    return can_process_warehouse_dispatch() || (is_warehouse_user() && (int)($row['created_by'] ?? 0)===(int)(current_user()['id'] ?? 0));
+    return can_process_warehouse_dispatch() || (is_warehouse_dispatch_operator() && (int)($row['created_by'] ?? 0)===(int)(current_user()['id'] ?? 0));
 }
 
 function depo_cikis_save(int $id): int
@@ -49,7 +49,7 @@ function depo_cikis_save(int $id): int
     depo_cikis_db_ensure();
     $existing=$id>0?depo_cikis_load($id):null;
     if($existing && !depo_cikis_can_edit($existing)) throw new RuntimeException('Bu fişi düzenleme yetkiniz yok.');
-    if($existing && is_warehouse_user() && (int)($existing['posted_to_cari']??0)===1) throw new RuntimeException('Cariye işlenmiş fişi yalnızca yönetici düzeltebilir.');
+    if($existing && is_warehouse_dispatch_operator() && (int)($existing['posted_to_cari']??0)===1) throw new RuntimeException('Cariye işlenmiş fişi yalnızca yönetici düzeltebilir.');
     $items=teklif_parse_items_from_post(); if(!$items) throw new RuntimeException('En az bir ürün girilmeli.');
     $total=array_sum(array_column($items,'line_total')); $name=trim((string)($_POST['customer_name']??''));
     if($name==='') throw new RuntimeException('Firma / müşteri adı gerekli.');
