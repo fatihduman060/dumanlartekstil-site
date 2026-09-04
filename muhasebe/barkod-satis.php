@@ -17,6 +17,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <link rel="stylesheet" href="assets/barkod-satis.css?v=14" />
 <style>
 .pos-product-entry-tile{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:11px;padding:13px 14px;margin:2px 0 10px;border:1px solid #d8cbb9;border-radius:16px;background:linear-gradient(135deg,#fffaf1,#f3eadc);text-decoration:none;color:#102818;box-shadow:0 8px 22px rgba(7,27,63,.05)}.pos-product-entry-tile:hover{border-color:#b89f7d;transform:translateY(-1px)}.pos-product-entry-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#16482e;color:#fff;font-size:23px;font-weight:900}.pos-product-entry-tile strong{display:block;font-size:14px;color:#102818}.pos-product-entry-tile small{display:block;margin-top:3px;color:#776b5c;font-size:10px;line-height:1.35}.pos-product-entry-arrow{font-size:20px;color:#16482e;font-weight:900}.pos-products-panel.pos-products-legacy{display:none!important}@media(max-width:680px){.pos-product-entry-tile{grid-template-columns:42px 1fr auto;padding:11px}.pos-product-entry-icon{width:42px;height:42px}}
+.pos-payment-modal[hidden]{display:none!important}.pos-payment-modal{position:fixed;inset:0;z-index:10100;display:grid;place-items:center;padding:18px;background:rgba(10,24,16,.7);backdrop-filter:blur(4px)}.pos-payment-dialog{width:min(520px,100%);padding:22px;border-radius:22px;background:#fff;box-shadow:0 25px 80px rgba(0,0,0,.35);display:grid;gap:16px}.pos-payment-head{display:flex;justify-content:space-between;gap:12px;align-items:start}.pos-payment-head h3{margin:3px 0;font-size:27px}.pos-payment-close{width:40px;height:40px;border:0;border-radius:50%;background:#f1eee7;font-size:24px;cursor:pointer}.pos-payment-dialog .pos-payments span{min-height:72px;font-size:15px}.pos-payment-confirm{min-height:54px;font-size:15px}.pos-payment-help{margin:0;color:var(--muted);font-size:11px}.pos-payment-dialog .pos-cari{display:grid;gap:6px}.pos-payment-dialog .pos-cari[hidden]{display:none!important}
 </style>
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <div class="pos-price-check" data-price-check hidden role="dialog" aria-modal="true" aria-labelledby="posPriceCheckTitle">
@@ -49,18 +50,27 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <div class="pos-total-box"><span>ÖDENECEK TOPLAM</span><strong data-pos-total>0,00 TL</strong><small data-pos-count>0 ürün</small></div>
     <div class="pos-customer-summary"><span>MÜŞTERİ</span><strong data-pos-customer-name>Perakende Müşteri</strong><small>Veresiye seçildiğinde müşteri belirleyin.</small></div>
     <label><span>İskonto tutarı</span><input type="number" min="0" step="0.01" value="0" data-pos-discount /></label>
-    <fieldset class="pos-payments"><legend>Ödeme şekli</legend>
-      <label><input type="radio" name="pos_payment" value="cash" checked /><span>💵 Nakit</span></label>
-      <label><input type="radio" name="pos_payment" value="card" /><span>💳 Kart</span></label>
-      <label><input type="radio" name="pos_payment" value="credit" /><span>🧾 Veresiye</span></label>
-    </fieldset>
-    <label class="pos-cari" data-pos-person-wrap hidden><span>Personel</span><select data-pos-person><option value="">Personel seçin</option><?php foreach ($creditPeople as $person): ?><option value="<?php echo e($person['id']); ?>"><?php echo e($person['full_name']); ?></option><?php endforeach; ?></select><small>Yalnızca Personel Veresiye Takibi'ndeki aktif personeller gösterilir.</small></label>
     <label><span>Not</span><input type="text" maxlength="160" placeholder="İsteğe bağlı" data-pos-note /></label>
     <button type="button" class="btn btn-primary pos-complete" data-pos-complete>Satışı Tamamla ve Direkt Yazdır</button>
     <a class="pos-direct-print-setup" href="#" data-windows-launcher>Windows sessiz yazdırma başlatıcısını indir</a>
     <small class="muted">Başlatıcıyla açıldığında fiş, yazdırma penceresi gösterilmeden varsayılan XP-Q805K yazıcısına gönderilir.</small>
     <p class="pos-status" data-pos-status></p>
   </aside>
+
+  <div class="pos-payment-modal" data-pos-payment-modal hidden role="dialog" aria-modal="true" aria-labelledby="posPaymentTitle">
+    <div class="pos-payment-dialog">
+      <div class="pos-payment-head"><div><span class="pos-kicker">SATIŞI TAMAMLA</span><h3 id="posPaymentTitle">Ödeme şeklini seçin</h3></div><button type="button" class="pos-payment-close" data-pos-payment-close aria-label="Kapat">×</button></div>
+      <p class="pos-payment-help">Satış, aşağıdaki ödeme türünü seçip onayladıktan sonra kaydedilecek ve fiş yazdırılacaktır.</p>
+      <fieldset class="pos-payments"><legend>Ödeme şekli</legend>
+        <label><input type="radio" name="pos_payment" value="cash" /><span>💵 Nakit</span></label>
+        <label><input type="radio" name="pos_payment" value="card" /><span>💳 Kredi Kartı</span></label>
+        <label><input type="radio" name="pos_payment" value="credit" /><span>🧾 Veresiye</span></label>
+      </fieldset>
+      <label class="pos-cari" data-pos-person-wrap hidden><span>Personel</span><select data-pos-person><option value="">Personel seçin</option><?php foreach ($creditPeople as $person): ?><option value="<?php echo e($person['id']); ?>"><?php echo e($person['full_name']); ?></option><?php endforeach; ?></select><small>Veresiye satış için müşteri seçimi zorunludur.</small></label>
+      <p class="pos-status" data-pos-payment-status></p>
+      <button type="button" class="btn btn-primary pos-payment-confirm" data-pos-payment-confirm>Seçimi Onayla ve Satışı Tamamla</button>
+    </div>
+  </div>
 
   <section class="panel-card pos-products-panel pos-products-legacy" aria-hidden="true">
     <div class="card-head"><div><h3>Ürün Tanımlama</h3><p class="muted">Yeni ürün ekleyebilir veya ürün listesinden fiyat ve stokları topluca düzenleyebilirsin.</p></div><div class="pos-product-head-actions"><a class="btn btn-secondary" href="barkod-stok-raporu.php">Stok ve Satış Dökümü</a><button type="button" class="btn btn-secondary" data-product-list-toggle aria-expanded="false">Ürün Listesi (<?php echo e(count($products)); ?>)</button><button type="button" class="btn btn-secondary" data-product-new>Yeni ürün</button></div></div>
@@ -124,7 +134,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=17"></script>
+<script src="assets/barkod-satis.js?v=18"></script>
 <script src="assets/barkod-canli-arama.js?v=6"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>
