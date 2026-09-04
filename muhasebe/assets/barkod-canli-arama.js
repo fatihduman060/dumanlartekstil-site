@@ -27,6 +27,7 @@
   }
   function hide(){
     results.hidden=true;
+    results.style.display='none';
     results.innerHTML='';
     activeIndex=-1;
     currentItems=[];
@@ -50,8 +51,11 @@
     if(!button) return;
     var product=currentItems[Number(button.getAttribute('data-live-pos-index'))];
     if(product){
+      input.value='';
+      input.blur();
       hide();
       root.dispatchEvent(new CustomEvent('pos:add-product',{detail:product}));
+      setTimeout(hide,0);
       return;
     }
     var barcode=button.getAttribute('data-live-pos-barcode')||'';
@@ -62,6 +66,7 @@
   }
   function render(items,query){
     if(String(input.value||'').trim()!==query) return;
+    results.style.display='';
     results.hidden=false;
     results.dataset.liveSearch='1';
     currentItems=items.slice();
