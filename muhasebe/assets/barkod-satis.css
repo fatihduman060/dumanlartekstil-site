@@ -75,6 +75,7 @@
 .pos-customer-summary>strong{font-size:16px;color:#173c27}
 .pos-customer-summary>small{font-size:11px;color:var(--muted)}
 .pos-product-entry-button{min-height:38px;padding:8px 14px;white-space:nowrap}
+.pos-scan-row{gap:4px}
 @media(min-width:981px) and (max-width:1279px){
   .pos-shell{grid-template-columns:1fr}
   .pos-checkout{position:static;grid-row:2}
