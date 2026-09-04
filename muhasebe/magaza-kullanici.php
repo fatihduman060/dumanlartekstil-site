@@ -113,6 +113,22 @@ function is_store_sales_user(?array $user = null): bool
         || $displayName === 'fabrikasatismagazasi';
 }
 
+function is_warehouse_user(?array $user = null): bool
+{
+    $user = $user ?: current_user();
+    return $user && (string)($user['role'] ?? '') === 'warehouse';
+}
+
+function can_access_warehouse_dispatch(): bool
+{
+    return is_admin() || is_fatih_user() || is_mustafa_duman_user() || is_warehouse_user();
+}
+
+function can_process_warehouse_dispatch(): bool
+{
+    return is_admin() || is_fatih_user() || is_mustafa_duman_user();
+}
+
 function can_manage_store_sales(): bool
 {
     return can_write() || is_store_sales_user();
@@ -198,5 +214,17 @@ if (is_logged_in() && is_store_sales_user()) {
     ];
     if (!in_array($currentRestrictedScript, $allowedStoreScripts, true)) {
         redirect('barkod-satis.php');
+    }
+}
+
+if (is_logged_in() && is_warehouse_user()) {
+    $allowedWarehouseScripts = [
+        'depo-cikis.php',
+        'depo-cikis-yazdir.php',
+        'logout.php',
+        'index.php',
+    ];
+    if (!in_array($currentRestrictedScript, $allowedWarehouseScripts, true)) {
+        redirect('depo-cikis.php');
     }
 }

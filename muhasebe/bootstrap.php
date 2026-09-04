@@ -689,7 +689,7 @@ function movement_entry_types(): array
 function is_private_receivable_movement(string $type): bool { return $type === 'ozel_alacak'; }
 function movement_label(string $type): string { $t = movement_entry_types(); return $t[$type]['label'] ?? $type; }
 function movement_tone(string $type): string { $t = movement_entry_types(); return $t[$type]['tone'] ?? 'neutral'; }
-function role_label(string $role): string { return ['admin'=>'Yönetici','editor'=>'Düzenleyici','viewer'=>'Görüntüleyici'][$role] ?? $role; }
+function role_label(string $role): string { return ['admin'=>'Yönetici','editor'=>'Düzenleyici','viewer'=>'Görüntüleyici','warehouse'=>'Depo'][$role] ?? $role; }
 
 function check_directions(): array
 {

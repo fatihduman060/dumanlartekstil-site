@@ -7,7 +7,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
     if($action==='add'){
         $username=trim($_POST['username']??''); $display=trim($_POST['display_name']??''); $password=$_POST['password']??''; $role=$_POST['role']??'viewer';
         if($username===''||$display===''||strlen($password)<8){ flash('error','Kullanıcı adı, isim ve en az 8 karakter şifre gerekli.'); redirect('kullanicilar.php'); }
-        if(!in_array($role, ['admin','editor','viewer'], true)) $role = 'viewer';
+        if(!in_array($role, ['admin','editor','viewer','warehouse'], true)) $role = 'viewer';
         try{
             db()->prepare('INSERT INTO users (username,display_name,password_hash,role,is_active,created_at,updated_at) VALUES (?,?,?,?,1,?,?)')->execute([$username,$display,password_hash($password,PASSWORD_DEFAULT),$role,now(),now()]);
             $newUserId = (int)db()->lastInsertId();
@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
     }
     if($action==='update'){
         $id=(int)($_POST['id']??0); $role=$_POST['role']??'viewer'; $active=isset($_POST['is_active'])?1:0; $display=trim($_POST['display_name']??'');
-        if(!in_array($role, ['admin','editor','viewer'], true)) $role = 'viewer';
+        if(!in_array($role, ['admin','editor','viewer','warehouse'], true)) $role = 'viewer';
         if($id===(int)current_user()['id'] && !$active){ flash('error','Kendi kullanıcınızı pasifleştiremezsiniz.'); redirect('kullanicilar.php'); }
         $oldStmt = db()->prepare('SELECT id, username, display_name, role, is_active FROM users WHERE id=?');
         $oldStmt->execute([$id]);
@@ -83,6 +83,7 @@ page_header('Kullanıcılar', 'kullanicilar');
       <label>Yetki seviyesi
         <select name="role">
           <option value="viewer">👁 Görüntüleyici</option>
+          <option value="warehouse">📦 Depo</option>
           <option value="editor">✏️ Düzenleyici</option>
           <option value="admin">⚙️ Yönetici</option>
         </select>
@@ -110,6 +111,7 @@ page_header('Kullanıcılar', 'kullanicilar');
               <td>
                 <select name="role">
                   <option value="viewer" <?php echo $u['role']==='viewer'?'selected':''; ?>>👁 Görüntüleyici</option>
+                  <option value="warehouse" <?php echo $u['role']==='warehouse'?'selected':''; ?>>📦 Depo</option>
                   <option value="editor" <?php echo $u['role']==='editor'?'selected':''; ?>>✏️ Düzenleyici</option>
                   <option value="admin" <?php echo $u['role']==='admin'?'selected':''; ?>>⚙️ Yönetici</option>
                 </select>
