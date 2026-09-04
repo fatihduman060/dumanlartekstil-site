@@ -74,6 +74,8 @@
 .pos-customer-summary>span{font-size:10px;font-weight:900;letter-spacing:.1em;color:var(--muted)}
 .pos-customer-summary>strong{font-size:16px;color:#173c27}
 .pos-customer-summary>small{font-size:11px;color:var(--muted)}
+.pos-cart-row.pos-cart-row-latest{position:relative;background:#eaf7ee!important;box-shadow:inset 5px 0 0 #269457,0 0 0 2px rgba(38,148,87,.18)}
+.pos-cart-row.pos-cart-row-latest:after{content:'SON EKLENEN';position:absolute;right:8px;top:4px;padding:2px 6px;border-radius:999px;background:#269457;color:#fff;font-size:8px;font-weight:950;letter-spacing:.04em}
 .pos-product-entry-button{min-height:38px;padding:8px 14px;white-space:nowrap}
 .pos-scan-row{gap:0}
 .pos-scan .mobile-barcode-field{grid-template-columns:minmax(0,1fr);gap:0}
