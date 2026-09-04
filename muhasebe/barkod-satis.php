@@ -14,7 +14,7 @@ $recentSales = pos_recent_sales(20);
 $canDeleteSales = pos_can_delete_sales();
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-satis.css?v=16" />
+<link rel="stylesheet" href="assets/barkod-satis.css?v=17" />
 <style>
 .pos-product-entry-tile{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:11px;padding:13px 14px;margin:2px 0 10px;border:1px solid #d8cbb9;border-radius:16px;background:linear-gradient(135deg,#fffaf1,#f3eadc);text-decoration:none;color:#102818;box-shadow:0 8px 22px rgba(7,27,63,.05)}.pos-product-entry-tile:hover{border-color:#b89f7d;transform:translateY(-1px)}.pos-product-entry-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#16482e;color:#fff;font-size:23px;font-weight:900}.pos-product-entry-tile strong{display:block;font-size:14px;color:#102818}.pos-product-entry-tile small{display:block;margin-top:3px;color:#776b5c;font-size:10px;line-height:1.35}.pos-product-entry-arrow{font-size:20px;color:#16482e;font-weight:900}.pos-products-panel.pos-products-legacy{display:none!important}@media(max-width:680px){.pos-product-entry-tile{grid-template-columns:42px 1fr auto;padding:11px}.pos-product-entry-icon{width:42px;height:42px}}
 .pos-payment-modal[hidden]{display:none!important}.pos-payment-modal{position:fixed;inset:0;z-index:10100;display:grid;place-items:center;padding:18px;background:rgba(10,24,16,.7);backdrop-filter:blur(4px)}.pos-payment-dialog{width:min(520px,100%);padding:22px;border-radius:22px;background:#fff;box-shadow:0 25px 80px rgba(0,0,0,.35);display:grid;gap:16px}.pos-payment-head{display:flex;justify-content:space-between;gap:12px;align-items:start}.pos-payment-head h3{margin:3px 0;font-size:27px}.pos-payment-close{width:40px;height:40px;border:0;border-radius:50%;background:#f1eee7;font-size:24px;cursor:pointer}.pos-payment-dialog .pos-payments span{min-height:72px;font-size:15px}.pos-payment-confirm{min-height:54px;font-size:15px}.pos-payment-help{margin:0;color:var(--muted);font-size:11px}.pos-payment-dialog .pos-cari{display:grid;gap:6px}.pos-payment-dialog .pos-cari[hidden]{display:none!important}
@@ -134,7 +134,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=21"></script>
+<script src="assets/barkod-satis.js?v=22"></script>
 <script src="assets/barkod-canli-arama.js?v=7"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>
