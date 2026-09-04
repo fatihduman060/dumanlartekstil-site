@@ -14,7 +14,7 @@ $recentSales = pos_recent_sales(20);
 $canDeleteSales = pos_can_delete_sales();
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-satis.css?v=9" />
+<link rel="stylesheet" href="assets/barkod-satis.css?v=10" />
 <style>
 .pos-product-entry-tile{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:11px;padding:13px 14px;margin:2px 0 10px;border:1px solid #d8cbb9;border-radius:16px;background:linear-gradient(135deg,#fffaf1,#f3eadc);text-decoration:none;color:#102818;box-shadow:0 8px 22px rgba(7,27,63,.05)}.pos-product-entry-tile:hover{border-color:#b89f7d;transform:translateY(-1px)}.pos-product-entry-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#16482e;color:#fff;font-size:23px;font-weight:900}.pos-product-entry-tile strong{display:block;font-size:14px;color:#102818}.pos-product-entry-tile small{display:block;margin-top:3px;color:#776b5c;font-size:10px;line-height:1.35}.pos-product-entry-arrow{font-size:20px;color:#16482e;font-weight:900}.pos-products-panel.pos-products-legacy{display:none!important}@media(max-width:680px){.pos-product-entry-tile{grid-template-columns:42px 1fr auto;padding:11px}.pos-product-entry-icon{width:42px;height:42px}}
 </style>
@@ -40,17 +40,14 @@ page_header('Barkodlu Satış', 'barkod_satis');
     </div>
     <div class="pos-search-results" data-pos-results hidden></div>
 
-    <div class="pos-cart-head"><h3>Sepet</h3><button type="button" class="pos-link danger" data-pos-clear>Sepeti temizle</button></div>
+    <div class="pos-cart-head"><h3>Satış Ürünleri</h3><button type="button" class="pos-link danger" data-pos-clear>Sepeti temizle</button></div>
+    <div class="pos-cart-columns" aria-hidden="true"><span>Ürün</span><span>Miktar</span><span>Birim</span><span>Fiyat</span><span>İskonto</span><span>Vergi</span><span>Tutar</span><span></span></div>
     <div class="pos-cart" data-pos-cart><div class="pos-empty">Henüz ürün okutulmadı.</div></div>
   </section>
 
   <aside class="pos-checkout panel-card">
     <div class="pos-total-box"><span>ÖDENECEK TOPLAM</span><strong data-pos-total>0,00 TL</strong><small data-pos-count>0 ürün</small></div>
-    <a class="pos-product-entry-tile" href="barkod-urunler.php">
-      <span class="pos-product-entry-icon">+</span>
-      <span><strong>Yeni Ürün Girişi</strong><small>Ürün tanımla · barkod ekle · fiyat ve stok düzenle</small></span>
-      <span class="pos-product-entry-arrow">›</span>
-    </a>
+    <div class="pos-customer-summary"><span>MÜŞTERİ</span><strong data-pos-customer-name>Perakende Müşteri</strong><small>Veresiye seçildiğinde müşteri belirleyin.</small></div>
     <label><span>İskonto tutarı</span><input type="number" min="0" step="0.01" value="0" data-pos-discount /></label>
     <fieldset class="pos-payments"><legend>Ödeme şekli</legend>
       <label><input type="radio" name="pos_payment" value="cash" checked /><span>💵 Nakit</span></label>
@@ -127,7 +124,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=15"></script>
+<script src="assets/barkod-satis.js?v=16"></script>
 <script src="assets/barkod-canli-arama.js?v=3"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>
