@@ -177,7 +177,7 @@ if (is_logged_in() && is_salary_only_user()) {
 
 if (is_logged_in() && is_store_sales_user()) {
     if ($currentRestrictedScript === 'faturalar.php') {
-        redirect('magaza.php');
+        redirect('barkod-satis.php');
     }
 
     $allowedStoreScripts = [
@@ -197,6 +197,6 @@ if (is_logged_in() && is_store_sales_user()) {
         'index.php',
     ];
     if (!in_array($currentRestrictedScript, $allowedStoreScripts, true)) {
-        redirect('magaza.php');
+        redirect('barkod-satis.php');
     }
 }
