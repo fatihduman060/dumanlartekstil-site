@@ -18,7 +18,12 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <style>
 .pos-product-entry-tile{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:11px;padding:13px 14px;margin:2px 0 10px;border:1px solid #d8cbb9;border-radius:16px;background:linear-gradient(135deg,#fffaf1,#f3eadc);text-decoration:none;color:#102818;box-shadow:0 8px 22px rgba(7,27,63,.05)}.pos-product-entry-tile:hover{border-color:#b89f7d;transform:translateY(-1px)}.pos-product-entry-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#16482e;color:#fff;font-size:23px;font-weight:900}.pos-product-entry-tile strong{display:block;font-size:14px;color:#102818}.pos-product-entry-tile small{display:block;margin-top:3px;color:#776b5c;font-size:10px;line-height:1.35}.pos-product-entry-arrow{font-size:20px;color:#16482e;font-weight:900}.pos-products-panel.pos-products-legacy{display:none!important}@media(max-width:680px){.pos-product-entry-tile{grid-template-columns:42px 1fr auto;padding:11px}.pos-product-entry-icon{width:42px;height:42px}}
 .pos-payment-modal[hidden]{display:none!important}.pos-payment-modal{position:fixed;inset:0;z-index:10100;display:grid;place-items:center;padding:18px;background:rgba(10,24,16,.7);backdrop-filter:blur(4px)}.pos-payment-dialog{width:min(520px,100%);padding:22px;border-radius:22px;background:#fff;box-shadow:0 25px 80px rgba(0,0,0,.35);display:grid;gap:16px}.pos-payment-head{display:flex;justify-content:space-between;gap:12px;align-items:start}.pos-payment-head h3{margin:3px 0;font-size:27px}.pos-payment-close{width:40px;height:40px;border:0;border-radius:50%;background:#f1eee7;font-size:24px;cursor:pointer}.pos-payment-dialog .pos-payments span{min-height:72px;font-size:15px}.pos-payment-confirm{min-height:54px;font-size:15px}.pos-payment-help{margin:0;color:var(--muted);font-size:11px}.pos-payment-dialog .pos-cari{display:grid;gap:6px}.pos-payment-dialog .pos-cari[hidden]{display:none!important}
-@media(min-width:981px){.pos-checkout{position:sticky!important;top:var(--pos-checkout-sticky-top,18px)!important;align-self:start!important;max-height:none!important;height:max-content!important;overflow:visible!important}}
+@media(min-width:981px){
+  .pos-checkout-slot{position:static;align-self:start;min-width:0}
+  .pos-checkout-slot.is-locked{position:sticky;top:var(--pos-checkout-sticky-top,18px);z-index:5}
+  .pos-checkout-slot>.pos-checkout{position:static!important;top:auto!important;align-self:start!important;max-height:none!important;height:max-content!important;overflow:visible!important;width:100%}
+}
+@media(max-width:980px){.pos-checkout-slot{position:static!important;grid-row:2}.pos-checkout-slot>.pos-checkout{position:static!important;top:auto!important}}
 </style>
 <div class="pos-shell" data-pos-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <div class="pos-price-check" data-price-check hidden role="dialog" aria-modal="true" aria-labelledby="posPriceCheckTitle">
@@ -47,16 +52,18 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <div class="pos-cart" data-pos-cart><div class="pos-empty">Henüz ürün okutulmadı.</div></div>
   </section>
 
-  <aside class="pos-checkout panel-card">
-    <div class="pos-total-box"><span>ÖDENECEK TOPLAM</span><strong data-pos-total>0,00 TL</strong><small data-pos-count>0 ürün</small></div>
-    <div class="pos-customer-summary"><span>MÜŞTERİ</span><strong data-pos-customer-name>Perakende Müşteri</strong><small>Veresiye seçildiğinde müşteri belirleyin.</small></div>
-    <label><span>İskonto tutarı</span><input type="number" min="0" step="0.01" value="0" data-pos-discount /></label>
-    <label><span>Not</span><input type="text" maxlength="160" placeholder="İsteğe bağlı" data-pos-note /></label>
-    <button type="button" class="btn btn-primary pos-complete" data-pos-complete>Satışı Tamamla ve Direkt Yazdır</button>
-    <a class="pos-direct-print-setup" href="#" data-windows-launcher>Windows sessiz yazdırma başlatıcısını indir</a>
-    <small class="muted">Başlatıcıyla açıldığında fiş, yazdırma penceresi gösterilmeden varsayılan XP-Q805K yazıcısına gönderilir.</small>
-    <p class="pos-status" data-pos-status></p>
-  </aside>
+  <div class="pos-checkout-slot">
+    <aside class="pos-checkout panel-card">
+      <div class="pos-total-box"><span>ÖDENECEK TOPLAM</span><strong data-pos-total>0,00 TL</strong><small data-pos-count>0 ürün</small></div>
+      <div class="pos-customer-summary"><span>MÜŞTERİ</span><strong data-pos-customer-name>Perakende Müşteri</strong><small>Veresiye seçildiğinde müşteri belirleyin.</small></div>
+      <label><span>İskonto tutarı</span><input type="number" min="0" step="0.01" value="0" data-pos-discount /></label>
+      <label><span>Not</span><input type="text" maxlength="160" placeholder="İsteğe bağlı" data-pos-note /></label>
+      <button type="button" class="btn btn-primary pos-complete" data-pos-complete>Satışı Tamamla ve Direkt Yazdır</button>
+      <a class="pos-direct-print-setup" href="#" data-windows-launcher>Windows sessiz yazdırma başlatıcısını indir</a>
+      <small class="muted">Başlatıcıyla açıldığında fiş, yazdırma penceresi gösterilmeden varsayılan XP-Q805K yazıcısına gönderilir.</small>
+      <p class="pos-status" data-pos-status></p>
+    </aside>
+  </div>
 
   <div class="pos-payment-modal" data-pos-payment-modal hidden role="dialog" aria-modal="true" aria-labelledby="posPaymentTitle">
     <div class="pos-payment-dialog">
@@ -134,15 +141,20 @@ page_header('Barkodlu Satış', 'barkod_satis');
 </div>
 <script>
 (function(){
-  var panel=document.querySelector('.pos-checkout');
-  if(!panel||!window.matchMedia('(min-width:981px)').matches)return;
-  var lockTop=function(){
-    if(window.scrollY!==0)return;
-    var top=Math.round(panel.getBoundingClientRect().top);
-    if(top>=0)panel.style.setProperty('--pos-checkout-sticky-top',top+'px');
+  var slot=document.querySelector('.pos-checkout-slot');
+  if(!slot||!window.matchMedia('(min-width:981px)').matches)return;
+  var lock=function(){
+    slot.classList.remove('is-locked');
+    slot.style.removeProperty('--pos-checkout-sticky-top');
+    requestAnimationFrame(function(){
+      var naturalTop=Math.round(slot.getBoundingClientRect().top+window.scrollY);
+      if(naturalTop<0)naturalTop=0;
+      slot.style.setProperty('--pos-checkout-sticky-top',naturalTop+'px');
+      slot.classList.add('is-locked');
+    });
   };
-  requestAnimationFrame(lockTop);
-  window.addEventListener('load',lockTop,{once:true});
+  if(document.readyState==='complete')lock();
+  else window.addEventListener('load',lock,{once:true});
 })();
 </script>
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
