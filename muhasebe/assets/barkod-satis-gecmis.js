@@ -14,13 +14,33 @@
 
   var style=document.createElement('style');
   style.textContent=''
+    +'.pos-history-cash-grid{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}.pos-history-cash-grid>.pos-history{grid-column:auto!important;margin:0}.pos-cash-left-card{display:grid;gap:12px;padding:16px 17px}.pos-cash-left-card h3{margin:0;color:#173c27}.pos-cash-left-card>small{color:#7d6f61;font-size:11px}.pos-cash-left-yesterday{display:grid;gap:3px;padding:12px 13px;border:1px solid #e3d8ca;border-radius:14px;background:#fbf7f1}.pos-cash-left-yesterday span,.pos-cash-left-today label>span{font-size:10px;font-weight:950;letter-spacing:.08em;color:#7d6f61;text-transform:uppercase}.pos-cash-left-yesterday strong{font-size:22px;color:#173c27}.pos-cash-left-yesterday small{color:#8a7b69}.pos-cash-left-today{display:grid;gap:7px}.pos-cash-left-today label{display:grid;gap:5px}.pos-cash-left-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.pos-cash-left-entry input{min-height:42px;border:1px solid #d9cdbf;border-radius:11px;padding:8px 10px;font-size:16px;font-weight:850}.pos-cash-left-entry button{min-height:42px;border:0;border-radius:11px;padding:8px 13px;background:#16482e;color:#fff;font-weight:900;cursor:pointer}.pos-cash-left-entry button:disabled{opacity:.6;cursor:wait}.pos-cash-left-status{min-height:18px;margin:0;font-size:11px;font-weight:850;color:#167243}'
     +'.pos-history{overflow:hidden}.pos-history-toggle{width:100%;border:0;background:transparent;padding:0;cursor:pointer;text-align:left;color:inherit}.pos-history-toggle-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px}.pos-history-toggle-title{display:grid;gap:3px}.pos-history-toggle-title h3{margin:0}.pos-history-toggle-title span{font-size:12px;color:#7d6f61}.pos-history-chevron{font-size:20px;font-weight:950;color:#16482e;transition:transform .2s ease}.pos-history-toggle[aria-expanded="true"] .pos-history-chevron{transform:rotate(180deg)}'
     +'.pos-history-content{border-top:1px solid #eadfd2}.pos-history-content[hidden]{display:none!important}.pos-history-summary{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:12px 14px;background:#fbf7f1}.pos-history-summary button{border:1px solid #e1d6c8;background:#fff;color:#16482e;border-radius:14px;padding:9px 11px;font-size:11px;font-weight:950;cursor:pointer;display:grid;gap:2px;min-width:145px;text-align:left}.pos-history-summary button strong{font-size:13px}.pos-history-summary button small{font-size:10px;color:#7d6f61;font-weight:850}.pos-history-summary button.active{background:#16482e;color:#fff;border-color:#16482e}.pos-history-summary button.active small{color:#e8f3ed}'
     +'.pos-history-item[data-pos-history-hidden="1"]{display:none!important}.pos-history-method{display:inline-flex!important;width:max-content;margin-top:4px!important;padding:3px 7px;border-radius:999px;background:#f7f1e7;color:#725b32!important;font-size:10px!important;font-weight:900}'
     +'.pos-history-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-right:6px}.pos-history-actions button{min-height:30px;border-radius:999px;padding:5px 9px;border:1px solid #dfd4c7;background:#fff;color:#16482e;font-size:10px;font-weight:900;cursor:pointer}.pos-history-actions button.danger{color:#b64242}.pos-history-actions button:disabled{opacity:.55;cursor:wait}'
     +'.pos-history-item{display:flex;align-items:center;gap:8px}.pos-history-row{flex:1;min-width:0}'
-    +'@media(max-width:680px){.pos-history-toggle-inner{padding:14px}.pos-history-summary{display:grid;grid-template-columns:1fr}.pos-history-summary button{width:100%;min-width:0}.pos-history-item{align-items:stretch;flex-direction:column}.pos-history-actions{padding:0 10px 10px}.pos-history-actions button{flex:1}}';
+    +'@media(max-width:980px){.pos-history-cash-grid{grid-template-columns:1fr}}@media(max-width:680px){.pos-history-toggle-inner{padding:14px}.pos-history-summary{display:grid;grid-template-columns:1fr}.pos-history-summary button{width:100%;min-width:0}.pos-history-item{align-items:stretch;flex-direction:column}.pos-history-actions{padding:0 10px 10px}.pos-history-actions button{flex:1}.pos-cash-left-entry{grid-template-columns:1fr}.pos-cash-left-entry button{width:100%}}';
   document.head.appendChild(style);
+
+  var cashGrid=document.createElement('div');
+  cashGrid.className='pos-history-cash-grid';
+  section.parentNode.insertBefore(cashGrid,section);
+  cashGrid.appendChild(section);
+
+  var cashCard=document.createElement('aside');
+  cashCard.className='panel-card pos-cash-left-card';
+  cashCard.innerHTML=''
+    +'<div><h3>Kasada Bırakılan Para</h3><small>Dünkü tutarı gör, bugün kasada bırakacağın tutarı yaz.</small></div>'
+    +'<div class="pos-cash-left-yesterday"><span>Dün</span><strong data-cash-left-yesterday>0,00 TL</strong><small data-cash-left-yesterday-date>—</small></div>'
+    +'<div class="pos-cash-left-today"><label><span>Bugün</span><div class="pos-cash-left-entry"><input type="text" inputmode="decimal" autocomplete="off" placeholder="Örn. 2.500" data-cash-left-today><button type="button" data-cash-left-save>Kaydet</button></div></label><p class="pos-cash-left-status" data-cash-left-status></p></div>';
+  cashGrid.appendChild(cashCard);
+
+  var cashYesterday=cashCard.querySelector('[data-cash-left-yesterday]');
+  var cashYesterdayDate=cashCard.querySelector('[data-cash-left-yesterday-date]');
+  var cashToday=cashCard.querySelector('[data-cash-left-today]');
+  var cashSave=cashCard.querySelector('[data-cash-left-save]');
+  var cashStatus=cashCard.querySelector('[data-cash-left-status]');
 
   function esc(value){
     return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];});
@@ -31,6 +51,14 @@
   function dateTr(value){
     var p=String(value||'').split('-');
     return p.length===3?p[2]+'.'+p[1]+'.'+p[0]:String(value||'');
+  }
+  function parseAmount(value){
+    var text=String(value||'').trim().replace(/\s+/g,'');
+    if(!text) return 0;
+    if(text.indexOf(',')!==-1&&text.indexOf('.')!==-1) text=text.replace(/\./g,'').replace(',','.');
+    else if(text.indexOf(',')!==-1) text=text.replace(',','.');
+    var number=Number(text);
+    return Number.isFinite(number)?Math.round(number*100)/100:-1;
   }
   function methodLabel(method){
     if(method==='cash') return 'Nakit';
@@ -98,6 +126,41 @@
       +'</div>';
   }
 
+  function loadCashLeft(){
+    fetch('barkod-kasa-parasi.php?_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(!data||!data.ok) throw new Error((data&&data.error)||'Kasa bilgisi alınamadı.');
+        cashYesterday.textContent=money(data.yesterday_amount||0);
+        cashYesterdayDate.textContent=dateTr(data.yesterday_date||'');
+        cashToday.value=Number(data.today_amount||0)>0?new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(data.today_amount||0)):'';
+        if(data.csrf_token) csrf=data.csrf_token;
+      })
+      .catch(function(error){cashStatus.textContent=error.message||'Kasa bilgisi alınamadı.';});
+  }
+
+  function saveCashLeft(){
+    var amount=parseAmount(cashToday.value);
+    if(amount<0){cashStatus.textContent='Geçerli bir tutar yaz.';cashToday.focus();return;}
+    cashSave.disabled=true;
+    cashSave.textContent='Kaydediliyor…';
+    cashStatus.textContent='';
+    var body=new FormData();
+    body.set('csrf_token',csrf);
+    body.set('amount',String(amount));
+    fetch('barkod-kasa-parasi.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(!data||!data.ok) throw new Error((data&&data.error)||'Kasa tutarı kaydedilemedi.');
+        cashYesterday.textContent=money(data.yesterday_amount||0);
+        cashYesterdayDate.textContent=dateTr(data.yesterday_date||'');
+        cashToday.value=new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(data.today_amount||0));
+        cashStatus.textContent=data.message||'Kaydedildi.';
+      })
+      .catch(function(error){cashStatus.textContent=error.message||'Kasa tutarı kaydedilemedi.';})
+      .finally(function(){cashSave.disabled=false;cashSave.textContent='Kaydet';});
+  }
+
   function load(){
     fetch(api+'?action=sales&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(r){return r.json();})
@@ -110,6 +173,9 @@
         // Sunucu geçici cevap vermezse mevcut PHP listesini bozma.
       });
   }
+
+  cashSave.addEventListener('click',saveCashLeft);
+  cashToday.addEventListener('keydown',function(event){if(event.key==='Enter'){event.preventDefault();saveCashLeft();}});
 
   section.addEventListener('click',function(event){
     var toggle=event.target.closest('[data-history-toggle]');
@@ -163,4 +229,5 @@
   });
 
   load();
+  loadCashLeft();
 })();
