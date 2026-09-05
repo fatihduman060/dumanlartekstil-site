@@ -52,9 +52,8 @@
     priceCheckInput.addEventListener('change',function(){if(priceCheckInput.value.trim())lookupPrice();});
     priceCheckResults.addEventListener('click',function(e){var button=e.target.closest('[data-price-check-id]');if(!button)return;var p=priceCheckItems.find(function(item){return Number(item.id)===Number(button.dataset.priceCheckId);});if(p)renderPriceProduct(p);});
   }
-
   function money(v){return new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(v||0))+' TL';}
-  function esc(s){return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];});}
+  function esc(s){return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c];});}
   function productName(p){var name=String((p&&p.name)||'').trim(),variant=String((p&&p.variant_name)||'').trim();return variant?name+' - '+variant:name;}
   function total(){var raw=cart.reduce(function(s,x){return s+x.quantity*Number(x.sale_price);},0);return Math.max(0,raw-Number(discount.value||0));}
   function render(){
@@ -112,7 +111,7 @@
   if(historyBox)historyBox.addEventListener('click',function(e){var button=e.target.closest('[data-sale-delete]');if(!button)return;e.preventDefault();e.stopPropagation();var receipt=button.dataset.receiptNo||'',saleId=button.dataset.saleDelete;if(!confirm(receipt+' numaralı satış silinsin mi? Stok ve mağaza toplamları geri alınacak.'))return;button.disabled=true;button.textContent='Siliniyor…';var body=new FormData();body.set('action','delete_sale');body.set('csrf_token',csrf);body.set('sale_id',saleId);fetch(api,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(!d.ok)throw new Error(d.error||'Satış silinemedi.');status.textContent=d.message;location.reload();}).catch(function(error){status.textContent=error.message;button.disabled=false;button.textContent='Sil';});});
   var form=root.querySelector('[data-product-form]'),extraInput=root.querySelector('[data-extra-barcode-input]'),extraList=root.querySelector('[data-extra-barcode-list]'),extraBarcodes=[];
   function normalizeBarcode(value){return String(value||'').replace(/\s+/g,'').trim();}
-  function renderExtraBarcodes(){form.elements.extra_barcodes.value=extraBarcodes.join('\n');extraList.innerHTML=extraBarcodes.length?extraBarcodes.map(function(code,i){return '<span class="pos-barcode-chip"><b>'+esc(code)+'</b><button type="button" data-extra-remove="'+i+'" aria-label="Barkodu kaldır">×</button></span>').join(''):'<small>Henüz ek barkod yok.</small>';}
+  function renderExtraBarcodes(){form.elements.extra_barcodes.value=extraBarcodes.join('\n');extraList.innerHTML=extraBarcodes.length?extraBarcodes.map(function(code,i){return '<span class="pos-barcode-chip"><b>'+esc(code)+'</b><button type="button" data-extra-remove="'+i+'" aria-label="Barkodu kaldır">×</button></span>';}).join(''):'<small>Henüz ek barkod yok.</small>';}
   function setExtraBarcodes(value){extraBarcodes=String(value||'').split(/[\r\n,;]+/).map(normalizeBarcode).filter(function(code,i,list){return code&&list.indexOf(code)===i;});renderExtraBarcodes();}
   function addExtraBarcode(){var code=normalizeBarcode(extraInput.value),primary=normalizeBarcode(form.elements.barcode.value);if(!code)return;if(code===primary){status.textContent='Bu barkod zaten ana barkod olarak kayıtlı.';extraInput.value='';return;}if(extraBarcodes.indexOf(code)!==-1){status.textContent='Bu ek barkod zaten listede.';extraInput.value='';return;}extraBarcodes.push(code);extraInput.value='';renderExtraBarcodes();status.textContent='';extraInput.focus();}
   root.querySelector('[data-extra-barcode-add]').onclick=addExtraBarcode;
@@ -138,8 +137,7 @@
     productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(button){button.addEventListener('click',function(){
       var updates=[];
 productManager.querySelectorAll('[data-bulk-product]').forEach(function(row){updates.push({id:Number(row.dataset.bulkProduct),sale_price:row.querySelector('[data-bulk-price]').value,stock_quantity:row.querySelector('[data-bulk-stock]').value});});
-      
-            if(!updates.length){productManagerStatus.textContent='Güncellenecek ürün bulunamadı.';return;}
+      if(!updates.length){productManagerStatus.textContent='Güncellenecek ürün bulunamadı.';return;}
 if(!confirm(updates.length+' ürünün fiyat ve stok bilgileri kaydedilsin mi?'))return;
 productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn){btn.disabled=true;btn.textContent='Kaydediliyor…';});
       productManagerStatus.textContent='';
@@ -147,7 +145,6 @@ productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn
       fetch(api,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(!d.ok)throw new Error(d.error||'Ürünler güncellenemedi.');productManagerStatus.textContent=d.message;setTimeout(function(){location.reload();},700);}).catch(function(error){productManagerStatus.textContent=error.message;productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn){btn.disabled=false;btn.textContent='Tüm Değişiklikleri Kaydet';});});
     });});
   }
-
   function updateClock(){var d=new Date(),el=root.querySelector('[data-pos-clock]');if(el)el.textContent=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});}
   updateClock();setInterval(updateClock,1000);setExtraBarcodes('');bindProductRows();render();setTimeout(function(){scan.focus();},250);
 })();
