@@ -751,7 +751,7 @@ function private_receivable_totals(array $filters = []): array
     if (!empty($filters['cari_id'])) { $where[] = 'pr.cari_id=?'; $params[] = (int)$filters['cari_id']; }
     if (!empty($filters['start'])) { $where[] = 'pr.receivable_date>=?'; $params[] = $filters['start']; }
     if (!empty($filters['end'])) { $where[] = 'pr.receivable_date<=?'; $params[] = $filters['end']; }
-    if (!empty($filters['q'])) { $where[] = '(pr.description LIKE ? OR c.name LIKE ? OR pr.document_name LIKE ?)'; $q = '%' . $filters['q'] . '%'; array_push($params, $q, $q, $q, $q); }
+    if (!empty($filters['q'])) { $where[] = '(pr.description LIKE ? OR c.name LIKE ? OR pr.document_name LIKE ?)'; $q = '%' . $filters['q'] . '%'; array_push($params, $q, $q, $q); }
     $sql = 'SELECT pr.status, SUM(pr.amount) AS total, COUNT(*) AS total_count FROM private_receivables pr JOIN cariler c ON c.id=pr.cari_id';
     if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
     $sql .= ' GROUP BY pr.status';
