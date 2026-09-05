@@ -20,5 +20,5 @@ $autoPrint = (string)($_GET['print'] ?? '') === '1';
   <div class="footer">Bizi tercih ettiğiniz için teşekkür ederiz.<br><span class="muted">Değişim için bu fişi saklayınız.</span><br><strong>Mali değeri yoktur.</strong></div>
 </main>
 <div class="actions"><button type="button" onclick="window.print()">Fişi Yazdır</button><a href="barkod-satis.php">Satışa Dön</a></div>
-<script>(function(){var params=new URLSearchParams(location.search);if(params.get('print')!=='1')return;var closeAfter=params.get('autoclose')==='1';window.addEventListener('afterprint',function(){if(closeAfter)setTimeout(function(){window.close();},150);});setTimeout(function(){window.print();},250);})();</script>
+<script>(function(){var params=new URLSearchParams(location.search);if(params.get('print')!=='1')return;var closeAfter=params.get('autoclose')==='1';window.addEventListener('afterprint',function(){if(closeAfter)setTimeout(function(){window.close();},40);});var run=function(){window.print();};if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){requestAnimationFrame(run);});}else{setTimeout(run,50);}})();</script>
 </body></html>
