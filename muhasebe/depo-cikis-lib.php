@@ -7,13 +7,32 @@ function depo_cikis_db_ensure(): void
     $pdo->exec("CREATE TABLE IF NOT EXISTS warehouse_dispatches (
         id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_no TEXT NOT NULL, dispatch_date TEXT NOT NULL,
         cari_id INTEGER, customer_name TEXT NOT NULL, customer_city TEXT, customer_address TEXT,
-        note TEXT, currency TEXT NOT NULL DEFAULT 'TL', total REAL NOT NULL DEFAULT 0,
+        note TEXT, currency TEXT NOT NULL DEFAULT 'TL',
+        subtotal REAL NOT NULL DEFAULT 0,
+        discount_enabled INTEGER NOT NULL DEFAULT 0, discount_rate REAL NOT NULL DEFAULT 0, discount_amount REAL NOT NULL DEFAULT 0,
+        vat_enabled INTEGER NOT NULL DEFAULT 0, vat_rate REAL NOT NULL DEFAULT 10, vat_amount REAL NOT NULL DEFAULT 0,
+        total REAL NOT NULL DEFAULT 0,
         processed INTEGER NOT NULL DEFAULT 0, processed_at TEXT, processed_by INTEGER,
         posted_to_cari INTEGER NOT NULL DEFAULT 0, cari_movement_id INTEGER,
         created_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
         FOREIGN KEY(cari_id) REFERENCES cariler(id) ON DELETE SET NULL,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
+    foreach ([
+        'subtotal' => 'REAL NOT NULL DEFAULT 0',
+        'discount_enabled' => 'INTEGER NOT NULL DEFAULT 0',
+        'discount_rate' => 'REAL NOT NULL DEFAULT 0',
+        'discount_amount' => 'REAL NOT NULL DEFAULT 0',
+        'vat_enabled' => 'INTEGER NOT NULL DEFAULT 0',
+        'vat_rate' => 'REAL NOT NULL DEFAULT 10',
+        'vat_amount' => 'REAL NOT NULL DEFAULT 0',
+    ] as $column => $definition) {
+        try { ensure_column($pdo, 'warehouse_dispatches', $column, $definition); } catch (Throwable $e) {}
+    }
+    // Eski fişlerde toplam, iskonto/KDV uygulanmamış ara toplamdır; mevcut kayıtları aynen koru.
+    try {
+        $pdo->exec("UPDATE warehouse_dispatches SET subtotal=total WHERE COALESCE(subtotal,0)=0 AND COALESCE(total,0)<>0 AND COALESCE(discount_amount,0)=0 AND COALESCE(vat_amount,0)=0");
+    } catch (Throwable $e) {}
     $pdo->exec("CREATE TABLE IF NOT EXISTS warehouse_dispatch_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT, dispatch_id INTEGER NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
         product_barcode TEXT, product_name TEXT, product_type TEXT, quantity REAL NOT NULL DEFAULT 0,
@@ -51,15 +70,48 @@ function depo_cikis_save(int $id): int
     if($existing && !depo_cikis_can_edit($existing)) throw new RuntimeException('Bu fişi düzenleme yetkiniz yok.');
     if($existing && is_warehouse_dispatch_operator() && (int)($existing['posted_to_cari']??0)===1) throw new RuntimeException('Cariye işlenmiş fişi yalnızca yönetici düzeltebilir.');
     $items=teklif_parse_items_from_post(); if(!$items) throw new RuntimeException('En az bir ürün girilmeli.');
-    $total=array_sum(array_column($items,'line_total')); $name=trim((string)($_POST['customer_name']??''));
+
+    $subtotal=round((float)array_sum(array_column($items,'line_total')),2);
+    $discountEnabled=isset($_POST['discount_enabled']) && (string)$_POST['discount_enabled']==='1' ? 1 : 0;
+    $discountRate=teklif_decimal($_POST['discount_rate']??'0');
+    $discountRate=max(0,min(100,$discountRate));
+    $discountAmount=$discountEnabled?round($subtotal*$discountRate/100,2):0.0;
+    $discountedSubtotal=max(0,round($subtotal-$discountAmount,2));
+    $vatEnabled=isset($_POST['vat_enabled']) && (string)$_POST['vat_enabled']==='1' ? 1 : 0;
+    $vatRate=max(0,teklif_decimal($_POST['vat_rate']??'10'));
+    $vatAmount=$vatEnabled?round($discountedSubtotal*$vatRate/100,2):0.0;
+    $total=round($discountedSubtotal+$vatAmount,2);
+
+    $name=trim((string)($_POST['customer_name']??''));
     if($name==='') throw new RuntimeException('Firma / müşteri adı gerekli.');
-    $data=[trim((string)($_POST['dispatch_no']??'')),trim((string)($_POST['dispatch_date']??''))?:date('Y-m-d'),(int)($_POST['cari_id']??0)?:null,$name,trim((string)($_POST['customer_city']??'')),trim((string)($_POST['customer_address']??'')),trim((string)($_POST['note']??'')),'TL',$total,now()];
+    $data=[
+        trim((string)($_POST['dispatch_no']??'')),
+        trim((string)($_POST['dispatch_date']??''))?:date('Y-m-d'),
+        (int)($_POST['cari_id']??0)?:null,
+        $name,
+        trim((string)($_POST['customer_city']??'')),
+        trim((string)($_POST['customer_address']??'')),
+        trim((string)($_POST['note']??'')),
+        'TL',
+        $subtotal,$discountEnabled,$discountRate,$discountAmount,$vatEnabled,$vatRate,$vatAmount,$total,
+        now()
+    ];
     $pdo=db(); $pdo->beginTransaction();
     try {
-        if($existing){$data[]=$id;$pdo->prepare('UPDATE warehouse_dispatches SET dispatch_no=?,dispatch_date=?,cari_id=?,customer_name=?,customer_city=?,customer_address=?,note=?,currency=?,total=?,updated_at=? WHERE id=?')->execute($data);$pdo->prepare('DELETE FROM warehouse_dispatch_items WHERE dispatch_id=?')->execute([$id]);}
-        else{$data[]=(int)(current_user()['id']??0);$data[]=now();$pdo->prepare('INSERT INTO warehouse_dispatches(dispatch_no,dispatch_date,cari_id,customer_name,customer_city,customer_address,note,currency,total,updated_at,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)')->execute($data);$id=(int)$pdo->lastInsertId();}
+        if($existing){
+            $data[]=$id;
+            $pdo->prepare('UPDATE warehouse_dispatches SET dispatch_no=?,dispatch_date=?,cari_id=?,customer_name=?,customer_city=?,customer_address=?,note=?,currency=?,subtotal=?,discount_enabled=?,discount_rate=?,discount_amount=?,vat_enabled=?,vat_rate=?,vat_amount=?,total=?,updated_at=? WHERE id=?')->execute($data);
+            $pdo->prepare('DELETE FROM warehouse_dispatch_items WHERE dispatch_id=?')->execute([$id]);
+        } else {
+            $data[]=(int)(current_user()['id']??0);$data[]=now();
+            $pdo->prepare('INSERT INTO warehouse_dispatches(dispatch_no,dispatch_date,cari_id,customer_name,customer_city,customer_address,note,currency,subtotal,discount_enabled,discount_rate,discount_amount,vat_enabled,vat_rate,vat_amount,total,updated_at,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute($data);
+            $id=(int)$pdo->lastInsertId();
+        }
         $s=$pdo->prepare('INSERT INTO warehouse_dispatch_items(dispatch_id,sort_order,product_barcode,product_name,product_type,quantity,unit_price,line_total) VALUES(?,?,?,?,?,?,?,?)');
-        foreach($items as $i=>$item)$s->execute([$id,$i,$item['product_barcode'],$item['product_name'],$item['product_type'],$item['quantity'],$item['unit_price'],$item['line_total']]);
+        foreach($items as $i=>$item){
+            $s->execute([$id,$i,$item['product_barcode'],$item['product_name'],$item['product_type'],$item['quantity'],$item['unit_price'],$item['line_total']]);
+            teklif_save_product_suggestion($item['product_name'],$item['product_type'],(float)$item['unit_price'],$item['product_barcode']);
+        }
         $pdo->commit(); log_action($existing?'Depo çıkış fişi güncellendi':'Depo çıkış fişi oluşturuldu',($data[0]?:('#'.$id))); return $id;
     } catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
