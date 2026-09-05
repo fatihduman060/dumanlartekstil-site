@@ -28,9 +28,11 @@ body{background:#e8e8e8;font:14px Arial,sans-serif;color:#102818}
 .info p{margin:3px 0 0;line-height:1.25;font-size:12px}
 .box{border:1px solid #102818;border-radius:6px;padding:7px}
 .box div{display:flex;justify-content:space-between;gap:8px;padding:3px;font-size:11px}
-table{width:100%;border-collapse:collapse;table-layout:fixed}
-th{background:#102818;color:#f2d18b;padding:6px 5px;font-size:10px;line-height:1.15}
-td{padding:5px;border:1px solid #ddd;font-size:10px;line-height:1.15;vertical-align:middle;word-break:break-word}
+table{width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid #9f9f9f}
+th{background:#102818;color:#f2d18b;padding:6px 5px;font-size:10px;line-height:1.15;border:1px solid #6f756f;font-weight:700}
+td{padding:5px;border:1px solid #b8b8b8;font-size:10px;line-height:1.15;vertical-align:middle;word-break:break-word}
+tbody tr:nth-child(odd){background:#ffffff}
+tbody tr:nth-child(even){background:#f2efe9}
 th:nth-child(1),td:nth-child(1){width:24%}
 th:nth-child(2),td:nth-child(2){width:38%}
 th:nth-child(3),td:nth-child(3){width:10%}
@@ -40,8 +42,8 @@ th:nth-child(5),td:nth-child(5){width:14%}
 .totals{display:grid;justify-content:end;gap:3px;margin-top:5mm}
 .total-row{display:grid;grid-template-columns:42mm 38mm;gap:6px;text-align:right;font-size:11px}
 .total-row.discount strong{color:#a13c3c}
-.total-row.grand{font-size:15px;border-top:2px solid #102818;padding-top:4px;margin-top:2px}
-.note{margin-top:5mm;border-top:1px solid #ccc;padding-top:3mm;font-size:10px;line-height:1.25}
+.total-row.grand{font-size:15px;border-top:2px solid #6f6f6f;padding-top:4px;margin-top:2px}
+.note{margin-top:5mm;border-top:1px solid #aaa;padding-top:3mm;font-size:10px;line-height:1.25}
 
 /* İlk sıkıştırma: görünümü bozmadan orta uzunlukta fişleri tek sayfaya alır. */
 body.fit-1 .page{padding:8mm 10mm}
@@ -84,6 +86,7 @@ tr{break-inside:avoid;page-break-inside:avoid}
   body{background:#fff}
   .bar{display:none!important}
   .page{margin:0;width:210mm;box-shadow:none}
+  table,thead,tbody,tr,th,td{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   body:not(.multi-page) .page{height:297mm;min-height:297mm;overflow:hidden}
   body.multi-page .page{height:auto;min-height:297mm;overflow:visible}
 }
