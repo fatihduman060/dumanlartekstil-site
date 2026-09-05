@@ -1,4 +1,13 @@
 (function(){
+  if(/\/cariler\.php$/i.test(location.pathname) && !document.querySelector('script[data-cari-canli-arama]')){
+    var cariSearchScript=document.createElement('script');
+    cariSearchScript.src='assets/cari-canli-arama.js?v=1&_='+Date.now();
+    cariSearchScript.setAttribute('data-cari-canli-arama','1');
+    document.body.appendChild(cariSearchScript);
+  }
+})();
+
+(function(){
   if(/\/raporlar\.php$/i.test(location.pathname) && !document.querySelector('script[data-rapor-kart-haric]')){
     var reportScript=document.createElement('script');
     reportScript.src='assets/rapor-kartli-odeme-haric.js?v=1&_='+Date.now();
