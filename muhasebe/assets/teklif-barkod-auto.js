@@ -65,7 +65,7 @@
 
   function rowOf(el){ return el && el.closest ? el.closest('tr') : null; }
 
-  function fillOfferRow(row){
+  function fillDocumentRow(row){
     if (!row) return;
     var barcode = row.querySelector('.product-barcode');
     var name = row.querySelector('.product-name');
@@ -80,32 +80,32 @@
     }
   }
 
-  function fillAllOfferRows(){
-    document.querySelectorAll('#offerRows tbody tr').forEach(function(row){ fillOfferRow(row); });
+  function fillAllDocumentRows(){
+    document.querySelectorAll('#offerRows tbody tr,#wdRows tbody tr').forEach(function(row){ fillDocumentRow(row); });
   }
 
-  function initOffer(){
-    if (!/teklif-ver\.php/i.test(location.pathname)) return;
-    var table = document.getElementById('offerRows');
+  function initDocumentRows(){
+    if (!/(?:teklif-ver|depo-cikis)\.php/i.test(location.pathname)) return;
+    var table = document.getElementById('offerRows') || document.getElementById('wdRows');
     if (!table) return;
     ensureStyle();
 
     table.addEventListener('input', function(e){
       if (!e.target) return;
-      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type')) fillOfferRow(rowOf(e.target));
+      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type')) fillDocumentRow(rowOf(e.target));
     });
     table.addEventListener('change', function(e){
       if (!e.target) return;
-      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type') || e.target.classList.contains('product-barcode')) fillOfferRow(rowOf(e.target));
+      if (e.target.classList.contains('product-name') || e.target.classList.contains('product-type') || e.target.classList.contains('product-barcode')) fillDocumentRow(rowOf(e.target));
     });
     table.addEventListener('blur', function(e){
-      if (e.target && e.target.classList.contains('product-barcode')) fillOfferRow(rowOf(e.target));
+      if (e.target && e.target.classList.contains('product-barcode')) fillDocumentRow(rowOf(e.target));
     }, true);
 
-    var form = document.getElementById('offerForm');
-    if (form) form.addEventListener('submit', fillAllOfferRows);
-    setTimeout(fillAllOfferRows, 100);
-    setTimeout(fillAllOfferRows, 700);
+    var form = document.getElementById('offerForm') || document.getElementById('wdForm');
+    if (form) form.addEventListener('submit', fillAllDocumentRows);
+    setTimeout(fillAllDocumentRows, 100);
+    setTimeout(fillAllDocumentRows, 700);
   }
 
   function saleRowOf(el){ return el && el.closest ? el.closest('.satis-item-row') : null; }
@@ -169,7 +169,7 @@
   }
 
   function init(){
-    initOffer();
+    initDocumentRows();
     initMovementSale();
   }
 
