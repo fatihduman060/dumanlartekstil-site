@@ -1,4 +1,8 @@
 (function(){
+  if(!document.querySelector('link[data-pos-hizli-style]')){
+    var style=document.createElement('link');
+    style.rel='stylesheet';style.href='assets/barkod-pos-hizli.css?v=1';style.setAttribute('data-pos-hizli-style','1');document.head.appendChild(style);
+  }
   var root=document.querySelector('[data-pos-root]');
   if(!root) return;
   var checkout=root.querySelector('.pos-checkout');
