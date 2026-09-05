@@ -25,6 +25,9 @@
     var variant=String((product&&product.variant_name)||'').trim();
     return variant ? name+' - '+variant : name;
   }
+  function isQuantityShortcut(value){
+    return /^\+\d+$/.test(String(value||'').trim());
+  }
   function hide(){
     results.hidden=true;
     results.style.display='none';
@@ -87,6 +90,7 @@
   function searchNow(){
     var query=String(input.value||'').trim();
     if(!query){hide();if(status)status.textContent='';return;}
+    if(isQuantityShortcut(query)){hide();return;}
     var current=++requestNo;
     if(status) status.textContent='Ürünler aranıyor…';
     fetch(searchApi+'?q='+encodeURIComponent(query)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
@@ -104,13 +108,22 @@
 
   input.addEventListener('input',function(){
     if(timer) clearTimeout(timer);
+    timer=null;
     requestNo++;
     var query=String(input.value||'').trim();
     if(!query){hide();if(status)status.textContent='';return;}
+    if(isQuantityShortcut(query)){hide();return;}
     timer=setTimeout(searchNow,180);
   });
 
   input.addEventListener('keydown',function(event){
+    if(event.key==='Enter'&&isQuantityShortcut(input.value)){
+      if(timer) clearTimeout(timer);
+      timer=null;
+      requestNo++;
+      hide();
+      return;
+    }
     var items=buttons();
     if((event.key==='ArrowDown'||event.key==='ArrowUp')&&!results.hidden&&items.length){
       event.preventDefault();event.stopImmediatePropagation();
