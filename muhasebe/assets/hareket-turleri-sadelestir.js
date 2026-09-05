@@ -17,7 +17,8 @@
       ['verecek','Alış Faturası'],
       ['tahsilat','Tahsilat'],
       ['odeme','Ödeme'],
-      ['gider','İade']
+      ['gider','İade'],
+      ['ciro_primi','Ciro Primi']
     ];
 
     select.innerHTML='';
