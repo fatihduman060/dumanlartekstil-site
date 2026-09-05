@@ -42,7 +42,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </div>
   <section class="pos-main panel-card">
     <div class="pos-title-row">
-      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button><a class="btn btn-secondary pos-product-entry-button" href="barkod-urunler.php">+ Yeni Ürün Ekle</a></div><p>Barkodu okut veya ürün adından herhangi bir kelimeyi yaz. Son ürünü artırmak için örneğin +3 yazman yeterli.</p></div>
+      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><a class="btn btn-secondary pos-new-sale" href="barkod-satis.php" target="_blank" rel="noopener" aria-label="Yeni satışı yeni sekmede aç">+ Yeni Satış</a><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button><a class="btn btn-secondary pos-product-entry-button" href="barkod-urunler.php">+ Yeni Ürün Ekle</a></div><p>Barkodu okut veya ürün adından herhangi bir kelimeyi yaz. Son ürünü artırmak için örneğin +3 yazman yeterli.</p></div>
       <div class="pos-clock"><strong data-pos-clock>--:--</strong><span><?php echo e(tr_date(date('Y-m-d'))); ?></span></div>
     </div>
     <div class="pos-scan-row">
