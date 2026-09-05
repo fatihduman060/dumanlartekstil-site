@@ -111,6 +111,7 @@ $where=[]; $params=[];
 if ($type !== '') { $where[]='cari_type = ?'; $params[]=$type; }
 $sql='SELECT * FROM cariler'; if ($where) $sql .= ' WHERE ' . implode(' AND ', $where); $sql .= ' ORDER BY name ASC';
 $stmt = db()->prepare($sql); $stmt->execute($params); $cariler = $stmt->fetchAll();
+$cariSearchOptions = $cariler;
 
 if ($q !== '') {
     $scored = [];
@@ -146,7 +147,12 @@ page_header('Cariler', 'cariler');
     </div>
   </div>
   <form class="filterbar" method="get">
-    <input name="q" placeholder="Cari, yetkili, vergi no, telefon ara..." value="<?php echo e($q); ?>">
+    <input name="q" list="cariSearchOptions" autocomplete="off" placeholder="Cari, yetkili, vergi no, telefon ara..." value="<?php echo e($q); ?>">
+    <datalist id="cariSearchOptions">
+      <?php foreach ($cariSearchOptions as $suggestCari): ?>
+        <option value="<?php echo e($suggestCari['name'] ?? ''); ?>"><?php echo e(trim((string)($suggestCari['city'] ?? ''))); ?></option>
+      <?php endforeach; ?>
+    </datalist>
     <select name="type"><option value="">Tümü</option><option value="Firma" <?php echo $type==='Firma'?'selected':''; ?>>Firma</option><option value="Kişi" <?php echo $type==='Kişi'?'selected':''; ?>>Kişi</option></select>
     <button class="btn btn-secondary" type="submit">Filtrele</button>
   </form>
