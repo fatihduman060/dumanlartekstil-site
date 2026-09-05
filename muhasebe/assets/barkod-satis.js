@@ -79,7 +79,7 @@
     if(!Number.isSafeInteger(amount)||amount<1){scan.value='';status.textContent='Eklenecek adet pozitif bir tam sayı olmalı.';return;}
     var item=cart.find(function(x){return Number(x.id)===Number(lastAddedProductId);});
     if(!item){status.textContent='Önce bir ürün okutun.';speakStatus(status.textContent);scan.value='';return;}
-    item.quantity+=amount;scan.value='';lastLookup='';results.hidden=true;results.innerHTML='';render();scan.focus({preventScroll:true});var message=amount+' adet eklendi. Sepette bu üründen '+new Intl.NumberFormat('tr-TR').format(item.quantity)+' adet oldu.';status.textContent=productName(item)+': '+message;speakStatus(message);revealLastAdded();
+    item.quantity+=amount;scan.value='';lastLookup='';results.hidden=true;results.innerHTML='';render();scan.focus({preventScroll:true});var message=amount+' adet eklendi. Sepette bu üründen '+new Intl.NumberFormat('tr-TR').format(item.quantity)+' adet oldu.';status.textContent=productName(item)+': '+message;speakStatus(amount+' tane eklendi.');revealLastAdded();
   }
   root.addEventListener('pos:add-product',function(event){if(event.detail)add(event.detail);});
   function showResults(items){results.hidden=false;if(!items.length){results.innerHTML='<div class="pos-result-empty">Ürün bulunamadı. Aşağıdan yeni ürün tanımlayabilirsiniz.</div>';root.dispatchEvent(new CustomEvent('pos:product-not-found'));return;}results.innerHTML=items.map(function(p){return '<button type="button" data-result-id="'+p.id+'"><span><strong>'+esc(productName(p))+'</strong><small>'+esc(p.matched_barcode||p.barcode)+' · Stok: '+Number(p.stock_quantity)+'</small></span><strong>'+money(p.sale_price)+'</strong></button>';}).join('');results._items=items;}
