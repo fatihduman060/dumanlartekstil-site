@@ -55,11 +55,37 @@ function magaza_veresiye_auto_only_sync_date(string $saleDate, ?int $userId = nu
         return ['updated'=>false, 'date'=>$saleDate, 'totals'=>$totals];
     }
 
+    $collectionTotal = round($totals['cash_collection'] + $totals['card_collection'], 2);
+    if ($row) {
+        $expectedDailyTotal = magaza_odeme_dagilim_gunluk_toplam(
+            (float)($row['cash_amount'] ?? 0),
+            (float)($row['card_amount'] ?? 0),
+            $totals['debt']
+        );
+        $alreadySynced =
+            abs((float)($row['manual_credit_amount'] ?? 0)) < 0.005
+            && abs((float)($row['credit_amount'] ?? 0) - $totals['debt']) < 0.005
+            && abs((float)($row['credit_collection_amount'] ?? 0) - $collectionTotal) < 0.005
+            && abs((float)($row['cash_credit_collection_amount'] ?? 0) - $totals['cash_collection']) < 0.005
+            && abs((float)($row['card_credit_collection_amount'] ?? 0) - $totals['card_collection']) < 0.005
+            && abs((float)($row['daily_total'] ?? 0) - $expectedDailyTotal) < 0.005;
+        if ($alreadySynced) {
+            return [
+                'updated'=>false,
+                'unchanged'=>true,
+                'date'=>$saleDate,
+                'record_id'=>(int)$row['id'],
+                'credit'=>$totals['debt'],
+                'cash_collection'=>$totals['cash_collection'],
+                'card_collection'=>$totals['card_collection'],
+            ];
+        }
+    }
+
     $now = now();
     $userId = $userId ?: (current_user()['id'] ?? null);
     if (!$row) {
         $dailyTotal = magaza_odeme_dagilim_gunluk_toplam(0, 0, $totals['debt']);
-        $collectionTotal = round($totals['cash_collection'] + $totals['card_collection'], 2);
         $pdo->prepare('INSERT INTO store_daily_payment_breakdown
             (sale_date,cash_amount,card_amount,manual_credit_amount,credit_amount,credit_collection_amount,cash_credit_collection_amount,card_credit_collection_amount,cash_change_left_amount,daily_total,created_by,created_at,updated_by,updated_at)
             VALUES (?,0,0,0,?,?,?,?,0,?,?,?,?,?)')
@@ -83,7 +109,6 @@ function magaza_veresiye_auto_only_sync_date(string $saleDate, ?int $userId = nu
             (float)($row['card_amount'] ?? 0),
             $totals['debt']
         );
-        $collectionTotal = round($totals['cash_collection'] + $totals['card_collection'], 2);
         $pdo->prepare('UPDATE store_daily_payment_breakdown
             SET manual_credit_amount=0,
                 credit_amount=?,
