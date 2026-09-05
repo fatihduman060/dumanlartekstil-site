@@ -1,12 +1,21 @@
 (function(){
   var root=document.querySelector('[data-pos-root]');if(!root)return;
   var api=root.dataset.api,csrf=root.dataset.csrf,cart=[],scan=root.querySelector('[data-pos-scan]'),cartBox=root.querySelector('[data-pos-cart]'),results=root.querySelector('[data-pos-results]'),discount=root.querySelector('[data-pos-discount]'),status=root.querySelector('[data-pos-status]');
-  var lookupBusy=false,lastLookup='',lastAddedProductId=null,quantityShortcutTimer=null;
+  var lookupBusy=false,lastLookup='',lastAddedProductId=null,quantityShortcutTimer=null,lookupRevision=0;
   var lastNotFoundAnnouncement=0;
-  function announceProductNotFound(){
-    var now=Date.now();if(now-lastNotFoundAnnouncement<1200)return;lastNotFoundAnnouncement=now;
+  function speakStatus(text){
     if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined')return;
-    window.speechSynthesis.cancel();var message=new SpeechSynthesisUtterance('Ürün bulunamadı');message.lang='tr-TR';message.rate=1;message.volume=1;window.speechSynthesis.speak(message);
+    try{
+      window.speechSynthesis.cancel();
+      var message=new SpeechSynthesisUtterance(text);
+      message.lang='tr-TR';message.rate=1;message.volume=1;
+      window.speechSynthesis.speak(message);
+    }catch(ignore){}
+  }
+  function announceProductNotFound(){
+    if(/^\+/.test(scan.value.trim()))return;
+    var now=Date.now();if(now-lastNotFoundAnnouncement<1200)return;lastNotFoundAnnouncement=now;
+    speakStatus('Ürün bulunamadı');
   }
   root.addEventListener('pos:product-not-found',announceProductNotFound);
   var launcherLink=root.querySelector('[data-windows-launcher]');
@@ -64,14 +73,19 @@
   function revealLastAdded(){setTimeout(function(){var row=cartBox.querySelector('[data-pos-last-added]');if(row)row.scrollIntoView({behavior:'smooth',block:'center'});},80);}
   function add(p){var old=cart.find(function(x){return Number(x.id)===Number(p.id);});if(old)old.quantity+=1;else{p.quantity=1;cart.push(p);}lastAddedProductId=Number(p.id);render();scan.value='';lastLookup='';scan.focus({preventScroll:true});status.textContent=productName(p)+' sepete eklendi.';revealLastAdded();}
   function addToLastProduct(amount){
+    if(quantityShortcutTimer)clearTimeout(quantityShortcutTimer);
+    quantityShortcutTimer=null;lookupRevision++;
+    root.dispatchEvent(new CustomEvent('pos:quantity-shortcut'));
+    if(!Number.isSafeInteger(amount)||amount<1){scan.value='';status.textContent='Eklenecek adet pozitif bir tam sayı olmalı.';return;}
     var item=cart.find(function(x){return Number(x.id)===Number(lastAddedProductId);});
-    if(!item){status.textContent='Önce bir ürün okutun.';scan.value='';return;}
-    item.quantity+=amount;scan.value='';lastLookup='';results.hidden=true;results.innerHTML='';render();scan.focus({preventScroll:true});status.textContent=productName(item)+' adedi +'+amount+' artırıldı.';revealLastAdded();
+    if(!item){status.textContent='Önce bir ürün okutun.';speakStatus(status.textContent);scan.value='';return;}
+    item.quantity+=amount;scan.value='';lastLookup='';results.hidden=true;results.innerHTML='';render();scan.focus({preventScroll:true});var message=amount+' adet eklendi. Sepette bu üründen '+new Intl.NumberFormat('tr-TR').format(item.quantity)+' adet oldu.';status.textContent=productName(item)+': '+message;speakStatus(message);revealLastAdded();
   }
   root.addEventListener('pos:add-product',function(event){if(event.detail)add(event.detail);});
   function showResults(items){results.hidden=false;if(!items.length){results.innerHTML='<div class="pos-result-empty">Ürün bulunamadı. Aşağıdan yeni ürün tanımlayabilirsiniz.</div>';root.dispatchEvent(new CustomEvent('pos:product-not-found'));return;}results.innerHTML=items.map(function(p){return '<button type="button" data-result-id="'+p.id+'"><span><strong>'+esc(productName(p))+'</strong><small>'+esc(p.matched_barcode||p.barcode)+' · Stok: '+Number(p.stock_quantity)+'</small></span><strong>'+money(p.sale_price)+'</strong></button>';}).join('');results._items=items;}
-  function lookup(){var q=scan.value.trim();if(!q||lookupBusy||q===lastLookup)return;lookupBusy=true;lastLookup=q;status.textContent='Barkod aranıyor…';fetch(api+'?action=barcode&barcode='+encodeURIComponent(q)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(d.product){add(d.product);results.hidden=true;return null;}return fetch(api+'?action=products&q='+encodeURIComponent(q)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(x){showResults(x.products||[]);status.textContent='';});}).catch(function(){status.textContent='Ürün aranamadı.';lastLookup='';}).finally(function(){lookupBusy=false;});}
+  function lookup(){var q=scan.value.trim();if(/^\+/.test(q)){var shortcut=q.match(/^\+(\d+)$/);if(shortcut)addToLastProduct(Number(shortcut[1]));return;}if(!q||lookupBusy||q===lastLookup)return;var revision=++lookupRevision;lookupBusy=true;lastLookup=q;status.textContent='Barkod aranıyor…';fetch(api+'?action=barcode&barcode='+encodeURIComponent(q)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(revision!==lookupRevision||scan.value.trim()!==q)return null;if(d.product){add(d.product);results.hidden=true;return null;}return fetch(api+'?action=products&q='+encodeURIComponent(q)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(x){if(revision!==lookupRevision||scan.value.trim()!==q)return;showResults(x.products||[]);status.textContent='';});}).catch(function(){if(revision!==lookupRevision||scan.value.trim()!==q)return;status.textContent='Ürün aranamadı.';lastLookup='';}).finally(function(){lookupBusy=false;});}
   scan.addEventListener('input',function(){
+    lookupRevision++;
     if(quantityShortcutTimer)clearTimeout(quantityShortcutTimer);
     var shortcut=scan.value.trim().match(/^\+(\d+)$/);if(!shortcut)return;
     quantityShortcutTimer=setTimeout(function(){var current=scan.value.trim().match(/^\+(\d+)$/);if(current)addToLastProduct(Number(current[1]));},350);

@@ -26,7 +26,7 @@
     return variant ? name+' - '+variant : name;
   }
   function isQuantityShortcut(value){
-    return /^\+\d+$/.test(String(value||'').trim());
+    return /^\+/.test(String(value||'').trim());
   }
   function hide(){
     results.hidden=true;
@@ -36,6 +36,10 @@
     currentItems=[];
     delete results.dataset.liveSearch;
   }
+  root.addEventListener('pos:quantity-shortcut',function(){
+    if(timer)clearTimeout(timer);
+    timer=null;requestNo++;hide();
+  });
   function buttons(){
     return Array.prototype.slice.call(results.querySelectorAll('[data-live-pos-barcode]'));
   }

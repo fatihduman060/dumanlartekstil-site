@@ -121,8 +121,8 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
-<script src="assets/barkod-satis.js?v=23"></script>
-<script src="assets/barkod-canli-arama.js?v=7"></script>
+<script src="assets/barkod-satis.js?v=24"></script>
+<script src="assets/barkod-canli-arama.js?v=8"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>
 <script src="assets/barkod-satis-gecmis.js?v=5"></script>
