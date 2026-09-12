@@ -28,6 +28,11 @@ try {
     $action = trim((string)($_REQUEST['action'] ?? 'products'));
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        if ($action === 'live_carts') {
+            if (!pos_can_delete_sales()) pos_json(['ok'=>false,'error'=>'Canlı sepeti yalnızca Fatih görebilir.'],403);
+            header('Cache-Control: no-store');
+            pos_json(['ok'=>true,'sales'=>pos_live_carts()]);
+        }
         if ($action === 'barcode') {
             $product = pos_product_by_barcode((string)($_GET['barcode'] ?? ''));
             pos_json(['ok'=>true, 'product'=>$product]);
@@ -48,6 +53,11 @@ try {
 
     if (!can_manage_store_sales()) throw new RuntimeException('Bu işlem için mağaza satış yetkisi gerekiyor.');
     if (!verify_csrf($_POST['csrf_token'] ?? null)) throw new RuntimeException('Oturum doğrulaması yenilenmeli. Sayfayı yenileyin.');
+
+    if ($action === 'sync_live_cart') {
+        pos_live_save($_POST);
+        pos_json(['ok'=>true]);
+    }
 
     if ($action === 'save_product') {
         $id = (int)($_POST['id'] ?? 0);

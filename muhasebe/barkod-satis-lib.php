@@ -442,3 +442,59 @@ function pos_history_audit(string $action, string $date): array
     unset($event);
     return $events;
 }
+
+function pos_live_ensure(): void
+{
+    db()->exec("CREATE TABLE IF NOT EXISTS pos_live_carts (
+        user_id INTEGER NOT NULL, terminal_id TEXT NOT NULL, snapshot TEXT NOT NULL,
+        updated_at INTEGER NOT NULL, PRIMARY KEY(user_id,terminal_id))");
+}
+
+function pos_live_save(array $input): void
+{
+    $terminal = (string)($input['terminal_id'] ?? '');
+    if (!preg_match('/^[a-f0-9-]{20,64}$/D', $terminal)) throw new InvalidArgumentException('Geçersiz kasa kimliği.');
+    $raw = json_decode((string)($input['items_json'] ?? ''), true);
+    if (!is_array($raw) || count($raw) > 500) throw new InvalidArgumentException('Geçersiz sepet.');
+    $items = []; $subtotal = 0;
+    $stmt = db()->prepare("SELECT id,name,variant_name,barcode,sale_price FROM pos_products WHERE id=?");
+    foreach ($raw as $item) {
+        $quantity = (float)($item['quantity'] ?? 0);
+        if (!is_finite($quantity) || $quantity <= 0 || $quantity > 1000000) throw new InvalidArgumentException('Geçersiz adet.');
+        $stmt->execute([(int)($item['product_id'] ?? 0)]);
+        $product = $stmt->fetch();
+        if (!$product) continue;
+        $line = round($quantity * (float)$product['sale_price'], 2);
+        $subtotal += $line;
+        $items[] = ['name'=>trim($product['name'] . ' ' . ($product['variant_name'] ?? '')),
+            'barcode'=>$product['barcode'],'quantity'=>$quantity,'unit_price'=>(float)$product['sale_price'],'line_total'=>$line];
+    }
+    $discount = min($subtotal, max(0, (float)($input['discount_amount'] ?? 0)));
+    $snapshot = ['items'=>$items,'subtotal'=>$subtotal,'discount_amount'=>$discount,'grand_total'=>round($subtotal-$discount,2),
+        'state'=>!$items && ($input['state'] ?? '') === 'completed' ? 'completed' : 'open'];
+    pos_live_ensure();
+    db()->prepare("INSERT INTO pos_live_carts(user_id,terminal_id,snapshot,updated_at) VALUES(?,?,?,?)
+        ON CONFLICT(user_id,terminal_id) DO UPDATE SET snapshot=excluded.snapshot,updated_at=excluded.updated_at")
+        ->execute([(int)current_user()['id'],$terminal,json_encode($snapshot,JSON_UNESCAPED_UNICODE),time()]);
+    db()->prepare('DELETE FROM pos_live_carts WHERE updated_at<?')->execute([time()-86400]);
+}
+
+function pos_live_carts(): array
+{
+    if (!pos_can_delete_sales()) throw new RuntimeException('Canlı sepeti yalnızca Fatih görebilir.');
+    pos_live_ensure();
+    $stmt = db()->prepare("SELECT c.*,u.display_name,u.username FROM pos_live_carts c JOIN users u ON u.id=c.user_id
+        WHERE c.updated_at>=? ORDER BY c.updated_at DESC");
+    $stmt->execute([time()-86400]);
+    $rows = [];
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $snapshot = json_decode($row['snapshot'],true);
+        if (!is_array($snapshot)) continue;
+        $snapshot['user_name'] = $row['display_name'] ?: $row['username'];
+        $snapshot['terminal'] = substr($row['terminal_id'],0,8);
+        $snapshot['updated_at'] = date('d.m.Y H:i:s',(int)$row['updated_at']);
+        $snapshot['stale'] = time()-(int)$row['updated_at'] > 30;
+        $rows[] = $snapshot;
+    }
+    return $rows;
+}

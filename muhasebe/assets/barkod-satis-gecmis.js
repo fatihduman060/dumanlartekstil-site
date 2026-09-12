@@ -102,7 +102,7 @@
   }
   function viewTabs(){
     var labels={recent:'Son Satışlar',past:'Geçmiş Günler'};
-    if(canAudit){labels.cancelled_sales='İptal Edilen Satışlar';labels.removed_cart_items='Sepetten Silinen Ürünler';}
+    if(canAudit){labels.live_carts='Canlı Sepet';labels.cancelled_sales='İptal Edilen Satışlar';labels.removed_cart_items='Sepetten Silinen Ürünler';}
     return '<div class="pos-history-views" aria-label="Satış geçmişi">'+Object.keys(labels).map(function(key){
       return '<button type="button" data-history-view="'+key+'" aria-pressed="'+(view===key)+'">'+labels[key]+'</button>';
     }).join('')+'</div>';
@@ -122,7 +122,12 @@
       +'<div class="pos-history-message" role="status">'+(loading?'Kayıtlar yükleniyor…':loadError?esc(loadError)+' <button type="button" data-history-retry>Tekrar dene</button>':sales.length+' kayıt')+'</div>'
       +(!loading&&!loadError?(rows||'<p class="pos-history-message">Seçilen gün için kayıt yok.</p>'):'');
   }
+  function renderLive(){
+    section.innerHTML=viewTabs()+'<p class="pos-history-message" role="status">'+(loading?'Yükleniyor…':loadError?esc(loadError):'Her 3 saniyede güncellenir. 30 saniyedir yanıt alınmayan kasalar bağlantısı kesilmiş olarak gösterilir.')+'</p>'
+      +(!loading&&!loadError?sales.map(function(cart){return '<article class="pos-audit-record"><strong>'+esc(cart.user_name)+' · Kasa '+esc(cart.terminal)+'</strong><small>'+esc(cart.updated_at)+' · '+(cart.stale?'Bağlantı kesildi — son alınan sepet':cart.state==='completed'?'Satış tamamlandı':cart.items.length?'Aktif sepet':'Sepet boş')+'</small><ul>'+cart.items.map(function(item){return '<li>'+esc(item.name)+' · '+esc(item.quantity)+' × '+money(item.unit_price)+' = '+money(item.line_total)+'</li>';}).join('')+'</ul><p>İndirim: '+money(cart.discount_amount)+' · Toplam: '+money(cart.grand_total)+'</p></article>';}).join('')||'<p class="pos-history-message">Henüz bağlanan kasa yok.</p>':'');
+  }
   function render(){
+    if(view==='live_carts'){renderLive();return;}
     if(view==='cancelled_sales'||view==='removed_cart_items'){renderAudit();return;}
     if(view==='recent') ensureActive();
     var s=summary();
@@ -205,7 +210,7 @@
     sales=[];
     render();
     var query=view!=='recent'?'&date='+encodeURIComponent(selectedDate):'';
-    var action=view==='cancelled_sales'||view==='removed_cart_items'?view:'sales';
+    var action=view==='live_carts'||view==='cancelled_sales'||view==='removed_cart_items'?view:'sales';
     fetch(api+'?action='+action+query+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(r){if(!r.ok) throw new Error('Satış geçmişi alınamadı.');return r.json();})
       .then(function(data){
@@ -238,7 +243,7 @@
     if(viewButton){
       var next=viewButton.getAttribute('data-history-view');
       if(next===view) return;
-      if(next!=='recent'&&next!=='past'&&(!canAudit||(next!=='cancelled_sales'&&next!=='removed_cart_items'))) return;
+      if(next!=='recent'&&next!=='past'&&(!canAudit||(next!=='live_carts'&&next!=='cancelled_sales'&&next!=='removed_cart_items'))) return;
       view=next;
       expanded=true;
       load();
@@ -297,4 +302,5 @@
 
   load();
   loadCashLeft();
+  setInterval(function(){if(view==='live_carts'&&!loading&&!document.hidden)load();},3000);
 })();
