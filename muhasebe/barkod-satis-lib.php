@@ -401,3 +401,44 @@ function pos_sales_on_date(string $date): array
     $stmt->execute([$date]);
     return $stmt->fetchAll() ?: [];
 }
+
+/** Restricted history: sale date for cancelled receipts, event date for cart removals. */
+function pos_history_audit(string $action, string $date): array
+{
+    if (!pos_can_delete_sales()) throw new RuntimeException('Bu kayıtları yalnızca Fatih kullanıcısı görebilir.');
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date) throw new InvalidArgumentException('Geçerli bir tarih seçin.');
+    pos_db_ensure();
+    if ($action === 'cancelled_sales') {
+        $stmt = db()->prepare("SELECT s.*, u.display_name AS user_name,
+            a.username AS cancelled_by, a.created_at AS cancelled_at
+            FROM pos_sales s LEFT JOIN users u ON u.id=s.created_by
+            LEFT JOIN audit_logs a ON a.id=(SELECT MAX(al.id) FROM audit_logs al
+                WHERE al.entity_type='pos_sale' AND al.entity_id=s.id AND al.action='silindi')
+            WHERE s.is_cancelled=1 AND s.sale_date=? ORDER BY s.sale_time DESC,s.id DESC");
+        $stmt->execute([$date]);
+        $sales = $stmt->fetchAll() ?: [];
+        $items = db()->prepare("SELECT i.* FROM pos_sale_items i JOIN pos_sales s ON s.id=i.sale_id
+            WHERE s.is_cancelled=1 AND s.sale_date=? ORDER BY i.id ASC");
+        $items->execute([$date]);
+        $bySale = [];
+        foreach ($items->fetchAll() ?: [] as $item) $bySale[(int)$item['sale_id']][] = $item;
+        foreach ($sales as &$sale) $sale['items'] = $bySale[(int)$sale['id']] ?? [];
+        unset($sale);
+        return $sales;
+    }
+    if ($action !== 'removed_cart_items') throw new InvalidArgumentException('Geçersiz geçmiş işlemi.');
+    $stmt = db()->prepare("SELECT id,username,action,created_at,new_value FROM audit_logs
+        WHERE entity_type='pos_cart' AND action IN ('urun_cikarildi','sepet_temizlendi')
+        AND created_at>=? AND created_at<? ORDER BY created_at DESC,id DESC");
+    $stmt->execute([$date . ' 00:00:00', $parsed->modify('+1 day')->format('Y-m-d') . ' 00:00:00']);
+    $events = $stmt->fetchAll() ?: [];
+    foreach ($events as &$event) {
+        $data = json_decode((string)$event['new_value'], true);
+        $event['items'] = is_array($data['items'] ?? null) ? $data['items'] : [];
+        $event['items_total'] = array_sum(array_map(static function ($item) { return (float)($item['line_total'] ?? 0); }, $event['items']));
+        unset($event['new_value']);
+    }
+    unset($event);
+    return $events;
+}

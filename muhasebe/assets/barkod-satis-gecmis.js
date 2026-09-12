@@ -11,6 +11,7 @@
   var active='cash';
   var expanded=false;
   var sales=[];
+  var canAudit=root.dataset.historyAudit==='1';
   var view='recent';
   var selectedDate=root.dataset.today||new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Istanbul'}).format(new Date());
   var requestId=0;
@@ -28,6 +29,7 @@
     +'@media(max-width:980px){.pos-history-cash-grid{grid-template-columns:1fr}}@media(max-width:680px){.pos-history-toggle-inner{padding:14px}.pos-history-summary{display:grid;grid-template-columns:1fr}.pos-history-summary button{width:100%;min-width:0}.pos-history-item{align-items:stretch;flex-direction:column}.pos-history-actions{padding:0 10px 10px}.pos-history-actions button{flex:1}.pos-cash-left-entry{grid-template-columns:1fr}.pos-cash-left-entry button{width:100%}}';
   style.textContent+='.pos-history-views{display:flex;gap:8px;flex-wrap:wrap;padding:14px}.pos-history-views button{padding:10px 14px;border:1px solid #d9cdbf;border-radius:12px;background:#fff;color:#16482e;cursor:pointer;font-weight:800}.pos-history-views button[aria-pressed="true"]{background:#16482e;color:#fff}.pos-history-date{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 14px 14px}.pos-history-date input{padding:8px;border:1px solid #d9cdbf;border-radius:8px}.pos-history-message{padding:14px}';
   style.textContent+='.pos-history-total{display:grid;gap:4px;padding:9px 11px;border:1px solid #e1d6c8;border-radius:14px;background:#fff;color:#16482e;font-size:13px}.pos-history-total small{font-size:10px;color:#7d6f61}';
+  style.textContent+='.pos-audit-record{margin:10px 14px;padding:12px;border:1px solid #e1d6c8;border-radius:12px;overflow-wrap:anywhere}.pos-audit-record summary{cursor:pointer}.pos-audit-record small{display:block;margin-top:6px;color:#7d6f61}.pos-audit-record li{margin:8px 0}.pos-audit-record p{line-height:1.6}';
   document.head.appendChild(style);
 
   var cashGrid=document.createElement('div');
@@ -98,7 +100,30 @@
       +'<small>'+data.count+' satış</small>'
       +'</'+tag+'>';
   }
+  function viewTabs(){
+    var labels={recent:'Son Satışlar',past:'Geçmiş Günler'};
+    if(canAudit){labels.cancelled_sales='İptal Edilen Satışlar';labels.removed_cart_items='Sepetten Silinen Ürünler';}
+    return '<div class="pos-history-views" aria-label="Satış geçmişi">'+Object.keys(labels).map(function(key){
+      return '<button type="button" data-history-view="'+key+'" aria-pressed="'+(view===key)+'">'+labels[key]+'</button>';
+    }).join('')+'</div>';
+  }
+  function renderAudit(){
+    var cancelled=view==='cancelled_sales';
+    var rows=sales.map(function(record){
+      var items=Array.isArray(record.items)?record.items:[];
+      var title=cancelled?(record.receipt_no||'POS #'+record.id):(record.action==='sepet_temizlendi'?'Sepet temizlendi':'Ürün sepetten çıkarıldı');
+      var meta=cancelled?'Satış: '+dateTr(record.sale_date)+' '+(record.sale_time||'')+' · İptal: '+(record.cancelled_at||'Kayıt yok')+' · '+(record.cancelled_by||'Kullanıcı kaydı yok'):(record.created_at||'')+' · '+(record.username||'Kullanıcı kaydı yok');
+      var details=items.map(function(item){return '<li><strong>'+esc(item.product_name||item.name||'Ürün')+'</strong> · '+esc(item.quantity)+' × '+money(item.unit_price)+' = '+money(item.line_total)+'</li>';}).join('');
+      return '<details class="pos-audit-record"><summary><strong>'+esc(title)+'</strong> · '+money(cancelled?record.grand_total:record.items_total)+'<small>'+esc(meta)+'</small></summary>'
+        +'<ul>'+(details||'<li>Ürün ayrıntısı kaydı bulunamadı.</li>')+'</ul>'
+        +(cancelled?'<p>Müşteri: '+esc(record.customer_name||'Perakende Müşteri')+' · Satışı yapan: '+esc(record.user_name||'Kayıt yok')+'</p><p>Ara toplam: '+money(record.subtotal)+' · İndirim: '+money(record.discount_amount)+' · Ödeme: '+esc(methodLabel(record.payment_method))+' · Toplam: '+money(record.grand_total)+'</p>':'<p>Silinen ürünlerin toplamı: '+money(record.items_total)+'</p>')+'</details>';
+    }).join('');
+    section.innerHTML=viewTabs()+'<label class="pos-history-date">'+(cancelled?'Satış tarihi':'İşlem tarihi')+' <input type="date" data-history-date value="'+esc(selectedDate)+'"></label>'
+      +'<div class="pos-history-message" role="status">'+(loading?'Kayıtlar yükleniyor…':loadError?esc(loadError)+' <button type="button" data-history-retry>Tekrar dene</button>':sales.length+' kayıt')+'</div>'
+      +(!loading&&!loadError?(rows||'<p class="pos-history-message">Seçilen gün için kayıt yok.</p>'):'');
+  }
   function render(){
+    if(view==='cancelled_sales'||view==='removed_cart_items'){renderAudit();return;}
     if(view==='recent') ensureActive();
     var s=summary();
     var tabs=''
@@ -127,7 +152,7 @@
 
     var allTotal=s.cash.total+s.card.total+s.credit.total;
     section.innerHTML=''
-      +'<div class="pos-history-views" aria-label="Satış geçmişi"><button type="button" data-history-view="recent" aria-pressed="'+(view==='recent')+'">Son Satışlar</button><button type="button" data-history-view="past" aria-pressed="'+(view==='past')+'">Geçmiş Günler</button></div>'
+      +viewTabs()
       +(view==='past'?'<label class="pos-history-date">Satış tarihi <input type="date" data-history-date value="'+esc(selectedDate)+'"></label>':'')
       +'<button type="button" class="pos-history-toggle" data-history-toggle aria-expanded="'+(expanded?'true':'false')+'">'
       +'<span class="pos-history-toggle-inner"><span class="pos-history-toggle-title"><h3>'+(view==='past'?dateTr(selectedDate)+' Satışları':'Son Satışlar')+'</h3><span>'+(loading?'Yükleniyor…':loadError?'Satışlar alınamadı':sales.length+' satış · Toplam '+money(allTotal))+' · Tıklayıp aç</span></span><span class="pos-history-chevron">⌄</span></span>'
@@ -179,8 +204,9 @@
     loadError='';
     sales=[];
     render();
-    var query=view==='past'?'&date='+encodeURIComponent(selectedDate):'';
-    fetch(api+'?action=sales'+query+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+    var query=view!=='recent'?'&date='+encodeURIComponent(selectedDate):'';
+    var action=view==='cancelled_sales'||view==='removed_cart_items'?view:'sales';
+    fetch(api+'?action='+action+query+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(r){if(!r.ok) throw new Error('Satış geçmişi alınamadı.');return r.json();})
       .then(function(data){
         if(id!==requestId) return;
@@ -212,6 +238,7 @@
     if(viewButton){
       var next=viewButton.getAttribute('data-history-view');
       if(next===view) return;
+      if(next!=='recent'&&next!=='past'&&(!canAudit||(next!=='cancelled_sales'&&next!=='removed_cart_items'))) return;
       view=next;
       expanded=true;
       load();

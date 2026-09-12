@@ -30,7 +30,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 @media(min-width:1280px){.pos-checkout-slot,.pos-checkout-slot.is-locked{position:static!important;align-self:stretch;min-width:0}.pos-checkout-slot>.pos-checkout{position:sticky!important;top:18px!important;z-index:5;align-self:start!important;width:100%}}
 @media(max-width:1279px){.pos-checkout-slot,.pos-checkout-slot.is-locked{position:static!important;grid-row:2}.pos-checkout-slot>.pos-checkout{position:static!important;top:auto!important}}
 </style>
-<div class="pos-shell" data-pos-root data-today="<?php echo e(date('Y-m-d')); ?>" data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
+<div class="pos-shell" data-pos-root data-history-audit="<?php echo $canDeleteSales ? '1' : '0'; ?>" data-today="<?php echo e(date('Y-m-d')); ?>" data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <div class="pos-price-check" data-price-check hidden role="dialog" aria-modal="true" aria-labelledby="posPriceCheckTitle">
     <div class="pos-price-check-card">
       <div class="pos-price-check-head"><div><span class="pos-kicker">HIZLI SORGULAMA</span><h3 id="posPriceCheckTitle">Fiyat Bak</h3></div><button type="button" data-price-check-close aria-label="Kapat">×</button></div>
@@ -125,6 +125,6 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/barkod-canli-arama.js?v=8"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>
-<script src="assets/barkod-satis-gecmis.js?v=6"></script>
+<script src="assets/barkod-satis-gecmis.js?v=7"></script>
 <script src="assets/barkod-pos-hizli.js?v=4"></script>
 <?php page_footer(); ?>
