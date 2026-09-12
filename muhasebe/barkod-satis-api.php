@@ -32,7 +32,12 @@ try {
             $product = pos_product_by_barcode((string)($_GET['barcode'] ?? ''));
             pos_json(['ok'=>true, 'product'=>$product]);
         }
-        if ($action === 'sales') pos_json(['ok'=>true, 'sales'=>pos_recent_sales()]);
+        if ($action === 'sales') {
+            $sales = array_key_exists('date', $_GET)
+                ? pos_sales_on_date(is_string($_GET['date']) ? $_GET['date'] : '')
+                : pos_recent_sales();
+            pos_json(['ok'=>true, 'sales'=>$sales]);
+        }
         pos_json(['ok'=>true, 'products'=>pos_products((string)($_GET['q'] ?? ''))]);
     }
 

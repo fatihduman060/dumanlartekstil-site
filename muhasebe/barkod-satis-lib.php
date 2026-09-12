@@ -383,3 +383,21 @@ function pos_recent_sales(int $limit = 30): array
     $stmt->execute([date('Y-m-d')]);
     return $stmt->fetchAll() ?: [];
 }
+
+/** All non-cancelled receipts for one calendar day, without the recent-list cap. */
+function pos_sales_on_date(string $date): array
+{
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+        throw new InvalidArgumentException('Geçerli bir satış tarihi seçin.');
+    }
+    pos_db_ensure();
+    $stmt = db()->prepare("SELECT s.*, c.name AS cari_name, p.full_name AS credit_person_name
+        FROM pos_sales s
+        LEFT JOIN cariler c ON c.id=s.cari_id
+        LEFT JOIN store_credit_people p ON p.id=s.credit_person_id
+        WHERE s.is_cancelled=0 AND s.sale_date=?
+        ORDER BY s.sale_time DESC,s.id DESC");
+    $stmt->execute([$date]);
+    return $stmt->fetchAll() ?: [];
+}
