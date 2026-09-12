@@ -10,7 +10,7 @@ pos_db_ensure();
 ensure_column(db(), 'pos_products', 'variant_name', 'TEXT');
 $products = pos_products();
 $creditPeople = pos_credit_people();
-$recentSales = pos_recent_sales(20);
+$recentSales = pos_recent_sales();
 $canDeleteSales = pos_can_delete_sales();
 page_header('Barkodlu Satış', 'barkod_satis');
 ?>
