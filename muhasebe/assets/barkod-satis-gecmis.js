@@ -115,6 +115,7 @@
       var meta=cancelled?'Satış: '+dateTr(record.sale_date)+' '+(record.sale_time||'')+' · İptal: '+(record.cancelled_at||'Kayıt yok')+' · '+(record.cancelled_by||'Kullanıcı kaydı yok'):(record.created_at||'')+' · '+(record.username||'Kullanıcı kaydı yok');
       var details=items.map(function(item){return '<li><strong>'+esc(item.product_name||item.name||'Ürün')+'</strong> · '+esc(item.quantity)+' × '+money(item.unit_price)+' = '+money(item.line_total)+'</li>';}).join('');
       return '<details class="pos-audit-record"><summary><strong>'+esc(title)+'</strong> · '+money(cancelled?record.grand_total:record.items_total)+'<small>'+esc(meta)+'</small></summary>'
+        +(cancelled?'':'<p><strong>Silme nedeni / Açıklama:</strong> '+esc(record.removal_reason||'Açıklama kaydı yok.')+'</p>')
         +'<ul>'+(details||'<li>Ürün ayrıntısı kaydı bulunamadı.</li>')+'</ul>'
         +(cancelled?'<p>Müşteri: '+esc(record.customer_name||'Perakende Müşteri')+' · Satışı yapan: '+esc(record.user_name||'Kayıt yok')+'</p><p>Ara toplam: '+money(record.subtotal)+' · İndirim: '+money(record.discount_amount)+' · Ödeme: '+esc(methodLabel(record.payment_method))+' · Toplam: '+money(record.grand_total)+'</p>':'<p>Silinen ürünlerin toplamı: '+money(record.items_total)+'</p>')+'</details>';
     }).join('');
