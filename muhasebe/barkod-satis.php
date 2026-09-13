@@ -66,6 +66,16 @@ page_header('Barkodlu Satış', 'barkod_satis');
       <p class="pos-status" data-pos-status></p>
     </aside>
   </div>
+  <div class="pos-payment-modal" data-pos-removal-modal hidden role="dialog" aria-modal="true" aria-labelledby="posRemovalTitle">
+    <div class="pos-payment-dialog">
+      <h3 id="posRemovalTitle">Ürünü sepetten sil</h3>
+      <p data-pos-removal-product></p>
+      <label class="pos-cari"><span>Silme nedeni / Açıklama</span><textarea data-pos-removal-reason rows="3" aria-describedby="posRemovalStatus"></textarea></label>
+      <p class="pos-status" id="posRemovalStatus" data-pos-removal-status role="alert"></p>
+      <button type="button" class="btn btn-primary" data-pos-removal-confirm>Ürünü Sil</button>
+      <button type="button" class="btn btn-secondary" data-pos-removal-cancel>Vazgeç</button>
+    </div>
+  </div>
   <div class="pos-payment-modal" data-pos-payment-modal hidden role="dialog" aria-modal="true" aria-labelledby="posPaymentTitle">
     <div class="pos-payment-dialog">
       <div class="pos-payment-head"><div><span class="pos-kicker">SATIŞI TAMAMLA</span><h3 id="posPaymentTitle">Ödeme şeklini seçin</h3></div><button type="button" class="pos-payment-close" data-pos-payment-close aria-label="Kapat">×</button></div>
@@ -122,7 +132,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
 <script src="assets/barkod-canli-sepet.js?v=1"></script>
-<script src="assets/barkod-satis.js?v=27"></script>
+<script src="assets/barkod-satis.js?v=28"></script>
 <script src="assets/barkod-canli-arama.js?v=8"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>

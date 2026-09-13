@@ -101,7 +101,38 @@
   function logCartEvent(eventType,items,reason){
     return fetch(api,{method:'POST',body:cartEventPayload(eventType,items,reason),credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(!d.ok)throw new Error(d.error||'Sepet işlemi kaydedilemedi.');return d;});
   }
-  cartBox.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;var i=Number(b.dataset.minus||b.dataset.plus||b.dataset.remove);if(b.hasAttribute('data-minus'))cart[i].quantity=Math.max(1,cart[i].quantity-1);if(b.hasAttribute('data-plus'))cart[i].quantity+=1;if(b.hasAttribute('data-remove')){var reason=window.prompt('Silme nedeni / Açıklama','');if(reason===null)return;reason=reason.trim();if(Array.from(reason).length<6){status.textContent='Silme nedeni en az 6 karakter olmalıdır.';window.alert(status.textContent);return;}var snapshot=[cart[i]];logCartEvent('item_removed',snapshot,reason).catch(function(error){status.textContent='Ürün çıkarıldı; denetim kaydı alınamadı: '+error.message;});cart.splice(i,1);}render();});
+  var removalModal=root.querySelector('[data-pos-removal-modal]'),removalReason=root.querySelector('[data-pos-removal-reason]'),removalStatus=root.querySelector('[data-pos-removal-status]'),removalConfirm=root.querySelector('[data-pos-removal-confirm]'),removalCancel=root.querySelector('[data-pos-removal-cancel]'),removalItem=null;
+  function closeRemoval(){removalModal.hidden=true;removalItem=null;scan.focus();}
+  removalCancel.onclick=closeRemoval;
+  removalModal.addEventListener('click',function(e){if(e.target===removalModal)closeRemoval();});
+  document.addEventListener('keydown',function(e){
+    if(removalModal.hidden)return;
+    if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();closeRemoval();}
+    if(/^F[0-9]+$/.test(e.key)){e.preventDefault();e.stopImmediatePropagation();}
+    if(e.key==='Tab'){
+      if(e.shiftKey&&document.activeElement===removalReason){e.preventDefault();removalCancel.focus();}
+      else if(!e.shiftKey&&document.activeElement===removalCancel){e.preventDefault();removalReason.focus();}
+    }
+  },true);
+  removalConfirm.onclick=function(){
+    var reason=removalReason.value.trim();
+    if(Array.from(reason).length<6){removalStatus.textContent='Silme nedeni en az 6 karakter olmalıdır.';removalReason.focus();return;}
+    var i=cart.indexOf(removalItem);if(i<0){closeRemoval();return;}
+    logCartEvent('item_removed',[removalItem],reason).catch(function(error){status.textContent='Ürün çıkarıldı; denetim kaydı alınamadı: '+error.message;});
+    cart.splice(i,1);render();closeRemoval();
+  };
+  cartBox.addEventListener('click',function(e){
+    var b=e.target.closest('button');if(!b)return;
+    var i=Number(b.dataset.minus||b.dataset.plus||b.dataset.remove);
+    if(b.hasAttribute('data-minus'))cart[i].quantity=Math.max(1,cart[i].quantity-1);
+    if(b.hasAttribute('data-plus'))cart[i].quantity+=1;
+    if(b.hasAttribute('data-remove')){
+      removalItem=cart[i];removalReason.value='';removalStatus.textContent='';
+      root.querySelector('[data-pos-removal-product]').textContent=productName(removalItem);
+      removalModal.hidden=false;removalReason.focus();return;
+    }
+    render();
+  });
   cartBox.addEventListener('change',function(e){if(!e.target.hasAttribute('data-qty'))return;var i=Number(e.target.dataset.qty);cart[i].quantity=Math.max(.01,Number(e.target.value||1));render();});
   discount.addEventListener('input',render);root.querySelector('[data-pos-clear]').onclick=function(){if(!cart.length||!confirm('Sepet temizlensin mi? Bu işlem tarih, saat, kullanıcı, ürünler ve toplam tutarla denetim kaydına yazılacaktır.'))return;var snapshot=cart.slice(),button=this;button.disabled=true;status.textContent='Sepet temizliği kaydediliyor…';logCartEvent('cart_cleared',snapshot).then(function(d){status.textContent=d.message;}).catch(function(error){status.textContent='Sepet temizlendi; denetim kaydı alınamadı: '+error.message;}).finally(function(){cart=[];discount.value=0;render();button.disabled=false;scan.focus();});};
   root.querySelectorAll('input[name="pos_payment"]').forEach(function(r){r.addEventListener('change',function(){root.querySelector('[data-pos-person-wrap]').hidden=this.value!=='credit';var customer=root.querySelector('[data-pos-customer-name]');if(customer)customer.textContent=this.value==='credit'?'Veresiye Müşterisi':'Perakende Müşteri';var paymentMessage=root.querySelector('[data-pos-payment-status]');if(paymentMessage)paymentMessage.textContent='';});});
