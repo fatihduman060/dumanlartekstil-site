@@ -1,7 +1,7 @@
 (function(){
   'use strict';
   if(!/\/dashboard\.php$/i.test(location.pathname)) return;
-  var attemptKey='bayrak250DashboardRepairAttemptV3';
+  var attemptKey='bayrak250DashboardCleanupAttemptV4';
   if(sessionStorage.getItem(attemptKey)==='1') return;
   sessionStorage.setItem(attemptKey,'1');
 
@@ -18,15 +18,15 @@
         body:body.toString()
       });
     })
-    .then(function(r){return r.json().catch(function(){return {ok:false,error:'Bayrak Gross çek onarımında sunucu cevabı okunamadı.'};});})
+    .then(function(r){return r.json().catch(function(){return {ok:false,error:'Bayrak Gross çek temizliğinde sunucu cevabı okunamadı.'};});})
     .then(function(d){
-      if(!d||!d.ok) throw new Error((d&&d.error)||'Bayrak Gross çek onarımı çalışmadı.');
-      if(d.repaired){
+      if(!d||!d.ok) throw new Error((d&&d.error)||'Bayrak Gross çek temizliği çalışmadı.');
+      if(d.deleted){
         location.reload();
         return;
       }
       if(d.needs_review){
-        console.warn('Bayrak Gross 250.000 TL çek otomatik onarımı güvenlik nedeniyle durdu.',d);
+        console.warn('Bayrak Gross 250.000 TL çek temizliği güvenlik nedeniyle durdu.',d);
       }
     })
     .catch(function(error){
