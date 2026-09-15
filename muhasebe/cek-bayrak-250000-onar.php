@@ -14,9 +14,60 @@ function bayrak_cek_json(array $payload, int $status = 200): void
     exit;
 }
 
+function bayrak_norm(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') return '';
+    return mb_strtolower($value, 'UTF-8');
+}
+
+function bayrak_same_physical_check(array $candidate, array $active): bool
+{
+    $candidateNo = trim((string)($candidate['check_no'] ?? ''));
+    $activeNo = trim((string)($active['check_no'] ?? ''));
+    if ($candidateNo !== '' && $activeNo !== '' && $candidateNo === $activeNo) return true;
+
+    $candidateDoc = trim((string)($candidate['document_path'] ?? ''));
+    $activeDoc = trim((string)($active['document_path'] ?? ''));
+    if ($candidateDoc !== '' && $activeDoc !== '' && $candidateDoc === $activeDoc) return true;
+
+    return false;
+}
+
+function bayrak_candidate_score(array $candidate, array $movement): int
+{
+    $score = 0;
+    $movementId = (int)($movement['id'] ?? 0);
+    if ((int)($candidate['movement_id'] ?? 0) === $movementId && $movementId > 0) $score += 120;
+
+    $candidateDoc = trim((string)($candidate['document_path'] ?? ''));
+    $movementDoc = trim((string)($movement['document_path'] ?? ''));
+    if ($candidateDoc !== '' && $movementDoc !== '' && $candidateDoc === $movementDoc) $score += 80;
+    elseif ($candidateDoc !== '') $score += 20;
+
+    $candidateNo = trim((string)($candidate['check_no'] ?? ''));
+    $movementDescription = bayrak_norm((string)($movement['description'] ?? ''));
+    if ($candidateNo !== '' && $movementDescription !== '' && mb_strpos($movementDescription, bayrak_norm($candidateNo)) !== false) $score += 55;
+    elseif ($candidateNo !== '') $score += 12;
+
+    $candidateDescription = bayrak_norm((string)($candidate['description'] ?? ''));
+    if ($candidateDescription !== '' && $movementDescription !== ''
+        && (mb_strpos($movementDescription, $candidateDescription) !== false
+            || mb_strpos($candidateDescription, $movementDescription) !== false)) {
+        $score += 18;
+    }
+
+    $reason = (string)($candidate['cancel_reason'] ?? '');
+    if (mb_strpos(bayrak_norm($reason), 'otomatik mükerrer çek birleştirildi') !== false) $score += 15;
+
+    if (trim((string)($candidate['bank_name'] ?? '')) !== '') $score += 3;
+    if (trim((string)($candidate['drawer'] ?? '')) !== '') $score += 3;
+    return $score;
+}
+
 try {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-        throw new RuntimeException('Bu onarım yalnız Çekler ekranından çalıştırılabilir.');
+        throw new RuntimeException('Bu onarım yalnız sistem içinden çalıştırılabilir.');
     }
     if (!verify_csrf($_POST['csrf_token'] ?? null)) {
         throw new RuntimeException('Oturum doğrulaması yenilenmeli. Sayfayı yenileyin.');
@@ -53,100 +104,165 @@ try {
         ]);
     }
 
-    if (count($candidates) !== 1) {
+    $cariIds = [];
+    foreach ($candidates as $candidate) {
+        $cid = (int)($candidate['cari_id'] ?? 0);
+        if ($cid > 0) $cariIds[$cid] = true;
+    }
+    if (!$cariIds) {
+        bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'Bayrak Gross iptal çeklerinde cari bağlantısı bulunamadı.']);
+    }
+
+    $restorable = [];
+    $diagnostics = [];
+
+    foreach ($candidates as $candidate) {
+        $checkId = (int)$candidate['id'];
+        $cariId = (int)($candidate['cari_id'] ?? 0);
+        if ($cariId <= 0) continue;
+
+        $aStmt = $pdo->prepare("SELECT * FROM checks
+            WHERE COALESCE(is_cancelled,0)=0 AND cari_id=? AND direction='alinacak'
+              AND due_date='2026-09-19' AND ABS(amount-250000)<0.01
+            ORDER BY id ASC");
+        $aStmt->execute([$cariId]);
+        $activeChecks = $aStmt->fetchAll() ?: [];
+
+        $physicalConflict = false;
+        foreach ($activeChecks as $activeCheck) {
+            if (bayrak_same_physical_check($candidate, $activeCheck)) {
+                $physicalConflict = true;
+                break;
+            }
+        }
+
+        $mStmt = $pdo->prepare("SELECT * FROM movements
+            WHERE COALESCE(is_cancelled,0)=0 AND cari_id=? AND movement_type='alacak'
+              AND due_date='2026-09-19' AND ABS(amount-250000)<0.01
+              AND COALESCE(is_check_adjustment,0)=0
+              AND COALESCE(is_check_unpaid_adjustment,0)=0
+            ORDER BY id ASC");
+        $mStmt->execute([$cariId]);
+        $activeMovements = $mStmt->fetchAll() ?: [];
+
+        $usedMovementIds = [];
+        foreach ($activeChecks as $activeCheck) {
+            $mid = (int)($activeCheck['movement_id'] ?? 0);
+            if ($mid > 0) $usedMovementIds[$mid] = true;
+        }
+
+        $unclaimed = [];
+        foreach ($activeMovements as $movement) {
+            $mid = (int)$movement['id'];
+            if (!isset($usedMovementIds[$mid])) $unclaimed[] = $movement;
+        }
+
+        $chosenMovement = null;
+        $targetMovementId = (int)($candidate['movement_id'] ?? 0);
+        if ($targetMovementId > 0) {
+            foreach ($unclaimed as $movement) {
+                if ((int)$movement['id'] === $targetMovementId) {
+                    $chosenMovement = $movement;
+                    break;
+                }
+            }
+        }
+
+        if (!$chosenMovement) {
+            $doc = trim((string)($candidate['document_path'] ?? ''));
+            if ($doc !== '') {
+                $matches = array_values(array_filter($unclaimed, fn($movement) => trim((string)($movement['document_path'] ?? '')) === $doc));
+                if (count($matches) === 1) $chosenMovement = $matches[0];
+            }
+        }
+
+        if (!$chosenMovement) {
+            $checkNo = trim((string)($candidate['check_no'] ?? ''));
+            if ($checkNo !== '') {
+                $needle = bayrak_norm($checkNo);
+                $matches = array_values(array_filter($unclaimed, function($movement) use ($needle) {
+                    return mb_strpos(bayrak_norm((string)($movement['description'] ?? '')), $needle) !== false;
+                }));
+                if (count($matches) === 1) $chosenMovement = $matches[0];
+            }
+        }
+
+        if (!$chosenMovement && count($unclaimed) === 1) {
+            $chosenMovement = $unclaimed[0];
+        }
+
+        $diagnostics[] = [
+            'check_id'=>$checkId,
+            'cari_id'=>$cariId,
+            'active_checks'=>count($activeChecks),
+            'active_movements'=>count($activeMovements),
+            'unclaimed_movements'=>count($unclaimed),
+            'physical_conflict'=>$physicalConflict,
+            'candidate_movement_id'=>$targetMovementId ?: null,
+            'chosen_movement_id'=>$chosenMovement ? (int)$chosenMovement['id'] : null,
+            'has_document'=>trim((string)($candidate['document_path'] ?? '')) !== '',
+            'check_no'=>trim((string)($candidate['check_no'] ?? '')),
+            'cancel_reason'=>(string)($candidate['cancel_reason'] ?? ''),
+        ];
+
+        if ($physicalConflict || !$chosenMovement) continue;
+
+        $restorable[] = [
+            'candidate'=>$candidate,
+            'movement'=>$chosenMovement,
+            'score'=>bayrak_candidate_score($candidate, $chosenMovement),
+        ];
+    }
+
+    if (!$restorable) {
         bayrak_cek_json([
             'ok'=>true,
             'repaired'=>false,
             'needs_review'=>true,
-            'message'=>'19.09.2026 / 250.000 TL Bayrak Gross için birden fazla iptal çek bulundu. Yanlış kaydı açmamak için otomatik işlem yapılmadı.',
+            'message'=>'Birden fazla iptal kayıt incelendi ancak aktif cari hareketiyle güvenli eşleşen çek bulunamadı. Finansal kayda dokunulmadı.',
             'cancelled_count'=>count($candidates),
+            'diagnostics'=>$diagnostics,
         ]);
     }
 
-    $target = $candidates[0];
-    $checkId = (int)$target['id'];
-    $cariId = (int)($target['cari_id'] ?? 0);
-    if ($cariId <= 0) {
-        bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'Bayrak Gross çek kaydında cari bağlantısı yok. Otomatik işlem yapılmadı.']);
+    // Birden fazla iptal satır aynı tek boştaki cari hareketine bağlanıyorsa bunlar aynı
+    // kaydın eski kopyalarıdır. En güçlü belge/çek no/hareket bağlantısı olan satırı seç.
+    $movementGroups = [];
+    foreach ($restorable as $item) {
+        $mid = (int)$item['movement']['id'];
+        $movementGroups[$mid][] = $item;
     }
 
-    // Aynı cari/vade/tutarda halen aktif olan çekleri bul.
-    $aStmt = $pdo->prepare("SELECT * FROM checks
-        WHERE id<>? AND COALESCE(is_cancelled,0)=0 AND cari_id=? AND direction='alinacak'
-          AND due_date='2026-09-19' AND ABS(amount-250000)<0.01
-        ORDER BY id ASC");
-    $aStmt->execute([$checkId, $cariId]);
-    $activeChecks = $aStmt->fetchAll() ?: [];
-
-    // Fiziksel olarak aynı çek olduğu açıkça görülüyorsa otomatik geri açma.
-    $targetNo = trim((string)($target['check_no'] ?? ''));
-    $targetDoc = trim((string)($target['document_path'] ?? ''));
-    foreach ($activeChecks as $activeCheck) {
-        $activeNo = trim((string)($activeCheck['check_no'] ?? ''));
-        $activeDoc = trim((string)($activeCheck['document_path'] ?? ''));
-        if ($targetNo !== '' && $activeNo !== '' && $targetNo === $activeNo) {
-            bayrak_cek_json([
-                'ok'=>true,'repaired'=>false,'needs_review'=>true,
-                'message'=>'İptal çek ile aktif çekin çek numarası aynı. Gerçek mükerrer olabileceği için otomatik geri açılmadı.',
-            ]);
-        }
-        if ($targetDoc !== '' && $activeDoc !== '' && $targetDoc === $activeDoc) {
-            bayrak_cek_json([
-                'ok'=>true,'repaired'=>false,'needs_review'=>true,
-                'message'=>'İptal çek ile aktif çek aynı çek görselini kullanıyor. Gerçek mükerrer olabileceği için otomatik geri açılmadı.',
-            ]);
-        }
-    }
-
-    // Finansal hareket tarafını kontrol et. Eski mükerrer birleştirme çekleri tek kayda indirirken
-    // cari hareketleri silmedi; bu yüzden ayrı gerçek çek için fazladan aktif hareket kalmış olmalı.
-    $mStmt = $pdo->prepare("SELECT * FROM movements
-        WHERE COALESCE(is_cancelled,0)=0 AND cari_id=? AND movement_type='alacak'
-          AND due_date='2026-09-19' AND ABS(amount-250000)<0.01
-          AND COALESCE(is_check_adjustment,0)=0
-          AND COALESCE(is_check_unpaid_adjustment,0)=0
-        ORDER BY id ASC");
-    $mStmt->execute([$cariId]);
-    $activeMovements = $mStmt->fetchAll() ?: [];
-
-    $usedMovementIds = [];
-    foreach ($activeChecks as $activeCheck) {
-        $mid = (int)($activeCheck['movement_id'] ?? 0);
-        if ($mid > 0) $usedMovementIds[$mid] = true;
-    }
-
-    $unclaimed = [];
-    foreach ($activeMovements as $movement) {
-        $mid = (int)$movement['id'];
-        if (!isset($usedMovementIds[$mid])) $unclaimed[] = $movement;
-    }
-
-    $targetMovementId = (int)($target['movement_id'] ?? 0);
-    $chosenMovement = null;
-    foreach ($unclaimed as $movement) {
-        if ((int)$movement['id'] === $targetMovementId) {
-            $chosenMovement = $movement;
-            break;
-        }
-    }
-    if (!$chosenMovement && count($unclaimed) === 1) {
-        $chosenMovement = $unclaimed[0];
-    }
-
-    if (!$chosenMovement) {
+    if (count($movementGroups) > 1) {
         bayrak_cek_json([
             'ok'=>true,
             'repaired'=>false,
             'needs_review'=>true,
-            'message'=>'Çek kaydı bulundu ancak cari bakiyede bu çeke ait ayrı ve boştaki aktif 250.000 TL hareket güvenle ayırt edilemedi. Otomatik işlem yapılmadı.',
-            'active_check_count'=>count($activeChecks),
-            'active_movement_count'=>count($activeMovements),
-            'unclaimed_movement_count'=>count($unclaimed),
-            'cancel_reason'=>(string)($target['cancel_reason'] ?? ''),
+            'message'=>'Birden fazla ayrı aktif 250.000 TL cari hareketi bulundu. Birden fazla gerçek çek olabileceği için otomatik seçim yapılmadı.',
+            'cancelled_count'=>count($candidates),
+            'restorable_count'=>count($restorable),
+            'movement_group_count'=>count($movementGroups),
+            'diagnostics'=>$diagnostics,
         ]);
     }
 
+    usort($restorable, function(array $a, array $b): int {
+        if ($a['score'] !== $b['score']) return $b['score'] <=> $a['score'];
+        $aDoc = trim((string)($a['candidate']['document_path'] ?? '')) !== '' ? 1 : 0;
+        $bDoc = trim((string)($b['candidate']['document_path'] ?? '')) !== '' ? 1 : 0;
+        if ($aDoc !== $bDoc) return $bDoc <=> $aDoc;
+        $aNo = trim((string)($a['candidate']['check_no'] ?? '')) !== '' ? 1 : 0;
+        $bNo = trim((string)($b['candidate']['check_no'] ?? '')) !== '' ? 1 : 0;
+        if ($aNo !== $bNo) return $bNo <=> $aNo;
+        return ((int)$b['candidate']['id']) <=> ((int)$a['candidate']['id']);
+    });
+
+    $winner = $restorable[0];
+    $target = $winner['candidate'];
+    $chosenMovement = $winner['movement'];
+    $checkId = (int)$target['id'];
     $movementId = (int)$chosenMovement['id'];
+
     $restoreStatus = 'bekliyor';
     $auditStmt = $pdo->prepare("SELECT old_value FROM audit_logs
         WHERE entity_type='cek' AND entity_id=? AND action='iptal'
@@ -177,9 +293,10 @@ try {
             'status'=>$restoreStatus,
             'movement_id'=>$movementId,
             'balance_changed'=>false,
-            'active_check_count_before'=>count($activeChecks),
-            'active_movement_count'=>count($activeMovements),
-            'source'=>'Bayrak Gross 250.000 / 19.09.2026 ayrı aktif hareket onarımı',
+            'cancelled_candidates'=>count($candidates),
+            'restorable_candidates'=>count($restorable),
+            'selection_score'=>(int)$winner['score'],
+            'source'=>'Bayrak Gross 250.000 / 19.09.2026 çoklu iptal güvenli onarım',
         ], (string)($target['cari_name'] ?? 'Bayrak Gross'));
         log_action('Otomatik mükerrer çek hatası onarıldı', '#'.$checkId.' '.(string)($target['cari_name'] ?? 'Bayrak Gross').' 250.000,00 / 19.09.2026');
 
@@ -195,7 +312,9 @@ try {
         'id'=>$checkId,
         'movement_id'=>$movementId,
         'status'=>$restoreStatus,
-        'message'=>'Bayrak Gross 250.000 TL çek yeniden aktif edildi. Mevcut ayrı cari hareketine bağlandı; cari bakiyesi ve banka/kasa değiştirilmedi.',
+        'cancelled_count'=>count($candidates),
+        'selected_score'=>(int)$winner['score'],
+        'message'=>'Bayrak Gross 250.000 TL çek yeniden aktif edildi. Aynı hareketin eski iptal kopyaları kapalı kaldı; cari bakiyesi ve banka/kasa değiştirilmedi.',
     ]);
 } catch (Throwable $e) {
     bayrak_cek_json(['ok'=>false,'error'=>$e->getMessage()], 422);
