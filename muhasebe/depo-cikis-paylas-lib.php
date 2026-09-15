@@ -2,6 +2,20 @@
 require_once __DIR__.'/depo-cikis-lib.php';
 require_once __DIR__.'/magaza-kullanici.php';
 
+// JPEG paylaşım modu yalnızca depo çıkış baskı sayfasında devreye girer.
+// Normal yazdır/PDF ekranının HTML'ini ve davranışını değiştirmez.
+if (basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) === 'depo-cikis-yazdir.php'
+    && (string)($_GET['share'] ?? '') === 'jpeg') {
+    ob_start(function ($html) {
+        $scripts = '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" referrerpolicy="no-referrer"></script>'
+            . '<script src="assets/depo-cikis-jpeg-paylas.js?v=1"></script>';
+        if (stripos($html, '</body>') !== false) {
+            return preg_replace('/<\/body>/i', $scripts . '</body>', $html, 1) ?? $html;
+        }
+        return $html . $scripts;
+    });
+}
+
 function depo_cikis_can_view(array $row): bool
 {
     return can_access_warehouse_dispatch()
