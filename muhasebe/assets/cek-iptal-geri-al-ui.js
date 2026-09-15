@@ -18,6 +18,44 @@
     var el=document.querySelector('input[name="csrf_token"]');
     return el ? el.value : '';
   }
+
+  function autoRepairBayrak(){
+    var token=csrf();
+    if(!token) return;
+    if(sessionStorage.getItem('bayrak250RepairRunning')==='1') return;
+    sessionStorage.setItem('bayrak250RepairRunning','1');
+
+    var body=new URLSearchParams();
+    body.set('csrf_token',token);
+    fetch('cek-bayrak-250000-onar.php',{
+      method:'POST',
+      credentials:'same-origin',
+      cache:'no-store',
+      headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+      body:body.toString()
+    })
+      .then(function(r){
+        return r.json().catch(function(){return {ok:false,error:'Bayrak Gross çek onarımında sunucu cevabı okunamadı.'};});
+      })
+      .then(function(d){
+        sessionStorage.removeItem('bayrak250RepairRunning');
+        if(!d||!d.ok) throw new Error((d&&d.error)||'Bayrak Gross çek onarımı çalışmadı.');
+        if(d.repaired){
+          sessionStorage.setItem('bayrak250RepairDone','1');
+          alert(d.message||'Bayrak Gross 250.000 TL çek güvenli şekilde yeniden aktif edildi.');
+          location.href='cekler.php?direction=alinacak';
+          return;
+        }
+        if(d.needs_review){
+          console.warn('Bayrak Gross çek otomatik onarımı durduruldu:',d.message||'Güvenlik kontrolü geçmedi.');
+        }
+      })
+      .catch(function(error){
+        sessionStorage.removeItem('bayrak250RepairRunning');
+        console.error(error);
+      });
+  }
+
   function addStyle(){
     if(document.getElementById('checkRestoreUiStyle')) return;
     var s=document.createElement('style');
@@ -26,6 +64,7 @@
     document.head.appendChild(s);
   }
   function enhance(){
+    autoRepairBayrak();
     var table=document.querySelector('.check-table');
     if(!table) return;
     addStyle();
