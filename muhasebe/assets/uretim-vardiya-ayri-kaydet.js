@@ -20,6 +20,7 @@
     button.setAttribute('data-bound','1');
     button.addEventListener('click', function(){
       var button = this;
+      if(card.dataset.entryDate && card.dataset.entryDate !== dateValue() && !confirm('Tarih değişti. Bu vardiyadaki değerler ' + dateValue() + ' tarihine kaydedilecek. Kontrol ettiniz mi?')) return;
       var body = new URLSearchParams();
       body.set('csrf_token', csrf());
       body.set('production_date', dateValue());

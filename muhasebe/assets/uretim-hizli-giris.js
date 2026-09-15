@@ -51,6 +51,7 @@
 
   function fillDay(section, day){
     ['gunduz','gece'].forEach(function(shift){
+      if (section.querySelector('[data-shift="'+shift+'"]').dataset.edited === '1') return;
       groups.forEach(function(group){
         var item = day && day[shift] && day[shift][group] ? day[shift][group] : null;
         var row = section.querySelector('[data-shift-row="'+shift+'-'+group+'"]');
@@ -92,10 +93,11 @@
   }
 
   function loadData(section){
+    var requestedDate = selectedDate();
     fetch('uretim-ozet.php?date=' + encodeURIComponent(selectedDate()), {credentials:'same-origin'})
       .then(function(response){ return response.json(); })
       .then(function(data){
-        if (!data || !data.ok) return;
+        if (!data || !data.ok || selectedDate() !== requestedDate) return;
         fillDay(section, data.day || {});
         renderReports(section, data);
       })
@@ -108,7 +110,8 @@
     var form = section.querySelector('[data-shift-form]');
     if (!form) return;
     section.setAttribute('data-ready','1');
-    form.addEventListener('input', function(){ recalc(form); });
+    section.querySelectorAll('[data-shift]').forEach(function(card){card.dataset.entryDate=selectedDate();});
+    form.addEventListener('input', function(event){ var card=event.target.closest('[data-shift]');if(card)card.dataset.edited='1';recalc(form); });
     loadData(section);
   }
 

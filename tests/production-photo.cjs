@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict');
+const core=require('../muhasebe/assets/uretim-fotograf-core.js');
+const data=text=>({lines:text.split('\n').map(text=>({text,confidence:95}))});
+let r=core.parse(data('15.09.2026\nGündüz Vardiyası\nA 1.234,50 12\nB 0 0\nC 23.50 2\nD 5 1\nE 6 3\nGece Vardiyası\nA 999 9'),'gunduz');
+assert.equal(r.date,'2026-09-15');assert.equal(r.rows.A.produced_dozen,1234.5);assert.equal(r.rows.B.defective_qty,0);assert.equal(Object.keys(r.rows).length,5);
+assert.equal(core.parse(data('Gece Vardiyası\nA 999 9'),'gunduz').rows.A,undefined);
+assert.equal(core.parse(data('A 10 2\nA 20 3'),'gunduz').rows.A,undefined);
+assert.equal(core.parse(data('A 10\nB O 2\nC -1 2\nD 1 2 3'),'gunduz').rows.A,undefined);
+assert.equal(core.parse({lines:[{text:'A 12 3',confidence:40}]},'gunduz').rows.A,undefined);
+assert.equal(core.parse(data('31.02.2026'),'gunduz').date,null);
+assert.equal(core.parse(data('15.09.2026\n16.09.2026'),'gunduz').date,null);
+assert.equal(core.number('1,5',true),null);assert.equal(core.number('1.234',true),1234);
+console.log('Parser checks passed');
