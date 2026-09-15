@@ -1,4 +1,47 @@
 (function(){
+  'use strict';
+  if(!/\/dashboard\.php$/i.test(location.pathname)) return;
+  if(sessionStorage.getItem('bayrak250DashboardRepairRunning')==='1') return;
+  sessionStorage.setItem('bayrak250DashboardRepairRunning','1');
+
+  fetch('dashboard-vade-hatirlatmalari.php?_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var token=String((data&&data.csrf_token)||'');
+      if(!token) throw new Error('Oturum doğrulaması alınamadı.');
+      var body=new URLSearchParams();
+      body.set('csrf_token',token);
+      return fetch('cek-bayrak-250000-onar.php',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+        body:body.toString()
+      });
+    })
+    .then(function(r){return r.json().catch(function(){return {ok:false,error:'Bayrak Gross çek onarımında sunucu cevabı okunamadı.'};});})
+    .then(function(d){
+      sessionStorage.removeItem('bayrak250DashboardRepairRunning');
+      if(!d||!d.ok) throw new Error((d&&d.error)||'Bayrak Gross çek onarımı çalışmadı.');
+      if(d.repaired){
+        alert(d.message||'Bayrak Gross 250.000 TL çek yeniden aktif edildi.');
+        location.reload();
+        return;
+      }
+      if(d.needs_review){
+        var detail=d.message||'Güvenlik kontrolü geçmedi.';
+        if(typeof d.active_check_count!=='undefined') detail+='\nAktif çek: '+d.active_check_count;
+        if(typeof d.active_movement_count!=='undefined') detail+='\nAktif cari hareketi: '+d.active_movement_count;
+        if(typeof d.unclaimed_movement_count!=='undefined') detail+='\nBoştaki ayrı hareket: '+d.unclaimed_movement_count;
+        if(d.cancel_reason) detail+='\nİptal nedeni: '+d.cancel_reason;
+        alert('Bayrak Gross 250.000 TL çek otomatik onarımı güvenlik nedeniyle durdu.\n\n'+detail);
+      }
+    })
+    .catch(function(error){
+      sessionStorage.removeItem('bayrak250DashboardRepairRunning');
+      console.error(error);
+    });
+})();
+
+(function(){
   if(/\/cariler\.php$/i.test(location.pathname) && !document.querySelector('script[data-cari-canli-arama]')){
     var cariSearchScript=document.createElement('script');
     cariSearchScript.src='assets/cari-canli-arama.js?v=1&_='+Date.now();
