@@ -37,6 +37,14 @@
     });
   }
 
+
+  if (!document.getElementById('check-main-image-style')) {
+    var checkImageStyle = document.createElement('style');
+    checkImageStyle.id = 'check-main-image-style';
+    checkImageStyle.textContent = '.check-main-image-upload{display:inline-flex}.check-main-image-picker{display:inline-flex;align-items:center;min-height:30px;border-radius:999px;padding:5px 9px;border:1px solid #e5dccf;background:#fff;color:#102818;text-decoration:none;font-size:11px;font-weight:900;cursor:pointer}.check-main-image-picker input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}';
+    document.head.appendChild(checkImageStyle);
+  }
+
   if (slug === 'cekler') {
     document.querySelectorAll('.row-actions a[href^="cekler.php?edit="]').forEach(function (editLink) {
       var match = editLink.getAttribute('href').match(/edit=([0-9]+)/);
@@ -181,6 +189,42 @@
       wa.textContent = 'WhatsApp ile ilet';
       wa.addEventListener('click', function () { shareDocumentImage(pdfUrl, offerNo, customer, wa, 'sipariş/teklif belgesini'); });
       pdfLink.insertAdjacentElement('afterend', wa);
+    });
+  }
+
+
+
+  if (slug === 'cekler') {
+    document.querySelectorAll('.row-links a[href^="cekler.php?"][href*="edit="]').forEach(function (editLink) {
+      var actions = editLink.closest('.row-links');
+      if (!actions || actions.querySelector('.check-main-image-link, .check-main-image-upload')) return;
+      var match = editLink.getAttribute('href').match(/[?&]edit=([0-9]+)/);
+      if (!match) return;
+      var checkId = match[1];
+      var row = editLink.closest('tr');
+      var csrf = row ? row.querySelector('input[name="csrf_token"]') : document.querySelector('input[name="csrf_token"]');
+      var existingMain = row ? row.querySelector('.doc-pills a[href^="cek-belge-indir.php?id="]') : null;
+      if (existingMain) {
+        var viewLink = document.createElement('a');
+        viewLink.href = 'cek-gorseli-goruntule.php?id=' + encodeURIComponent(checkId);
+        viewLink.target = '_blank';
+        viewLink.className = 'check-main-image-link';
+        viewLink.textContent = 'Çek görseli';
+        editLink.insertAdjacentElement('afterend', viewLink);
+        return;
+      }
+      if (!csrf) return;
+      var form = document.createElement('form');
+      form.method = 'post';
+      form.enctype = 'multipart/form-data';
+      form.action = 'cek-gorseli-yukle.php';
+      form.className = 'check-main-image-upload';
+      form.innerHTML = '<input type="hidden" name="csrf_token" value="' + csrf.value.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"><input type="hidden" name="id" value="' + checkId + '"><input type="hidden" name="back" value="' + (location.pathname.split('/').pop() + location.search).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"><label class="check-main-image-picker">Çek görseli<input name="document" type="file" accept="image/*,application/pdf"></label>';
+      var input = form.querySelector('input[type="file"]');
+      input.addEventListener('change', function () {
+        if (input.files && input.files.length) form.submit();
+      });
+      editLink.insertAdjacentElement('afterend', form);
     });
   }
 
