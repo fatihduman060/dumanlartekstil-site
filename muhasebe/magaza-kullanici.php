@@ -216,6 +216,8 @@ if (is_logged_in() && is_store_sales_user()) {
         'magaza-veresiye.php',
         'depo-cikis.php',
         'depo-cikis-yazdir.php',
+        'depo-cikis-pdf.php',
+        'depo-cikis-paylas.php',
         'logout.php',
         'index.php',
     ];
@@ -242,6 +244,8 @@ if (is_logged_in() && is_warehouse_user()) {
         'magaza-veresiye.php',
         'depo-cikis.php',
         'depo-cikis-yazdir.php',
+        'depo-cikis-pdf.php',
+        'depo-cikis-paylas.php',
         'logout.php',
         'index.php',
     ];

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__.'/depo-cikis-lib.php';
+require_once __DIR__.'/depo-cikis-paylas-lib.php';
 require_once __DIR__.'/magaza-kullanici.php';
 require_login();
 if(!can_access_warehouse_dispatch()) redirect('dashboard.php');
@@ -17,7 +17,7 @@ if(is_warehouse_user() && (int)($row['created_by']??0)!==(int)(current_user()['i
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{background:#e8e8e8;font:14px Arial,sans-serif;color:#102818}
-.bar{padding:12px;text-align:center;background:#102818}
+.bar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:12px;text-align:center;background:#102818}
 .bar button,.bar a{padding:9px 14px;border:0;border-radius:20px;background:#fff;color:#102818;text-decoration:none;font-weight:bold;cursor:pointer}
 .page{width:210mm;min-height:297mm;margin:12px auto;padding:10mm 12mm;background:#fff}
 .head{text-align:center;border-bottom:2px solid #b99245;padding-bottom:5mm;margin-bottom:5mm}
@@ -93,7 +93,8 @@ tr{break-inside:avoid;page-break-inside:avoid}
 </style>
 </head>
 <body>
-<div class="bar"><button type="button" onclick="window.print()">Yazdır / PDF</button> <a href="depo-cikis.php?edit=<?php echo e($row['id']); ?>">Düzenlemeye dön</a></div>
+<?php depo_cikis_share_form((int)$row['id']); ?>
+<div class="bar"><a target="_blank" rel="noopener noreferrer" href="depo-cikis-pdf.php?id=<?php echo e($row['id']); ?>">PDF görüntüle</a> <?php depo_cikis_share_button((int)$row['id']); ?> <button type="button" onclick="window.print()">Yazdır / PDF</button> <a href="depo-cikis.php?edit=<?php echo e($row['id']); ?>">Düzenlemeye dön</a></div>
 <main class="page" id="printPage">
   <header class="head">
     <img class="logo" src="assets/dumanlar-logo-arkaplansiz.png?v=20" alt="Dumanlar">
