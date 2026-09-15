@@ -45,13 +45,15 @@ function depo_cikis_shared_row(string $token): ?array
     return $row && hash_equals($share['fingerprint'],depo_cikis_fingerprint($row)) ? $row : null;
 }
 
+// Eski PDF-bağlantısı paylaşım formunu geriye dönük uyumluluk için tutuyoruz.
 function depo_cikis_share_form(int $id): void
 {
-    echo '<form id="wdShare'.$id.'" method="post" action="depo-cikis-paylas.php" target="_blank" rel="noopener noreferrer">'
+    echo '<form id="wdShare'.$id.'" method="post" action="depo-cikis-paylas.php" target="_blank" rel="noopener noreferrer" hidden>'
         .csrf_field().'<input type="hidden" name="id" value="'.$id.'"></form>';
 }
 
 function depo_cikis_share_button(int $id): void
 {
-    echo '<button type="submit" form="wdShare'.$id.'" title="Fişe özel PDF bağlantısı 7 gün geçerlidir; bağlantıyı alan kişi fişi açabilir.">WhatsApp ile paylaş</button>';
+    $href='depo-cikis-yazdir.php?id='.$id.'&share=jpeg';
+    echo '<a href="'.e($href).'" target="_blank" rel="noopener noreferrer" title="Fişi JPEG olarak hazırlar ve telefondaki paylaşım menüsünden WhatsApp ile göndermenizi sağlar.">WhatsApp ile paylaş</a>';
 }
