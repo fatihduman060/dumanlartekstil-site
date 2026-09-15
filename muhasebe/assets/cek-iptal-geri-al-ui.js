@@ -47,11 +47,18 @@
           return;
         }
         if(d.needs_review){
-          console.warn('Bayrak Gross çek otomatik onarımı durduruldu:',d.message||'Güvenlik kontrolü geçmedi.');
+          var detail=d.message||'Güvenlik kontrolü geçmedi.';
+          if(typeof d.active_check_count!=='undefined') detail+='\nAktif çek: '+d.active_check_count;
+          if(typeof d.active_movement_count!=='undefined') detail+='\nAktif cari hareketi: '+d.active_movement_count;
+          if(typeof d.unclaimed_movement_count!=='undefined') detail+='\nBoştaki ayrı hareket: '+d.unclaimed_movement_count;
+          if(d.cancel_reason) detail+='\nİptal nedeni: '+d.cancel_reason;
+          alert('Bayrak Gross 250.000 TL çek otomatik onarımı güvenlik nedeniyle durdu.\n\n'+detail);
+          console.warn('Bayrak Gross çek otomatik onarımı durduruldu:',d);
         }
       })
       .catch(function(error){
         sessionStorage.removeItem('bayrak250RepairRunning');
+        alert('Bayrak Gross 250.000 TL çek onarımı çalışırken hata oluştu:\n\n'+(error.message||error));
         console.error(error);
       });
   }
