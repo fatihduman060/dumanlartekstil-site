@@ -92,9 +92,10 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
   }
 
-  async function shareOfferImage(pdfUrl, offerNo, customer, button) {
+  async function shareDocumentImage(pdfUrl, docNo, customer, button, documentLabel) {
     var oldText = button.textContent;
     var iframe;
+    documentLabel = documentLabel || 'sipariş/teklif belgesini';
     try {
       button.disabled = true;
       button.textContent = 'Görüntü hazırlanıyor...';
@@ -140,10 +141,10 @@
       var blob = await canvasToBlob(canvas);
       if (!blob) throw new Error('Görüntü dosyası oluşturulamadı.');
 
-      var baseName = safeFileName((offerNo ? offerNo + '-' : '') + (customer || 'siparis-fisi'));
+      var baseName = safeFileName((docNo ? docNo + '-' : '') + (customer || 'siparis-fisi'));
       var fileName = baseName + '.png';
       var file = new File([blob], fileName, { type: 'image/png' });
-      var shareText = 'Merhaba, ' + (customer ? customer + ' için ' : '') + (offerNo ? offerNo + ' numaralı ' : '') + 'sipariş/teklif belgesini iletiyorum.';
+      var shareText = 'Merhaba, ' + (customer ? customer + ' için ' : '') + (docNo ? docNo + ' numaralı ' : '') + documentLabel + ' iletiyorum.';
 
       if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
         button.textContent = 'WhatsApp açılıyor...';
@@ -178,8 +179,44 @@
       wa.type = 'button';
       wa.className = 'whatsapp-offer-link';
       wa.textContent = 'WhatsApp ile ilet';
-      wa.addEventListener('click', function () { shareOfferImage(pdfUrl, offerNo, customer, wa); });
+      wa.addEventListener('click', function () { shareDocumentImage(pdfUrl, offerNo, customer, wa, 'sipariş/teklif belgesini'); });
       pdfLink.insertAdjacentElement('afterend', wa);
+    });
+  }
+
+  if (slug === 'depo-cikis') {
+    document.querySelectorAll('.wd-actions a[href^="depo-cikis-yazdir.php?id="]').forEach(function (printLink) {
+      var actions = printLink.closest('.wd-actions');
+      if (!actions || actions.querySelector('.whatsapp-dispatch-link')) return;
+      var pdfLink = actions.querySelector('a[href^="depo-cikis-yazdir.php?id="][href*="pdf=1"]') || printLink;
+      var row = printLink.closest('tr');
+      var cells = row ? row.children : [];
+      var dateNoCell = cells && cells[0] ? cells[0] : null;
+      var customerCell = cells && cells[1] ? cells[1] : null;
+      var noEl = dateNoCell ? dateNoCell.querySelector('small') : null;
+      var dispatchNo = noEl ? noEl.textContent.replace(/^#/, '').trim() : '';
+      var customer = customerCell ? customerCell.textContent.trim() : '';
+      if (!customer) {
+        var customerInput = document.querySelector('#wdCustomer');
+        customer = customerInput ? customerInput.value.trim() : '';
+      }
+      var pdfUrl = new URL(pdfLink.getAttribute('href'), window.location.href).href;
+      var shareButton = actions.querySelector('button[form^="wdShare"]');
+      if (shareButton) {
+        shareButton.type = 'button';
+        shareButton.removeAttribute('form');
+        shareButton.classList.add('whatsapp-dispatch-link');
+        shareButton.textContent = 'WhatsApp ile ilet';
+      } else {
+        shareButton = document.createElement('button');
+        shareButton.type = 'button';
+        shareButton.className = 'whatsapp-dispatch-link';
+        shareButton.textContent = 'WhatsApp ile ilet';
+        pdfLink.insertAdjacentElement('afterend', shareButton);
+      }
+      shareButton.addEventListener('click', function () {
+        shareDocumentImage(pdfUrl, dispatchNo, customer, shareButton, 'depo çıkış fişini');
+      });
     });
   }
 
