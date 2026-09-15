@@ -11,9 +11,9 @@ $row=depo_cikis_load((int)($_POST['id']??0));
 if (!$row || !depo_cikis_can_view($row)) { http_response_code(404); exit('Fiş bulunamadı.'); }
 $token=depo_cikis_create_share($row);
 // Canonical deployment origin; never trust Host/X-Forwarded-Host for shared URLs.
-$url='https://bitke.com.tr'.APP_BASE_PATH.'/depo-cikis-pdf.php?token='.$token;
+$url='https://bitke.com.tr'.APP_BASE_PATH.'/depo-cikis-yazdir.php?token='.$token.'&pdf=1';
 $text='Dumanlar Tekstil - Depo çıkış fişi #'.$row['dispatch_no']."\n"
     .'Tarih: '.tr_date($row['dispatch_date'])."\n"
-    .'PDF görüntüle (7 gün geçerli): '.$url;
+    .'PDF al / görüntüle (7 gün geçerli): '.$url;
 header('Location: https://wa.me/?text='.rawurlencode($text),true,303);
 exit;

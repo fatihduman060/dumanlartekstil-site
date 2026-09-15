@@ -1,178 +1,78 @@
 <?php
 require_once __DIR__.'/depo-cikis-paylas-lib.php';
-require_once __DIR__.'/magaza-kullanici.php';
-require_login();
-if(!can_access_warehouse_dispatch()) redirect('dashboard.php');
-$row=depo_cikis_load((int)($_GET['id']??0));
-if(!$row) redirect('depo-cikis.php');
-if(is_warehouse_user() && (int)($row['created_by']??0)!==(int)(current_user()['id']??0)) redirect('depo-cikis.php');
+
+header('Cache-Control: private, no-store');
+header('Referrer-Policy: no-referrer');
+header('X-Content-Type-Options: nosniff');
+header('X-Robots-Tag: noindex, nofollow, noarchive');
+
+$isShared = isset($_GET['token']);
+if ($isShared) {
+    $row = depo_cikis_shared_row(is_string($_GET['token']) ? $_GET['token'] : '');
+} else {
+    require_login();
+    if (!can_access_warehouse_dispatch()) redirect('dashboard.php');
+    $row = depo_cikis_load((int)($_GET['id'] ?? 0));
+    if ($row && !depo_cikis_can_view($row)) $row = null;
+}
+if (!$row) { http_response_code(404); exit('Fiş bulunamadı veya paylaşım bağlantısının süresi doldu.'); }
+
+$title = 'SİPARİŞ FİŞİ';
+$dispatchNo = (string)($row['dispatch_no'] ?? '');
+$dispatchDate = (string)($row['dispatch_date'] ?? date('Y-m-d'));
+$customer = (string)($row['customer_name'] ?? '');
+$city = (string)($row['customer_city'] ?? '');
+$customerAddress = trim((string)($row['customer_address'] ?? ''));
+$currency = (string)($row['currency'] ?? 'TL');
+$quantityLabel = 'ADET';
+$note = (string)($row['note'] ?? '');
+$footerText = 'MALIMIZDAN HAYIR GÖRÜN.';
+$subtotal = (float)($row['subtotal'] ?? $row['total'] ?? 0);
+$discountEnabled = (int)($row['discount_enabled'] ?? 0) === 1;
+$discountRate = (float)($row['discount_rate'] ?? 0);
+$discountAmount = (float)($row['discount_amount'] ?? 0);
+$vatEnabled = (int)($row['vat_enabled'] ?? 0) === 1;
+$vatRate = (float)($row['vat_rate'] ?? 10);
+$vatAmount = (float)($row['vat_amount'] ?? 0);
+$grandTotal = (float)($row['total'] ?? ($subtotal - $discountAmount + $vatAmount));
+$rows = $row['items'] ?? [];
+$hasProductType = false;
+foreach ($rows as $r) {
+    if (trim((string)($r['product_type'] ?? '')) !== '') {
+        $hasProductType = true;
+        break;
+    }
+}
+while (count($rows) < 13) {
+    $rows[] = ['product_barcode'=>'', 'product_name'=>'', 'product_type'=>'', 'quantity'=>0, 'unit_price'=>0, 'line_total'=>0];
+}
+$totalBlankColspan = $hasProductType ? 4 : 3;
+$logoSrc = 'assets/dumanlar-logo-arkaplansiz.png?v=20';
+$editUrl = 'depo-cikis.php?edit='.(int)$row['id'];
 ?>
 <!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sipariş Fişi #<?php echo e($row['dispatch_no']); ?></title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><?php echo e($title); ?> #<?php echo e($dispatchNo); ?></title>
 <style>
-*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{background:#e8e8e8;font:14px Arial,sans-serif;color:#102818}
-.bar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:12px;text-align:center;background:#102818}
-.bar button,.bar a{padding:9px 14px;border:0;border-radius:20px;background:#fff;color:#102818;text-decoration:none;font-weight:bold;cursor:pointer}
-.page{width:210mm;min-height:297mm;margin:12px auto;padding:10mm 12mm;background:#fff}
-.head{text-align:center;border-bottom:2px solid #b99245;padding-bottom:5mm;margin-bottom:5mm}
-.logo{width:94mm;height:23mm;object-fit:contain}
-.head h1{margin:3mm 0 0;font-size:18px;letter-spacing:1.4px}
-.info{display:grid;grid-template-columns:minmax(0,1fr) 62mm;gap:10mm;margin:5mm 0 6mm}
-.info h2{margin:0 0 3px;font-size:16px;line-height:1.1}
-.info p{margin:3px 0 0;line-height:1.25;font-size:12px}
-.box{border:1px solid #102818;border-radius:6px;padding:7px}
-.box div{display:flex;justify-content:space-between;gap:8px;padding:3px;font-size:11px}
-table{width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid #9f9f9f}
-th{background:#102818;color:#f2d18b;padding:6px 5px;font-size:10px;line-height:1.15;border:1px solid #6f756f;font-weight:700}
-td{padding:5px;border:1px solid #b8b8b8;font-size:10px;line-height:1.15;vertical-align:middle;word-break:break-word}
-tbody tr:nth-child(odd){background:#ffffff}
-tbody tr:nth-child(even){background:#f2efe9}
-th:nth-child(1),td:nth-child(1){width:24%}
-th:nth-child(2),td:nth-child(2){width:38%}
-th:nth-child(3),td:nth-child(3){width:10%}
-th:nth-child(4),td:nth-child(4){width:14%}
-th:nth-child(5),td:nth-child(5){width:14%}
-.num{text-align:right;white-space:nowrap}
-.totals{display:grid;justify-content:end;gap:3px;margin-top:5mm}
-.total-row{display:grid;grid-template-columns:42mm 38mm;gap:6px;text-align:right;font-size:11px}
-.total-row.discount strong{color:#a13c3c}
-.total-row.grand{font-size:15px;border-top:2px solid #6f6f6f;padding-top:4px;margin-top:2px}
-.note{margin-top:5mm;border-top:1px solid #aaa;padding-top:3mm;font-size:10px;line-height:1.25}
-
-/* İlk sıkıştırma: görünümü bozmadan orta uzunlukta fişleri tek sayfaya alır. */
-body.fit-1 .page{padding:8mm 10mm}
-body.fit-1 .head{padding-bottom:3.5mm;margin-bottom:3.5mm}
-body.fit-1 .logo{width:86mm;height:20mm}
-body.fit-1 .head h1{margin-top:2mm;font-size:16px}
-body.fit-1 .info{gap:8mm;margin:3.5mm 0 4mm}
-body.fit-1 .info h2{font-size:14px}
-body.fit-1 .info p{font-size:10.5px;line-height:1.15}
-body.fit-1 .box{padding:5px}
-body.fit-1 .box div{padding:2px;font-size:10px}
-body.fit-1 th{padding:5px 4px;font-size:9px}
-body.fit-1 td{padding:4px;font-size:9px;line-height:1.08}
-body.fit-1 .totals{margin-top:3mm;gap:2px}
-body.fit-1 .total-row{font-size:10px}
-body.fit-1 .total-row.grand{font-size:13px;padding-top:3px}
-body.fit-1 .note{margin-top:3mm;padding-top:2mm;font-size:9px}
-
-/* İkinci sıkıştırma: hâlâ okunabilir kalarak tek A4 için son kademe. */
-body.fit-2 .page{padding:6mm 8mm}
-body.fit-2 .head{padding-bottom:2mm;margin-bottom:2mm}
-body.fit-2 .logo{width:78mm;height:17mm}
-body.fit-2 .head h1{margin-top:1.5mm;font-size:14px}
-body.fit-2 .info{grid-template-columns:minmax(0,1fr) 55mm;gap:6mm;margin:2.5mm 0 3mm}
-body.fit-2 .info h2{font-size:12px}
-body.fit-2 .info p{font-size:9px;line-height:1.08}
-body.fit-2 .box{padding:4px}
-body.fit-2 .box div{padding:1.5px;font-size:9px}
-body.fit-2 th{padding:4px 3px;font-size:8px}
-body.fit-2 td{padding:3px;font-size:8px;line-height:1.02}
-body.fit-2 .totals{margin-top:2.5mm;gap:1px}
-body.fit-2 .total-row{grid-template-columns:38mm 34mm;font-size:9px}
-body.fit-2 .total-row.grand{font-size:12px;padding-top:2px}
-body.fit-2 .note{margin-top:2mm;padding-top:1.5mm;font-size:8px}
-
-thead{display:table-header-group}
-tr{break-inside:avoid;page-break-inside:avoid}
-@page{size:A4;margin:0}
-@media print{
-  body{background:#fff}
-  .bar{display:none!important}
-  .page{margin:0;width:210mm;box-shadow:none}
-  table,thead,tbody,tr,th,td{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-  body:not(.multi-page) .page{height:297mm;min-height:297mm;overflow:hidden}
-  body.multi-page .page{height:auto;min-height:297mm;overflow:visible}
-}
+*{box-sizing:border-box}:root{--navy:#061a33;--gold:#c49a4f;--gold2:#efd28a;--line:#e6dfd2;--cream:#faf4e8;--ink:#071a33}html,body{margin:0;padding:0;background:#dfe3e7;font-family:Arial,Helvetica,sans-serif;color:var(--ink)}.toolbar{position:sticky;top:0;z-index:30;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;padding:12px;background:var(--navy)}.toolbar button,.toolbar a{border:0;border-radius:999px;padding:10px 16px;background:#fff;color:var(--navy);font-weight:800;text-decoration:none;cursor:pointer}.page{width:210mm;height:297mm;margin:14px auto;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.20);position:relative;overflow:hidden;border:1px solid #d7dce2}.header{height:58mm;padding:7mm 10mm 0;background:linear-gradient(180deg,#fff 0,#fff 80%,#fbf7ef 100%);border-top:3mm solid var(--navy);position:relative;text-align:center;overflow:hidden}.header:before{content:'';position:absolute;left:11mm;right:11mm;bottom:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}.header:after{content:'';position:absolute;left:50%;bottom:0;width:2.3mm;height:2.3mm;background:var(--gold);transform:translate(-50%,50%) rotate(45deg)}.logo{display:block;width:118mm;height:34mm;object-fit:contain;margin:0 auto 4mm}.brand-line{display:flex;align-items:center;justify-content:center;gap:7mm;color:var(--gold);font-size:3.55mm;letter-spacing:.75mm;font-weight:950;text-transform:uppercase}.brand-line:before,.brand-line:after{content:'';width:30mm;height:.35mm;background:linear-gradient(90deg,transparent,var(--gold),transparent)}.contact{height:11mm;display:grid;grid-template-columns:31mm 43mm 49mm 31mm 1fr;align-items:center;border-top:.45mm solid var(--gold);border-bottom:.45mm solid var(--gold);background:#fff;font-size:2.35mm;color:#0e1d31;font-weight:800}.contact div{height:100%;display:flex;align-items:center;justify-content:center;gap:1.15mm;border-right:1px solid #d8dee5;padding:0 1.2mm;text-align:center;overflow:hidden;white-space:nowrap}.contact div:last-child{border-right:0;font-size:1.9mm;white-space:normal;line-height:1.12}.web-cell{font-size:2.12mm!important;letter-spacing:-.03mm!important;padding:0 .85mm!important}.ico{width:5.1mm;height:5.1mm;border:1px solid var(--gold);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--gold);font-size:2.2mm;flex:0 0 auto}.wa{border-color:#25d366;color:#25d366;font-weight:900}.wa svg{width:3.25mm;height:3.25mm;display:block;fill:currentColor}.address-cell{font-size:2.15mm!important;line-height:1.22!important;font-weight:900!important;text-align:left!important;justify-content:flex-start!important;gap:1.2mm!important;padding-left:1.6mm!important}.address-text{display:block}.address-text span,.address-text strong{display:block}.address-text strong{margin-top:.25mm;color:var(--navy);font-weight:950;letter-spacing:.08mm}.content{padding:8mm 10mm 44mm;position:relative}.doc-head{display:grid;grid-template-columns:1fr 70mm;gap:12mm;align-items:start;margin-bottom:5mm}.customer-name{font-size:6mm!important;line-height:1.08;font-weight:950;color:var(--navy);margin-bottom:2.5mm;max-width:132mm;text-transform:uppercase;letter-spacing:.04mm}.customer-info{display:grid;gap:1mm;max-width:118mm;margin:0 0 3.2mm;padding:2.7mm 3.2mm;border:1px solid #e6dfd2;border-left:1.2mm solid var(--gold);border-radius:2mm;background:#fbf7ef;color:#273249;font-size:2.65mm;line-height:1.22;font-weight:700}.customer-info div{display:grid;grid-template-columns:18mm 1fr;gap:2mm}.customer-info b{color:var(--navy);font-size:2.45mm;text-transform:uppercase;letter-spacing:.03em}.city{font-size:4.7mm;font-weight:950;color:#273249}.city:before{content:' ';display:inline-block;width:4.5mm;height:4.5mm;border-radius:50%;background:var(--gold);margin-right:2.5mm;vertical-align:-.7mm}.date-box{border:1.25px solid var(--navy);border-radius:2mm;background:#fff;box-shadow:0 5px 13px rgba(12,28,52,.04);overflow:hidden;margin-top:1.5mm}.date-row{display:grid;grid-template-columns:28mm 1fr;align-items:center;min-height:11.8mm;border-bottom:1px solid #d8dee5}.date-row:last-child{border-bottom:0}.date-row b{height:100%;display:flex;align-items:center;padding:0 4mm;border-right:1px solid #aab4c1;font-size:3mm;color:var(--navy);font-weight:900}.date-row strong{padding:0 5mm;font-size:3.25mm;color:#24324a;text-align:right;font-weight:900}table.items{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:2.75mm;border:1px solid var(--gold);border-radius:2mm;overflow:hidden}.items th{background:var(--navy);color:var(--gold2);text-align:center;padding:2.05mm 1.2mm;border-right:1px solid var(--gold);font-weight:900}.items th:last-child{border-right:0}.items td{height:5mm;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:.9mm 1.3mm;color:#263246;font-weight:700;vertical-align:middle}.items td:last-child{border-right:0}.items td.center{text-align:center}.items td.right{text-align:right}.items .empty{color:transparent}.total-line td{height:6.2mm;background:#fff}.total-line .label{background:var(--navy);color:var(--gold2);text-align:center;font-weight:900}.total-line .amount{color:#9a702a;font-weight:900;text-align:center;font-size:3.2mm;background:#fbf5e9}.total-line.discount .amount{color:#b64242}.note{display:flex;align-items:center;gap:3mm;margin:5mm 2.5mm 0;font-size:3.25mm;color:#273249;font-weight:800}.note-mark{width:8mm;height:8mm;border-radius:50%;background:var(--navy);color:var(--gold2);display:inline-flex;align-items:center;justify-content:center;font-size:3mm;flex:0 0 auto}.note-text{flex:1;border-bottom:1px dotted #aab4c1;min-height:5mm;padding-top:1.2mm;font-weight:700;color:#333}.bottom{position:absolute;left:0;right:0;bottom:0;height:41mm;overflow:hidden;background:linear-gradient(to bottom,var(--navy) 0,var(--navy) 33mm,#efc36d 33mm,#f9e4aa 37mm,#efc36d 41mm);border-top:1mm solid var(--gold)}.bottom:after{content:attr(data-footer);position:absolute;left:0;right:0;bottom:0;height:8mm;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:3.4mm;letter-spacing:.65mm;color:#513910;z-index:5;white-space:nowrap}.features{position:absolute;left:0;right:0;top:0;height:33mm;display:grid;grid-template-columns:1fr 1fr 1fr 54mm;align-items:center;gap:3mm;padding:4.6mm 10.5mm;color:#fff;overflow:hidden}.feature{display:grid;grid-template-columns:9mm 1fr;gap:2.4mm;align-items:center;border-right:1px solid rgba(196,154,79,.65);height:20mm;padding-right:2.4mm}.feature:nth-child(3){border-right:0}.ficon{width:8.8mm;height:8.8mm;border:1.2px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gold);font-size:3mm}.feature b{display:block;color:var(--gold2);font-size:2.55mm;margin-bottom:.6mm}.feature span{display:block;font-size:2.05mm;line-height:1.2;color:#e7edf5}.thanks{border:1.1px solid var(--gold);border-radius:2mm;padding:4.5mm;text-align:center;color:var(--gold2);font-family:Georgia,serif;font-size:3.9mm;line-height:1.2;font-style:italic}@page{size:A4;margin:0}@media print{html,body{width:210mm!important;height:297mm!important;background:#fff!important;overflow:hidden!important;margin:0!important;padding:0!important}.toolbar{display:none!important}.page{margin:0 auto!important;border:0!important;box-shadow:none!important;width:210mm!important;height:297mm!important;overflow:hidden!important}.header{height:49mm!important;padding-top:5mm!important;border-top-width:2.4mm!important}.logo{width:111mm!important;height:30mm!important;margin-bottom:2.5mm!important}.brand-line{font-size:3.05mm!important}.contact{height:9.5mm!important;font-size:2.18mm!important;grid-template-columns:30mm 41mm 49mm 30mm 1fr!important}.contact div{gap:.9mm!important;padding:0 1mm!important}.contact div:last-child{font-size:2mm!important;line-height:1.18!important}.web-cell{font-size:2mm!important;padding:0 .55mm!important}.ico{width:4.5mm!important;height:4.5mm!important}.wa svg{width:2.9mm!important;height:2.9mm!important}.content{padding:7mm 9.5mm 39mm!important}.customer-name{font-size:6mm!important;line-height:1.06!important;margin-bottom:2.2mm!important}.customer-info{font-size:2.45mm!important;padding:2.2mm 2.8mm!important;margin-bottom:2.6mm!important}.city{font-size:4.4mm!important}.date-row{min-height:10mm!important}.items td{height:4.25mm!important}.items th{padding:1.7mm 1mm!important}.total-line td{height:4.8mm!important}.bottom{height:37mm!important;background:linear-gradient(to bottom,var(--navy) 0,var(--navy) 29.7mm,#efc36d 29.7mm,#f9e4aa 33.3mm,#efc36d 37mm)!important}.bottom:after{height:7.2mm!important;font-size:3mm!important}.features{height:29.7mm!important;padding:3.8mm 9mm!important;grid-template-columns:1fr 1fr 1fr 51mm!important}.header,.contact,.bottom,.features,.items th,.total-line .label{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 </style>
 </head>
 <body>
-<?php depo_cikis_share_form((int)$row['id']); ?>
-<div class="bar"><a target="_blank" rel="noopener noreferrer" href="depo-cikis-pdf.php?id=<?php echo e($row['id']); ?>">PDF görüntüle</a> <?php depo_cikis_share_button((int)$row['id']); ?> <button type="button" onclick="window.print()">Yazdır / PDF</button> <a href="depo-cikis.php?edit=<?php echo e($row['id']); ?>">Düzenlemeye dön</a></div>
-<main class="page" id="printPage">
-  <header class="head">
-    <img class="logo" src="assets/dumanlar-logo-arkaplansiz.png?v=20" alt="Dumanlar">
-    <h1>SİPARİŞ FİŞİ</h1>
-  </header>
-  <section class="info">
-    <div>
-      <h2><?php echo e($row['customer_name']); ?></h2>
-      <div><?php echo e($row['customer_city']); ?></div>
-      <p><?php echo nl2br(e($row['customer_address'])); ?></p>
-    </div>
-    <div class="box">
-      <div><b>Tarih</b><span><?php echo e(tr_date($row['dispatch_date'])); ?></span></div>
-      <div><b>Fiş No</b><span><?php echo e($row['dispatch_no']); ?></span></div>
-    </div>
-  </section>
-  <table>
-    <thead><tr><th>Barkod</th><th>Ürün</th><th>Miktar</th><th>Birim Fiyat</th><th>Tutar</th></tr></thead>
-    <tbody>
-    <?php foreach($row['items'] as $i): ?>
-      <tr>
-        <td><?php echo e($i['product_barcode']); ?></td>
-        <td><?php echo e($i['product_name']); ?></td>
-        <td class="num"><?php echo e(number_format((float)$i['quantity'],0,',','.')); ?></td>
-        <td class="num"><?php echo e(money((float)$i['unit_price'])); ?></td>
-        <td class="num"><?php echo e(money((float)$i['line_total'])); ?></td>
-      </tr>
-    <?php endforeach; ?>
-    </tbody>
-  </table>
-  <div class="totals">
-    <div class="total-row"><span>Ara Toplam:</span><strong><?php echo e(money((float)($row['subtotal']??$row['total']))); ?> TL</strong></div>
-    <?php if((int)($row['discount_enabled']??0)===1): ?><div class="total-row discount"><span>İskonto (%<?php echo e((string)($row['discount_rate']??0)); ?>):</span><strong>-<?php echo e(money((float)($row['discount_amount']??0))); ?> TL</strong></div><?php endif; ?>
-    <?php if((int)($row['vat_enabled']??0)===1): ?><div class="total-row"><span>KDV (%<?php echo e((string)($row['vat_rate']??0)); ?>):</span><strong><?php echo e(money((float)($row['vat_amount']??0))); ?> TL</strong></div><?php endif; ?>
-    <div class="total-row grand"><span>GENEL TOPLAM:</span><strong><?php echo e(money((float)$row['total'])); ?> TL</strong></div>
-  </div>
-  <?php if(trim((string)$row['note'])!==''): ?><div class="note"><b>NOT:</b> <?php echo nl2br(e($row['note'])); ?></div><?php endif; ?>
+<?php if (!$isShared): ?><?php depo_cikis_share_form((int)$row['id']); ?><?php endif; ?>
+<div class="toolbar">
+  <button type="button" onclick="window.print()">Yazdır / PDF al</button>
+  <?php if (!$isShared): ?><?php depo_cikis_share_button((int)$row['id']); ?><a href="<?php echo e($editUrl); ?>">Düzenlemeye dön</a><a href="depo-cikis.php">Depo çıkış listesi</a><?php endif; ?>
+</div>
+<main class="page">
+<section class="header"><img class="logo" src="<?php echo e($logoSrc); ?>" alt="Dumanlar"><div class="brand-line"><?php echo e($title); ?></div></section>
+<section class="contact"><div><span class="ico">T</span>0 (356) 715 82 83</div><div><span class="ico">M</span>dumanlartekstil@yahoo.com</div><div class="web-cell"><span class="ico">W</span>www.dumanlartekstil.com.tr</div><div><span class="ico wa" aria-label="WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16.02 3.2A12.73 12.73 0 0 0 5.2 22.65L3.8 28.8l6.29-1.66A12.74 12.74 0 1 0 16.02 3.2Zm0 23.12c-2.05 0-4.06-.6-5.78-1.74l-.41-.27-3.74.99 1-3.64-.27-.42a10.35 10.35 0 1 1 9.2 5.08Zm5.96-7.74c-.33-.16-1.93-.95-2.23-1.06-.3-.11-.52-.16-.74.16-.22.33-.85 1.06-1.04 1.28-.19.22-.38.25-.7.08-.33-.16-1.38-.51-2.63-1.62-.97-.86-1.62-1.92-1.81-2.25-.19-.33-.02-.5.14-.66.15-.15.33-.38.49-.57.16-.19.22-.33.33-.55.11-.22.05-.41-.03-.57-.08-.16-.74-1.78-1.01-2.44-.27-.64-.54-.55-.74-.56h-.63c-.22 0-.57.08-.87.41-.3.33-1.14 1.11-1.14 2.71s1.17 3.15 1.33 3.37c.16.22 2.3 3.51 5.57 4.92.78.34 1.39.54 1.86.69.78.25 1.49.21 2.05.13.63-.09 1.93-.79 2.2-1.55.27-.76.27-1.42.19-1.55-.08-.14-.3-.22-.63-.38Z"/></svg></span>0 (356) 715 82 83</div><div class="address-cell"><span class="ico">A</span><span class="address-text"><span>Kelkit Osb Mah. Beyllikbükü Cad. No:8</span><strong>ERBAA/TOKAT</strong></span></div></section>
+<section class="content"><div class="doc-head"><div class="title-wrap"><div class="customer-name"><?php echo e($customer); ?></div><?php if ($customerAddress !== ''): ?><div class="customer-info"><div><b>Adres</b><span><?php echo e($customerAddress); ?></span></div></div><?php endif; ?><div class="city"><?php echo e($city ?: '-'); ?></div></div><div class="date-box"><div class="date-row"><b>SİPARİŞ TARİHİ</b><strong><?php echo e(tr_date($dispatchDate)); ?></strong></div><div class="date-row"><b>SİPARİŞ NO</b><strong><?php echo e($dispatchNo); ?></strong></div></div></div>
+<table class="items"><thead><tr><?php if ($hasProductType): ?><th style="width:15%">BARKOD</th><th style="width:30%">ÜRÜN ADI</th><th style="width:21%">ÜRÜN CİNSİ / AÇIKLAMA</th><th style="width:10%"><?php echo e($quantityLabel); ?></th><th style="width:11%">BİRİM FİYAT</th><th style="width:13%">TUTAR</th><?php else: ?><th style="width:17%">BARKOD</th><th style="width:39%">ÜRÜN ADI</th><th style="width:12%"><?php echo e($quantityLabel); ?></th><th style="width:14%">BİRİM FİYAT</th><th style="width:18%">TUTAR</th><?php endif; ?></tr></thead><tbody><?php foreach ($rows as $r): $barcode=trim((string)($r['product_barcode'] ?? '')); $name=trim((string)($r['product_name'] ?? '')); $ptype=trim((string)($r['product_type'] ?? '')); $qty=(float)($r['quantity'] ?? 0); $price=(float)($r['unit_price'] ?? 0); $line=(float)($r['line_total'] ?? 0); $has=$barcode!=='' || $name!=='' || $ptype!=='' || $qty>0 || $price>0; ?><tr><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($barcode); ?></td><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($name); ?></td><?php if ($hasProductType): ?><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($ptype); ?></td><?php endif; ?><td class="center"><?php echo $qty > 0 ? e(number_format($qty, 0, ',', '.')) : ''; ?></td><td class="right"><?php echo $price > 0 ? e(teklif_money($price)) : ''; ?></td><td class="right"><?php echo $line > 0 ? e(teklif_money($line)) : ''; ?></td></tr><?php endforeach; ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">ARA TOPLAM</td><td class="amount"><?php echo e(teklif_money($subtotal)); ?> <?php echo e($currency); ?></td></tr><?php if ($discountEnabled): ?><tr class="total-line discount"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">İSKONTO (%<?php echo e((string)$discountRate); ?>)</td><td class="amount">-<?php echo e(teklif_money($discountAmount)); ?> <?php echo e($currency); ?></td></tr><?php endif; ?><?php if ($vatEnabled): ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">KDV (%<?php echo e((string)$vatRate); ?>)</td><td class="amount"><?php echo e(teklif_money($vatAmount)); ?> <?php echo e($currency); ?></td></tr><?php endif; ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">GENEL TOPLAM</td><td class="amount"><?php echo e(teklif_money($grandTotal)); ?> <?php echo e($currency); ?></td></tr></tbody></table>
+<div class="note"><span class="note-mark">N</span><span>NOT</span><span class="note-text"><?php echo $note !== '' ? nl2br(e($note)) : ''; ?></span></div></section>
+<section class="bottom" data-footer="<?php echo e($footerText); ?>"><div class="features"><div class="feature"><div class="ficon">1</div><div><b>YÜKSEK KALİTE</b><span>Kaliteli üretim standardı</span></div></div><div class="feature"><div class="ficon">2</div><div><b>ZAMANINDA TESLİMAT</b><span>Siparişlerinizi zamanında teslim ediyoruz.</span></div></div><div class="feature"><div class="ficon">3</div><div><b>GÜVENİLİR HİZMET</b><span>Müşteri memnuniyetini önceliğimiz kabul ediyoruz.</span></div></div><div class="thanks">Teşekkür eder,<br>iyi çalışmalar dileriz.</div></div></section>
 </main>
-<script>
-(function(){
-  var page=document.getElementById('printPage');
-  if(!page) return;
-
-  function overflowsA4(){
-    var oldHeight=page.style.height;
-    var oldMinHeight=page.style.minHeight;
-    var oldOverflow=page.style.overflow;
-    page.style.height='297mm';
-    page.style.minHeight='297mm';
-    page.style.overflow='hidden';
-    var overflow=page.scrollHeight>page.clientHeight+2;
-    page.style.height=oldHeight;
-    page.style.minHeight=oldMinHeight;
-    page.style.overflow=oldOverflow;
-    return overflow;
-  }
-
-  function fitForPrint(){
-    document.body.classList.remove('fit-1','fit-2','multi-page');
-
-    if(!overflowsA4()) return;
-    document.body.classList.add('fit-1');
-    if(!overflowsA4()) return;
-
-    document.body.classList.remove('fit-1');
-    document.body.classList.add('fit-2');
-    if(!overflowsA4()) return;
-
-    // Bu noktada liste gerçekten uzun: okunabilirliği koru ve ikinci sayfaya izin ver.
-    document.body.classList.add('multi-page');
-  }
-
-  window.addEventListener('beforeprint',fitForPrint);
-  window.addEventListener('resize',function(){window.clearTimeout(window.__wdFitTimer);window.__wdFitTimer=window.setTimeout(fitForPrint,120)});
-  window.addEventListener('load',function(){setTimeout(fitForPrint,60);setTimeout(fitForPrint,350)});
-  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(fitForPrint);
-  fitForPrint();
-})();
-</script>
 </body>
 </html>

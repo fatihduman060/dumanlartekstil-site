@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Integration checks against a disposable copy; never opens the live database.
 Run: PHP_BINARY=/path/to/php python3 tools/test-depo-cikis.py
-Requires PHP with PDO SQLite, mbstring and Python 3.
+Requires PHP with PDO SQLite and Python 3.
 """
 import os, pathlib, shutil, socket, subprocess, tempfile, time
 import urllib.request, urllib.error, urllib.parse, sqlite3
@@ -54,11 +54,11 @@ echo $id;
     try: response=opener.open(r)
     except urllib.error.HTTPError as e: response=e
     return response.status,response.headers,response.read()
-   for user,expected in [(None,302),(101,200),(102,404),(103,404),(104,200)]:
+   for user,expected in [(None,302),(101,303),(102,404),(103,404),(104,303)]:
     status,h,b=req('depo-cikis-pdf.php?id=1',user)
     assert status==expected,(user,status,b[:150],str(h))
-    if status==200: assert b.startswith(b'%PDF-') and 'inline;' in h['Content-Disposition'] and 'no-store' in h['Cache-Control']
-   print('PDF: login, owner, other warehouse, viewer, store access passed')
+    if status==303: assert h['Location']=='depo-cikis-yazdir.php?id=1&pdf=1' and 'no-store' in h['Cache-Control']
+   print('PDF view: login, owner, other warehouse, viewer, store access passed')
    for user,expected in [(None,302),(102,404),(103,404)]:
     status,h,b=req('depo-cikis-paylas.php',user,{'id':1,'csrf_token':'qatoken'})
     assert status==expected,(user,status)
@@ -69,14 +69,14 @@ echo $id;
    status,h,b=req('depo-cikis-paylas.php',101,{'id':1,'csrf_token':'qatoken'})
    assert status==303,(status,b[:200])
    msg=urllib.parse.parse_qs(urllib.parse.urlparse(h['Location']).query)['text'][0]
-   assert 'https://bitke.com.tr/muhasebe/depo-cikis-pdf.php?token=' in msg and '#00042' in msg
+   assert 'https://bitke.com.tr/muhasebe/depo-cikis-yazdir.php?token=' in msg and '&pdf=1' in msg and '#00042' in msg
    url=msg.split('https://bitke.com.tr/muhasebe/')[1]
    status,h,b=req(url)
-   assert status==200 and b.startswith(b'%PDF-'),(status,b[:200])
+   assert status==200 and b'S\xc4\xb0PAR\xc4\xb0\xc5\x9e F\xc4\xb0\xc5\x9e\xc4\xb0' in b and b'brand-line' in b,(status,b[:200])
    assert h['Referrer-Policy']=='no-referrer' and h['X-Content-Type-Options']=='nosniff'
    for token in ['x','0'*64,'../test','']:
-    assert req('depo-cikis-pdf.php?token='+token)[0]==404
-   print('Share: POST + CSRF, permissions, WhatsApp message, anonymous PDF, invalid tokens passed')
+    assert req('depo-cikis-yazdir.php?token='+token)[0]==404
+   print('Share: POST + CSRF, permissions, WhatsApp message, anonymous printable view, invalid tokens passed')
    con=sqlite3.connect(str(site/'muhasebe/storage/bitke_muhasebe.sqlite'))
    con.execute('UPDATE warehouse_dispatches SET note=? WHERE id=1',('changed',));con.commit()
    assert req(url)[0]==404
@@ -85,9 +85,10 @@ echo $id;
    con.execute('UPDATE warehouse_dispatch_shares SET expires_at=0');con.commit()
    assert req(url)[0]==404
    print('Share invalidation on edit and expiration passed')
-   for path in ['depo-cikis.php?edit=1','depo-cikis-yazdir.php?id=1']:
-    status,h,b=req(path,101);text=b.decode()
-    assert status==200 and 'PDF görüntüle' in text and 'WhatsApp ile paylaş' in text,(path,status,text[:200])
-   print('Form/list/print buttons render for warehouse user')
+   status,h,b=req('depo-cikis.php?edit=1',101);text=b.decode()
+   assert status==200 and 'PDF görüntüle' in text and 'WhatsApp ile paylaş' in text,(status,text[:200])
+   status,h,b=req('depo-cikis-yazdir.php?id=1',101);text=b.decode()
+   assert status==200 and 'WhatsApp ile paylaş' in text and 'brand-line' in text,(status,text[:200])
+   print('Form/list/print buttons and offer-style print view render for warehouse user')
   finally:
    server.terminate(); server.wait(timeout=10)
