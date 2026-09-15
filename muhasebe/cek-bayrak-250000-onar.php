@@ -36,80 +36,117 @@ try {
     $candidates = $stmt->fetchAll() ?: [];
 
     if (!$candidates) {
-        bayrak_cek_json(['ok'=>true, 'repaired'=>false, 'message'=>'Hedef iptal çek bulunmadı; onarım gerekmiyor.']);
+        $activeStmt = $pdo->prepare("SELECT ch.id FROM checks ch LEFT JOIN cariler c ON c.id=ch.cari_id
+            WHERE COALESCE(ch.is_cancelled,0)=0 AND ch.direction='alinacak'
+              AND ch.due_date='2026-09-19' AND ABS(ch.amount-250000)<0.01
+              AND LOWER(COALESCE(c.name,'')) LIKE '%bayrak%' LIMIT 1");
+        $activeStmt->execute();
+        $activeId = (int)($activeStmt->fetchColumn() ?: 0);
+        bayrak_cek_json([
+            'ok'=>true,
+            'repaired'=>false,
+            'already_active'=>$activeId > 0,
+            'id'=>$activeId ?: null,
+            'message'=>$activeId > 0
+                ? 'Bayrak Gross 250.000 TL çek zaten aktif durumda.'
+                : 'Bayrak Gross 250.000 TL için hedef iptal çek bulunmadı.',
+        ]);
     }
 
-    $autoMerged = [];
-    foreach ($candidates as $candidate) {
-        $reason = trim((string)($candidate['cancel_reason'] ?? ''));
-        if (preg_match('/^Otomatik mükerrer çek birleştirildi \(#(\d+)\)$/u', $reason, $m)) {
-            $candidate['_survivor_id'] = (int)$m[1];
-            $autoMerged[] = $candidate;
-        }
-    }
-
-    if (count($autoMerged) !== 1) {
+    if (count($candidates) !== 1) {
         bayrak_cek_json([
             'ok'=>true,
             'repaired'=>false,
             'needs_review'=>true,
-            'message'=>count($autoMerged) > 1
-                ? 'Aynı ölçütlerde birden fazla otomatik iptal çek var; yanlış kaydı açmamak için işlem yapılmadı.'
-                : 'İptal nedeni otomatik mükerrer birleştirme değil; bakiyeyi riske atmamak için otomatik onarım yapılmadı.',
+            'message'=>'19.09.2026 / 250.000 TL Bayrak Gross için birden fazla iptal çek bulundu. Yanlış kaydı açmamak için otomatik işlem yapılmadı.',
+            'cancelled_count'=>count($candidates),
         ]);
     }
 
-    $target = $autoMerged[0];
+    $target = $candidates[0];
     $checkId = (int)$target['id'];
-    $survivorId = (int)$target['_survivor_id'];
-    $movementId = (int)($target['movement_id'] ?? 0);
-    if ($movementId <= 0) {
-        bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'İptal çekin kendine ait cari hareket bağlantısı yok; otomatik açmak güvenli değil.']);
+    $cariId = (int)($target['cari_id'] ?? 0);
+    if ($cariId <= 0) {
+        bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'Bayrak Gross çek kaydında cari bağlantısı yok. Otomatik işlem yapılmadı.']);
     }
 
-    $mStmt = $pdo->prepare('SELECT * FROM movements WHERE id=? LIMIT 1');
-    $mStmt->execute([$movementId]);
-    $movement = $mStmt->fetch() ?: null;
-    if (!$movement || (int)($movement['is_cancelled'] ?? 0) === 1) {
-        bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'Çekin bağlı cari hareketi aktif değil; cari bakiyeyi değiştirmemek için otomatik onarım durduruldu.']);
-    }
+    // Aynı cari/vade/tutarda halen aktif olan çekleri bul.
+    $aStmt = $pdo->prepare("SELECT * FROM checks
+        WHERE id<>? AND COALESCE(is_cancelled,0)=0 AND cari_id=? AND direction='alinacak'
+          AND due_date='2026-09-19' AND ABS(amount-250000)<0.01
+        ORDER BY id ASC");
+    $aStmt->execute([$checkId, $cariId]);
+    $activeChecks = $aStmt->fetchAll() ?: [];
 
-    $expectedType = 'alacak';
-    if ((int)($movement['cari_id'] ?? 0) !== (int)($target['cari_id'] ?? 0)
-        || (string)($movement['movement_type'] ?? '') !== $expectedType
-        || abs((float)($movement['amount'] ?? 0) - 250000.0) >= 0.01
-        || (string)($movement['due_date'] ?? '') !== '2026-09-19') {
-        bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'Bağlı hareket çekle birebir eşleşmiyor; otomatik onarım yapılmadı.']);
-    }
-
-    $survivor = null;
-    if ($survivorId > 0) {
-        $sStmt = $pdo->prepare('SELECT * FROM checks WHERE id=? LIMIT 1');
-        $sStmt->execute([$survivorId]);
-        $survivor = $sStmt->fetch() ?: null;
-    }
-
-    if ($survivor && (int)($survivor['is_cancelled'] ?? 0) === 0) {
-        $survivorMovementId = (int)($survivor['movement_id'] ?? 0);
-        if ($survivorMovementId === $movementId) {
-            bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'İptal çek ile aktif çek aynı cari hareketine bağlı; gerçek mükerrer olabileceği için otomatik onarım yapılmadı.']);
+    // Fiziksel olarak aynı çek olduğu açıkça görülüyorsa otomatik geri açma.
+    $targetNo = trim((string)($target['check_no'] ?? ''));
+    $targetDoc = trim((string)($target['document_path'] ?? ''));
+    foreach ($activeChecks as $activeCheck) {
+        $activeNo = trim((string)($activeCheck['check_no'] ?? ''));
+        $activeDoc = trim((string)($activeCheck['document_path'] ?? ''));
+        if ($targetNo !== '' && $activeNo !== '' && $targetNo === $activeNo) {
+            bayrak_cek_json([
+                'ok'=>true,'repaired'=>false,'needs_review'=>true,
+                'message'=>'İptal çek ile aktif çekin çek numarası aynı. Gerçek mükerrer olabileceği için otomatik geri açılmadı.',
+            ]);
         }
-
-        $targetNo = trim((string)($target['check_no'] ?? ''));
-        $survivorNo = trim((string)($survivor['check_no'] ?? ''));
-        if ($targetNo !== '' && $survivorNo !== '' && $targetNo === $survivorNo) {
-            bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'Aktif çek ile iptal çekin çek numarası aynı; gerçek mükerrer olabileceği için otomatik onarım yapılmadı.']);
+        if ($targetDoc !== '' && $activeDoc !== '' && $targetDoc === $activeDoc) {
+            bayrak_cek_json([
+                'ok'=>true,'repaired'=>false,'needs_review'=>true,
+                'message'=>'İptal çek ile aktif çek aynı çek görselini kullanıyor. Gerçek mükerrer olabileceği için otomatik geri açılmadı.',
+            ]);
         }
     }
 
-    $otherStmt = $pdo->prepare("SELECT id FROM checks
-        WHERE id<>? AND COALESCE(is_cancelled,0)=0 AND movement_id=? LIMIT 1");
-    $otherStmt->execute([$checkId, $movementId]);
-    $otherCheckId = (int)($otherStmt->fetchColumn() ?: 0);
-    if ($otherCheckId > 0) {
-        bayrak_cek_json(['ok'=>true,'repaired'=>false,'needs_review'=>true,'message'=>'Bu cari hareketi başka aktif bir çeke bağlı (#'.$otherCheckId.'); otomatik onarım yapılmadı.']);
+    // Finansal hareket tarafını kontrol et. Eski mükerrer birleştirme çekleri tek kayda indirirken
+    // cari hareketleri silmedi; bu yüzden ayrı gerçek çek için fazladan aktif hareket kalmış olmalı.
+    $mStmt = $pdo->prepare("SELECT * FROM movements
+        WHERE COALESCE(is_cancelled,0)=0 AND cari_id=? AND movement_type='alacak'
+          AND due_date='2026-09-19' AND ABS(amount-250000)<0.01
+          AND COALESCE(is_check_adjustment,0)=0
+          AND COALESCE(is_check_unpaid_adjustment,0)=0
+        ORDER BY id ASC");
+    $mStmt->execute([$cariId]);
+    $activeMovements = $mStmt->fetchAll() ?: [];
+
+    $usedMovementIds = [];
+    foreach ($activeChecks as $activeCheck) {
+        $mid = (int)($activeCheck['movement_id'] ?? 0);
+        if ($mid > 0) $usedMovementIds[$mid] = true;
     }
 
+    $unclaimed = [];
+    foreach ($activeMovements as $movement) {
+        $mid = (int)$movement['id'];
+        if (!isset($usedMovementIds[$mid])) $unclaimed[] = $movement;
+    }
+
+    $targetMovementId = (int)($target['movement_id'] ?? 0);
+    $chosenMovement = null;
+    foreach ($unclaimed as $movement) {
+        if ((int)$movement['id'] === $targetMovementId) {
+            $chosenMovement = $movement;
+            break;
+        }
+    }
+    if (!$chosenMovement && count($unclaimed) === 1) {
+        $chosenMovement = $unclaimed[0];
+    }
+
+    if (!$chosenMovement) {
+        bayrak_cek_json([
+            'ok'=>true,
+            'repaired'=>false,
+            'needs_review'=>true,
+            'message'=>'Çek kaydı bulundu ancak cari bakiyede bu çeke ait ayrı ve boştaki aktif 250.000 TL hareket güvenle ayırt edilemedi. Otomatik işlem yapılmadı.',
+            'active_check_count'=>count($activeChecks),
+            'active_movement_count'=>count($activeMovements),
+            'unclaimed_movement_count'=>count($unclaimed),
+            'cancel_reason'=>(string)($target['cancel_reason'] ?? ''),
+        ]);
+    }
+
+    $movementId = (int)$chosenMovement['id'];
     $restoreStatus = 'bekliyor';
     $auditStmt = $pdo->prepare("SELECT old_value FROM audit_logs
         WHERE entity_type='cek' AND entity_id=? AND action='iptal'
@@ -124,16 +161,14 @@ try {
 
     $pdo->beginTransaction();
     try {
-        // Sadece çek kaydını yeniden görünür hale getiriyoruz. Cari hareketin tutarı,
-        // iptal durumu ve cari bakiyeyi etkileyen hiçbir alan değiştirilmez.
+        // Yalnızca görünmez olmuş çek kaydını, zaten aktif olan ayrı cari hareketine geri bağlıyoruz.
+        // Yeni finansal hareket oluşturulmaz; mevcut hareket tutarı ve cari bakiyesi değiştirilmez.
         $pdo->prepare("UPDATE checks
-            SET is_cancelled=0, status=?, closed_at=NULL, cancelled_at=NULL, cancelled_by=NULL,
-                cancel_reason=NULL, updated_at=?
+            SET movement_id=?, is_cancelled=0, status=?, closed_at=NULL,
+                cancelled_at=NULL, cancelled_by=NULL, cancel_reason=NULL, updated_at=?
             WHERE id=?")
-            ->execute([$restoreStatus, now(), $checkId]);
+            ->execute([$movementId, $restoreStatus, now(), $checkId]);
 
-        // Eski mükerrer birleştirme bu hareketin check_id alanını survivor çeke taşımıştı.
-        // Finansal hareketi değiştirmeden yalnız doğru çek kaydına geri bağlıyoruz.
         $pdo->prepare('UPDATE movements SET check_id=?, updated_at=? WHERE id=?')
             ->execute([$checkId, now(), $movementId]);
 
@@ -142,7 +177,9 @@ try {
             'status'=>$restoreStatus,
             'movement_id'=>$movementId,
             'balance_changed'=>false,
-            'source'=>'Bayrak Gross 250.000 / 19.09.2026 güvenli onarım',
+            'active_check_count_before'=>count($activeChecks),
+            'active_movement_count'=>count($activeMovements),
+            'source'=>'Bayrak Gross 250.000 / 19.09.2026 ayrı aktif hareket onarımı',
         ], (string)($target['cari_name'] ?? 'Bayrak Gross'));
         log_action('Otomatik mükerrer çek hatası onarıldı', '#'.$checkId.' '.(string)($target['cari_name'] ?? 'Bayrak Gross').' 250.000,00 / 19.09.2026');
 
@@ -158,7 +195,7 @@ try {
         'id'=>$checkId,
         'movement_id'=>$movementId,
         'status'=>$restoreStatus,
-        'message'=>'Bayrak Gross 250.000 TL çek otomatik mükerrer iptalinden çıkarıldı. Cari hareket ve bakiye değiştirilmedi.',
+        'message'=>'Bayrak Gross 250.000 TL çek yeniden aktif edildi. Mevcut ayrı cari hareketine bağlandı; cari bakiyesi ve banka/kasa değiştirilmedi.',
     ]);
 } catch (Throwable $e) {
     bayrak_cek_json(['ok'=>false,'error'=>$e->getMessage()], 422);
