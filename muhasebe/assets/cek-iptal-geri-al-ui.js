@@ -19,40 +19,6 @@
     return el ? el.value : '';
   }
 
-  function cleanupBayrak(){
-    var token=csrf();
-    if(!token) return;
-    var key='bayrak250CheckCleanupV4';
-    if(sessionStorage.getItem(key)==='1') return;
-    sessionStorage.setItem(key,'1');
-
-    var body=new URLSearchParams();
-    body.set('csrf_token',token);
-    fetch('cek-bayrak-250000-onar.php',{
-      method:'POST',
-      credentials:'same-origin',
-      cache:'no-store',
-      headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
-      body:body.toString()
-    })
-      .then(function(r){
-        return r.json().catch(function(){return {ok:false,error:'Bayrak Gross çek temizliğinde sunucu cevabı okunamadı.'};});
-      })
-      .then(function(d){
-        if(!d||!d.ok) throw new Error((d&&d.error)||'Bayrak Gross çek temizliği çalışmadı.');
-        if(d.deleted){
-          location.href='cekler.php?direction=alinacak';
-          return;
-        }
-        if(d.needs_review){
-          console.warn('Bayrak Gross 250.000 TL çek temizliği güvenlik nedeniyle durdu.',d);
-        }
-      })
-      .catch(function(error){
-        console.error(error);
-      });
-  }
-
   function addStyle(){
     if(document.getElementById('checkRestoreUiStyle')) return;
     var s=document.createElement('style');
@@ -60,8 +26,8 @@
     s.textContent='.check-restore-btn{display:inline-flex;align-items:center;justify-content:center;min-height:34px;border:1px solid #9bc7aa;border-radius:999px;padding:6px 11px;background:#eaf7ee;color:#155b34;font-size:11px;font-weight:950;cursor:pointer}.check-restore-btn:hover{background:#dff1e5}.check-restore-btn:disabled{opacity:.55;cursor:wait}.check-restore-note{display:block;margin-top:6px!important;color:#776b5c!important;font-size:10px!important;line-height:1.35}';
     document.head.appendChild(s);
   }
+
   function enhance(){
-    cleanupBayrak();
     var table=document.querySelector('.check-table');
     if(!table) return;
     addStyle();
@@ -117,5 +83,6 @@
       });
     });
   }
+
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',enhance); else enhance();
 })();
