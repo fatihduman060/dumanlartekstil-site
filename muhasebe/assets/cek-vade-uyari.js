@@ -1,40 +1,4 @@
 (function(){
-  'use strict';
-  if(!/\/dashboard\.php$/i.test(location.pathname)) return;
-  var attemptKey='bayrak250DashboardCleanupAttemptV4';
-  if(sessionStorage.getItem(attemptKey)==='1') return;
-  sessionStorage.setItem(attemptKey,'1');
-
-  fetch('dashboard-vade-hatirlatmalari.php?_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
-    .then(function(r){return r.json();})
-    .then(function(data){
-      var token=String((data&&data.csrf_token)||'');
-      if(!token) throw new Error('Oturum doğrulaması alınamadı.');
-      var body=new URLSearchParams();
-      body.set('csrf_token',token);
-      return fetch('cek-bayrak-250000-onar.php',{
-        method:'POST',credentials:'same-origin',cache:'no-store',
-        headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
-        body:body.toString()
-      });
-    })
-    .then(function(r){return r.json().catch(function(){return {ok:false,error:'Bayrak Gross çek temizliğinde sunucu cevabı okunamadı.'};});})
-    .then(function(d){
-      if(!d||!d.ok) throw new Error((d&&d.error)||'Bayrak Gross çek temizliği çalışmadı.');
-      if(d.deleted){
-        location.reload();
-        return;
-      }
-      if(d.needs_review){
-        console.warn('Bayrak Gross 250.000 TL çek temizliği güvenlik nedeniyle durdu.',d);
-      }
-    })
-    .catch(function(error){
-      console.error(error);
-    });
-})();
-
-(function(){
   if(/\/cariler\.php$/i.test(location.pathname) && !document.querySelector('script[data-cari-canli-arama]')){
     var cariSearchScript=document.createElement('script');
     cariSearchScript.src='assets/cari-canli-arama.js?v=1&_='+Date.now();
