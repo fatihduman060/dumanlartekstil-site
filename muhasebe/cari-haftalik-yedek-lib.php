@@ -140,12 +140,16 @@ function cari_haftalik_create(bool $force = false): ?string
     $pattern = $dir . '/Cari_Bakiye_' . str_replace('-', '', $weekKey) . '_*.xlsx';
     $existing = glob($pattern) ?: [];
     if (!$force && $existing) return $existing[0];
-    if ($force && $existing) {
-        foreach ($existing as $old) @unlink($old);
-    }
+
     $stamp = date('Ymd_His');
     $path = $dir . '/Cari_Bakiye_' . str_replace('-', '', $weekKey) . '_' . $stamp . '.xlsx';
     cari_haftalik_make_xlsx($path, date('d.m.Y H:i'));
+
+    if ($force && $existing) {
+        foreach ($existing as $old) {
+            if ($old !== $path) @unlink($old);
+        }
+    }
     cari_haftalik_cleanup(52);
     return $path;
 }
