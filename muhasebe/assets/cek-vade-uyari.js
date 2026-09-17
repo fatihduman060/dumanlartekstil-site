@@ -253,3 +253,11 @@
     formDetails.scrollIntoView({behavior:'smooth',block:'start'});
   },50);
 })();
+
+(function(){
+  if(!/\/cekler\.php$/i.test(location.pathname) || document.querySelector('script[data-cek-gorsel-oku]')) return;
+  var s=document.createElement('script');
+  s.src='assets/cek-gorsel-oku.js?v=1&_='+Date.now();
+  s.setAttribute('data-cek-gorsel-oku','1');
+  document.body.appendChild(s);
+})();
