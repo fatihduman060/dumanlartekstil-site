@@ -309,4 +309,5 @@ page_header('Teklif Ver', 'teklif_ver');
   recalc();
 })();
 </script>
+<script src="assets/musteri-urun-son-fiyat.js?v=1"></script>
 <?php page_footer(); ?>
