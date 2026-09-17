@@ -5,6 +5,20 @@
   function normalizeCariDetailCards(){if(!/cari-detay\.php/i.test(location.pathname))return;var grid=document.querySelector('#ozet .cari-rontgen-grid');if(!grid)return;var cards=grid.querySelectorAll(':scope > .stat-card');if(cards.length<3)return;var net=parseMoney(cards[0].querySelector('strong')?cards[0].querySelector('strong').textContent:'0'),receivable=Math.max(net,0),payable=Math.max(-net,0);var rs=cards[1].querySelector('strong'),ps=cards[2].querySelector('strong');if(cards[1].querySelector('span'))cards[1].querySelector('span').textContent='Kalan net alacak';if(rs){rs.textContent=formatAmount(receivable,'TL');rs.classList.remove('text-danger');rs.classList.add('text-success');}if(cards[1].querySelector('small'))cards[1].querySelector('small').textContent='Tüm alacak, tahsilat, borç ve ödemeler mahsup edildi';if(cards[2].querySelector('span'))cards[2].querySelector('span').textContent='Kalan net borç';if(ps){ps.textContent=formatAmount(payable,'TL');ps.classList.remove('text-success','text-danger');ps.classList.add(payable>0?'text-danger':'text-success');}if(cards[2].querySelector('small'))cards[2].querySelector('small').textContent='Tüm alacak, tahsilat, borç ve ödemeler mahsup edildi';}
   function loadCariSaleViewer(){if(!/cari-detay\.php/i.test(location.pathname)||document.querySelector('script[data-cari-satis-viewer]'))return;var script=document.createElement('script');script.src='assets/cari-satis-detay-goruntule.js?v=1251bd8c';script.setAttribute('data-cari-satis-viewer','1');document.head.appendChild(script);}
   function addWarehouseDeleteButtons(){if(!/depo-cikis\.php/i.test(location.pathname))return;var csrf=document.querySelector('input[name="csrf_token"], input[name="csrf"]');document.querySelectorAll('a[href^="depo-cikis.php?edit="]').forEach(function(editLink){var actions=editLink.closest('.wd-actions');if(!actions||actions.querySelector('.wd-delete-form'))return;var match=String(editLink.getAttribute('href')||'').match(/edit=(\d+)/);if(!match)return;var form=document.createElement('form');form.method='post';form.action='depo-cikis-sil.php';form.className='wd-delete-form';form.onsubmit=function(){return window.confirm('Bu depo çıkış fişi silinsin mi? Bu işlem geri alınamaz.');};if(csrf){var token=document.createElement('input');token.type='hidden';token.name=csrf.name;token.value=csrf.value;form.appendChild(token);}var id=document.createElement('input');id.type='hidden';id.name='id';id.value=match[1];form.appendChild(id);var button=document.createElement('button');button.type='submit';button.textContent='Sil';button.style.color='#b42318';button.style.borderColor='#efb7b2';form.appendChild(button);actions.appendChild(form);});}
+  function markOfferEditLinks(){
+    document.querySelectorAll('a[href*="teklif-ver.php?edit="]').forEach(function(link){
+      link.addEventListener('click',function(){try{sessionStorage.setItem('bitke_offer_edit_once','1');}catch(e){};});
+    });
+  }
+  function enforceOfferEntryMode(){
+    if(!/teklif-ver\.php/i.test(location.pathname))return false;
+    if(/[?&]edit=\d+/i.test(location.search)){
+      var allowed=false;try{allowed=sessionStorage.getItem('bitke_offer_edit_once')==='1';sessionStorage.removeItem('bitke_offer_edit_once');}catch(e){}
+      if(!allowed){location.replace('teklif-ver.php?new=1');return true;}
+      return false;
+    }
+    return false;
+  }
   function clearRestoredNewOffer(){
     if(!/teklif-ver\.php/i.test(location.pathname)||/[?&]edit=\d+/i.test(location.search))return;
     var form=document.getElementById('offerForm');if(!form)return;
@@ -15,7 +29,7 @@
     if(discount)discount.checked=false;if(vat)vat.checked=false;if(discountRate)discountRate.value='0';if(vatRate)vatRate.value='10';
     ['input','change'].forEach(function(type){form.dispatchEvent(new Event(type,{bubbles:true}));});
   }
-  function init(){if(/cariler\.php/i.test(location.pathname)){fetch('cari-doviz-bakiye.php',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(data){if(!data||!data.ok||!data.balances)return;document.querySelectorAll('a[href^="cari-detay.php?id="]').forEach(function(link){var match=String(link.getAttribute('href')||'').match(/id=(\d+)/);if(!match)return;var tr=link.closest('tr');if(!tr)return;updateCell(tr.querySelector('td.right'),data.balances[match[1]]||[{currency:'TL',net:0}]);});}).catch(function(){});}normalizeCariDetailCards();loadCariSaleViewer();addWarehouseDeleteButtons();clearRestoredNewOffer();}
+  function init(){if(enforceOfferEntryMode())return;if(/cariler\.php/i.test(location.pathname)){fetch('cari-doviz-bakiye.php',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(data){if(!data||!data.ok||!data.balances)return;document.querySelectorAll('a[href^="cari-detay.php?id="]').forEach(function(link){var match=String(link.getAttribute('href')||'').match(/id=(\d+)/);if(!match)return;var tr=link.closest('tr');if(!tr)return;updateCell(tr.querySelector('td.right'),data.balances[match[1]]||[{currency:'TL',net:0}]);});}).catch(function(){});}normalizeCariDetailCards();loadCariSaleViewer();addWarehouseDeleteButtons();markOfferEditLinks();clearRestoredNewOffer();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
-  window.addEventListener('pageshow',function(){clearRestoredNewOffer();});
+  window.addEventListener('pageshow',function(){if(!enforceOfferEntryMode())clearRestoredNewOffer();});
 })();
