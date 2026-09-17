@@ -250,3 +250,13 @@ document.addEventListener('change', function (event) {
   script.dataset.depoCikisCariGrupla='1';
   document.body.appendChild(script);
 })();
+
+// Dashboard/Yedekleme sayfalarında haftalık cari bakiye Excel yedeğini yönet.
+(function loadWeeklyCariBackup(){
+  if(!/(?:dashboard|yedekler)\.php$/i.test(location.pathname)) return;
+  if(document.querySelector('script[data-cari-haftalik-yedek]')) return;
+  const script=document.createElement('script');
+  script.src='assets/cari-haftalik-yedek.js?v=1&_='+Date.now();
+  script.dataset.cariHaftalikYedek='1';
+  document.body.appendChild(script);
+})();
