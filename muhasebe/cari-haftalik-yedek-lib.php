@@ -82,14 +82,15 @@ function cari_haftalik_make_xlsx(string $path, string $snapshotAt): void
     $sheetRows[] = ['TOPLAM','','','','',$totalReceivable,$totalPayable,$totalNet,''];
 
     $xmlRows = '';
+    $lastRowIndex = count($sheetRows) - 1;
     foreach ($sheetRows as $rIndex => $row) {
         $cells = '';
         foreach ($row as $cIndex => $value) {
-            $isNumeric = $rIndex >= 4 && in_array($cIndex, [5,6,7], true) && is_numeric($value);
+            $isNumeric = ($rIndex >= 4 || $rIndex === $lastRowIndex) && in_array($cIndex, [5,6,7], true) && is_numeric($value);
             if ($isNumeric) {
                 $cells .= '<c r="' . cari_haftalik_col_name($cIndex) . ($rIndex + 1) . '" s="2"><v>' . number_format((float)$value, 2, '.', '') . '</v></c>';
             } else {
-                $style = $rIndex === 0 ? ' s="3"' : ($rIndex === 3 || $rIndex === count($sheetRows)-1 ? ' s="1"' : '');
+                $style = $rIndex === 0 ? ' s="3"' : ($rIndex === 3 || $rIndex === $lastRowIndex ? ' s="1"' : '');
                 $cells .= '<c r="' . cari_haftalik_col_name($cIndex) . ($rIndex + 1) . '" t="inlineStr"' . $style . '><is><t>' . cari_haftalik_xml((string)$value) . '</t></is></c>';
             }
         }
@@ -98,8 +99,10 @@ function cari_haftalik_make_xlsx(string $path, string $snapshotAt): void
 
     $sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        . '<sheetViews><sheetView workbookViewId="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+        . '<sheetFormatPr defaultRowHeight="15"/>'
         . '<cols><col min="1" max="1" width="34" customWidth="1"/><col min="2" max="2" width="14" customWidth="1"/><col min="3" max="3" width="18" customWidth="1"/><col min="4" max="5" width="22" customWidth="1"/><col min="6" max="8" width="20" customWidth="1"/><col min="9" max="9" width="18" customWidth="1"/></cols>'
-        . '<sheetData>' . $xmlRows . '</sheetData><autoFilter ref="A4:I' . max(4, count($sheetRows)-1) . '"/><freezePane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></worksheet>';
+        . '<sheetData>' . $xmlRows . '</sheetData><autoFilter ref="A4:I' . max(4, $lastRowIndex) . '"/></worksheet>';
 
     $styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         . '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
@@ -134,9 +137,11 @@ function cari_haftalik_create(bool $force = false): ?string
 {
     $dir = cari_haftalik_yedek_ensure_dir();
     $weekKey = cari_haftalik_week_key();
-    if (!$force) {
-        $existing = glob($dir . '/Cari_Bakiye_' . str_replace('-', '', $weekKey) . '_*.xlsx') ?: [];
-        if ($existing) return $existing[0];
+    $pattern = $dir . '/Cari_Bakiye_' . str_replace('-', '', $weekKey) . '_*.xlsx';
+    $existing = glob($pattern) ?: [];
+    if (!$force && $existing) return $existing[0];
+    if ($force && $existing) {
+        foreach ($existing as $old) @unlink($old);
     }
     $stamp = date('Ymd_His');
     $path = $dir . '/Cari_Bakiye_' . str_replace('-', '', $weekKey) . '_' . $stamp . '.xlsx';
