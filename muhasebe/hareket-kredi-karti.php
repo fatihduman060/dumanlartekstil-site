@@ -13,6 +13,32 @@ ensure_column($pdo, 'movements', 'report_excluded', 'INTEGER NOT NULL DEFAULT 0'
 $pdo->exec('CREATE INDEX IF NOT EXISTS idx_movements_card_key ON movements(card_key)');
 $pdo->exec('CREATE INDEX IF NOT EXISTS idx_movements_report_excluded ON movements(report_excluded)');
 
+function kartli_odeme_recent_duplicate(PDO $pdo, int $cariId, float $amount, string $date, string $cardKey, ?int $userId): ?array
+{
+    $sql = "SELECT * FROM movements
+            WHERE cari_id=?
+              AND movement_type='odeme'
+              AND movement_date=?
+              AND card_key=?
+              AND COALESCE(report_excluded,0)=1
+              AND COALESCE(is_cancelled,0)=0
+              AND ABS(amount-?) < 0.005";
+    $params = [$cariId, $date, $cardKey, $amount];
+    if ($userId) {
+        $sql .= ' AND created_by=?';
+        $params[] = $userId;
+    }
+    $sql .= ' ORDER BY id DESC LIMIT 5';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $nowTs = time();
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $createdTs = strtotime((string)($row['created_at'] ?? ''));
+        if ($createdTs && abs($nowTs - $createdTs) <= 120) return $row;
+    }
+    return null;
+}
+
 try {
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         $items = [];
@@ -50,6 +76,21 @@ try {
     $cari = $cariStmt->fetch();
     if (!$cari) throw new RuntimeException('Seçilen cari bulunamadı.');
 
+    $userId = current_user()['id'] ?? null;
+    $existing = kartli_odeme_recent_duplicate($pdo, $cariId, $amount, $date, $cardKey, $userId ? (int)$userId : null);
+    if ($existing) {
+        $existingId = (int)$existing['id'];
+        log_action('Mükerrer kartlı ödeme engellendi', (string)$cari['name'] . ' / ' . (string)$card['name'] . ' / ' . money($amount) . ' / hareket #' . $existingId);
+        echo json_encode([
+            'ok'=>true,
+            'message'=>'Aynı kartlı ödeme zaten kaydedilmişti. İkinci kayıt oluşturulmadı.',
+            'movement_id'=>$existingId,
+            'duplicate_ignored'=>true,
+            'redirect'=>'hareketler.php?edit=' . $existingId,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     try {
         $doc = handle_upload('document');
     } catch (Throwable $e) {
@@ -67,7 +108,7 @@ try {
         ->execute([
             $cariId, $categoryId, $amount, $date, $paymentMethod, $description,
             $documentType, $doc['path'], $doc['name'], $doc['mime'], $cardKey,
-            current_user()['id'] ?? null, now(), now()
+            $userId, now(), now()
         ]);
     $movementId = (int)$pdo->lastInsertId();
 
