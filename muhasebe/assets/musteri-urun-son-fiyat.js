@@ -155,3 +155,85 @@
 
   if(Number(cariSelect.value||0)>0) loadPrices();
 })();
+
+(function(){
+  'use strict';
+  if(!/\/teklif-ver\.php$/i.test(location.pathname)) return;
+
+  var table=document.querySelector('.saved-offers');
+  var tbody=table&&table.tBodies?table.tBodies[0]:null;
+  if(!tbody||tbody.dataset.firmaGrouped==='1') return;
+
+  var rows=Array.prototype.slice.call(tbody.querySelectorAll(':scope > tr')).filter(function(row){
+    return !row.querySelector('td.empty') && row.cells && row.cells.length>=5;
+  });
+  if(!rows.length) return;
+
+  var norm=function(value){
+    return String(value||'').trim().replace(/\s+/g,' ').toLocaleUpperCase('tr-TR');
+  };
+  var groups=[];
+  var byKey={};
+
+  rows.forEach(function(row){
+    var firmCell=row.cells[1];
+    var firmStrong=firmCell?firmCell.querySelector('strong'):null;
+    var firm=(firmStrong?firmStrong.textContent:firmCell?firmCell.textContent:'').replace(/\s+/g,' ').trim()||'Firma belirtilmemiş';
+    var key=norm(firm);
+    if(!byKey[key]){
+      byKey[key]={name:firm,rows:[]};
+      groups.push(byKey[key]);
+    }
+    byKey[key].rows.push(row);
+  });
+
+  var style=document.getElementById('teklif-firma-group-style');
+  if(!style){
+    style=document.createElement('style');
+    style.id='teklif-firma-group-style';
+    style.textContent=''
+      +'.offer-firm-group td{padding:0!important;background:#fbf6ed!important;border-bottom:1px solid #e5dccf!important}'
+      +'.offer-firm-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;border:0;background:transparent;padding:13px 15px;color:#102818;cursor:pointer;text-align:left;font:inherit}'
+      +'.offer-firm-toggle strong{font-size:14px}.offer-firm-toggle small{display:block!important;margin-top:3px!important;color:#776b5c!important;font-size:11px!important}'
+      +'.offer-firm-toggle .offer-firm-arrow{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#16482e;color:#fff;font-weight:900;transition:transform .18s ease}'
+      +'.offer-firm-group.open .offer-firm-arrow{transform:rotate(90deg)}'
+      +'.saved-offers tr.offer-firm-item[hidden]{display:none!important}'
+      +'.saved-offers tr.offer-firm-item td:first-child{padding-left:22px}'
+      +'@media(max-width:640px){.offer-firm-toggle{padding:12px}.saved-offers tr.offer-firm-item td:first-child{padding-left:12px}}';
+    document.head.appendChild(style);
+  }
+
+  tbody.innerHTML='';
+  groups.forEach(function(group,index){
+    var header=document.createElement('tr');
+    header.className='offer-firm-group';
+    var td=document.createElement('td');
+    td.colSpan=5;
+    var button=document.createElement('button');
+    button.type='button';
+    button.className='offer-firm-toggle';
+    button.setAttribute('aria-expanded','false');
+    button.innerHTML='<span><strong></strong><small></small></span><span class="offer-firm-arrow">›</span>';
+    button.querySelector('strong').textContent=group.name;
+    button.querySelector('small').textContent=group.rows.length+' teklif';
+    td.appendChild(button);
+    header.appendChild(td);
+    tbody.appendChild(header);
+
+    group.rows.forEach(function(row){
+      row.classList.add('offer-firm-item');
+      row.dataset.firmGroup=String(index);
+      row.hidden=true;
+      tbody.appendChild(row);
+    });
+
+    button.addEventListener('click',function(){
+      var open=button.getAttribute('aria-expanded')!=='true';
+      button.setAttribute('aria-expanded',open?'true':'false');
+      header.classList.toggle('open',open);
+      group.rows.forEach(function(row){row.hidden=!open;});
+    });
+  });
+
+  tbody.dataset.firmaGrouped='1';
+})();
