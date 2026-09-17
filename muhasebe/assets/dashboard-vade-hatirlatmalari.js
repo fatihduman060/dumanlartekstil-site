@@ -222,8 +222,26 @@
     completeReminder(button);
   });
 
+  function repairIlsanDuplicateCardPayment(){
+    if(!/dashboard\.php/i.test(location.pathname)) return;
+    fetch('kartli-odeme-mukerrer-onar.php?_='+Date.now(),{
+      credentials:'same-origin',
+      cache:'no-store',
+      headers:{'Accept':'application/json'}
+    })
+      .then(function(response){return response.json();})
+      .then(function(data){
+        if(data&&data.ok&&data.status==='repaired'){
+          console.info('İlsan mükerrer kartlı ödeme düzeltildi:',data);
+          load();
+        }
+      })
+      .catch(function(){});
+  }
+
   function run(){
     if(!/dashboard\.php/i.test(location.pathname)) return;
+    repairIlsanDuplicateCardPayment();
     addStyles();
     load();
   }
