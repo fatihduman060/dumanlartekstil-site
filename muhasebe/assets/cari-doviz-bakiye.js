@@ -102,6 +102,31 @@
     });
   }
 
+  function clearRestoredNewOffer(){
+    if (!/teklif-ver\.php/i.test(location.pathname)) return;
+    if (/[?&]edit=\d+/i.test(location.search)) return;
+    var form = document.getElementById('offerForm');
+    if (!form) return;
+
+    var cari = form.querySelector('[name="cari_id"]');
+    var fields = ['customer_name','customer_city','customer_phone','customer_tax_office','customer_tax_no','customer_address','note','term_text'];
+    if (cari) cari.value = '';
+    fields.forEach(function(name){
+      var el = form.querySelector('[name="' + name + '"]');
+      if (el) el.value = '';
+    });
+    form.querySelectorAll('[name="product_barcode[]"],[name="product_name[]"],[name="product_type[]"],[name="quantity[]"],[name="unit_price[]"]').forEach(function(el){ el.value = ''; });
+    var discount = form.querySelector('[name="discount_enabled"]');
+    var vat = form.querySelector('[name="vat_enabled"]');
+    var discountRate = form.querySelector('[name="discount_rate"]');
+    var vatRate = form.querySelector('[name="vat_rate"]');
+    if (discount) discount.checked = false;
+    if (vat) vat.checked = false;
+    if (discountRate) discountRate.value = '0';
+    if (vatRate) vatRate.value = '10';
+    ['input','change'].forEach(function(type){ form.dispatchEvent(new Event(type, {bubbles:true})); });
+  }
+
   function init(){
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
@@ -121,6 +146,7 @@
     normalizeCariDetailCards();
     loadCariSaleViewer();
     addWarehouseDeleteButtons();
+    clearRestoredNewOffer();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
