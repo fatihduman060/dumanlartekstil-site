@@ -34,7 +34,6 @@ function is_super_admin(?int $userId = null): bool
 
 function can_manage_users(): bool
 {
-    // Süper yönetici tanımlandıktan sonra kullanıcı yönetimi yalnızca Fatih'e açıktır.
     $ids = super_admin_user_ids();
     return empty($ids) ? is_admin() : is_super_admin();
 }
@@ -42,22 +41,13 @@ function can_manage_users(): bool
 function set_user_super_admin(int $userId, bool $enabled): void
 {
     if ($userId <= 0) return;
-
     $stmt = db()->prepare('SELECT id, username, display_name FROM users WHERE id=? LIMIT 1');
     $stmt->execute([$userId]);
     $target = $stmt->fetch() ?: null;
-
-    // Süper yönetici yetkisi yalnızca Fatih kullanıcısına verilebilir.
-    if ($enabled && (!$target || !is_fatih_user($target))) {
-        $enabled = false;
-    }
-
+    if ($enabled && (!$target || !is_fatih_user($target))) $enabled = false;
     $ids = super_admin_user_ids();
-    if ($enabled) {
-        $ids = [$userId];
-    } else {
-        $ids = array_values(array_filter($ids, fn($id) => (int)$id !== $userId));
-    }
+    if ($enabled) $ids = [$userId];
+    else $ids = array_values(array_filter($ids, fn($id) => (int)$id !== $userId));
     $ids = array_values(array_unique(array_map('intval', $ids)));
     setting_set('super_admin_user_ids', json_encode($ids, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 }
@@ -84,9 +74,6 @@ function can_access_private_finance_modules(): bool
 {
     $u = current_user();
     if (!$u) return false;
-
-    // Yönetici rolü özel finans ekranlarını görür; süper yönetici ayrımı yalnızca
-    // kullanıcı yönetimi gibi en üst düzey işlemler için kullanılır.
     return is_admin() || is_super_admin((int)($u['id'] ?? 0)) || is_murat_limited_user($u);
 }
 
@@ -102,43 +89,26 @@ function require_private_finance_modules(): void
 function private_finance_script_names(): array
 {
     return [
-        'hesaplar.php',
-        'cekler.php',
-        'cek-senet-arsivi.php',
-        'cek-senet-belge-goruntule.php',
-        'cek-ek-belge.php',
-        'teklif-ver.php',
-        'teklif-yazdir.php',
-        'tahsilat-makbuzu.php',
-        'tahsilat-yazdir.php',
-        'vergi-odemeleri.php',
+        'hesaplar.php','cekler.php','cek-senet-arsivi.php','cek-senet-belge-goruntule.php','cek-ek-belge.php',
+        'teklif-ver.php','teklif-yazdir.php','tahsilat-makbuzu.php','tahsilat-yazdir.php','vergi-odemeleri.php',
     ];
 }
 
 $currentScript = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-if (is_logged_in() && in_array($currentScript, private_finance_script_names(), true)) {
-    require_private_finance_modules();
-}
+if (is_logged_in() && in_array($currentScript, private_finance_script_names(), true)) require_private_finance_modules();
 
 if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'kullanicilar.php') {
     if (is_logged_in() && current_user() && !can_manage_users()) {
         flash('error', 'Kullanıcı tanımları yalnızca süper yönetici tarafından yönetilebilir.');
         redirect('dashboard.php');
     }
-    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
-        && ($_POST['action'] ?? '') === 'update'
-        && verify_csrf($_POST['csrf_token'] ?? null)
-        && is_logged_in()
-        && current_user()
-        && can_manage_users()) {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'update' && verify_csrf($_POST['csrf_token'] ?? null) && is_logged_in() && current_user() && can_manage_users()) {
         $targetUserId = (int)($_POST['id'] ?? 0);
         if ($targetUserId > 0) {
             $postedRole = (string)($_POST['role'] ?? '');
             $makeSuper = $postedRole === 'super_admin' || (isset($_POST['is_super_admin']) && (string)$_POST['is_super_admin'] === '1');
             set_user_super_admin($targetUserId, $makeSuper);
-            if ($postedRole === 'super_admin') {
-                $_POST['role'] = 'admin';
-            }
+            if ($postedRole === 'super_admin') $_POST['role'] = 'admin';
         }
     }
 }
@@ -152,62 +122,34 @@ function page_header(string $title, string $active = ''): void
     $fullAdmin = is_admin();
 
     if ($warehouseOnly) {
-        $nav = [
-            ['barkod_satis', 'barkod-satis.php', 'Barkodlu Satış', '▣'],
-            ['magaza', 'magaza.php', 'Mağaza', '▤'],
-            ['depo_cikis', 'depo-cikis.php', 'Depo Çıkış', '⇥'],
-        ];
+        $nav = [['barkod_satis','barkod-satis.php','Barkodlu Satış','▣'],['magaza','magaza.php','Mağaza','▤'],['depo_cikis','depo-cikis.php','Depo Çıkış','⇥']];
     } elseif ($storeOnly) {
-        $nav = [
-            ['barkod_satis', 'barkod-satis.php', 'Barkodlu Satış', '▣'],
-            ['magaza', 'magaza.php', 'Mağaza', '▤'],
-            ['depo_cikis', 'depo-cikis.php', 'Depo Çıkış', '⇥'],
-        ];
+        $nav = [['barkod_satis','barkod-satis.php','Barkodlu Satış','▣'],['magaza','magaza.php','Mağaza','▤'],['depo_cikis','depo-cikis.php','Depo Çıkış','⇥']];
     } elseif ($muratLimited) {
-        $nav = [
-            ['faturalar', 'faturalar.php', 'Faturalar', '▤'],
-            ['sirket_evraklari', 'sirket-evraklari.php', 'Şirket Evrakları', '▧'],
-            ['vergi_odemeleri', 'vergi-odemeleri.php', 'Vergi Ödemeleri', '₺'],
-        ];
+        $nav = [['faturalar','faturalar.php','Faturalar','▤'],['sirket_evraklari','sirket-evraklari.php','Şirket Evrakları','▧'],['vergi_odemeleri','vergi-odemeleri.php','Vergi Ödemeleri','₺']];
     } else {
-        $nav = [['dashboard', 'dashboard.php', 'Genel Bakış', '⌂']];
-        $nav[] = ['cariler', 'cariler.php', 'Cariler', '◎'];
-        if ($fullAdmin) $nav[] = ['faturalar', 'faturalar.php', 'Faturalar', '▤'];
-        if (can_access_private_finance_modules()) $nav[] = ['hesaplar', 'hesaplar.php', 'Kasa / Banka', '▣'];
-        if (can_write()) {
-            $nav[] = ['barkod_satis', 'barkod-satis.php', 'Barkodlu Satış', '▣'];
-            $nav[] = ['uretim_takibi', 'uretim-takibi.php', 'Üretim Takibi', '⚙'];
-            $nav[] = ['stok_takibi', 'stok-takibi.php', 'Stok Takibi', '▦'];
-        }
-        if ($fullAdmin) {
-            $nav[] = ['magaza', 'magaza.php', 'Mağaza', '▥'];
-            $nav[] = ['depo_cikis', 'depo-cikis.php', 'Depo Çıkış', '⇥'];
-        }
-        if (can_access_private_finance_modules()) $nav[] = ['vergi_odemeleri', 'vergi-odemeleri.php', 'Vergi Ödemeleri', '₺'];
-        if (can_access_private_finance_modules()) $nav[] = ['kart_ekstre', 'kart-ekstre-takibi.php', 'Kart Ekstre Takibi', '▧'];
-        if ($fullAdmin) $nav[] = ['maaslar', 'maaslar.php', 'Maaşlar', '₺'];
-        if (can_access_private_finance_modules()) $nav[] = ['cekler', 'cekler.php', 'Çekler', '◈'];
-        if ($fullAdmin) $nav[] = ['hesap_dokumleri', 'hesap-dokumleri.php', 'Hesap Dökümleri', '▥'];
-        if (can_access_private_finance_modules()) $nav[] = ['teklif_ver', 'teklif-ver.php', 'Teklif Ver', '✎'];
-        if (can_access_private_finance_modules()) $nav[] = ['tahsilat_makbuzu', 'tahsilat-makbuzu.php', 'Tahsilat Makbuzu', '₺'];
-        $nav[] = ['sirket_evraklari', 'sirket-evraklari.php', 'Şirket Evrakları', '▧'];
-        $nav[] = ['ozel_alacaklar', 'ozel-alacaklar.php', 'Özel Alacak', '◆'];
-        $nav[] = ['hareketler', 'hareketler.php', 'Hareketler', '↕'];
-        $nav[] = ['belgeler', 'belgeler.php', 'Belgeler', '▤'];
-        $nav[] = ['kategoriler', 'kategoriler.php', 'Kategoriler', '▦'];
-        $nav[] = ['raporlar', 'raporlar.php', 'Raporlar', '◷'];
-
-        // Kullanıcı yönetimi seyrek kullanıldığı için Raporlar'ın altında tutulur.
-        if (can_manage_users()) {
-            $nav[] = ['kullanicilar', 'kullanicilar.php', 'Kullanıcılar', '♙'];
-        }
-
-        $nav[] = ['hesabim', 'hesabim.php', 'Hesabım', '⚿'];
-
-        if ($fullAdmin) {
-            $nav[] = ['yedekler', 'yedekler.php', 'Yedekleme', '⇩'];
-            $nav[] = ['loglar', 'loglar.php', 'Loglar', '☰'];
-        }
+        $nav = [['dashboard','dashboard.php','Genel Bakış','⌂']];
+        $nav[]=['cariler','cariler.php','Cariler','◎'];
+        if($fullAdmin)$nav[]=['faturalar','faturalar.php','Faturalar','▤'];
+        if(can_access_private_finance_modules())$nav[]=['hesaplar','hesaplar.php','Kasa / Banka','▣'];
+        if(can_write()){$nav[]=['barkod_satis','barkod-satis.php','Barkodlu Satış','▣'];$nav[]=['uretim_takibi','uretim-takibi.php','Üretim Takibi','⚙'];$nav[]=['stok_takibi','stok-takibi.php','Stok Takibi','▦'];}
+        if($fullAdmin){$nav[]=['magaza','magaza.php','Mağaza','▥'];$nav[]=['depo_cikis','depo-cikis.php','Depo Çıkış','⇥'];}
+        if(can_access_private_finance_modules())$nav[]=['vergi_odemeleri','vergi-odemeleri.php','Vergi Ödemeleri','₺'];
+        if(can_access_private_finance_modules())$nav[]=['kart_ekstre','kart-ekstre-takibi.php','Kart Ekstre Takibi','▧'];
+        if($fullAdmin)$nav[]=['maaslar','maaslar.php','Maaşlar','₺'];
+        if(can_access_private_finance_modules())$nav[]=['cekler','cekler.php','Çekler','◈'];
+        if($fullAdmin)$nav[]=['hesap_dokumleri','hesap-dokumleri.php','Hesap Dökümleri','▥'];
+        if(can_access_private_finance_modules())$nav[]=['teklif_ver','teklif-ver.php','Teklif Ver','✎'];
+        if(can_access_private_finance_modules())$nav[]=['tahsilat_makbuzu','tahsilat-makbuzu.php','Tahsilat Makbuzu','₺'];
+        $nav[]=['sirket_evraklari','sirket-evraklari.php','Şirket Evrakları','▧'];
+        $nav[]=['ozel_alacaklar','ozel-alacaklar.php','Özel Alacak','◆'];
+        $nav[]=['hareketler','hareketler.php','Hareketler','↕'];
+        $nav[]=['belgeler','belgeler.php','Belgeler','▤'];
+        $nav[]=['kategoriler','kategoriler.php','Kategoriler','▦'];
+        $nav[]=['raporlar','raporlar.php','Raporlar','◷'];
+        if(can_manage_users())$nav[]=['kullanicilar','kullanicilar.php','Kullanıcılar','♙'];
+        $nav[]=['hesabim','hesabim.php','Hesabım','⚿'];
+        if($fullAdmin){$nav[]=['yedekler','yedekler.php','Yedekleme','⇩'];$nav[]=['loglar','loglar.php','Loglar','☰'];}
     }
     ?>
 <!doctype html>
@@ -241,32 +183,18 @@ function page_header(string $title, string $active = ''): void
       </a>
       <nav class="side-nav" aria-label="Panel menüsü">
         <?php foreach ($nav as $item): ?>
-          <a class="<?php echo $active === $item[0] ? 'active' : ''; ?>" href="<?php echo e($item[1]); ?>">
-            <span class="nav-ico"><?php echo e($item[3]); ?></span>
-            <span><?php echo e($item[2]); ?></span>
-          </a>
+          <a class="<?php echo $active === $item[0] ? 'active' : ''; ?>" href="<?php echo e($item[1]); ?>"><span class="nav-ico"><?php echo e($item[3]); ?></span><span><?php echo e($item[2]); ?></span></a>
         <?php endforeach; ?>
       </nav>
-      <div class="side-footer">
-        <span><?php echo $warehouseOnly ? 'Depo Kullanıcısı' : ($storeOnly ? 'Mağaza Kullanıcısı' : ($muratLimited ? 'Fatura / Evrak / Vergi' : (is_super_admin() ? 'Süper Yönetici' : e(role_label($u['role'] ?? 'viewer'))))); ?></span>
-        <strong><?php echo e($u['display_name'] ?? 'Kullanıcı'); ?></strong>
-      </div>
+      <div class="side-footer"><span><?php echo $warehouseOnly ? 'Depo Kullanıcısı' : ($storeOnly ? 'Mağaza Kullanıcısı' : ($muratLimited ? 'Fatura / Evrak / Vergi' : (is_super_admin() ? 'Süper Yönetici' : e(role_label($u['role'] ?? 'viewer'))))); ?></span><strong><?php echo e($u['display_name'] ?? 'Kullanıcı'); ?></strong></div>
     </aside>
     <main class="main">
       <header class="topbar">
         <button class="menu-toggle" type="button" data-menu-toggle>☰</button>
-        <div>
-          <p>Bitke özel alan</p>
-          <h1><?php echo e($title); ?></h1>
-        </div>
-        <div class="top-actions">
-          <?php if (!$storeOnly): ?><a class="ghost-link" href="../" target="_blank" rel="noopener">Siteyi aç</a><?php endif; ?>
-          <span class="session-chip" title="İşlem yapılmazsa otomatik çıkış süresi"><?php echo !empty($_SESSION['remember_pwa']) ? '30 gün' : ((int)(SESSION_TIMEOUT_SECONDS / 3600) . ' saat'); ?></span><a class="logout-link" href="logout.php">Çıkış</a>
-        </div>
+        <div><p>Bitke özel alan</p><h1><?php echo e($title); ?></h1></div>
+        <div class="top-actions"><?php if (!$storeOnly): ?><a class="ghost-link" href="../" target="_blank" rel="noopener">Siteyi aç</a><?php endif; ?><span class="session-chip" title="İşlem yapılmazsa otomatik çıkış süresi"><?php echo !empty($_SESSION['remember_pwa']) ? '30 gün' : ((int)(SESSION_TIMEOUT_SECONDS / 3600) . ' saat'); ?></span><a class="logout-link" href="logout.php">Çıkış</a></div>
       </header>
-      <?php foreach (get_flashes() as $flash): ?>
-        <div class="alert alert-<?php echo e($flash['type']); ?>"><?php echo e($flash['message']); ?></div>
-      <?php endforeach; ?>
+      <?php foreach (get_flashes() as $flash): ?><div class="alert alert-<?php echo e($flash['type']); ?>"><?php echo e($flash['message']); ?></div><?php endforeach; ?>
 <?php }
 
 function page_footer(): void
@@ -276,7 +204,7 @@ function page_footer(): void
     </main>
   </div>
   <script>window.BITKE_SUPER_ADMIN_IDS = <?php echo json_encode(super_admin_user_ids(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_COMPANY_TAX_NO = <?php echo json_encode(preg_replace('/\D+/', '', (string)setting_get('company_tax_no', '3140036788')) ?: '3140036788', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>; window.BITKE_PRIVATE_FINANCE_ACCESS = <?php echo can_access_private_finance_modules() ? 'true' : 'false'; ?>; window.BITKE_STORE_SALES_ONLY = <?php echo $storeOnly ? 'true' : 'false'; ?>;</script>
-  <script src="assets/muhasebe.js?v=517"></script>
+  <script src="assets/muhasebe.js?v=518"></script>
   <?php if ($storeOnly): ?>
   <script src="assets/magaza-kullanici-ekrani.js?v=2"></script>
   <script src="assets/magaza-gunluk-satis.js?v=9"></script>
