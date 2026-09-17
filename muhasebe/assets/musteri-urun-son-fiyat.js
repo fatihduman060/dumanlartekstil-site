@@ -23,10 +23,12 @@
     return String(n).replace('.',',');
   }
 
-  function recalc(row){
+  function triggerRecalc(row){
     var price=row?.querySelector('.price');
     if(!price) return;
+    settingPrice=true;
     price.dispatchEvent(new Event('input',{bubbles:true}));
+    settingPrice=false;
   }
 
   function matchForRow(row){
@@ -75,7 +77,7 @@
       price.title=currentCari>0?'Bu müşteride bu ürün için geçmiş fiyat yok.':'Müşteri seçilince son fiyat otomatik gelir.';
     }
     settingPrice=false;
-    recalc(row);
+    triggerRecalc(row);
   }
 
   function applyAll(){
