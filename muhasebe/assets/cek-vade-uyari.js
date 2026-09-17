@@ -191,3 +191,65 @@
     document.body.appendChild(restoreScript);
   }
 })();
+
+(function(){
+  'use strict';
+  if(!/\/cekler\.php$/i.test(location.pathname)) return;
+
+  var params=new URLSearchParams(location.search);
+  var oldMode=params.get('old_check')==='1';
+  var direction=params.get('direction')==='verilecek'?'verilecek':'alinacak';
+  var heroActions=document.querySelector('.checks-hero .checks-actions');
+  var formDetails=document.getElementById('cek-form');
+  if(!heroActions||!formDetails) return;
+
+  if(!document.getElementById('old-check-entry-style')){
+    var style=document.createElement('style');
+    style.id='old-check-entry-style';
+    style.textContent='.old-check-entry-btn{background:#fff4d6!important;color:#7d5600!important;border:1px solid #e7ca78!important}.old-check-entry-banner{margin:0 0 14px;padding:13px 14px;border:1px solid #e7ca78;border-radius:14px;background:#fff8df;color:#6b4c00;font-weight:800;line-height:1.45}.old-check-entry-banner strong{display:block;margin-bottom:3px;color:#4d3700}.old-check-hidden-flag{display:none!important}';
+    document.head.appendChild(style);
+  }
+
+  if(!heroActions.querySelector('.old-check-entry-btn')){
+    var oldLink=document.createElement('a');
+    oldLink.className='old-check-entry-btn';
+    oldLink.href='cekler.php?direction='+encodeURIComponent(direction)+'&old_check=1#cek-form';
+    oldLink.textContent='Eski çek girişi';
+    oldLink.title='Daha önce alınmış ve cari bakiyeye etkisi daha önce işlenmiş çekleri gir';
+    heroActions.appendChild(oldLink);
+  }
+
+  if(!oldMode) return;
+
+  formDetails.open=true;
+  var summary=formDetails.querySelector(':scope > summary span');
+  if(summary) summary.textContent='Eski / devir çek girişi';
+
+  var form=formDetails.querySelector('form');
+  if(!form) return;
+
+  var oldFlag=form.querySelector('input[name="is_opening_balance_check"]');
+  if(oldFlag){
+    oldFlag.checked=true;
+    var flagLabel=oldFlag.closest('label');
+    if(flagLabel) flagLabel.classList.add('old-check-hidden-flag');
+  }
+
+  if(!form.querySelector('.old-check-entry-banner')){
+    var banner=document.createElement('div');
+    banner.className='old-check-entry-banner';
+    banner.innerHTML='<strong>Eski çek girişi aktif</strong>Bu bölüm daha önce alınmış, cari bakiyesi zaten netleştirilmiş çekler içindir. Çek listeye ve vade takibine eklenir; cari bakiyeye yeniden düşüş/çıkış uygulanmaması için devir çek olarak kaydedilir.';
+    var grid=form.querySelector('.check-form-grid');
+    if(grid) grid.insertAdjacentElement('beforebegin',banner);
+  }
+
+  var submit=form.querySelector('button[type="submit"]');
+  if(submit) submit.textContent='Eski Çeki Kaydet';
+
+  var directionSelect=form.querySelector('select[name="direction"]');
+  if(directionSelect) directionSelect.value=direction;
+
+  setTimeout(function(){
+    formDetails.scrollIntoView({behavior:'smooth',block:'start'});
+  },50);
+})();
