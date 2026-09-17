@@ -240,3 +240,13 @@ document.addEventListener('change', function (event) {
   script.dataset.cekCiroUi='1';
   document.body.appendChild(script);
 })();
+
+// Depo Çıkış'ta cariye işlenmiş fişleri müşteri bazında kapalı gruplarda göster.
+(function loadWarehouseDispatchCariGroups(){
+  if(!/depo-cikis\.php$/i.test(location.pathname)) return;
+  if(document.querySelector('script[data-depo-cikis-cari-grupla]')) return;
+  const script=document.createElement('script');
+  script.src='assets/depo-cikis-cari-grupla.js?v=1&_='+Date.now();
+  script.dataset.depoCikisCariGrupla='1';
+  document.body.appendChild(script);
+})();
