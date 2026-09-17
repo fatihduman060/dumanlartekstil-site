@@ -128,3 +128,12 @@
 
   syncType();
 })();
+
+(function(){
+  if(!/\/hareketler\.php$/i.test(location.pathname)) return;
+  if(document.querySelector('script[data-hareket-satis-musteri-fiyat]')) return;
+  var script=document.createElement('script');
+  script.src='assets/hareket-satis-musteri-fiyat.js?v=1&_='+Date.now();
+  script.setAttribute('data-hareket-satis-musteri-fiyat','1');
+  document.body.appendChild(script);
+})();
