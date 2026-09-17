@@ -64,8 +64,6 @@ document.addEventListener('change', function (event) {
   function replaceText(text) {
     let next = text;
     for (const [from, to] of replacements) {
-      // Gelir/Gider işlem türlerini sadeleştirirken "Gelir tablosu" gibi
-      // rapor başlıklarını değiştirme.
       if ((from === 'Gelir' || from === 'Gider') && next.trim() !== from) continue;
       next = next.split(from).join(to);
     }
@@ -192,50 +190,8 @@ document.addEventListener('change', function (event) {
   }
 })();
 
-// Çek ekranını alınan/verilen sekmeleriyle ayır.
-(function splitChecksByDirectionTabs() {
-  const title = document.querySelector('.topbar h1')?.textContent.trim() || '';
-  if (title !== 'Çekler') return;
-
-  const url = new URL(window.location.href);
-  const params = url.searchParams;
-  if (!params.has('direction') && !params.has('edit')) {
-    params.set('direction', 'alinacak');
-    window.location.replace(url.pathname + '?' + params.toString());
-    return;
-  }
-
-  const current = params.get('direction') === 'verilecek' ? 'verilecek' : 'alinacak';
-  const listCard = document.querySelector('.check-list-card');
-  const summary = document.querySelector('.checks-summary');
-  const target = summary || listCard;
-  if (!target || document.querySelector('.check-direction-tabs')) return;
-
-  function linkFor(direction) {
-    const next = new URL(window.location.href);
-    next.searchParams.set('direction', direction);
-    next.searchParams.delete('edit');
-    return next.pathname + '?' + next.searchParams.toString();
-  }
-
-  const style = document.createElement('style');
-  style.textContent = '.check-direction-tabs{display:flex;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #e5dccf;border-radius:18px;padding:8px;box-shadow:0 10px 26px rgba(7,27,63,.05)}.check-direction-tabs a{flex:1 1 220px;text-align:center;text-decoration:none;border-radius:14px;padding:13px 16px;font-weight:950;color:#16482e;background:#fbf6ed;border:1px solid transparent}.check-direction-tabs a.active{background:#16482e;color:#fff;box-shadow:0 8px 20px rgba(22,72,46,.18)}.check-direction-tabs small{display:block;margin-top:3px;font-weight:700;opacity:.72}.bank-location-note{display:block!important;margin-top:6px!important;color:#16482e!important;font-weight:900!important}.auto-check-note{margin-top:8px;padding:8px 10px;border-radius:12px;background:#e9f8ef;color:#16482e;font-weight:800;font-size:12px}';
-  document.head.appendChild(style);
-
-  const tabs = document.createElement('nav');
-  tabs.className = 'check-direction-tabs';
-  tabs.innerHTML = `
-    <a href="${linkFor('alinacak')}" class="${current === 'alinacak' ? 'active' : ''}">Alınan Çekler<small>Müşteriden aldığımız çekler</small></a>
-    <a href="${linkFor('verilecek')}" class="${current === 'verilecek' ? 'active' : ''}">Verilen Çekler<small>Bizim yazdığımız/verdiğimiz çekler</small></a>
-  `;
-  target.insertAdjacentElement('afterend', tabs);
-
-  const directionSelect = document.querySelector('.check-filter select[name="direction"]');
-  if (directionSelect) directionSelect.closest('select').value = current;
-
-  const headline = document.querySelector('.checks-hero h2');
-  if (headline) headline.textContent = current === 'alinacak' ? 'Alınan çekleri takip et.' : 'Verilen çekleri takip et.';
-})();
+// Alınan/verilen sekmeleri artık cekler.php tarafından ilk HTML içinde oluşturuluyor.
+// Burada ikinci yönlendirme veya sonradan sekme üretimi yapılmaz; böylece sayfa açılırken görüntü sıçramaz.
 
 // Bankaya verilen alınan çeklerin nerede olduğunu göster ve vadesi gelenleri otomatik tahsil ettir.
 (function autoCollectBankChecks() {
