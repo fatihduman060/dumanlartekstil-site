@@ -67,6 +67,41 @@
     document.head.appendChild(script);
   }
 
+  function addWarehouseDeleteButtons(){
+    if (!/depo-cikis\.php/i.test(location.pathname)) return;
+    var csrf = document.querySelector('input[name="csrf_token"], input[name="csrf"]');
+    document.querySelectorAll('a[href^="depo-cikis.php?edit="]').forEach(function(editLink){
+      var actions = editLink.closest('.wd-actions');
+      if (!actions || actions.querySelector('.wd-delete-form')) return;
+      var match = String(editLink.getAttribute('href') || '').match(/edit=(\d+)/);
+      if (!match) return;
+      var form = document.createElement('form');
+      form.method = 'post';
+      form.action = 'depo-cikis-sil.php';
+      form.className = 'wd-delete-form';
+      form.onsubmit = function(){ return window.confirm('Bu depo çıkış fişi silinsin mi? Bu işlem geri alınamaz.'); };
+      if (csrf) {
+        var token = document.createElement('input');
+        token.type = 'hidden';
+        token.name = csrf.name;
+        token.value = csrf.value;
+        form.appendChild(token);
+      }
+      var id = document.createElement('input');
+      id.type = 'hidden';
+      id.name = 'id';
+      id.value = match[1];
+      form.appendChild(id);
+      var button = document.createElement('button');
+      button.type = 'submit';
+      button.textContent = 'Sil';
+      button.style.color = '#b42318';
+      button.style.borderColor = '#efb7b2';
+      form.appendChild(button);
+      actions.appendChild(form);
+    });
+  }
+
   function init(){
     if (/cariler\.php/i.test(location.pathname)) {
       fetch('cari-doviz-bakiye.php', {credentials:'same-origin'})
@@ -85,6 +120,7 @@
     }
     normalizeCariDetailCards();
     loadCariSaleViewer();
+    addWarehouseDeleteButtons();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
