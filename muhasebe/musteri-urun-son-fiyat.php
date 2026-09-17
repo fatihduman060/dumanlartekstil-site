@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/depo-cikis-lib.php';
+require_once __DIR__ . '/hareket-satis-db.php';
 
 require_login();
 header('Content-Type: application/json; charset=utf-8');
@@ -20,6 +21,7 @@ try {
 
     teklif_db_ensure();
     depo_cikis_db_ensure();
+    hareket_satis_db_ensure();
     $pdo = db();
 
     $sql = "
@@ -56,11 +58,31 @@ try {
         WHERE w.cari_id=?
           AND wi.unit_price>0
 
+        UNION ALL
+
+        SELECT
+            'hareket' AS source_type,
+            m.id AS source_id,
+            m.movement_date AS document_date,
+            ms.updated_at AS updated_at,
+            msi.id AS item_id,
+            COALESCE(msi.product_barcode,'') AS product_barcode,
+            COALESCE(msi.product_name,'') AS product_name,
+            '' AS product_type,
+            msi.unit_price AS unit_price
+        FROM movement_sale_items msi
+        INNER JOIN movement_sales ms ON ms.movement_id=msi.movement_id
+        INNER JOIN movements m ON m.id=ms.movement_id
+        WHERE m.cari_id=?
+          AND COALESCE(m.is_cancelled,0)=0
+          AND m.movement_type='alacak'
+          AND msi.unit_price>0
+
         ORDER BY updated_at DESC, document_date DESC, source_id DESC, item_id DESC
     ";
 
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$cariId, $cariId]);
+    $stmt->execute([$cariId, $cariId, $cariId]);
     $rows = $stmt->fetchAll() ?: [];
 
     // Aynı ürün geçmişte birçok kez kullanılmış olabilir. Sorgu en yeniden eskiye
