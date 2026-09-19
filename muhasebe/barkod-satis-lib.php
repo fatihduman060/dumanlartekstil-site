@@ -603,7 +603,7 @@ function pos_archive_stale_live_carts(int $staleSeconds = 300): void
                 (string)$row['terminal_id'],
                 (string)$row['snapshot'],
                 (int)$row['updated_at'],
-                now(),
+                date('Y-m-d H:i:s', (int)$row['updated_at'] + max(60, $staleSeconds)),
             ]);
         }
         // updated_at eşleşmesi, aynı kasa bu sırada yeniden bağlandıysa yeni kaydın silinmesini engeller.
