@@ -14,10 +14,12 @@ function depo_cikis_db_ensure(): void
         total REAL NOT NULL DEFAULT 0,
         processed INTEGER NOT NULL DEFAULT 0, processed_at TEXT, processed_by INTEGER,
         posted_to_cari INTEGER NOT NULL DEFAULT 0, cari_movement_id INTEGER,
+        source_offer_id INTEGER,
         created_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
         FOREIGN KEY(cari_id) REFERENCES cariler(id) ON DELETE SET NULL,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
+    try { ensure_column($pdo, 'warehouse_dispatches', 'source_offer_id', 'INTEGER'); } catch (Throwable $e) {}
     foreach ([
         'subtotal' => 'REAL NOT NULL DEFAULT 0',
         'discount_enabled' => 'INTEGER NOT NULL DEFAULT 0',
@@ -40,6 +42,120 @@ function depo_cikis_db_ensure(): void
         FOREIGN KEY(dispatch_id) REFERENCES warehouse_dispatches(id) ON DELETE CASCADE
     )");
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_date ON warehouse_dispatches(dispatch_date,id)');
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer ON warehouse_dispatches(source_offer_id) WHERE source_offer_id IS NOT NULL");
+}
+
+function depo_cikis_offer_map(array $offerIds): array
+{
+    depo_cikis_db_ensure();
+    $offerIds = array_values(array_unique(array_filter(array_map('intval', $offerIds), static function ($id) { return $id > 0; })));
+    if (!$offerIds) return [];
+    $placeholders = implode(',', array_fill(0, count($offerIds), '?'));
+    $stmt = db()->prepare("SELECT source_offer_id,id FROM warehouse_dispatches WHERE source_offer_id IN ($placeholders)");
+    $stmt->execute($offerIds);
+    $map = [];
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $map[(int)$row['source_offer_id']] = (int)$row['id'];
+    }
+    return $map;
+}
+
+function depo_cikis_from_offer(int $offerId): int
+{
+    if (!can_access_warehouse_dispatch()) {
+        throw new RuntimeException('Depo Çıkış bölümüne erişim yetkiniz yok.');
+    }
+    if ($offerId <= 0) throw new RuntimeException('Aktarılacak teklif seçilmedi.');
+
+    depo_cikis_db_ensure();
+    $offer = teklif_load($offerId);
+    if (!$offer) throw new RuntimeException('Aktarılacak teklif bulunamadı.');
+    if (strtoupper(trim((string)($offer['currency'] ?? 'TL'))) !== 'TL') {
+        throw new RuntimeException('Depo Çıkış aktarımı şu anda yalnız TL tekliflerde kullanılabilir.');
+    }
+
+    $stmt = db()->prepare('SELECT id FROM warehouse_dispatches WHERE source_offer_id=? LIMIT 1');
+    $stmt->execute([$offerId]);
+    $existingId = (int)($stmt->fetchColumn() ?: 0);
+    if ($existingId > 0) return $existingId;
+
+    $items = is_array($offer['items'] ?? null) ? $offer['items'] : [];
+    if (!$items) throw new RuntimeException('Teklifte aktarılacak ürün satırı bulunmuyor.');
+
+    $dispatchNo = depo_cikis_next_no();
+    $dispatchDate = trim((string)($offer['offer_date'] ?? '')) ?: date('Y-m-d');
+    $customerName = trim((string)($offer['customer_name'] ?? ''));
+    if ($customerName === '') throw new RuntimeException('Teklifte firma / müşteri adı bulunmuyor.');
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('INSERT INTO warehouse_dispatches
+            (dispatch_no,dispatch_date,cari_id,customer_name,customer_city,customer_address,note,currency,
+             subtotal,discount_enabled,discount_rate,discount_amount,vat_enabled,vat_rate,vat_amount,total,
+             processed,posted_to_cari,source_offer_id,created_by,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?,?)');
+        $stmt->execute([
+            $dispatchNo,
+            $dispatchDate,
+            (int)($offer['cari_id'] ?? 0) ?: null,
+            $customerName,
+            trim((string)($offer['customer_city'] ?? '')),
+            trim((string)($offer['customer_address'] ?? '')),
+            trim((string)($offer['note'] ?? '')),
+            'TL',
+            round((float)($offer['subtotal'] ?? 0), 2),
+            (int)($offer['discount_enabled'] ?? 0) === 1 ? 1 : 0,
+            (float)($offer['discount_rate'] ?? 0),
+            round((float)($offer['discount_amount'] ?? 0), 2),
+            (int)($offer['vat_enabled'] ?? 0) === 1 ? 1 : 0,
+            (float)($offer['vat_rate'] ?? 10),
+            round((float)($offer['vat_amount'] ?? 0), 2),
+            round((float)($offer['grand_total'] ?? 0), 2),
+            $offerId,
+            (int)(current_user()['id'] ?? 0) ?: null,
+            now(),
+            now(),
+        ]);
+        $dispatchId = (int)$pdo->lastInsertId();
+
+        $itemStmt = $pdo->prepare('INSERT INTO warehouse_dispatch_items
+            (dispatch_id,sort_order,product_barcode,product_name,product_type,quantity,unit_price,line_total)
+            VALUES (?,?,?,?,?,?,?,?)');
+        foreach ($items as $index => $item) {
+            $itemStmt->execute([
+                $dispatchId,
+                $index + 1,
+                (string)($item['product_barcode'] ?? ''),
+                (string)($item['product_name'] ?? ''),
+                (string)($item['product_type'] ?? ''),
+                (float)($item['quantity'] ?? 0),
+                (float)($item['unit_price'] ?? 0),
+                round((float)($item['line_total'] ?? ((float)($item['quantity'] ?? 0) * (float)($item['unit_price'] ?? 0))), 2),
+            ]);
+        }
+
+        audit_action('depo_cikis', $dispatchId, 'tekliften_aktarildi', null, [
+            'source_offer_id'=>$offerId,
+            'offer_no'=>(string)($offer['offer_no'] ?? ''),
+            'dispatch_no'=>$dispatchNo,
+            'customer_name'=>$customerName,
+            'item_count'=>count($items),
+            'total'=>(float)($offer['grand_total'] ?? 0),
+        ], $dispatchNo);
+        $pdo->commit();
+        log_action('Teklif Depo Çıkışa aktarıldı', (string)($offer['offer_no'] ?? '') . ' → ' . $dispatchNo);
+        return $dispatchId;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+
+        // Çift tıklama / tekrar gönderimde aynı teklif için ikinci fiş oluşmasın.
+        $stmt = db()->prepare('SELECT id FROM warehouse_dispatches WHERE source_offer_id=? LIMIT 1');
+        $stmt->execute([$offerId]);
+        $existingId = (int)($stmt->fetchColumn() ?: 0);
+        if ($existingId > 0) return $existingId;
+        throw $e;
+    }
 }
 
 function depo_cikis_next_no(): string
