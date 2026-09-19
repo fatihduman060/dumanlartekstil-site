@@ -230,8 +230,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Aynı faturanın ikinci kez kaydedilip cariye iki defa işlenmesini engelle.
         $duplicateSql = "SELECT id,invoice_no,cari_id,issuer_name FROM invoices
-            WHERE id<>? AND direction=? AND COALESCE(is_cancelled,0)=0";
-        $duplicateParams = [$id, $direction];
+            WHERE id<>? AND direction=? AND COALESCE(is_cancelled,0)=0 AND substr(invoice_date,1,4)=?";
+        $duplicateParams = [$id, $direction, substr($invoiceDate, 0, 4)];
         if ($direction === 'gelen') {
             if ($cariId) {
                 $duplicateSql .= " AND cari_id=?";
