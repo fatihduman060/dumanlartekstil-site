@@ -211,7 +211,11 @@ function pos_db_ensure(): void
         note TEXT,
         cari_movement_id INTEGER,
         credit_entry_id INTEGER,
+        source_token TEXT,
         is_cancelled INTEGER NOT NULL DEFAULT 0,
+        cancelled_at TEXT,
+        cancelled_by INTEGER,
+        cancel_reason TEXT,
         created_by INTEGER,
         created_at TEXT NOT NULL,
         FOREIGN KEY(cari_id) REFERENCES cariler(id) ON DELETE SET NULL,
@@ -223,6 +227,11 @@ function pos_db_ensure(): void
     ensure_column($pdo, 'pos_sales', 'cash_amount', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'pos_sales', 'card_amount', 'REAL NOT NULL DEFAULT 0');
     ensure_column($pdo, 'pos_sales', 'credit_amount', 'REAL NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'pos_sales', 'source_token', 'TEXT');
+    ensure_column($pdo, 'pos_sales', 'cancelled_at', 'TEXT');
+    ensure_column($pdo, 'pos_sales', 'cancelled_by', 'INTEGER');
+    ensure_column($pdo, 'pos_sales', 'cancel_reason', 'TEXT');
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_sales_source_token ON pos_sales(source_token) WHERE source_token IS NOT NULL AND TRIM(source_token)<>''");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_date ON pos_sales(sale_date, id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_credit_person ON pos_sales(credit_person_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_credit_entry ON pos_sales(credit_entry_id)");
