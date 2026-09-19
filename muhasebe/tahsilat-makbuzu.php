@@ -15,8 +15,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('tahsilat-makbuzu.php?edit=' . $id);
         }
         if ($action === 'delete') {
-            if (tahsilat_delete((int)($_POST['id'] ?? 0))) flash('success', 'Tahsilat makbuzu silindi.');
-            else flash('error', 'Silinecek makbuz bulunamadı.');
+            if (tahsilat_delete((int)($_POST['id'] ?? 0), (string)($_POST['cancel_reason'] ?? ''))) {
+                flash('success', 'Tahsilat makbuzu ve varsa bağlı cari/çek kayıtları iptal edildi; geçmiş kayıt korundu.');
+            } else {
+                flash('error', 'İptal edilecek makbuz bulunamadı.');
+            }
             redirect('tahsilat-makbuzu.php');
         }
     } catch (Throwable $e) {
@@ -151,7 +154,7 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
                 <td><strong><?php echo e($r['customer_name']); ?></strong><small><?php echo e($r['customer_city'] ?: '-'); ?></small></td>
                 <td><strong><?php echo e(tahsilat_money((float)$r['amount']) . ' ' . $r['currency']); ?></strong><small><span class="pill"><?php echo e(tahsilat_payment_label((string)$r['payment_type'])); ?></span></small></td>
                 <td><?php echo e($r['description'] ?: '-'); ?><?php if(!empty($r['due_date'])): ?><small>Vade: <?php echo e(tahsilat_tr_date($r['due_date'])); ?></small><?php endif; ?><?php if(!empty($r['check_record_id'])): ?><small>Çek/Senet kaydı: #<?php echo e($r['check_record_id']); ?></small><?php endif; ?></td>
-                <td><div class="saved-actions"><a href="tahsilat-makbuzu.php?edit=<?php echo e($r['id']); ?>">Düzenle</a><a target="_blank" href="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>">PDF</a><button type="button" class="whatsapp-receipt-link" data-url="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>" data-no="<?php echo e($r['receipt_no']); ?>">WhatsApp</button><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu makbuz silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
+                <td><div class="saved-actions"><a href="tahsilat-makbuzu.php?edit=<?php echo e($r['id']); ?>">Düzenle</a><a target="_blank" href="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>">PDF</a><button type="button" class="whatsapp-receipt-link" data-url="tahsilat-yazdir.php?id=<?php echo e($r['id']); ?>" data-no="<?php echo e($r['receipt_no']); ?>">WhatsApp</button><?php if(can_write()): ?><form method="post" onsubmit="var r=window.prompt('Makbuz iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('Makbuz silinmeyecek; varsa bağlı cari hareketi ve çek/senet de güvenli şekilde iptal edilecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><input type="hidden" name="cancel_reason" value=""><button type="submit">İptal</button></form><?php endif; ?></div></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
