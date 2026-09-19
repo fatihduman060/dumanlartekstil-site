@@ -199,7 +199,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('hesaplar.php#disaridan-para-girisi');
         }
         $reason = trim((string)($_POST['cancel_reason'] ?? ''));
-        if ($reason === '') $reason = 'Kullanıcı tarafından iptal edildi.';
+        $reasonLength = function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') : strlen($reason);
+        if ($reasonLength < 6) {
+            flash('error', 'Dış kaynak iptal nedeni en az 6 karakter olmalıdır.');
+            redirect('hesaplar.php#disaridan-para-girisi');
+        }
         db()->prepare("INSERT INTO account_transactions
             (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
             VALUES (?, 'out', ?, ?, 'external_funding_reversal', ?, ?, ?, ?)")
@@ -253,7 +257,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('hesaplar.php#fatih-duman-maas');
         }
         $reason = trim((string)($_POST['cancel_reason'] ?? ''));
-        if ($reason === '') $reason = 'Kullanıcı tarafından iptal edildi.';
+        $reasonLength = function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') : strlen($reason);
+        if ($reasonLength < 6) {
+            flash('error', 'Maaş çıkışı iptal nedeni en az 6 karakter olmalıdır.');
+            redirect('hesaplar.php#fatih-duman-maas');
+        }
         db()->prepare("INSERT INTO account_transactions
             (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at)
             VALUES (?, 'in', ?, ?, 'salary_reversal', ?, ?, ?, ?)")
@@ -345,7 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'delete_transaction') {
         $id = (int)($_POST['id'] ?? 0);
-        $reason = trim((string)($_POST['cancel_reason'] ?? 'Liste üzerinden iptal'));
+        $reason = trim((string)($_POST['cancel_reason'] ?? ''));
         if (function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') < 6 : strlen($reason) < 6) {
             flash('error', 'İptal nedeni en az 6 karakter olmalıdır.');
             redirect('hesaplar.php');
@@ -685,7 +693,7 @@ page_header('Kasa / Banka', 'hesaplar');
           <td><?php echo e($payment['description']); ?></td>
           <td><?php echo e($payment['user_name'] ?: '-'); ?></td>
           <td class="right"><strong class="text-danger"><?php echo e(money($payment['amount'])); ?></strong></td>
-          <td><?php if($paymentCancelled): ?><?php echo badge('İptal edildi','neutral'); ?><?php elseif(can_write()): ?><form method="post" onsubmit="return confirm('Bu maaş çıkışı iptal edilsin mi? Tutar seçilen hesaba geri eklenecek.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel_owner_salary_payment"><input type="hidden" name="id" value="<?php echo e($payment['id']); ?>"><input type="hidden" name="cancel_reason" value="Kullanıcı tarafından iptal edildi."><button>İptal et</button></form><?php else: ?><?php echo badge('Aktif','success'); ?><?php endif; ?></td>
+          <td><?php if($paymentCancelled): ?><?php echo badge('İptal edildi','neutral'); ?><?php elseif(can_write()): ?><form method="post" onsubmit="var r=window.prompt('Maaş çıkışı iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('Bu maaş çıkışı iptal edilsin mi? Tutar seçilen hesaba geri eklenecek.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel_owner_salary_payment"><input type="hidden" name="id" value="<?php echo e($payment['id']); ?>"><input type="hidden" name="cancel_reason" value=""><button>İptal et</button></form><?php else: ?><?php echo badge('Aktif','success'); ?><?php endif; ?></td>
         </tr><?php endforeach; ?>
       </tbody>
     </table>
@@ -721,7 +729,7 @@ page_header('Kasa / Banka', 'hesaplar');
           <td><?php echo e($funding['description']); ?></td>
           <td><?php echo e($funding['user_name'] ?: '-'); ?></td>
           <td class="right"><strong class="text-success"><?php echo e(money($funding['amount'])); ?></strong></td>
-          <td><?php if($fundingCancelled): ?><?php echo badge('İptal edildi','neutral'); ?><?php elseif(can_write()): ?><form method="post" onsubmit="return confirm('Bu dış kaynak para girişi iptal edilsin mi? Kayıt silinmez, karşı para çıkışı oluşturulur.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel_external_funding"><input type="hidden" name="id" value="<?php echo e($funding['id']); ?>"><input type="hidden" name="cancel_reason" value="Kullanıcı tarafından iptal edildi."><button>İptal et</button></form><?php else: ?><?php echo badge('Aktif','success'); ?><?php endif; ?></td>
+          <td><?php if($fundingCancelled): ?><?php echo badge('İptal edildi','neutral'); ?><?php elseif(can_write()): ?><form method="post" onsubmit="var r=window.prompt('Dış kaynak iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('Bu dış kaynak para girişi iptal edilsin mi? Kayıt silinmez, karşı para çıkışı oluşturulur.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel_external_funding"><input type="hidden" name="id" value="<?php echo e($funding['id']); ?>"><input type="hidden" name="cancel_reason" value=""><button>İptal et</button></form><?php else: ?><?php echo badge('Aktif','success'); ?><?php endif; ?></td>
         </tr><?php endforeach; ?>
       </tbody>
     </table>
@@ -770,7 +778,7 @@ page_header('Kasa / Banka', 'hesaplar');
           <td><?php echo e($tr['description'] ?: '-'); ?><small><?php echo e($tr['user_name'] ?: ''); ?></small></td>
           <td class="right"><?php echo $tr['direction']==='in' ? '<strong class="text-success">'.e(money($tr['amount'])).'</strong>' : '-'; ?></td>
           <td class="right"><?php echo $tr['direction']==='out' ? '<strong class="text-danger">'.e(money($tr['amount'])).'</strong>' : '-'; ?></td>
-          <td class="row-actions"><?php if(can_write() && in_array($tr['source_type'], ['manual','transfer','zero'], true)): ?><form method="post" onsubmit="return confirm('Bu hareket silinmeyecek; ters kayıt oluşturularak iptal edilecek. Virman ise iki taraf birlikte iptal edilir. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete_transaction"><input type="hidden" name="id" value="<?php echo e($tr['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button></form><?php endif; ?></td>
+          <td class="row-actions"><?php if(can_write() && in_array($tr['source_type'], ['manual','transfer','zero'], true)): ?><form method="post" onsubmit="var r=window.prompt('Hesap hareketi iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('Bu hareket silinmeyecek; ters kayıt oluşturularak iptal edilecek. Virman ise iki taraf birlikte iptal edilir. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete_transaction"><input type="hidden" name="id" value="<?php echo e($tr['id']); ?>"><input type="hidden" name="cancel_reason" value=""><button>İptal</button></form><?php endif; ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
