@@ -201,6 +201,9 @@ function pos_db_ensure(): void
         cari_id INTEGER,
         credit_person_id INTEGER,
         payment_method TEXT NOT NULL,
+        cash_amount REAL NOT NULL DEFAULT 0,
+        card_amount REAL NOT NULL DEFAULT 0,
+        credit_amount REAL NOT NULL DEFAULT 0,
         subtotal REAL NOT NULL DEFAULT 0,
         discount_amount REAL NOT NULL DEFAULT 0,
         vat_amount REAL NOT NULL DEFAULT 0,
@@ -217,6 +220,9 @@ function pos_db_ensure(): void
     )");
     ensure_column($pdo, 'pos_sales', 'credit_person_id', 'INTEGER');
     ensure_column($pdo, 'pos_sales', 'credit_entry_id', 'INTEGER');
+    ensure_column($pdo, 'pos_sales', 'cash_amount', 'REAL NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'pos_sales', 'card_amount', 'REAL NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'pos_sales', 'credit_amount', 'REAL NOT NULL DEFAULT 0');
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_date ON pos_sales(sale_date, id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_credit_person ON pos_sales(credit_person_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_credit_entry ON pos_sales(credit_entry_id)");
@@ -421,6 +427,24 @@ function pos_daily_totals_delta(string $saleDate, float $grossDelta, float $cash
     magaza_odeme_dagilim_hareketlerini_senkronla($paymentId);
 }
 
+function pos_sale_payment_amounts(array $sale): array
+{
+    $grandTotal = round(max(0, (float)($sale['grand_total'] ?? 0)), 2);
+    $cash = round(max(0, (float)($sale['cash_amount'] ?? 0)), 2);
+    $card = round(max(0, (float)($sale['card_amount'] ?? 0)), 2);
+    $credit = round(max(0, (float)($sale['credit_amount'] ?? 0)), 2);
+    $storedTotal = round($cash + $card + $credit, 2);
+
+    if ($storedTotal <= 0.004 && $grandTotal > 0) {
+        $method = (string)($sale['payment_method'] ?? '');
+        if ($method === 'cash') $cash = $grandTotal;
+        elseif ($method === 'card') $card = $grandTotal;
+        elseif ($method === 'credit') $credit = $grandTotal;
+    }
+
+    return ['cash'=>$cash, 'card'=>$card, 'credit'=>$credit];
+}
+
 function pos_sale(int $id): ?array
 {
     pos_db_ensure();
@@ -436,6 +460,10 @@ function pos_sale(int $id): ?array
     $stmt = db()->prepare("SELECT * FROM pos_sale_items WHERE sale_id=? ORDER BY id ASC");
     $stmt->execute([$id]);
     $sale['items'] = $stmt->fetchAll() ?: [];
+    $paymentAmounts = pos_sale_payment_amounts($sale);
+    $sale['cash_amount'] = $paymentAmounts['cash'];
+    $sale['card_amount'] = $paymentAmounts['card'];
+    $sale['credit_amount'] = $paymentAmounts['credit'];
     return $sale;
 }
 
@@ -469,7 +497,15 @@ function pos_sales_on_date(string $date): array
         WHERE s.is_cancelled=0 AND s.sale_date=?
         ORDER BY s.sale_time DESC,s.id DESC");
     $stmt->execute([$date]);
-    return $stmt->fetchAll() ?: [];
+    $sales = $stmt->fetchAll() ?: [];
+    foreach ($sales as &$sale) {
+        $paymentAmounts = pos_sale_payment_amounts($sale);
+        $sale['cash_amount'] = $paymentAmounts['cash'];
+        $sale['card_amount'] = $paymentAmounts['card'];
+        $sale['credit_amount'] = $paymentAmounts['credit'];
+    }
+    unset($sale);
+    return $sales;
 }
 
 /** Restricted history: sale date for cancelled receipts, event date for cart removals. */
@@ -493,7 +529,13 @@ function pos_history_audit(string $action, string $date): array
         $items->execute([$date]);
         $bySale = [];
         foreach ($items->fetchAll() ?: [] as $item) $bySale[(int)$item['sale_id']][] = $item;
-        foreach ($sales as &$sale) $sale['items'] = $bySale[(int)$sale['id']] ?? [];
+        foreach ($sales as &$sale) {
+            $sale['items'] = $bySale[(int)$sale['id']] ?? [];
+            $paymentAmounts = pos_sale_payment_amounts($sale);
+            $sale['cash_amount'] = $paymentAmounts['cash'];
+            $sale['card_amount'] = $paymentAmounts['card'];
+            $sale['credit_amount'] = $paymentAmounts['credit'];
+        }
         unset($sale);
         return $sales;
     }
