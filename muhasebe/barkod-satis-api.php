@@ -322,11 +322,12 @@ try {
             $pdo->prepare("UPDATE pos_sales SET is_cancelled=1 WHERE id=?")->execute([$saleId]);
             $grandTotal = (float)$sale['grand_total'];
             $paymentMethod = (string)$sale['payment_method'];
+            $paymentAmounts = pos_sale_payment_amounts($sale);
             pos_daily_totals_delta(
                 (string)$sale['sale_date'],
                 -$grandTotal,
-                $paymentMethod === 'cash' ? -$grandTotal : 0,
-                $paymentMethod === 'card' ? -$grandTotal : 0,
+                -$paymentAmounts['cash'],
+                -$paymentAmounts['card'],
                 0,
                 (int)(current_user()['id'] ?? 0) ?: null
             );
@@ -335,6 +336,9 @@ try {
             audit_action('pos_sale', $saleId, 'silindi', [
                 'receipt_no'=>$sale['receipt_no'],
                 'payment_method'=>$paymentMethod,
+                'cash_amount'=>$paymentAmounts['cash'],
+                'card_amount'=>$paymentAmounts['card'],
+                'credit_amount'=>$paymentAmounts['credit'],
                 'grand_total'=>$grandTotal,
                 'is_cancelled'=>0,
             ], [
@@ -354,7 +358,7 @@ try {
     $rawItems = json_decode((string)($_POST['items_json'] ?? ''), true);
     if (!is_array($rawItems) || !$rawItems) throw new RuntimeException('Sepette ürün bulunmuyor.');
     $paymentMethod = trim((string)($_POST['payment_method'] ?? 'cash'));
-    if (!in_array($paymentMethod, ['cash','card','credit'], true)) throw new RuntimeException('Ödeme şekli geçersiz.');
+    if (!in_array($paymentMethod, ['cash','card','credit','mixed'], true)) throw new RuntimeException('Ödeme şekli geçersiz.');
     $personId = (int)($_POST['person_id'] ?? 0);
     $creditPerson = null;
     if ($paymentMethod === 'credit') {
@@ -394,12 +398,29 @@ try {
         if ($grandTotal <= 0) throw new RuntimeException('Satış toplamı sıfır olamaz.');
         if ($subtotal > 0 && $discount > 0) $vatAmount = round($vatAmount * ($grandTotal / $subtotal), 2);
 
+        $cashAmount = 0.0;
+        $cardAmount = 0.0;
+        $creditAmount = 0.0;
+        if ($paymentMethod === 'cash') {
+            $cashAmount = $grandTotal;
+        } elseif ($paymentMethod === 'card') {
+            $cardAmount = $grandTotal;
+        } elseif ($paymentMethod === 'credit') {
+            $creditAmount = $grandTotal;
+        } elseif ($paymentMethod === 'mixed') {
+            $cashAmount = round(max(0, decimal_from_input($_POST['cash_amount'] ?? 0)), 2);
+            if ($cashAmount <= 0) throw new RuntimeException('Nakit + Kredi Kartı ödemede nakit tutarı sıfırdan büyük olmalıdır.');
+            if ($cashAmount >= $grandTotal) throw new RuntimeException('Nakit + Kredi Kartı ödemede nakit tutarı satış toplamından küçük olmalıdır.');
+            $cardAmount = round($grandTotal - $cashAmount, 2);
+            if ($cardAmount <= 0) throw new RuntimeException('Kredi kartı tutarı sıfırdan büyük olmalıdır.');
+        }
+
         $customerName = $paymentMethod === 'credit' && $creditPerson
             ? (string)$creditPerson['full_name']
             : 'Perakende Müşteri';
 
-        $pdo->prepare("INSERT INTO pos_sales (sale_date,sale_time,customer_name,cari_id,credit_person_id,payment_method,subtotal,discount_amount,vat_amount,grand_total,note,created_by,created_at) VALUES (?,?,?,NULL,?,?,?,?,?,?,?,?,?)")
-            ->execute([$saleDate,$saleTime,$customerName,$personId ?: null,$paymentMethod,round($subtotal,2),$discount,round($vatAmount,2),$grandTotal,trim((string)($_POST['note'] ?? '')),$userId,now()]);
+        $pdo->prepare("INSERT INTO pos_sales (sale_date,sale_time,customer_name,cari_id,credit_person_id,payment_method,cash_amount,card_amount,credit_amount,subtotal,discount_amount,vat_amount,grand_total,note,created_by,created_at) VALUES (?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$saleDate,$saleTime,$customerName,$personId ?: null,$paymentMethod,$cashAmount,$cardAmount,$creditAmount,round($subtotal,2),$discount,round($vatAmount,2),$grandTotal,trim((string)($_POST['note'] ?? '')),$userId,now()]);
         $saleId = (int)$pdo->lastInsertId();
         $receiptNo = pos_receipt_no($saleId, $saleDate);
         $pdo->prepare("UPDATE pos_sales SET receipt_no=? WHERE id=?")->execute([$receiptNo,$saleId]);
@@ -426,8 +447,8 @@ try {
         pos_daily_totals_delta(
             $saleDate,
             $grandTotal,
-            $paymentMethod==='cash' ? $grandTotal : 0,
-            $paymentMethod==='card' ? $grandTotal : 0,
+            $cashAmount,
+            $cardAmount,
             0,
             $userId
         );
@@ -447,6 +468,9 @@ try {
         audit_action('pos_sale', $saleId, 'satildi', null, [
             'receipt_no'=>$receiptNo,
             'payment_method'=>$paymentMethod,
+            'cash_amount'=>$cashAmount,
+            'card_amount'=>$cardAmount,
+            'credit_amount'=>$creditAmount,
             'grand_total'=>$grandTotal,
             'credit_person_id'=>$personId ?: null,
             'credit_entry_id'=>$creditEntryId ?: null,
@@ -462,7 +486,7 @@ try {
             ], (string)$creditPerson['full_name']);
         }
         $pdo->commit();
-        pos_json(['ok'=>true,'message'=>'Satış tamamlandı.','sale_id'=>$saleId,'receipt_no'=>$receiptNo,'receipt_url'=>'barkod-fis.php?id='.$saleId]);
+        pos_json(['ok'=>true,'message'=>'Satış tamamlandı.','sale_id'=>$saleId,'receipt_no'=>$receiptNo,'receipt_url'=>'barkod-fis.php?id='.$saleId,'payment_method'=>$paymentMethod,'cash_amount'=>$cashAmount,'card_amount'=>$cardAmount,'credit_amount'=>$creditAmount]);
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         throw $e;
