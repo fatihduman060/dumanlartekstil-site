@@ -73,16 +73,32 @@
   function methodLabel(method){
     if(method==='cash') return 'Nakit';
     if(method==='card') return 'Kredi Kartı';
+    if(method==='mixed') return 'Nakit + Kredi Kartı';
     if(method==='credit') return 'Veresiye';
     return method||'-';
+  }
+  function paymentAmounts(sale){
+    var grand=Number(sale&&sale.grand_total||0);
+    var cash=Number(sale&&sale.cash_amount||0),card=Number(sale&&sale.card_amount||0),credit=Number(sale&&sale.credit_amount||0);
+    if(cash+card+credit<=0.004&&grand>0){
+      if(sale.payment_method==='cash')cash=grand;
+      else if(sale.payment_method==='card')card=grand;
+      else if(sale.payment_method==='credit')credit=grand;
+    }
+    return {cash:cash,card:card,credit:credit};
+  }
+  function paymentDetail(sale){
+    var a=paymentAmounts(sale);
+    if(sale.payment_method==='mixed'||(a.cash>0.004&&a.card>0.004)) return 'Nakit '+money(a.cash)+' · Kart '+money(a.card);
+    return methodLabel(sale.payment_method);
   }
   function summary(){
     var out={cash:{count:0,total:0},card:{count:0,total:0},credit:{count:0,total:0}};
     sales.forEach(function(s){
-      var method=s.payment_method;
-      if(!Object.prototype.hasOwnProperty.call(out,method)) return;
-      out[method].count++;
-      out[method].total+=Number(s.grand_total||0);
+      var a=paymentAmounts(s);
+      if(a.cash>0.004){out.cash.count++;out.cash.total+=a.cash;}
+      if(a.card>0.004){out.card.count++;out.card.total+=a.card;}
+      if(a.credit>0.004){out.credit.count++;out.credit.total+=a.credit;}
     });
     return out;
   }
@@ -166,7 +182,9 @@
       +creditCollectionTile();
 
     var rows=sales.map(function(sale){
-      var hidden=view==='past'||sale.payment_method===active?'0':'1';
+      var amounts=paymentAmounts(sale);
+      var matchesActive=active==='cash'?amounts.cash>0.004:(active==='card'?amounts.card>0.004:amounts.credit>0.004);
+      var hidden=view==='past'||matchesActive?'0':'1';
       var receipt=esc(sale.receipt_no||('POS #'+sale.id));
       var customer=esc(sale.customer_name||sale.credit_person_name||'Perakende Müşteri');
       var actions='';
@@ -178,7 +196,7 @@
         actions+='<button type="button" class="danger" data-history-delete="'+esc(sale.id)+'" data-receipt="'+receipt+'">Sil</button>';
       }
       return '<div class="pos-history-item" data-history-payment="'+esc(sale.payment_method)+'" data-pos-history-hidden="'+hidden+'">'
-        +'<a href="barkod-fis.php?id='+encodeURIComponent(sale.id)+'" target="_blank" class="pos-history-row"><span><strong>'+receipt+'</strong><small>'+dateTr(sale.sale_date)+' '+esc(String(sale.sale_time||'').slice(0,5))+' · '+customer+'</small><small class="pos-history-method">'+esc(methodLabel(sale.payment_method))+'</small></span><strong>'+money(sale.grand_total)+'</strong></a>'
+        +'<a href="barkod-fis.php?id='+encodeURIComponent(sale.id)+'" target="_blank" class="pos-history-row"><span><strong>'+receipt+'</strong><small>'+dateTr(sale.sale_date)+' '+esc(String(sale.sale_time||'').slice(0,5))+' · '+customer+'</small><small class="pos-history-method">'+esc(paymentDetail(sale))+'</small></span><strong>'+money(sale.grand_total)+'</strong></a>'
         +(actions?'<div class="pos-history-actions">'+actions+'</div>':'')
         +'</div>';
     }).join('');
