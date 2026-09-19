@@ -6,6 +6,7 @@
     terminal=crypto.randomUUID();
     try{sessionStorage.setItem(terminalKey,terminal);}catch(ignore){}
   }
+  root.dataset.posTerminalId=terminal;
   function schedule(){dirty=true;clearTimeout(timer);timer=setTimeout(send,250);}
   function send(){
     if(busy||!dirty||!snapshot)return;
