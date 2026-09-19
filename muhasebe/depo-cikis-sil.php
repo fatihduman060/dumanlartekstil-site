@@ -35,17 +35,28 @@ if ((int)($row['posted_to_cari'] ?? 0) === 1 || (int)($row['cari_movement_id'] ?
     redirect('depo-cikis.php?edit=' . $id);
 }
 
+$reason = trim((string)($_POST['cancel_reason'] ?? 'Hatalı depo çıkış fişi iptal edildi'));
+$reasonLength = function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') : strlen($reason);
+if ($reasonLength < 6) {
+    flash('error', 'İptal nedeni en az 6 karakter olmalıdır.');
+    redirect('depo-cikis.php?edit=' . $id);
+}
+
 $pdo = db();
 $pdo->beginTransaction();
 try {
-    $pdo->prepare('DELETE FROM warehouse_dispatch_items WHERE dispatch_id=?')->execute([$id]);
-    $pdo->prepare('DELETE FROM warehouse_dispatches WHERE id=?')->execute([$id]);
+    $pdo->prepare('UPDATE warehouse_dispatches SET is_cancelled=1,cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=? AND COALESCE(is_cancelled,0)=0')
+        ->execute([now(), current_user()['id'] ?? null, $reason, now(), $id]);
+    audit_action('depo_cikis', $id, 'iptal', $row, [
+        'is_cancelled'=>1,
+        'cancel_reason'=>$reason,
+    ], trim((string)($row['dispatch_no'] ?? ('#' . $id))));
     $pdo->commit();
-    log_action('Depo çıkış fişi silindi', trim((string)($row['dispatch_no'] ?? ('#' . $id))) . ' - ' . trim((string)($row['customer_name'] ?? '')));
-    flash('success', 'Hatalı depo çıkış fişi silindi.');
+    log_action('Depo çıkış fişi iptal edildi', trim((string)($row['dispatch_no'] ?? ('#' . $id))) . ' - ' . trim((string)($row['customer_name'] ?? '')));
+    flash('success', 'Depo çıkış fişi silinmedi; iptal edilerek geçmişte korundu.');
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    flash('error', 'Fiş silinemedi: ' . $e->getMessage());
+    flash('error', 'Fiş iptal edilemedi: ' . $e->getMessage());
 }
 
 redirect('depo-cikis.php');
