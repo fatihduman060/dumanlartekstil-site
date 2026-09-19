@@ -74,7 +74,9 @@ function dashboard_cari_aggregate(?string $startDate = null, ?string $endDate = 
       ORDER BY m.id ASC");
     $stmt->execute($dateParams);
 
-    $buckets = [];
+    // Genel Bakış, cari detayla aynı aktif hareketleri esas alır.
+    // Zaman/tutar benzerliğine bakarak kayıt gizlemek gerçek iki işlemi yanlışlıkla tek işlem sayabilir.
+    $kept = [];
     foreach ($stmt->fetchAll() as $movement) {
         $cariId = (int)($movement['cari_id'] ?? 0);
         if ($cariId <= 0 || !isset($cariler[$cariId])) continue;
@@ -84,82 +86,7 @@ function dashboard_cari_aggregate(?string $startDate = null, ?string $endDate = 
 
         $movement['cari_id'] = $cariId;
         $movement['currency'] = $currency;
-
-        $signature = implode('|', [
-            $cariId,
-            (string)$movement['movement_type'],
-            number_format((float)$movement['amount'], 2, '.', ''),
-            $currency,
-            (string)$movement['movement_date'],
-            (int)($movement['account_id'] ?? 0),
-        ]);
-
-        if (!isset($buckets[$signature])) $buckets[$signature] = [];
-        $buckets[$signature][] = $movement;
-    }
-
-    $kept = [];
-    $ignoredIds = [];
-
-    foreach ($buckets as $bucketRows) {
-        if (count($bucketRows) === 1) {
-            $kept[] = $bucketRows[0];
-            continue;
-        }
-
-        $type = (string)($bucketRows[0]['movement_type'] ?? '');
-        if (!in_array($type, ['tahsilat','odeme'], true)) {
-            foreach ($bucketRows as $row) $kept[] = $row;
-            continue;
-        }
-
-        $dueRows = [];
-        $normalRows = [];
-        foreach ($bucketRows as $row) {
-            if (dashboard_cari_due_source_id((string)($row['description'] ?? '')) > 0) $dueRows[] = $row;
-            else $normalRows[] = $row;
-        }
-
-        while ($dueRows && $normalRows) {
-            $dueRow = array_shift($dueRows);
-            $normalRow = array_shift($normalRows);
-            $kept[] = $dueRow;
-            $ignoredIds[] = (int)$normalRow['id'];
-        }
-
-        $remainingRows = array_merge($dueRows, $normalRows);
-        if (!$remainingRows) continue;
-
-        $exactGroups = [];
-        foreach ($remainingRows as $row) {
-            $detailKey = implode('|', [
-                dashboard_cari_norm((string)($row['description'] ?? '')),
-                dashboard_cari_norm((string)($row['payment_method'] ?? '')),
-                trim((string)($row['due_date'] ?? '')),
-                trim((string)($row['document_type'] ?? '')),
-            ]);
-            if (!isset($exactGroups[$detailKey])) $exactGroups[$detailKey] = [];
-            $exactGroups[$detailKey][] = $row;
-        }
-
-        foreach ($exactGroups as $exactRows) {
-            if (count($exactRows) === 1) {
-                $kept[] = $exactRows[0];
-                continue;
-            }
-
-            $keepRow = $exactRows[0];
-            $kept[] = $keepRow;
-
-            foreach (array_slice($exactRows, 1) as $candidate) {
-                $gap = dashboard_cari_created_gap_seconds($keepRow, $candidate);
-                if ($gap !== null && $gap <= 1800) {
-                    $ignoredIds[] = (int)$candidate['id'];
-                } else {
-                    $kept[] = $candidate;
-                }
-            }
-        }
+        $kept[] = $movement;
     }
 
     $positions = [];
@@ -197,6 +124,6 @@ function dashboard_cari_aggregate(?string $startDate = null, ?string $endDate = 
     return [
         'positions'=>array_values($positions),
         'duplicate_cari_group_count'=>0,
-        'ignored_duplicate_movement_ids'=>array_values(array_unique($ignoredIds)),
+        'ignored_duplicate_movement_ids'=>[],
     ];
 }
