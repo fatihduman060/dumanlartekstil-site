@@ -14,10 +14,23 @@ function magaza_satis_pos_tablosu_var_mi(): bool
     return (bool)db()->query("SELECT name FROM sqlite_master WHERE type='table' AND name='pos_sales' LIMIT 1")->fetchColumn();
 }
 
+function magaza_satis_pos_kolonu_var_mi(string $column): bool
+{
+    if (!magaza_satis_pos_tablosu_var_mi()) return false;
+    $rows = db()->query("PRAGMA table_info(pos_sales)")->fetchAll() ?: [];
+    foreach ($rows as $row) {
+        if ((string)($row['name'] ?? '') === $column) return true;
+    }
+    return false;
+}
+
 function magaza_satis_pos_kart_toplami(string $saleDate): float
 {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || !magaza_satis_pos_tablosu_var_mi()) return 0.0;
-    $stmt = db()->prepare("SELECT COALESCE(SUM(grand_total),0) FROM pos_sales WHERE sale_date=? AND payment_method='card' AND COALESCE(is_cancelled,0)=0");
+    $cardExpr = magaza_satis_pos_kolonu_var_mi('card_amount')
+        ? "CASE WHEN COALESCE(card_amount,0)>0 THEN card_amount WHEN payment_method='card' THEN grand_total ELSE 0 END"
+        : "CASE WHEN payment_method='card' THEN grand_total ELSE 0 END";
+    $stmt = db()->prepare("SELECT COALESCE(SUM({$cardExpr}),0) FROM pos_sales WHERE sale_date=? AND COALESCE(is_cancelled,0)=0");
     $stmt->execute([$saleDate]);
     return round((float)($stmt->fetchColumn() ?: 0), 2);
 }
@@ -92,13 +105,18 @@ function magaza_satis_tablosunu_hazirla(): void
         $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_store_daily_sales_date ON store_daily_sales(sale_date)");
 
         if (magaza_satis_pos_tablosu_var_mi()) {
-            $cardExpr = "ROUND(COALESCE((SELECT SUM(grand_total) FROM pos_sales WHERE sale_date=NEW.sale_date AND payment_method='card' AND COALESCE(is_cancelled,0)=0),0),2)";
+            if (!magaza_satis_pos_kolonu_var_mi('cash_amount')) $pdo->exec("ALTER TABLE pos_sales ADD COLUMN cash_amount REAL NOT NULL DEFAULT 0");
+            if (!magaza_satis_pos_kolonu_var_mi('card_amount')) $pdo->exec("ALTER TABLE pos_sales ADD COLUMN card_amount REAL NOT NULL DEFAULT 0");
+            if (!magaza_satis_pos_kolonu_var_mi('credit_amount')) $pdo->exec("ALTER TABLE pos_sales ADD COLUMN credit_amount REAL NOT NULL DEFAULT 0");
+            $cardExpr = "ROUND(COALESCE((SELECT SUM(CASE WHEN COALESCE(card_amount,0)>0 THEN card_amount WHEN payment_method='card' THEN grand_total ELSE 0 END) FROM pos_sales WHERE sale_date=NEW.sale_date AND COALESCE(is_cancelled,0)=0),0),2)";
             $adjustExpr = "CASE WHEN COALESCE(pos_card_sync,0)=1 THEN COALESCE(manual_adjustment,0) ELSE 0 END";
             $grossExpr = "MAX(0, ROUND(({$cardExpr}) + ({$adjustExpr}),2))";
             $subtotalExpr = "ROUND(({$grossExpr}) / (1 + (COALESCE(vat_rate,10) / 100.0)),2)";
             $vatExpr = "ROUND(({$grossExpr}) - ({$subtotalExpr}),2)";
 
-            $pdo->exec("CREATE TRIGGER IF NOT EXISTS trg_store_daily_sales_pos_card_insert_v1
+            $pdo->exec("DROP TRIGGER IF EXISTS trg_store_daily_sales_pos_card_insert_v1");
+            $pdo->exec("DROP TRIGGER IF EXISTS trg_store_daily_sales_pos_card_update_v1");
+            $pdo->exec("CREATE TRIGGER IF NOT EXISTS trg_store_daily_sales_pos_card_insert_v2
                 AFTER INSERT ON store_daily_sales
                 WHEN NEW.sale_date >= '2026-09-04' AND NEW.note IN ('Barkodlu satış','Barkodlu satışlar dahil')
                 BEGIN
@@ -113,7 +131,7 @@ function magaza_satis_tablosunu_hazirla(): void
                     WHERE id=NEW.id;
                 END");
 
-            $pdo->exec("CREATE TRIGGER IF NOT EXISTS trg_store_daily_sales_pos_card_update_v1
+            $pdo->exec("CREATE TRIGGER IF NOT EXISTS trg_store_daily_sales_pos_card_update_v2
                 AFTER UPDATE OF gross_amount,note ON store_daily_sales
                 WHEN NEW.sale_date >= '2026-09-04' AND NEW.note IN ('Barkodlu satış','Barkodlu satışlar dahil')
                 BEGIN
