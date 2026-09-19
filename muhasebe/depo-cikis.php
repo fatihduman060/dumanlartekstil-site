@@ -24,7 +24,9 @@ $productJson=json_encode(array_map(function($p){return [
     'default_unit_price'=>(float)($p['default_unit_price']??0),
 ];},$productRows),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 $listSql='SELECT w.*,u.display_name AS creator_name FROM warehouse_dispatches w LEFT JOIN users u ON u.id=w.created_by';$params=[];
-if(is_warehouse_user()){$listSql.=' WHERE w.created_by=?';$params[]=(int)(current_user()['id']??0);}$listSql.=' ORDER BY w.dispatch_date DESC,w.id DESC LIMIT 150';
+$listWhere=['COALESCE(w.is_cancelled,0)=0'];
+if(is_warehouse_user()){$listWhere[]='w.created_by=?';$params[]=(int)(current_user()['id']??0);}
+$listSql.=' WHERE '.implode(' AND ',$listWhere).' ORDER BY w.dispatch_date DESC,w.id DESC LIMIT 150';
 $s=db()->prepare($listSql);$s->execute($params);$list=$s->fetchAll();$items=$edit['items']??[];$rows=max(6,count($items)+2);
 $cariJson=json_encode($cariler,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 page_header('Depo Çıkış','depo_cikis');
