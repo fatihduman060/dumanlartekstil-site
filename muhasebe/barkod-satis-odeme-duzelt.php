@@ -77,7 +77,10 @@ try {
     try {
         // Genel satış toplamı değişmez. Yalnızca o günün Nakit/Kart dağılımı aktarılır.
         pos_daily_totals_delta($saleDate, 0.0, $cashDelta, $cardDelta, 0.0, $userId);
-        $pdo->prepare("UPDATE pos_sales SET payment_method=? WHERE id=?")->execute([$target, $saleId]);
+        $newCashAmount = $target === 'cash' ? $amount : 0.0;
+        $newCardAmount = $target === 'card' ? $amount : 0.0;
+        $pdo->prepare("UPDATE pos_sales SET payment_method=?,cash_amount=?,card_amount=?,credit_amount=0 WHERE id=?")
+            ->execute([$target,$newCashAmount,$newCardAmount,$saleId]);
         // Ödeme şekli değiştikten sonra Z raporunu gerçek Barkodlu Satış kart toplamına eşitle.
         magaza_satis_pos_kart_senkronla($saleDate);
 
