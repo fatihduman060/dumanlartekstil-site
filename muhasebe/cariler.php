@@ -2,6 +2,33 @@
 require_once __DIR__ . '/layout.php';
 require_login();
 
+function cari_kullanim_sayisi(int $cariId): int
+{
+    if ($cariId <= 0) return 0;
+    $pdo = db();
+    $targets = [
+        ['movements','cari_id'],
+        ['checks','cari_id'],
+        ['private_receivables','cari_id'],
+        ['invoices','cari_id'],
+        ['offers','cari_id'],
+        ['warehouse_dispatches','cari_id'],
+        ['collection_receipts','cari_id'],
+        ['standalone_documents','cari_id'],
+    ];
+    $total = 0;
+    foreach ($targets as $target) {
+        [$table,$column] = $target;
+        $exists = $pdo->prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1");
+        $exists->execute([$table]);
+        if (!$exists->fetchColumn()) continue;
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM {$table} WHERE {$column}=?");
+        $stmt->execute([$cariId]);
+        $total += (int)$stmt->fetchColumn();
+    }
+    return $total;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_write();
     require_csrf();
@@ -40,9 +67,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($action === 'delete') {
         $id = (int)($_POST['id'] ?? 0);
-        $stmt = db()->prepare('SELECT * FROM cariler WHERE id=?'); $stmt->execute([$id]); $oldCari = $stmt->fetch(); $name = $oldCari['name'] ?? '';
-        $stmt = db()->prepare('DELETE FROM cariler WHERE id=?'); $stmt->execute([$id]);
-        log_action('Cari silindi', (string)$name); audit_action('cari', $id, 'silindi', $oldCari, null, (string)$name); flash('success', 'Cari silindi. Bağlı hareket/çek varsa cari bağı kaldırıldı, kayıtlar korunur.'); redirect('cariler.php');
+        $stmt = db()->prepare('SELECT * FROM cariler WHERE id=?');
+        $stmt->execute([$id]);
+        $oldCari = $stmt->fetch() ?: null;
+        $name = (string)($oldCari['name'] ?? '');
+        if (!$oldCari) {
+            flash('error', 'Silinecek cari bulunamadı.');
+            redirect('cariler.php');
+        }
+        $usageCount = cari_kullanim_sayisi($id);
+        if ($usageCount > 0) {
+            flash('error', 'Bu cari ' . $usageCount . ' finansal/belge kaydında kullanılıyor. Geçmiş bağlantılar bozulmasın diye silinmedi; gerekirse cari adını düzenleyin.');
+            redirect('cariler.php');
+        }
+        db()->prepare('DELETE FROM cariler WHERE id=?')->execute([$id]);
+        log_action('Kullanılmamış cari silindi', $name);
+        audit_action('cari', $id, 'silindi', $oldCari, null, $name);
+        flash('success', 'Hiçbir finansal kayıtta kullanılmamış cari silindi.');
+        redirect('cariler.php');
     }
 }
 
