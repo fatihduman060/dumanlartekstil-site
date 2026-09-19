@@ -11,6 +11,7 @@
   var active='cash';
   var expanded=false;
   var sales=[];
+  var creditCollections={cash:0,card:0,total:0,count:0,entries:[]};
   var canAudit=root.dataset.historyAudit==='1';
   var view='recent';
   var selectedDate=root.dataset.today||new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Istanbul'}).format(new Date());
@@ -22,7 +23,7 @@
   style.textContent=''
     +'.pos-history-cash-grid{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}.pos-history-cash-grid>.pos-history{grid-column:auto!important;margin:0}.pos-cash-left-card{display:grid;gap:12px;padding:16px 17px}.pos-cash-left-card h3{margin:0;color:#173c27}.pos-cash-left-card>small{color:#7d6f61;font-size:11px}.pos-cash-left-yesterday{display:grid;gap:3px;padding:12px 13px;border:1px solid #e3d8ca;border-radius:14px;background:#fbf7f1}.pos-cash-left-yesterday span,.pos-cash-left-today label>span{font-size:10px;font-weight:950;letter-spacing:.08em;color:#7d6f61;text-transform:uppercase}.pos-cash-left-yesterday strong{font-size:22px;color:#173c27}.pos-cash-left-yesterday small{color:#8a7b69}.pos-cash-left-today{display:grid;gap:7px}.pos-cash-left-today label{display:grid;gap:5px}.pos-cash-left-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.pos-cash-left-entry input{min-height:42px;border:1px solid #d9cdbf;border-radius:11px;padding:8px 10px;font-size:16px;font-weight:850}.pos-cash-left-entry button{min-height:42px;border:0;border-radius:11px;padding:8px 13px;background:#16482e;color:#fff;font-weight:900;cursor:pointer}.pos-cash-left-entry button:disabled{opacity:.6;cursor:wait}.pos-cash-left-status{min-height:18px;margin:0;font-size:11px;font-weight:850;color:#167243}'
     +'.pos-history{overflow:hidden}.pos-history-toggle{width:100%;border:0;background:transparent;padding:0;cursor:pointer;text-align:left;color:inherit}.pos-history-toggle-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px}.pos-history-toggle-title{display:grid;gap:3px}.pos-history-toggle-title h3{margin:0}.pos-history-toggle-title span{font-size:12px;color:#7d6f61}.pos-history-chevron{font-size:20px;font-weight:950;color:#16482e;transition:transform .2s ease}.pos-history-toggle[aria-expanded="true"] .pos-history-chevron{transform:rotate(180deg)}'
-    +'.pos-history-content{border-top:1px solid #eadfd2}.pos-history-content[hidden]{display:none!important}.pos-history-summary{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:12px 14px;background:#fbf7f1}.pos-history-summary button{border:1px solid #e1d6c8;background:#fff;color:#16482e;border-radius:14px;padding:9px 11px;font-size:11px;font-weight:950;cursor:pointer;display:grid;gap:2px;min-width:145px;text-align:left}.pos-history-summary button strong{font-size:13px}.pos-history-summary button small{font-size:10px;color:#7d6f61;font-weight:850}.pos-history-summary button.active{background:#16482e;color:#fff;border-color:#16482e}.pos-history-summary button.active small{color:#e8f3ed}'
+    +'.pos-history-content{border-top:1px solid #eadfd2}.pos-history-content[hidden]{display:none!important}.pos-history-summary{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:12px 14px;background:#fbf7f1}.pos-history-summary button,.pos-history-summary .pos-history-total{border:1px solid #e1d6c8;background:#fff;color:#16482e;border-radius:14px;padding:10px 12px;font-size:11px;font-weight:950;cursor:pointer;display:grid;gap:4px;min-width:190px;text-align:left}.pos-history-summary button strong,.pos-history-summary .pos-history-total strong{font-size:13px}.pos-history-summary button small,.pos-history-summary .pos-history-total small{font-size:10px;color:#7d6f61;font-weight:850}.pos-history-summary button.active{background:#16482e;color:#fff;border-color:#16482e}.pos-history-summary button.active small{color:#e8f3ed}.pos-history-collection-line{padding-top:4px;margin-top:2px;border-top:1px dashed #dfd4c7;color:#8b5c12!important}.pos-history-entry-total{font-size:11px!important;color:#16482e!important}.pos-history-summary button.active .pos-history-collection-line,.pos-history-summary button.active .pos-history-entry-total{color:#fff!important;border-top-color:rgba(255,255,255,.35)}.pos-credit-collection-tile{min-width:230px!important}.pos-credit-collection-people{display:grid;gap:2px;margin-top:3px;padding-top:5px;border-top:1px dashed #dfd4c7;font-size:9px;color:#6f6255;font-weight:800}.pos-credit-collection-tile .pos-credit-collection-people{white-space:normal}.pos-credit-collection-more{color:#16482e;font-weight:950}'
     +'.pos-history-item[data-pos-history-hidden="1"]{display:none!important}.pos-history-method{display:inline-flex!important;width:max-content;margin-top:4px!important;padding:3px 7px;border-radius:999px;background:#f7f1e7;color:#725b32!important;font-size:10px!important;font-weight:900}'
     +'.pos-history-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-right:6px}.pos-history-actions button{min-height:30px;border-radius:999px;padding:5px 9px;border:1px solid #dfd4c7;background:#fff;color:#16482e;font-size:10px;font-weight:900;cursor:pointer}.pos-history-actions button.danger{color:#b64242}.pos-history-actions button:disabled{opacity:.55;cursor:wait}'
     +'.pos-history-item{display:flex;align-items:center;gap:8px}.pos-history-row{flex:1;min-width:0}'
@@ -95,9 +96,35 @@
   function tabHtml(method,icon,label,data){
     var tag=view==='past'?'div':'button';
     var attrs=view==='past'?' class="pos-history-total"':' type="button" data-history-tab="'+method+'" class="'+(active===method?'active':'')+'"';
-    return '<'+tag+attrs+'>'
+    var collection=method==='cash'?Number(creditCollections.cash||0):(method==='card'?Number(creditCollections.card||0):0);
+    var html='<'+tag+attrs+'>'
       +'<strong>'+icon+' '+label+' · '+money(data.total)+'</strong>'
-      +'<small>'+data.count+' satış</small>'
+      +'<small>'+data.count+' satış</small>';
+    if(method==='cash'||method==='card'){
+      html+='<small class="pos-history-collection-line">Veresiye tahsilat: +'+money(collection)+'</small>'
+        +'<small class="pos-history-entry-total">Toplam giriş: '+money(Number(data.total||0)+collection)+'</small>';
+    }
+    return html+'</'+tag+'>';
+  }
+
+  function creditCollectionTile(){
+    var cash=Number(creditCollections.cash||0);
+    var card=Number(creditCollections.card||0);
+    var entries=Array.isArray(creditCollections.entries)?creditCollections.entries:[];
+    var people=entries.slice(0,4).map(function(entry){
+      var method=entry.payment_method==='card'?'Kart':'Nakit';
+      var time=String(entry.created_at||'').slice(11,16);
+      return '<span>'+esc(entry.full_name||'Kişi')+' · '+method+' '+money(entry.amount)+(time?' · '+esc(time):'')+'</span>';
+    }).join('');
+    if(entries.length>4) people+='<span class="pos-credit-collection-more">+'+(entries.length-4)+' tahsilat daha</span>';
+    if(!people) people='<span>Bugün henüz tahsilat yok.</span>';
+    var tag=view==='recent'?'button':'div';
+    var attrs=view==='recent'?' type="button" data-credit-collection-open class="pos-credit-collection-tile"':' class="pos-history-total pos-credit-collection-tile"';
+    return '<'+tag+attrs+'>'
+      +'<strong>🤝 Veresiye Tahsilat · '+money(cash+card)+'</strong>'
+      +'<small>Nakit '+money(cash)+' · Kart '+money(card)+'</small>'
+      +'<span class="pos-credit-collection-people">'+people+'</span>'
+      +(view==='recent'?'<small>Yeni tahsilat için tıkla</small>':'')
       +'</'+tag+'>';
   }
   function viewTabs(){
@@ -135,10 +162,8 @@
     var tabs=''
       +tabHtml('cash','💵','Nakit',s.cash)
       +tabHtml('card','💳','Kredi Kartı',s.card)
-      +tabHtml('credit','🧾','Veresiye',s.credit);
-    if(view==='recent'){
-      tabs+='<button type="button" data-credit-collection-open class="pos-credit-collection-tile"><strong>🤝 Veresiye Tahsilat</strong><small>Kişi seç · Nakit / Kart</small></button>';
-    }
+      +tabHtml('credit','🧾','Veresiye',s.credit)
+      +creditCollectionTile();
 
     var rows=sales.map(function(sale){
       var hidden=view==='past'||sale.payment_method===active?'0':'1';
@@ -211,6 +236,7 @@
     loading=true;
     loadError='';
     sales=[];
+    creditCollections={cash:0,card:0,total:0,count:0,entries:[]};
     render();
     var query=view!=='recent'?'&date='+encodeURIComponent(selectedDate):'';
     var action=view==='live_carts'||view==='cancelled_sales'||view==='removed_cart_items'?view:'sales';
@@ -220,6 +246,9 @@
         if(id!==requestId) return;
         if(!data||data.ok===false||!Array.isArray(data.sales)) throw new Error((data&&data.error)||'Satış geçmişi alınamadı.');
         sales=data.sales;
+        creditCollections=data.credit_collections&&typeof data.credit_collections==='object'
+          ?data.credit_collections
+          :{cash:0,card:0,total:0,count:0,entries:[]};
         loading=false;
         render();
       })
