@@ -46,7 +46,12 @@ function depo_cikis_db_ensure(): void
         FOREIGN KEY(dispatch_id) REFERENCES warehouse_dispatches(id) ON DELETE CASCADE
     )");
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_date ON warehouse_dispatches(dispatch_date,id)');
-    $pdo->exec("DROP INDEX IF EXISTS idx_warehouse_dispatch_source_offer");
+    $indexStmt = $pdo->prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_warehouse_dispatch_source_offer' LIMIT 1");
+    $indexStmt->execute();
+    $existingIndexSql = (string)($indexStmt->fetchColumn() ?: '');
+    if ($existingIndexSql !== '' && stripos($existingIndexSql, 'is_cancelled') === false) {
+        $pdo->exec("DROP INDEX IF EXISTS idx_warehouse_dispatch_source_offer");
+    }
     $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer ON warehouse_dispatches(source_offer_id) WHERE source_offer_id IS NOT NULL AND COALESCE(is_cancelled,0)=0");
 }
 
@@ -155,7 +160,7 @@ function depo_cikis_from_offer(int $offerId): int
         if ($pdo->inTransaction()) $pdo->rollBack();
 
         // Çift tıklama / tekrar gönderimde aynı teklif için ikinci fiş oluşmasın.
-        $stmt = db()->prepare('SELECT id FROM warehouse_dispatches WHERE source_offer_id=? LIMIT 1');
+        $stmt = db()->prepare('SELECT id FROM warehouse_dispatches WHERE source_offer_id=? AND COALESCE(is_cancelled,0)=0 LIMIT 1');
         $stmt->execute([$offerId]);
         $existingId = (int)($stmt->fetchColumn() ?: 0);
         if ($existingId > 0) return $existingId;
