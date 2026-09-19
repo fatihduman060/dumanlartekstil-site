@@ -129,8 +129,8 @@ try {
         $eventType = trim((string)($_POST['event_type'] ?? ''));
         if (!in_array($eventType, ['cart_cleared','item_removed'], true)) throw new RuntimeException('Sepet işlemi geçersiz.');
         $removalReason = preg_replace('/^[\s\x{FEFF}]+|[\s\x{FEFF}]+$/u', '', (string)($_POST['removal_reason'] ?? '')) ?? '';
-        if ($eventType === 'item_removed' && preg_match_all('/./us', $removalReason) < 6) {
-            throw new RuntimeException('Silme nedeni en az 6 karakter olmalıdır.');
+        if (preg_match_all('/./us', $removalReason) < 6) {
+            throw new RuntimeException('Sepetten ürün kaldırma veya sepet temizleme nedeni en az 6 karakter olmalıdır.');
         }
         $rawItems = json_decode((string)($_POST['items_json'] ?? ''), true);
         if (!is_array($rawItems) || !$rawItems) throw new RuntimeException('Kaydedilecek sepet bilgisi bulunamadı.');
