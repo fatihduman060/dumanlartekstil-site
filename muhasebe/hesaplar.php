@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_login();
+ensure_column(db(), 'account_transactions', 'transfer_group', 'TEXT');
+db()->exec("CREATE INDEX IF NOT EXISTS idx_account_transactions_transfer_group ON account_transactions(transfer_group)");
 
 function turkiye_banka_listesi(): array
 {
@@ -282,14 +284,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $desc = trim($_POST['description'] ?? 'Hesaplar arası virman');
         $stamp = 'Virman #' . date('YmdHis');
+        $transferGroup = bin2hex(random_bytes(16));
         db()->beginTransaction();
         try {
-            db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)')
-                ->execute([$from, 'out', $amount, $date, 'transfer', $stamp . ' - ' . $desc, current_user()['id'], now()]);
-            db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)')
-                ->execute([$to, 'in', $amount, $date, 'transfer', $stamp . ' - ' . $desc, current_user()['id'], now()]);
+            db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, transfer_group, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)')
+                ->execute([$from, 'out', $amount, $date, 'transfer', $transferGroup, $stamp . ' - ' . $desc, current_user()['id'], now()]);
+            $outId = (int)db()->lastInsertId();
+            db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, transfer_group, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)')
+                ->execute([$to, 'in', $amount, $date, 'transfer', $transferGroup, $stamp . ' - ' . $desc, current_user()['id'], now()]);
+            $inId = (int)db()->lastInsertId();
             db()->commit();
-            log_action('Kasa/Banka virman', money($amount)); audit_action('hesap_hareketi', null, 'virman', null, ['from'=>$from,'to'=>$to,'amount'=>$amount,'date'=>$date], $stamp);
+            log_action('Kasa/Banka virman', money($amount));
+            audit_action('hesap_hareketi', null, 'virman', null, [
+                'from'=>$from,'to'=>$to,'amount'=>$amount,'date'=>$date,
+                'transfer_group'=>$transferGroup,'out_id'=>$outId,'in_id'=>$inId
+            ], $stamp);
             flash('success', 'Virman kaydı oluşturuldu.');
         } catch (Throwable $e) {
             db()->rollBack();
@@ -300,13 +309,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'delete_transaction') {
         $id = (int)($_POST['id'] ?? 0);
+        $reason = trim((string)($_POST['cancel_reason'] ?? 'Liste üzerinden iptal'));
+        if (function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') < 6 : strlen($reason) < 6) {
+            flash('error', 'İptal nedeni en az 6 karakter olmalıdır.');
+            redirect('hesaplar.php');
+        }
+
         $stmt = db()->prepare("SELECT * FROM account_transactions WHERE id=? AND source_type IN ('manual','transfer','zero')");
         $stmt->execute([$id]);
         $tr = $stmt->fetch();
-        if ($tr) {
-            db()->prepare('DELETE FROM account_transactions WHERE id=?')->execute([$id]);
-            log_action('Kasa/Banka hareketi silindi', '#' . $id . ' ' . money($tr['amount'])); audit_action('hesap_hareketi', $id, 'silindi', $tr, null, money($tr['amount']));
-            flash('success', 'Hesap hareketi silindi.');
+        if (!$tr) {
+            flash('error', 'İptal edilecek hesap hareketi bulunamadı.');
+            redirect('hesaplar.php');
+        }
+
+        $rows = [$tr];
+        $transferGroup = trim((string)($tr['transfer_group'] ?? ''));
+        if ((string)$tr['source_type'] === 'transfer') {
+            if ($transferGroup !== '') {
+                $pairStmt = db()->prepare("SELECT * FROM account_transactions WHERE source_type='transfer' AND transfer_group=? ORDER BY id");
+                $pairStmt->execute([$transferGroup]);
+                $rows = $pairStmt->fetchAll() ?: [];
+            } else {
+                // Eski virmanlarda grup alanı yoktu. Yalnız birebir güvenli eşleşme varsa iki tarafı birlikte bağla.
+                $pairStmt = db()->prepare("SELECT * FROM account_transactions
+                    WHERE source_type='transfer' AND transaction_date=? AND ABS(amount-?)<0.005 AND description=?
+                    ORDER BY id");
+                $pairStmt->execute([(string)$tr['transaction_date'], (float)$tr['amount'], (string)$tr['description']]);
+                $rows = $pairStmt->fetchAll() ?: [];
+                if (count($rows) === 2) {
+                    $dirs = array_count_values(array_map(static function ($row) { return (string)$row['direction']; }, $rows));
+                    if (($dirs['in'] ?? 0) !== 1 || ($dirs['out'] ?? 0) !== 1) $rows = [];
+                }
+                if (count($rows) === 2) {
+                    $ids = array_map(static function ($row) { return (int)$row['id']; }, $rows);
+                    sort($ids);
+                    $transferGroup = 'legacy-' . substr(hash('sha256', implode('-', $ids)), 0, 24);
+                    db()->prepare("UPDATE account_transactions SET transfer_group=? WHERE id IN (?,?)")
+                        ->execute([$transferGroup, $ids[0], $ids[1]]);
+                    foreach ($rows as &$legacyRow) $legacyRow['transfer_group'] = $transferGroup;
+                    unset($legacyRow);
+                }
+            }
+            if (count($rows) !== 2) {
+                flash('error', 'Bu eski virmanın iki tarafı güvenle eşleştirilemedi. Tek tarafı iptal edilmedi.');
+                redirect('hesaplar.php');
+            }
+        }
+
+        foreach ($rows as $row) {
+            $reverseType = (string)$row['source_type'] . '_reversal';
+            $reverseCheck = db()->prepare("SELECT id FROM account_transactions WHERE source_type=? AND source_id=? LIMIT 1");
+            $reverseCheck->execute([$reverseType, (int)$row['id']]);
+            if ($reverseCheck->fetchColumn()) {
+                flash('warning', 'Bu hesap hareketi daha önce iptal edilmiş.');
+                redirect('hesaplar.php');
+            }
+        }
+
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $reversalIds = [];
+            foreach ($rows as $row) {
+                $reverseDirection = (string)$row['direction'] === 'in' ? 'out' : 'in';
+                $reverseType = (string)$row['source_type'] . '_reversal';
+                $pdo->prepare("INSERT INTO account_transactions
+                    (account_id,direction,amount,transaction_date,source_type,source_id,transfer_group,description,created_by,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([
+                        (int)$row['account_id'],
+                        $reverseDirection,
+                        (float)$row['amount'],
+                        (string)$row['transaction_date'],
+                        $reverseType,
+                        (int)$row['id'],
+                        $transferGroup !== '' ? $transferGroup : null,
+                        'İptal karşılığı: ' . trim((string)($row['description'] ?? '')) . ' / ' . $reason,
+                        current_user()['id'] ?? null,
+                        now(),
+                    ]);
+                $reversalIds[] = (int)$pdo->lastInsertId();
+            }
+            audit_action('hesap_hareketi', $id, 'iptal', $tr, [
+                'reason'=>$reason,
+                'reversal_ids'=>$reversalIds,
+                'transfer_group'=>$transferGroup !== '' ? $transferGroup : null,
+                'affected_original_ids'=>array_map(static function ($row) { return (int)$row['id']; }, $rows),
+            ], money((float)$tr['amount']));
+            $pdo->commit();
+            log_action('Kasa/Banka hareketi iptal edildi', '#' . $id . ' ' . money((float)$tr['amount']));
+            flash('success', (string)$tr['source_type'] === 'transfer'
+                ? 'Virmanın iki tarafı birlikte iptal edildi; eski kayıtlar korundu.'
+                : 'Hesap hareketi iptal edildi; eski kayıt korunarak ters kayıt oluşturuldu.');
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            flash('error', 'Hesap hareketi iptal edilemedi: ' . $e->getMessage());
         }
         redirect('hesaplar.php');
     }
@@ -636,7 +734,7 @@ page_header('Kasa / Banka', 'hesaplar');
           <td><?php echo e($tr['description'] ?: '-'); ?><small><?php echo e($tr['user_name'] ?: ''); ?></small></td>
           <td class="right"><?php echo $tr['direction']==='in' ? '<strong class="text-success">'.e(money($tr['amount'])).'</strong>' : '-'; ?></td>
           <td class="right"><?php echo $tr['direction']==='out' ? '<strong class="text-danger">'.e(money($tr['amount'])).'</strong>' : '-'; ?></td>
-          <td class="row-actions"><?php if(can_write() && in_array($tr['source_type'], ['manual','transfer','zero'], true)): ?><form method="post" onsubmit="return confirm('Bu manuel/virman/sıfırlama hareketi silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete_transaction"><input type="hidden" name="id" value="<?php echo e($tr['id']); ?>"><button>Sil</button></form><?php endif; ?></td>
+          <td class="row-actions"><?php if(can_write() && in_array($tr['source_type'], ['manual','transfer','zero'], true)): ?><form method="post" onsubmit="return confirm('Bu hareket silinmeyecek; ters kayıt oluşturularak iptal edilecek. Virman ise iki taraf birlikte iptal edilir. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete_transaction"><input type="hidden" name="id" value="<?php echo e($tr['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button></form><?php endif; ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
