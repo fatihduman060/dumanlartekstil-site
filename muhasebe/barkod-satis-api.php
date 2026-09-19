@@ -211,6 +211,80 @@ try {
         pos_json(['ok'=>true,'message'=>$changed . ' ürünün fiyat/stok bilgisi güncellendi.','changed'=>$changed]);
     }
 
+    if ($action === 'credit_collection') {
+        $personId = (int)($_POST['person_id'] ?? 0);
+        $paymentMethod = trim((string)($_POST['payment_method'] ?? ''));
+        $amount = round(max(0, decimal_from_input($_POST['amount'] ?? 0)), 2);
+        $sourceToken = preg_replace('/[^A-Za-z0-9_.:-]/', '', trim((string)($_POST['source_token'] ?? ''))) ?? '';
+        if ($personId <= 0) throw new RuntimeException('Tahsilat yapılacak kişi seçilmedi.');
+        if (!in_array($paymentMethod, ['cash','card'], true)) throw new RuntimeException('Tahsilat türü Nakit veya Kart olmalıdır.');
+        if ($amount <= 0) throw new RuntimeException('Tahsilat tutarı sıfırdan büyük olmalıdır.');
+        if ($sourceToken === '' || strlen($sourceToken) > 100) throw new RuntimeException('Tahsilat güvenlik anahtarı geçersiz. Sayfayı yenileyip tekrar deneyin.');
+
+        $person = pos_credit_person_with_balance($personId);
+        if (!$person) throw new RuntimeException('Seçilen kişi bulunamadı.');
+        $balance = round(max(0, (float)($person['balance'] ?? 0)), 2);
+        if ($balance <= 0.004) throw new RuntimeException('Seçilen kişinin açık veresiye borcu bulunmuyor.');
+        if ($amount > $balance + 0.004) {
+            throw new RuntimeException('Tahsilat tutarı kalan borçtan fazla olamaz. Kalan borç: ' . number_format($balance, 2, ',', '.') . ' TL');
+        }
+
+        $pdo = db();
+        $existing = $pdo->prepare("SELECT id,amount FROM store_credit_entries WHERE source_token=? LIMIT 1");
+        $existing->execute([$sourceToken]);
+        $existingRow = $existing->fetch();
+        if ($existingRow) {
+            pos_json([
+                'ok'=>true,
+                'duplicate'=>true,
+                'message'=>'Bu tahsilat zaten kaydedilmiş.',
+                'entry_id'=>(int)$existingRow['id'],
+            ]);
+        }
+
+        $entryDate = date('Y-m-d');
+        $userId = (int)(current_user()['id'] ?? 0) ?: null;
+        $description = 'Barkodlu Satış ekranından ' . ($paymentMethod === 'cash' ? 'nakit' : 'kart') . ' veresiye tahsilatı';
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare("INSERT INTO store_credit_entries
+                (person_id,entry_type,amount,entry_date,payment_method,daily_breakdown_id,source_token,description,is_cancelled,created_by,created_at,updated_at)
+                VALUES (?,'payment',?,?,?,NULL,?,?,0,?,?,?)")
+                ->execute([$personId,$amount,$entryDate,$paymentMethod,$sourceToken,$description,$userId,now(),now()]);
+            $entryId = (int)$pdo->lastInsertId();
+
+            $sync = magaza_veresiye_auto_only_sync_date($entryDate, $userId);
+            $dailyBreakdownId = (int)($sync['record_id'] ?? 0);
+            if ($dailyBreakdownId > 0) {
+                $pdo->prepare('UPDATE store_credit_entries SET daily_breakdown_id=?,updated_at=? WHERE id=?')
+                    ->execute([$dailyBreakdownId,now(),$entryId]);
+            }
+
+            audit_action('magaza_personel_veresiye_hareketi', $entryId, 'pos_tahsilat', null, [
+                'person_id'=>$personId,
+                'type'=>'payment',
+                'amount'=>$amount,
+                'payment_method'=>$paymentMethod,
+                'date'=>$entryDate,
+                'source'=>'barkod_satis',
+                'source_token'=>$sourceToken,
+            ], (string)$person['full_name']);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+
+        $remaining = round(max(0, $balance - $amount), 2);
+        pos_json([
+            'ok'=>true,
+            'message'=>(string)$person['full_name'] . ' için ' . number_format($amount, 2, ',', '.') . ' TL ' . ($paymentMethod === 'cash' ? 'nakit' : 'kart') . ' tahsilat kaydedildi.',
+            'entry_id'=>$entryId,
+            'remaining_balance'=>$remaining,
+            'payment_method'=>$paymentMethod,
+        ]);
+    }
+
     if ($action === 'delete_sale') {
         if (!pos_can_delete_sales()) throw new RuntimeException('Satış silme yetkisi yalnızca Fatih kullanıcısına aittir.');
         $saleId = (int)($_POST['sale_id'] ?? 0);
