@@ -201,11 +201,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$id]);
         $m = $stmt->fetch();
         if ($m && (int)($m['is_cancelled'] ?? 0) === 0) {
+            $reason = trim((string)($_POST['cancel_reason'] ?? ''));
+            $reasonLength = function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') : strlen($reason);
+            if ($reasonLength < 6) {
+                flash('error', 'Hareket iptal nedeni en az 6 karakter olmalıdır.');
+                redirect('hareketler.php');
+            }
             db()->prepare('UPDATE movements SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')
-                ->execute([now(), current_user()['id'], trim($_POST['cancel_reason'] ?? 'İptal edildi'), now(), $id]);
+                ->execute([now(), current_user()['id'], $reason, now(), $id]);
             sync_movement_account_transaction($id);
             sync_movement_to_check($id, false);
-            log_action('Hareket iptal edildi', '#' . $id . ' ' . movement_label($m['movement_type']) . ' ' . hareket_money($m['amount'], $m['currency'] ?? 'TL')); audit_action('hareket', $id, 'iptal', $m, ['is_cancelled'=>1,'cancel_reason'=>trim($_POST['cancel_reason'] ?? 'İptal edildi')], movement_label($m['movement_type']));
+            log_action('Hareket iptal edildi', '#' . $id . ' ' . movement_label($m['movement_type']) . ' ' . hareket_money($m['amount'], $m['currency'] ?? 'TL')); audit_action('hareket', $id, 'iptal', $m, ['is_cancelled'=>1,'cancel_reason'=>$reason], movement_label($m['movement_type']));
             flash('success', 'Hareket iptal edildi. Kayıt silinmedi; işlem geçmişinde korunuyor.');
         }
         redirect('hareketler.php');
@@ -444,7 +450,7 @@ page_header('Hareketler', 'hareketler');
             <td><?php echo e($m['description'] ?: '-'); ?><small><?php echo e($m['payment_method'] ?: ''); ?><?php echo !empty($m['linked_check_id']) ? ' · <a href="cekler.php?q=' . e($m['linked_check_no'] ?: $m['linked_check_id']) . '">Çek #' . e($m['linked_check_id']) . '</a>' : ''; ?> <?php echo $cancelled ? ' · İptal: '.e($m['cancel_reason'] ?: '') : ''; ?></small></td>
             <td><?php echo $m['document_path'] ? '<a href="belge-indir.php?id='.e($m['id']).'" target="_blank">'.e(document_type_label($m['document_type'])).'</a>' : '-'; ?></td>
             <td class="right"><strong><?php echo e(hareket_money($m['amount'], $m['currency'] ?? 'TL')); ?></strong></td>
-            <td class="row-actions"><?php if(!$cancelled): ?><a href="hareketler.php?edit=<?php echo e($m['id']); ?>">Düzenle</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Hareket silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button>İptal</button></form><?php endif; ?><?php else: ?><span class="muted">Kayıt korundu</span><?php if(can_write() && !empty($m['linked_check_id'])): ?><form method="post"><?php echo csrf_field(); ?><input type="hidden" name="action" value="repair_check_link"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><button type="submit">Çek bağlantısını düzelt</button></form><?php endif; ?><?php endif; ?></td>
+            <td class="row-actions"><?php if(!$cancelled): ?><a href="hareketler.php?edit=<?php echo e($m['id']); ?>">Düzenle</a><?php if(can_write()): ?><form method="post" onsubmit="var r=window.prompt('Hareket iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('Hareket silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><input type="hidden" name="cancel_reason" value=""><button>İptal</button></form><?php endif; ?><?php else: ?><span class="muted">Kayıt korundu</span><?php if(can_write() && !empty($m['linked_check_id'])): ?><form method="post"><?php echo csrf_field(); ?><input type="hidden" name="action" value="repair_check_link"><input type="hidden" name="id" value="<?php echo e($m['id']); ?>"><button type="submit">Çek bağlantısını düzelt</button></form><?php endif; ?><?php endif; ?></td>
           </tr>
           <?php endforeach; ?>
         </tbody>
