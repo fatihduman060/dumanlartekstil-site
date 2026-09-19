@@ -179,6 +179,27 @@ function depo_cikis_can_edit(array $row): bool
     return can_process_warehouse_dispatch() || (is_warehouse_dispatch_operator() && (int)($row['created_by'] ?? 0)===(int)(current_user()['id'] ?? 0));
 }
 
+function depo_cikis_sync_cari_movement(array $row, int $movementId): void
+{
+    $cariId = (int)($row['cari_id'] ?? 0);
+    $total = (float)($row['total'] ?? 0);
+    $date = trim((string)($row['dispatch_date'] ?? '')) ?: date('Y-m-d');
+    $dispatchNo = trim((string)($row['dispatch_no'] ?? ''));
+    if ($cariId <= 0) throw new RuntimeException('Cariye işlenmiş fişte cari seçimi kaldırılamaz.');
+    if ($total <= 0) throw new RuntimeException('Cariye işlenmiş fişin toplamı sıfır olamaz.');
+    if ($movementId <= 0 || !teklif_active_movement_id($movementId)) {
+        throw new RuntimeException('Fişin bağlı aktif cari hareketi bulunamadı. Cari bakiyesi bozulmasın diye fiş güncellenmedi.');
+    }
+    $desc = 'Depo çıkış sipariş fişi no: ' . $dispatchNo . ' / Ürün satışı';
+    db()->prepare("UPDATE movements SET
+        cari_id=?, category_id=?, account_id=NULL, movement_type='alacak', amount=?, currency='TL',
+        movement_date=?, due_date=NULL, payment_method='Depo çıkış fişi', description=?,
+        document_type='depo_cikis_fisi', updated_at=?
+        WHERE id=? AND COALESCE(is_cancelled,0)=0")
+        ->execute([$cariId, teklif_category_id('Satış'), $total, $date, $desc, now(), $movementId]);
+    sync_movement_account_transaction($movementId);
+}
+
 function depo_cikis_save(int $id): int
 {
     depo_cikis_db_ensure();
@@ -228,7 +249,32 @@ function depo_cikis_save(int $id): int
             $s->execute([$id,$i,$item['product_barcode'],$item['product_name'],$item['product_type'],$item['quantity'],$item['unit_price'],$item['line_total']]);
             teklif_save_product_suggestion($item['product_name'],$item['product_type'],(float)$item['unit_price'],$item['product_barcode']);
         }
-        $pdo->commit(); log_action($existing?'Depo çıkış fişi güncellendi':'Depo çıkış fişi oluşturuldu',($data[0]?:('#'.$id))); return $id;
+
+        if($existing && (int)($existing['posted_to_cari']??0)===1){
+            $movementId=teklif_active_movement_id((int)($existing['cari_movement_id']??0));
+            depo_cikis_sync_cari_movement([
+                'cari_id'=>$data[2],
+                'total'=>$total,
+                'dispatch_date'=>$data[1],
+                'dispatch_no'=>$data[0],
+            ],$movementId);
+        }
+
+        audit_action('depo_cikis',$id,$existing?'guncellendi':'olusturuldu',$existing,[
+            'dispatch_no'=>$data[0],
+            'dispatch_date'=>$data[1],
+            'cari_id'=>$data[2],
+            'customer_name'=>$name,
+            'subtotal'=>$subtotal,
+            'discount_amount'=>$discountAmount,
+            'vat_amount'=>$vatAmount,
+            'total'=>$total,
+            'item_count'=>count($items),
+            'cari_movement_id'=>$existing ? (int)($existing['cari_movement_id']??0) : null,
+        ],$data[0]?:('#'.$id));
+        $pdo->commit();
+        log_action($existing?'Depo çıkış fişi güncellendi':'Depo çıkış fişi oluşturuldu',($data[0]?:('#'.$id)));
+        return $id;
     } catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
 
@@ -244,10 +290,29 @@ function depo_cikis_post_to_cari(int $id): int
     $row=depo_cikis_load($id); if(!$row)throw new RuntimeException('Fiş bulunamadı.');
     $cariId=(int)($row['cari_id']??0); if($cariId<=0)throw new RuntimeException('Cariye işlemek için fişte cari seçilmeli.');
     $total=(float)($row['total']??0); if($total<=0)throw new RuntimeException('Fiş toplamı bulunamadı.');
-    $mid=teklif_active_movement_id((int)($row['cari_movement_id']??0));
-    $desc='Depo çıkış sipariş fişi no: '.trim((string)$row['dispatch_no']).' / Ürün satışı'; $now=now();
-    if($mid){db()->prepare('UPDATE movements SET cari_id=?,movement_type=?,amount=?,movement_date=?,payment_method=?,description=?,document_type=?,updated_at=? WHERE id=?')->execute([$cariId,'alacak',$total,$row['dispatch_date'],'Depo çıkış fişi',$desc,'depo_cikis_fisi',$now,$mid]);}
-    else{$s=db()->prepare('INSERT INTO movements(cari_id,category_id,movement_type,amount,movement_date,payment_method,description,document_type,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');$s->execute([$cariId,teklif_category_id('Satış'),'alacak',$total,$row['dispatch_date'],'Depo çıkış fişi',$desc,'depo_cikis_fisi',current_user()['id']??null,$now,$now]);$mid=(int)db()->lastInsertId();}
-    db()->prepare('UPDATE warehouse_dispatches SET posted_to_cari=1,cari_movement_id=?,processed=1,processed_at=COALESCE(processed_at,?),processed_by=COALESCE(processed_by,?),updated_at=? WHERE id=?')->execute([$mid,$now,current_user()['id']??null,$now,$id]);
-    log_action('Depo çıkış fişi cariye işlendi',trim((string)$row['dispatch_no']).' - '.money($total)); return $mid;
+    $pdo=db();
+    $pdo->beginTransaction();
+    try{
+        $mid=teklif_active_movement_id((int)($row['cari_movement_id']??0));
+        $now=now();
+        if($mid){
+            depo_cikis_sync_cari_movement($row,$mid);
+        }else{
+            $desc='Depo çıkış sipariş fişi no: '.trim((string)$row['dispatch_no']).' / Ürün satışı';
+            $s=$pdo->prepare("INSERT INTO movements(cari_id,category_id,account_id,movement_type,amount,currency,movement_date,due_date,payment_method,description,document_type,created_by,created_at,updated_at)
+                VALUES(?,?,NULL,'alacak',?,'TL',?,NULL,'Depo çıkış fişi',?,'depo_cikis_fisi',?,?,?)");
+            $s->execute([$cariId,teklif_category_id('Satış'),$total,$row['dispatch_date'],$desc,current_user()['id']??null,$now,$now]);
+            $mid=(int)$pdo->lastInsertId();
+            sync_movement_account_transaction($mid);
+        }
+        $pdo->prepare('UPDATE warehouse_dispatches SET posted_to_cari=1,cari_movement_id=?,processed=1,processed_at=COALESCE(processed_at,?),processed_by=COALESCE(processed_by,?),updated_at=? WHERE id=?')
+            ->execute([$mid,$now,current_user()['id']??null,$now,$id]);
+        audit_action('depo_cikis',$id,'cariye_islendi',$row,['posted_to_cari'=>1,'cari_movement_id'=>$mid,'total'=>$total],trim((string)$row['dispatch_no']));
+        $pdo->commit();
+        log_action('Depo çıkış fişi cariye işlendi',trim((string)$row['dispatch_no']).' - '.money($total));
+        return $mid;
+    }catch(Throwable $e){
+        if($pdo->inTransaction())$pdo->rollBack();
+        throw $e;
+    }
 }
