@@ -283,15 +283,22 @@ function tahsilat_delete(int $id, string $reason = ''): bool
             $cStmt = $pdo->prepare('SELECT * FROM checks WHERE id=? LIMIT 1');
             $cStmt->execute([$checkId]);
             $check = $cStmt->fetch() ?: null;
-            if ($check && (int)($check['is_cancelled'] ?? 0) === 0) {
-                $pdo->prepare("UPDATE checks SET is_cancelled=1,status='iptal',cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=?")
-                    ->execute([$now,$userId,'Tahsilat makbuzu iptal edildi: '.$reason,$now,$checkId]);
+            if ($check) {
+                $checkWasActive = (int)($check['is_cancelled'] ?? 0) === 0;
+                $checkReason = 'Tahsilat makbuzu iptal edildi: ' . $reason;
+                $pdo->prepare("UPDATE checks SET is_cancelled=1,status='iptal',
+                    cancelled_at=COALESCE(cancelled_at,?),cancelled_by=COALESCE(cancelled_by,?),
+                    cancel_reason=CASE WHEN COALESCE(cancel_reason,'')='' THEN ? ELSE cancel_reason END,
+                    updated_at=? WHERE id=?")
+                    ->execute([$now,$userId,$checkReason,$now,$checkId]);
                 sync_check_to_movement($checkId, false);
-                audit_action('cek', $checkId, 'tahsilat_makbuzu_iptal', $check, [
-                    'is_cancelled'=>1,
-                    'receipt_id'=>$id,
-                    'cancel_reason'=>'Tahsilat makbuzu iptal edildi: '.$reason,
-                ], (string)($old['receipt_no'] ?? ''));
+                if ($checkWasActive) {
+                    audit_action('cek', $checkId, 'tahsilat_makbuzu_iptal', $check, [
+                        'is_cancelled'=>1,
+                        'receipt_id'=>$id,
+                        'cancel_reason'=>$checkReason,
+                    ], (string)($old['receipt_no'] ?? ''));
+                }
             }
         }
 
