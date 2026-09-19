@@ -117,8 +117,10 @@
   }
 
   if(editing){
+    // Düzenleme ekranı ilk açıldığında kayıtlı teklife hiç dokunma.
+    // Boş fiyatlar da dahil olmak üzere belge, kullanıcı değişiklik yapana kadar aynen korunur.
     body.querySelectorAll('.price').forEach(function(price){
-      if(String(price.value||'').trim()!=='') price.dataset.pricePreserve='1';
+      price.dataset.pricePreserve='1';
     });
   }
 
@@ -132,8 +134,9 @@
   body.addEventListener('change',function(event){
     if(!event.target.classList.contains('product-name')&&!event.target.classList.contains('product-barcode')) return;
     var row=event.target.closest('tr');
-    var price=row?.querySelector('.price');
-    if(price&&price.dataset.priceManual!=='1'&&price.dataset.pricePreserve!=='1'){
+    var price=row?row.querySelector('.price'):null;
+    if(price&&price.dataset.priceManual!=='1'){
+      delete price.dataset.pricePreserve;
       setTimeout(function(){
         if(currentCari===Number(cariSelect.value||0)&&cache[currentCari]) applyRow(row);
         else loadPrices().then(function(){applyRow(row);});
@@ -142,12 +145,15 @@
   });
 
   cariSelect.addEventListener('change',function(){
-    body.querySelectorAll('.price[data-customer-auto="1"]').forEach(function(price){
-      delete price.dataset.customerAuto;
-      if(price.dataset.priceManual!=='1'&&price.dataset.pricePreserve!=='1') price.value='';
+    body.querySelectorAll('.price').forEach(function(price){
+      delete price.dataset.pricePreserve;
+      if(price.dataset.customerAuto==='1'){
+        delete price.dataset.customerAuto;
+        if(price.dataset.priceManual!=='1') price.value='';
+      }
     });
     loadPrices();
   });
 
-  if(Number(cariSelect.value||0)>0) loadPrices();
+  if(!editing&&Number(cariSelect.value||0)>0) loadPrices();
 })();
