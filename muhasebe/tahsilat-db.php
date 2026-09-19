@@ -37,6 +37,13 @@ function tahsilat_db_ensure(): void
     ensure_column($pdo, 'collection_receipts', 'check_document_name', 'TEXT');
     ensure_column($pdo, 'collection_receipts', 'check_document_mime', 'TEXT');
     ensure_column($pdo, 'collection_receipts', 'check_record_id', 'INTEGER');
+    ensure_column($pdo, 'collection_receipts', 'posted_to_cari', 'INTEGER NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'collection_receipts', 'cari_movement_id', 'INTEGER');
+    ensure_column($pdo, 'collection_receipts', 'posted_at', 'TEXT');
+    ensure_column($pdo, 'collection_receipts', 'posted_by', 'INTEGER');
+    ensure_column($pdo, 'collection_receipts', 'deleted_at', 'TEXT');
+    ensure_column($pdo, 'collection_receipts', 'deleted_by', 'INTEGER');
+    ensure_column($pdo, 'collection_receipts', 'delete_reason', 'TEXT');
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_collection_receipts_date ON collection_receipts(receipt_date, id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_collection_receipts_check_record ON collection_receipts(check_record_id)");
 }
@@ -186,9 +193,36 @@ function tahsilat_save_from_post(int $id = 0): int
     if ($payload['customer_name'] === '') throw new RuntimeException('Firma / müşteri adı boş olamaz.');
 
     $pdo = db();
+
+    $dupStmt = $pdo->prepare("SELECT id FROM collection_receipts
+        WHERE id<>? AND COALESCE(is_deleted,0)=0 AND UPPER(TRIM(receipt_no))=UPPER(TRIM(?)) LIMIT 1");
+    $dupStmt->execute([$id, $payload['receipt_no']]);
+    $duplicateReceiptId = (int)($dupStmt->fetchColumn() ?: 0);
+    if ($duplicateReceiptId > 0) {
+        throw new RuntimeException('Aynı makbuz numarası aktif kayıtlarda zaten var (Makbuz #' . $duplicateReceiptId . '). İkinci kayıt oluşturulmadı.');
+    }
     if ($id > 0) {
         $old = tahsilat_load($id);
         if (!$old) throw new RuntimeException('Düzenlenecek makbuz bulunamadı.');
+
+        if ((int)($old['posted_to_cari'] ?? 0) === 1) {
+            $financialFields = [
+                'receipt_date','cari_id','payment_type','currency','amount',
+                'bank_name','document_no','due_date'
+            ];
+            foreach ($financialFields as $field) {
+                $oldValue = $field === 'amount'
+                    ? round((float)($old[$field] ?? 0), 2)
+                    : trim((string)($old[$field] ?? ''));
+                $newValue = $field === 'amount'
+                    ? round((float)($payload[$field] ?? 0), 2)
+                    : trim((string)($payload[$field] ?? ''));
+                if ($oldValue !== $newValue) {
+                    throw new RuntimeException('Bu makbuz cariye işlendiği için tutar/tarih/cari/ödeme bilgileri doğrudan değiştirilemez. Yanlışsa makbuzu iptal edip doğru kayıt oluşturun.');
+                }
+            }
+        }
+
         $payload['updated_at'] = now();
         $payload['id'] = $id;
         $stmt = $pdo->prepare('UPDATE collection_receipts SET receipt_no=:receipt_no, receipt_date=:receipt_date, cari_id=:cari_id, customer_name=:customer_name, customer_city=:customer_city, customer_address=:customer_address, customer_tax_office=:customer_tax_office, customer_tax_no=:customer_tax_no, customer_phone=:customer_phone, payment_type=:payment_type, currency=:currency, amount=:amount, amount_text=:amount_text, description=:description, bank_name=:bank_name, document_no=:document_no, due_date=:due_date, debtor_name=:debtor_name, collected_by=:collected_by, paid_by=:paid_by, check_document_path=:check_document_path, check_document_name=:check_document_name, check_document_mime=:check_document_mime, updated_at=:updated_at WHERE id=:id');
@@ -210,15 +244,72 @@ function tahsilat_save_from_post(int $id = 0): int
     return $receiptId;
 }
 
-function tahsilat_delete(int $id): bool
+function tahsilat_delete(int $id, string $reason = ''): bool
 {
     tahsilat_db_ensure();
     $old = tahsilat_load($id);
     if (!$old) return false;
-    db()->prepare('UPDATE collection_receipts SET is_deleted=1, updated_at=? WHERE id=?')->execute([now(), $id]);
-    log_action('Tahsilat makbuzu silindi', ($old['receipt_no'] ?? '') . ' ' . ($old['customer_name'] ?? ''));
-    audit_action('tahsilat_makbuzu', $id, 'silindi', $old, null, $old['receipt_no'] ?? '');
-    return true;
+
+    $reason = trim($reason);
+    $reasonLength = function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') : strlen($reason);
+    if ($reasonLength < 6) throw new RuntimeException('Makbuz iptal nedeni en az 6 karakter olmalıdır.');
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $userId = current_user()['id'] ?? null;
+        $now = now();
+        $movementId = (int)($old['cari_movement_id'] ?? 0);
+        if ($movementId > 0) {
+            $mStmt = $pdo->prepare('SELECT * FROM movements WHERE id=? LIMIT 1');
+            $mStmt->execute([$movementId]);
+            $movement = $mStmt->fetch() ?: null;
+            if ($movement && (int)($movement['is_cancelled'] ?? 0) === 0) {
+                $movementReason = 'Tahsilat makbuzu iptal edildi: ' . $reason;
+                $pdo->prepare('UPDATE movements SET is_cancelled=1,cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=?')
+                    ->execute([$now,$userId,$movementReason,$now,$movementId]);
+                sync_movement_account_transaction($movementId);
+                sync_movement_to_check($movementId, false);
+                audit_action('hareket', $movementId, 'tahsilat_makbuzu_iptal', $movement, [
+                    'is_cancelled'=>1,
+                    'cancel_reason'=>$movementReason,
+                    'receipt_id'=>$id,
+                ], (string)($old['receipt_no'] ?? ''));
+            }
+        }
+
+        $checkId = (int)($old['check_record_id'] ?? 0);
+        if ($checkId > 0) {
+            $cStmt = $pdo->prepare('SELECT * FROM checks WHERE id=? LIMIT 1');
+            $cStmt->execute([$checkId]);
+            $check = $cStmt->fetch() ?: null;
+            if ($check && (int)($check['is_cancelled'] ?? 0) === 0) {
+                $pdo->prepare("UPDATE checks SET is_cancelled=1,status='iptal',cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=?")
+                    ->execute([$now,$userId,'Tahsilat makbuzu iptal edildi: '.$reason,$now,$checkId]);
+                sync_check_to_movement($checkId, false);
+                audit_action('cek', $checkId, 'tahsilat_makbuzu_iptal', $check, [
+                    'is_cancelled'=>1,
+                    'receipt_id'=>$id,
+                    'cancel_reason'=>'Tahsilat makbuzu iptal edildi: '.$reason,
+                ], (string)($old['receipt_no'] ?? ''));
+            }
+        }
+
+        $pdo->prepare('UPDATE collection_receipts SET is_deleted=1,deleted_at=?,deleted_by=?,delete_reason=?,updated_at=? WHERE id=?')
+            ->execute([$now,$userId,$reason,$now,$id]);
+        audit_action('tahsilat_makbuzu', $id, 'iptal', $old, [
+            'is_deleted'=>1,
+            'delete_reason'=>$reason,
+            'linked_movement_id'=>$movementId ?: null,
+            'linked_check_id'=>$checkId ?: null,
+        ], $old['receipt_no'] ?? '');
+        $pdo->commit();
+        log_action('Tahsilat makbuzu iptal edildi', ($old['receipt_no'] ?? '') . ' ' . ($old['customer_name'] ?? ''));
+        return true;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
 }
 
 function tahsilatlar_list(int $limit = 120): array
