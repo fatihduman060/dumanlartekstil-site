@@ -179,6 +179,9 @@ try {
             'payment_method'=>$paymentMethod,
             'event_time'=>now(),
         ], $eventLabel);
+        if ($eventType === 'cart_cleared') {
+            pos_live_clear_terminal(trim((string)($_POST['terminal_id'] ?? '')), (int)(current_user()['id'] ?? 0));
+        }
         pos_json(['ok'=>true,'message'=>$eventLabel . ' ve denetim kaydına işlendi.']);
     }
 
@@ -519,6 +522,7 @@ try {
             ], (string)$creditPerson['full_name']);
         }
         $pdo->commit();
+        pos_live_clear_terminal(trim((string)($_POST['terminal_id'] ?? '')), $userId);
         pos_json(['ok'=>true,'message'=>'Satış tamamlandı.','sale_id'=>$saleId,'receipt_no'=>$receiptNo,'receipt_url'=>'barkod-fis.php?id='.$saleId,'payment_method'=>$paymentMethod,'cash_amount'=>$cashAmount,'card_amount'=>$cardAmount,'credit_amount'=>$creditAmount]);
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
