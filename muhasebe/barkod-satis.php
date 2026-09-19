@@ -147,7 +147,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <div class="pos-history-list">
       <?php if (!$recentSales): ?><p class="muted">Henüz barkodlu satış yok.</p><?php endif; ?>
       <?php foreach ($recentSales as $sale): ?>
-      <div class="pos-history-item"><a href="barkod-fis.php?id=<?php echo e($sale['id']); ?>" target="_blank" class="pos-history-row"><span><strong><?php echo e($sale['receipt_no']); ?></strong><small><?php echo e(tr_date($sale['sale_date'])); ?> <?php echo e(substr($sale['sale_time'],0,5)); ?> · <?php echo e($sale['customer_name']); ?></small></span><strong><?php echo e(money((float)$sale['grand_total'])); ?></strong></a><?php if ($canDeleteSales): ?><button type="button" class="pos-sale-delete" data-sale-delete="<?php echo e($sale['id']); ?>" data-receipt-no="<?php echo e($sale['receipt_no']); ?>">Sil</button><?php endif; ?></div>
+      <div class="pos-history-item"><a href="barkod-fis.php?id=<?php echo e($sale['id']); ?>" target="_blank" class="pos-history-row"><span><strong><?php echo e($sale['receipt_no']); ?></strong><small><?php echo e(tr_date($sale['sale_date'])); ?> <?php echo e(substr($sale['sale_time'],0,5)); ?> · <?php echo e($sale['customer_name']); ?></small></span><strong><?php echo e(money((float)$sale['grand_total'])); ?></strong></a><?php if ($canDeleteSales): ?><button type="button" class="pos-sale-delete" data-sale-delete="<?php echo e($sale['id']); ?>" data-receipt-no="<?php echo e($sale['receipt_no']); ?>" >İptal</button><?php endif; ?></div>
       <?php endforeach; ?>
     </div>
   </section>
