@@ -155,7 +155,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/barkod-canli-arama.js?v=8"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>
-<script src="assets/barkod-satis-gecmis.js?v=10"></script>
+<script src="assets/barkod-satis-gecmis.js?v=11"></script>
 <script src="assets/barkod-veresiye-tahsilat.js?v=1"></script>
 <script src="assets/barkod-pos-hizli.js?v=4"></script>
 <?php page_footer(); ?>
