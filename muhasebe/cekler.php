@@ -112,6 +112,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('cekler.php?direction=' . urlencode($direction));
         }
 
+        $checkNoInput = trim((string)($_POST['check_no'] ?? ''));
+        if ($checkNoInput !== '') {
+            $cariForDuplicate = ($_POST['cari_id'] ?? '') !== '' ? (int)$_POST['cari_id'] : 0;
+            $dupStmt = db()->prepare("SELECT id,check_no FROM checks
+                WHERE id<>? AND direction=? AND COALESCE(cari_id,0)=? AND due_date=?
+                  AND ABS(amount-?)<0.005 AND COALESCE(is_cancelled,0)=0");
+            $dupStmt->execute([$id,$direction,$cariForDuplicate,$due,$amount]);
+            $checkNoKey = preg_replace('/[^A-Z0-9]/', '', strtoupper($checkNoInput));
+            foreach ($dupStmt->fetchAll() ?: [] as $dupCheck) {
+                $dupKey = preg_replace('/[^A-Z0-9]/', '', strtoupper((string)($dupCheck['check_no'] ?? '')));
+                if ($checkNoKey !== '' && $dupKey === $checkNoKey) {
+                    flash('error', 'Aynı çek numarası, tutar ve vade ile aktif kayıt zaten var (Çek #' . (int)$dupCheck['id'] . '). İkinci kayıt oluşturulmadı.');
+                    redirect('cekler.php?direction=' . urlencode($direction));
+                }
+            }
+        }
+
         $oldDoc = null;
         $oldCheck = null;
         $status = 'bekliyor';
@@ -221,10 +238,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$id]);
         $ch = $stmt->fetch();
         if ($ch && (int)($ch['is_cancelled'] ?? 0) === 0) {
-            $reason = trim($_POST['cancel_reason'] ?? 'Liste üzerinden iptal');
+            $reason = trim((string)($_POST['cancel_reason'] ?? ''));
             $ciroSummaryText = mb_strtolower(trim((string)($ch['check_no'] ?? '')) . ' ' . trim((string)($ch['description'] ?? '')), 'UTF-8');
             if ((string)($ch['direction'] ?? '') === 'verilecek' && mb_strpos($ciroSummaryText, 'müşteri çek') !== false) {
                 $reason = 'Müşteri çekleri ciro edilerek kapatıldı';
+            } else {
+                $reasonLength = function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') : strlen($reason);
+                if ($reasonLength < 6) {
+                    flash('error', 'Çek iptal nedeni en az 6 karakter olmalıdır.');
+                    redirect('cekler.php?direction=' . urlencode((string)$ch['direction']));
+                }
             }
             db()->prepare('UPDATE checks SET is_cancelled=1, status=?, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')->execute(['iptal', now(), current_user()['id'], $reason, now(), $id]);
             sync_check_to_movement($id, false);
@@ -366,7 +389,7 @@ page_header('Çekler', 'cekler');
         <td><b><?php echo e(money($ch['amount'])); ?></b><span>TRY</span></td>
         <td><span class="status-badge tone-<?php echo e($tone); ?>"><?php echo e(cek_status_label2($status)); ?></span><?php echo $ch['description'] ? '<small>'.e($ch['description']).'</small>' : ''; ?><small class="collection-bank <?php echo $collectionLabel===''?'missing':''; ?>"><?php echo $collectionLabel!=='' ? ($ch['direction']==='verilecek' ? 'Ödeme hesabı: ' : 'Tahsil hesabı: ').e($collectionLabel) : ($ch['direction']==='verilecek' ? 'Ödeme hesabı seçilmedi' : 'Tahsil hesabı seçilmedi'); ?></small><div class="check-life"><em><?php echo e(tr_date(substr((string)($ch['created_at'] ?? $today),0,10))); ?> · Kayda alındı</em><?php if($status !== 'bekliyor'): ?><em><?php echo e(tr_date($ch['closed_at'] ?: substr((string)($ch['updated_at'] ?? $today),0,10))); ?> · <?php echo e(cek_status_label2($status)); ?></em><?php endif; ?></div></td>
         <td><div class="doc-pills"><?php if($frontDocs): ?><a href="serbest-belge-indir.php?id=<?php echo e($frontDocs[0]['id']); ?>" target="_blank">Ön</a><?php elseif(!empty($ch['document_path'])): ?><a href="cek-belge-indir.php?id=<?php echo e($id); ?>" target="_blank">Ana</a><?php else: ?><span>Ön yok</span><?php endif; ?><?php if($backDocs): ?><a href="serbest-belge-indir.php?id=<?php echo e($backDocs[0]['id']); ?>" target="_blank">Arka</a><?php else: ?><span>Arka yok</span><?php endif; ?><?php if(count($docs)>2): ?><a href="cek-ek-belge.php?id=<?php echo e($id); ?>"><?php echo e(count($docs)); ?> belge</a><?php endif; ?></div></td>
-        <td><div class="row-control"><?php if(!$cancelled): ?><form method="post" class="status-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?php echo e($id); ?>"><select name="status"><?php foreach(cek_status_options_for_direction((string)$ch['direction']) as $value=>$label): ?><option value="<?php echo e($value); ?>" <?php echo $status===$value?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><button type="submit">Kaydet</button></form><div class="row-links"><a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($id); ?>#cek-form">Düzenle</a><a href="cek-ek-belge.php?id=<?php echo e($id); ?>">Ek belge</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Çek silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($id); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal"><button class="danger" type="submit">İptal</button></form><?php endif; ?></div><?php else: ?><?php if($ciroSummary): ?><span class="muted">Ciro edilen müşteri çeklerinin toplu karşılığı</span><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?><?php endif; ?></div></td>
+        <td><div class="row-control"><?php if(!$cancelled): ?><form method="post" class="status-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?php echo e($id); ?>"><select name="status"><?php foreach(cek_status_options_for_direction((string)$ch['direction']) as $value=>$label): ?><option value="<?php echo e($value); ?>" <?php echo $status===$value?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><button type="submit">Kaydet</button></form><div class="row-links"><a href="cekler.php?direction=<?php echo e($ch['direction']); ?>&edit=<?php echo e($id); ?>#cek-form">Düzenle</a><a href="cek-ek-belge.php?id=<?php echo e($id); ?>">Ek belge</a><?php if(can_write()): ?><form method="post" onsubmit="var r=window.prompt('Çek iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('Çek silinmeyecek, iptal edildi olarak işaretlenecek. Devam edilsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($id); ?>"><input type="hidden" name="cancel_reason" value=""><button class="danger" type="submit">İptal</button></form><?php endif; ?></div><?php else: ?><?php if($ciroSummary): ?><span class="muted">Ciro edilen müşteri çeklerinin toplu karşılığı</span><?php else: ?><span class="muted">Kayıt korundu</span><?php endif; ?><?php endif; ?></div></td>
       </tr>
       <?php endforeach; ?>
     </tbody></table></div>
