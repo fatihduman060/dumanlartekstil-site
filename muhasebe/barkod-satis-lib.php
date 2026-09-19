@@ -647,8 +647,12 @@ function pos_live_clear_terminal(string $terminal, ?int $userId = null): void
     if (!preg_match('/^[a-f0-9-]{20,64}$/D', $terminal)) return;
     $userId = $userId ?: (int)(current_user()['id'] ?? 0);
     if ($userId <= 0) return;
-    pos_live_ensure();
-    db()->prepare("DELETE FROM pos_live_carts WHERE user_id=? AND terminal_id=?")->execute([$userId,$terminal]);
+    try {
+        pos_live_ensure();
+        db()->prepare("DELETE FROM pos_live_carts WHERE user_id=? AND terminal_id=?")->execute([$userId,$terminal]);
+    } catch (Throwable $e) {
+        // Canlı sepet temizliği, tamamlanmış satışın sonucunu başarısız göstermemeli.
+    }
 }
 
 function pos_live_save(array $input): void
