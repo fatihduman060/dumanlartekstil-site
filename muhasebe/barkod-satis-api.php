@@ -33,6 +33,12 @@ try {
             header('Cache-Control: no-store');
             pos_json(['ok'=>true,'sales'=>pos_live_carts()]);
         }
+        if ($action === 'abandoned_carts') {
+            if (!pos_can_delete_sales()) pos_json(['ok'=>false,'error'=>'Terk edilen sepetleri yalnızca Fatih görebilir.'],403);
+            $date = is_string($_GET['date'] ?? null) ? $_GET['date'] : '';
+            header('Cache-Control: no-store');
+            pos_json(['ok'=>true,'sales'=>pos_abandoned_carts($date)]);
+        }
         if ($action === 'barcode') {
             $product = pos_product_by_barcode((string)($_GET['barcode'] ?? ''));
             pos_json(['ok'=>true, 'product'=>$product]);
