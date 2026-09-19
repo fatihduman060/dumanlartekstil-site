@@ -227,6 +227,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $oldRow = $id > 0 ? fatura_getir($id) : null;
+
+        // Aynı faturanın ikinci kez kaydedilip cariye iki defa işlenmesini engelle.
+        $duplicateSql = "SELECT id,invoice_no,cari_id,issuer_name FROM invoices
+            WHERE id<>? AND direction=? AND COALESCE(is_cancelled,0)=0";
+        $duplicateParams = [$id, $direction];
+        if ($direction === 'gelen') {
+            if ($cariId) {
+                $duplicateSql .= " AND cari_id=?";
+                $duplicateParams[] = $cariId;
+            } elseif ($issuerName !== '') {
+                $duplicateSql .= " AND UPPER(TRIM(COALESCE(issuer_name,'')))=UPPER(TRIM(?))";
+                $duplicateParams[] = $issuerName;
+            } else {
+                $duplicateSql .= " AND 1=0";
+            }
+        }
+        $dupStmt = db()->prepare($duplicateSql);
+        $dupStmt->execute($duplicateParams);
+        foreach ($dupStmt->fetchAll() ?: [] as $dupRow) {
+            $dupKey = preg_replace('/[^A-Z0-9]/', '', strtoupper((string)($dupRow['invoice_no'] ?? '')));
+            if ($dupKey !== '' && $dupKey === $invoiceNoKey) {
+                flash('error', 'Aynı fatura numarası aktif kayıtlarda zaten var (Fatura #' . (int)$dupRow['id'] . '). İkinci kayıt oluşturulmadı.');
+                redirect('faturalar.php' . ($id > 0 ? '?edit=' . $id : ''));
+            }
+        }
+
         $issuerUnchanged = $oldRow && trim((string)($oldRow['issuer_name'] ?? '')) === $issuerName;
         $issuerSource = $issuerUnchanged ? (string)($oldRow['issuer_source'] ?? '') : ($issuerName !== '' ? 'manual' : '');
         $issuerConfidence = $issuerUnchanged ? (int)($oldRow['issuer_confidence'] ?? 0) : ($issuerName !== '' ? 100 : 0);
@@ -336,7 +362,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['id'] ?? 0);
         $invoice = fatura_getir($id);
         if ($invoice && (int)($invoice['is_cancelled'] ?? 0) === 0) {
-            $reason = trim((string)($_POST['cancel_reason'] ?? 'Fatura iptal edildi'));
+            $reason = trim((string)($_POST['cancel_reason'] ?? ''));
+            $reasonLength = function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') : strlen($reason);
+            if ($reasonLength < 6) {
+                flash('error', 'Fatura iptal nedeni en az 6 karakter olmalıdır.');
+                redirect('faturalar.php');
+            }
             db()->prepare('UPDATE invoices SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')
                 ->execute([now(), current_user()['id'] ?? null, $reason, now(), $id]);
 
@@ -657,8 +688,8 @@ page_header('Faturalar', 'faturalar');
                   <?php echo csrf_field(); ?><input type="hidden" name="action" value="post_cari"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>">
                   <button><?php echo !empty($r['cari_movement_id']) && (int)($r['movement_cancelled'] ?? 0)===0 ? 'Cariyi güncelle' : 'Cariye işle'; ?></button>
                 </form><?php endif; ?>
-                <form method="post" onsubmit="return confirm('Fatura ve varsa bağlı cari hareket iptal edilsin mi?');">
-                  <?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><input type="hidden" name="cancel_reason" value="Liste üzerinden iptal">
+                <form method="post" onsubmit="var r=window.prompt('Fatura iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('Fatura ve varsa bağlı cari hareket iptal edilsin mi?');">
+                  <?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><input type="hidden" name="cancel_reason" value="">
                   <button>İptal</button>
                 </form>
               <?php endif; ?>
