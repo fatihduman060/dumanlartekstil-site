@@ -97,6 +97,42 @@ function pos_credit_person_with_balance(int $personId): ?array
     return $stmt->fetch() ?: null;
 }
 
+function pos_credit_collections_on_date(string $date): array
+{
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+        throw new InvalidArgumentException('Geçerli bir tahsilat tarihi seçin.');
+    }
+    pos_store_credit_ensure();
+    $stmt = db()->prepare("SELECT e.id,e.person_id,e.amount,e.payment_method,e.entry_date,e.created_at,p.full_name
+        FROM store_credit_entries e
+        JOIN store_credit_people p ON p.id=e.person_id
+        WHERE e.entry_type='payment'
+          AND e.entry_date=?
+          AND COALESCE(e.is_cancelled,0)=0
+          AND e.payment_method IN ('cash','card')
+        ORDER BY e.created_at DESC,e.id DESC");
+    $stmt->execute([$date]);
+    $entries = $stmt->fetchAll() ?: [];
+    $cash = 0.0;
+    $card = 0.0;
+    foreach ($entries as &$entry) {
+        $entry['id'] = (int)$entry['id'];
+        $entry['person_id'] = (int)$entry['person_id'];
+        $entry['amount'] = round((float)$entry['amount'], 2);
+        if (($entry['payment_method'] ?? '') === 'cash') $cash += $entry['amount'];
+        if (($entry['payment_method'] ?? '') === 'card') $card += $entry['amount'];
+    }
+    unset($entry);
+    return [
+        'cash'=>round($cash, 2),
+        'card'=>round($card, 2),
+        'total'=>round($cash + $card, 2),
+        'count'=>count($entries),
+        'entries'=>$entries,
+    ];
+}
+
 function pos_mark_old_offer_products(): void
 {
     $pdo = db();
