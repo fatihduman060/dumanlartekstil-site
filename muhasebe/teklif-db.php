@@ -152,7 +152,7 @@ function teklif_normalize_barcode(string $barcode = '', string $productName = ''
     $raw = trim($barcode);
     $digits = preg_replace('/\D+/', '', $raw);
     if (strlen($digits) === 13) return $digits;
-    if (strlen($digits) === 12 && str_starts_with($digits, '86992348')) return $digits . teklif_ean13_check_digit($digits);
+    if (strlen($digits) === 12 && substr($digits, 0, 8) === '86992348') return $digits . teklif_ean13_check_digit($digits);
     if (strlen($digits) === 4) return teklif_barcode_from_article($digits);
     $article = teklif_article_from_text($raw) ?: teklif_article_from_text($productName) ?: teklif_article_from_text($productType);
     if ($article !== '') return teklif_barcode_from_article($article);
