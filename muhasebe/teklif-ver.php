@@ -2,6 +2,9 @@
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/teklif-db.php';
 require_login();
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 teklif_db_ensure();
 
 if (!function_exists('teklif_next_offer_no')) {
@@ -32,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'save') {
             $offerId = teklif_save_from_post((int)($_POST['id'] ?? 0));
             flash('success', 'Teklif kaydedildi. İstersen alttan PDF alabilir veya tekrar düzenleyebilirsin.');
-            redirect('teklif-ver.php?edit=' . $offerId);
+            redirect('teklif-ver.php?edit=' . $offerId . '#offer-form');
         }
         if ($action === 'delete') {
             $id = (int)($_POST['id'] ?? 0);
@@ -75,6 +78,10 @@ $productJson = json_encode(array_map(function ($p) {
 
 $editId = (int)($_GET['edit'] ?? 0);
 $edit = $editId > 0 ? teklif_load($editId) : null;
+if ($editId > 0 && !$edit) {
+    flash('error', 'Düzenlemek istediğiniz teklif bulunamadı veya kayıt artık aktif değil.');
+    redirect('teklif-ver.php');
+}
 $list = teklifler_list(120);
 $titleOptions = ['SİPARİŞ FİŞİ', 'TEKLİF FORMU', 'PROFORMA', 'PROFORMA FATURA', 'SİPARİŞ FORMU'];
 
@@ -107,7 +114,7 @@ page_header('Teklif Ver', 'teklif_ver');
     <div class="offer-actions"><a class="secondary" href="teklif-ver.php">Yeni teklif</a></div>
   </section>
 
-  <section class="offer-card">
+  <section class="offer-card" id="offer-form">
     <header><div><h3><?php echo $edit ? 'Teklif düzenle' : 'Yeni teklif'; ?></h3><small><?php echo $edit ? 'Kayıt no #' . e($edit['id']) : 'Kaydedince alttaki listede görünür.'; ?></small></div><strong><?php echo $edit ? e($edit['offer_no']) : 'Yeni teklif'; ?></strong></header>
     <div class="offer-body">
       <?php if (can_write()): ?>
@@ -194,7 +201,7 @@ page_header('Teklif Ver', 'teklif_ver');
               <td><strong><?php echo e($offer['customer_name']); ?></strong><small><?php echo e($offer['customer_city'] ?: '-'); ?><?php echo !empty($offer['customer_phone']) ? ' · Tel: ' . e($offer['customer_phone']) : ''; ?></small></td>
               <td><strong><?php echo e(teklif_money((float)$offer['grand_total']) . ' ' . $offer['currency']); ?></strong><small>Ara toplam: <?php echo e(teklif_money((float)$offer['subtotal'])); ?></small></td>
               <td><?php echo ((int)($offer['discount_enabled'] ?? 0)===1) ? '<span class="pill discount">%'.e((string)($offer['discount_rate'] ?? 0)).' iskonto</span><small>-'.e(teklif_money((float)($offer['discount_amount'] ?? 0))).'</small>' : '<span class="pill off">İskonto yok</span>'; ?><?php echo ((int)$offer['vat_enabled']===1) ? '<span class="pill" style="margin-left:4px">%'.e((string)$offer['vat_rate']).' KDV</span><small>'.e(teklif_money((float)$offer['vat_amount'])).'</small>' : '<small>KDV yok</small>'; ?></td>
-              <td><div class="saved-actions"><a href="teklif-ver.php?edit=<?php echo e($offer['id']); ?>">Düzenle</a><a target="_blank" href="teklif-yazdir.php?id=<?php echo e($offer['id']); ?>">PDF</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
+              <td><div class="saved-actions"><a href="teklif-ver.php?edit=<?php echo e($offer['id']); ?>#offer-form">Düzenle</a><a target="_blank" href="teklif-yazdir.php?id=<?php echo e($offer['id']); ?>">PDF</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
             </tr>
             <?php endforeach; ?>
           </tbody>
@@ -309,5 +316,5 @@ page_header('Teklif Ver', 'teklif_ver');
   recalc();
 })();
 </script>
-<script src="assets/musteri-urun-son-fiyat.js?v=1"></script>
+<script src="assets/musteri-urun-son-fiyat.js?v=2"></script>
 <?php page_footer(); ?>
