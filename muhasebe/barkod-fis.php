@@ -5,7 +5,8 @@ require_login();
 $id = (int)($_GET['id'] ?? 0);
 $sale = pos_sale($id);
 if (!$sale) { http_response_code(404); exit('Fiş bulunamadı.'); }
-$paymentLabels = ['cash'=>'Nakit','card'=>'Kredi Kartı','credit'=>'Veresiye'];
+$paymentLabels = ['cash'=>'Nakit','card'=>'Kredi Kartı','mixed'=>'Nakit + Kredi Kartı','credit'=>'Veresiye'];
+$paymentAmounts = pos_sale_payment_amounts($sale);
 $autoPrint = (string)($_GET['print'] ?? '') === '1';
 ?><!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?php echo e($sale['receipt_no']); ?> | Satış Fişi</title>
@@ -16,7 +17,7 @@ $autoPrint = (string)($_GET['print'] ?? '') === '1';
   <div class="center"><div class="brand">DUMANLAR A.Ş.</div><div class="muted">SATIŞ FİŞİ</div></div>
   <div class="meta"><span>Müşteri</span><strong><?php echo e($sale['customer_name'] ?: 'Perakende Müşteri'); ?></strong><span>Tarih</span><strong><?php echo e(tr_date($sale['sale_date'])); ?> <?php echo e(substr($sale['sale_time'],0,5)); ?></strong><span>Fiş No</span><strong><?php echo e($sale['receipt_no']); ?></strong></div>
   <table class="items"><tbody><?php foreach ($sale['items'] as $item): ?><tr><td><div class="name"><?php echo e($item['product_name']); ?></div><div class="detail"><?php echo e($item['barcode']); ?><br><?php echo e(number_format((float)$item['quantity'], 0, ',', '.')); ?> × <?php echo e(money((float)$item['unit_price'])); ?></div></td><td class="right"><strong><?php echo e(money((float)$item['line_total'])); ?></strong></td></tr><?php endforeach; ?></tbody></table>
-  <div class="totals"><?php if ((float)$sale['discount_amount'] > 0): ?><div class="total-row"><span>Ara Toplam</span><strong><?php echo e(money((float)$sale['subtotal'])); ?></strong></div><div class="total-row"><span>İndirim</span><strong>-<?php echo e(money((float)$sale['discount_amount'])); ?></strong></div><?php endif; ?><div class="total-row grand"><span>TOPLAM</span><strong><?php echo e(money((float)$sale['grand_total'])); ?></strong></div><div class="total-row"><span>Ödeme</span><strong><?php echo e($paymentLabels[$sale['payment_method']] ?? $sale['payment_method']); ?></strong></div></div>
+  <div class="totals"><?php if ((float)$sale['discount_amount'] > 0): ?><div class="total-row"><span>Ara Toplam</span><strong><?php echo e(money((float)$sale['subtotal'])); ?></strong></div><div class="total-row"><span>İndirim</span><strong>-<?php echo e(money((float)$sale['discount_amount'])); ?></strong></div><?php endif; ?><div class="total-row grand"><span>TOPLAM</span><strong><?php echo e(money((float)$sale['grand_total'])); ?></strong></div><div class="total-row"><span>Ödeme</span><strong><?php echo e($paymentLabels[$sale['payment_method']] ?? $sale['payment_method']); ?></strong></div><?php if ((float)$paymentAmounts['cash'] > 0 && (float)$paymentAmounts['card'] > 0): ?><div class="total-row"><span>Nakit</span><strong><?php echo e(money((float)$paymentAmounts['cash'])); ?></strong></div><div class="total-row"><span>Kredi Kartı</span><strong><?php echo e(money((float)$paymentAmounts['card'])); ?></strong></div><?php endif; ?></div>
   <div class="footer">Bizi tercih ettiğiniz için teşekkür ederiz.<br><span class="muted">Değişim için bu fişi saklayınız.</span><br><strong>Mali değeri yoktur.</strong></div>
 </main>
 <div class="actions"><button type="button" onclick="window.print()">Fişi Yazdır</button><a href="barkod-satis.php">Satışa Dön</a></div>
