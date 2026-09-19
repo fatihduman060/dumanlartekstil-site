@@ -167,7 +167,7 @@
       +(!loading&&!loadError?(rows||'<p class="pos-history-message">Seçilen gün için kayıt yok.</p>'):'');
   }
   function renderLive(){
-    section.innerHTML=viewTabs()+'<p class="pos-history-message" role="status">'+(loading?'Yükleniyor…':loadError?esc(loadError):'Her 3 saniyede güncellenir. 30 saniyedir yanıt alınmayan kasalar bağlantısı kesilmiş olarak gösterilir.')+'</p>'
+    section.innerHTML=viewTabs()+'<p class="pos-history-message" role="status">'+(loading?'Yükleniyor…':loadError?esc(loadError):'Her 3 saniyede güncellenir. 30 saniyede bağlantı kesilmiş görünür; 5 dakika geri gelmeyen açık sepet Terk Edilen Sepetler arşivine alınır.')+'</p>'
       +(!loading&&!loadError?sales.map(function(cart){return '<article class="pos-audit-record"><strong>'+esc(cart.user_name)+' · Kasa '+esc(cart.terminal)+'</strong><small>'+esc(cart.updated_at)+' · '+(cart.stale?'Bağlantı kesildi — son alınan sepet':cart.state==='completed'?'Satış tamamlandı':cart.items.length?'Aktif sepet':'Sepet boş')+'</small><ul>'+cart.items.map(function(item){return '<li>'+esc(item.name)+' · '+esc(item.quantity)+' × '+money(item.unit_price)+' = '+money(item.line_total)+'</li>';}).join('')+'</ul><p>İndirim: '+money(cart.discount_amount)+' · Toplam: '+money(cart.grand_total)+'</p></article>';}).join('')||'<p class="pos-history-message">Henüz bağlanan kasa yok.</p>':'');
   }
   function renderAbandoned(){
