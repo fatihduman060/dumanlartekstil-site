@@ -43,10 +43,17 @@ try {
             pos_json(['ok'=>true, 'sales'=>pos_history_audit($action, $date)]);
         }
         if ($action === 'sales') {
+            $date = array_key_exists('date', $_GET)
+                ? (is_string($_GET['date']) ? $_GET['date'] : '')
+                : date('Y-m-d');
             $sales = array_key_exists('date', $_GET)
-                ? pos_sales_on_date(is_string($_GET['date']) ? $_GET['date'] : '')
+                ? pos_sales_on_date($date)
                 : pos_recent_sales();
-            pos_json(['ok'=>true, 'sales'=>$sales]);
+            pos_json([
+                'ok'=>true,
+                'sales'=>$sales,
+                'credit_collections'=>pos_credit_collections_on_date($date),
+            ]);
         }
         pos_json(['ok'=>true, 'products'=>pos_products((string)($_GET['q'] ?? ''))]);
     }
