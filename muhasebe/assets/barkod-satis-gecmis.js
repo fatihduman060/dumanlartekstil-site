@@ -136,7 +136,9 @@
       +tabHtml('cash','💵','Nakit',s.cash)
       +tabHtml('card','💳','Kredi Kartı',s.card)
       +tabHtml('credit','🧾','Veresiye',s.credit);
-
+    if(view==='recent'){
+      tabs+='<button type="button" data-credit-collection-open class="pos-credit-collection-tile"><strong>🤝 Veresiye Tahsilat</strong><small>Kişi seç · Nakit / Kart</small></button>';
+    }
 
     var rows=sales.map(function(sale){
       var hidden=view==='past'||sale.payment_method===active?'0':'1';
@@ -255,6 +257,12 @@
     if(toggle){
       expanded=!expanded;
       render();
+      return;
+    }
+
+    var creditCollection=event.target.closest('[data-credit-collection-open]');
+    if(creditCollection){
+      root.dispatchEvent(new CustomEvent('pos:credit-collection-open'));
       return;
     }
 
