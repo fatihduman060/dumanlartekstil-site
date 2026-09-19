@@ -293,9 +293,11 @@ try {
     }
 
     if ($action === 'delete_sale') {
-        if (!pos_can_delete_sales()) throw new RuntimeException('Satış silme yetkisi yalnızca Fatih kullanıcısına aittir.');
+        if (!pos_can_delete_sales()) throw new RuntimeException('Satış iptal yetkisi yalnızca Fatih kullanıcısına aittir.');
         $saleId = (int)($_POST['sale_id'] ?? 0);
-        if ($saleId <= 0) throw new RuntimeException('Silinecek satış seçilmedi.');
+        $cancelReason = preg_replace('/^[\s\x{FEFF}]+|[\s\x{FEFF}]+$/u', '', (string)($_POST['cancel_reason'] ?? '')) ?? '';
+        if ($saleId <= 0) throw new RuntimeException('İptal edilecek satış seçilmedi.');
+        if (preg_match_all('/./us', $cancelReason) < 6) throw new RuntimeException('Satış iptal nedeni en az 6 karakter olmalıdır.');
         $pdo = db();
         $pdo->beginTransaction();
         try {
@@ -316,10 +318,11 @@ try {
             $creditEntryId = (int)($sale['credit_entry_id'] ?? 0);
             if ($creditEntryId > 0) {
                 $pdo->prepare("UPDATE store_credit_entries SET is_cancelled=1,cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=? AND is_cancelled=0")
-                    ->execute([now(),current_user()['id'] ?? null,'Barkodlu satış Fatih kullanıcısı tarafından silindi',now(),$creditEntryId]);
+                    ->execute([now(),current_user()['id'] ?? null,$cancelReason,now(),$creditEntryId]);
             }
 
-            $pdo->prepare("UPDATE pos_sales SET is_cancelled=1 WHERE id=?")->execute([$saleId]);
+            $pdo->prepare("UPDATE pos_sales SET is_cancelled=1,cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=?")
+                ->execute([now(),current_user()['id'] ?? null,$cancelReason,$saleId]);
             $grandTotal = (float)$sale['grand_total'];
             $paymentMethod = (string)$sale['payment_method'];
             $paymentAmounts = pos_sale_payment_amounts($sale);
@@ -343,6 +346,7 @@ try {
                 'is_cancelled'=>0,
             ], [
                 'is_cancelled'=>1,
+                'cancel_reason'=>$cancelReason,
                 'stock_restored'=>true,
                 'totals_reversed'=>true,
             ], (string)$sale['receipt_no']);
@@ -351,7 +355,7 @@ try {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
         }
-        pos_json(['ok'=>true,'message'=>'Satış silindi; stok ve mağaza toplamları geri alındı.']);
+        pos_json(['ok'=>true,'message'=>'Satış iptal edildi; stok ve mağaza toplamları geri alındı.']);
     }
 
     if ($action !== 'complete_sale') throw new RuntimeException('Geçersiz işlem.');
@@ -359,6 +363,8 @@ try {
     if (!is_array($rawItems) || !$rawItems) throw new RuntimeException('Sepette ürün bulunmuyor.');
     $paymentMethod = trim((string)($_POST['payment_method'] ?? 'cash'));
     if (!in_array($paymentMethod, ['cash','card','credit','mixed'], true)) throw new RuntimeException('Ödeme şekli geçersiz.');
+    $sourceToken = trim((string)($_POST['source_token'] ?? ''));
+    if ($sourceToken !== '' && !preg_match('/^[a-zA-Z0-9-]{20,100}$/D', $sourceToken)) throw new RuntimeException('Satış işlem kimliği geçersiz.');
     $personId = (int)($_POST['person_id'] ?? 0);
     $creditPerson = null;
     if ($paymentMethod === 'credit') {
@@ -372,6 +378,26 @@ try {
     $saleTime = date('H:i:s');
     $userId = (int)(current_user()['id'] ?? 0) ?: null;
     $pdo = db();
+    if ($sourceToken !== '') {
+        $tokenStmt = $pdo->prepare("SELECT id,receipt_no,payment_method,cash_amount,card_amount,credit_amount,is_cancelled FROM pos_sales WHERE source_token=? AND created_by=? LIMIT 1");
+        $tokenStmt->execute([$sourceToken,$userId]);
+        $existingSale = $tokenStmt->fetch();
+        if ($existingSale) {
+            if ((int)$existingSale['is_cancelled'] === 1) throw new RuntimeException('Bu satış işlem kimliği daha önce kullanılmış ve satış sonradan iptal edilmiş.');
+            pos_json([
+                'ok'=>true,
+                'message'=>'Satış daha önce kaydedilmişti; ikinci kez oluşturulmadı.',
+                'sale_id'=>(int)$existingSale['id'],
+                'receipt_no'=>(string)$existingSale['receipt_no'],
+                'receipt_url'=>'barkod-fis.php?id='.(int)$existingSale['id'],
+                'payment_method'=>(string)$existingSale['payment_method'],
+                'cash_amount'=>(float)$existingSale['cash_amount'],
+                'card_amount'=>(float)$existingSale['card_amount'],
+                'credit_amount'=>(float)$existingSale['credit_amount'],
+                'duplicate_prevented'=>true,
+            ]);
+        }
+    }
     $pdo->beginTransaction();
     try {
         $items = [];
@@ -419,8 +445,8 @@ try {
             ? (string)$creditPerson['full_name']
             : 'Perakende Müşteri';
 
-        $pdo->prepare("INSERT INTO pos_sales (sale_date,sale_time,customer_name,cari_id,credit_person_id,payment_method,cash_amount,card_amount,credit_amount,subtotal,discount_amount,vat_amount,grand_total,note,created_by,created_at) VALUES (?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?)")
-            ->execute([$saleDate,$saleTime,$customerName,$personId ?: null,$paymentMethod,$cashAmount,$cardAmount,$creditAmount,round($subtotal,2),$discount,round($vatAmount,2),$grandTotal,trim((string)($_POST['note'] ?? '')),$userId,now()]);
+        $pdo->prepare("INSERT INTO pos_sales (sale_date,sale_time,customer_name,cari_id,credit_person_id,payment_method,cash_amount,card_amount,credit_amount,subtotal,discount_amount,vat_amount,grand_total,note,source_token,created_by,created_at) VALUES (?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$saleDate,$saleTime,$customerName,$personId ?: null,$paymentMethod,$cashAmount,$cardAmount,$creditAmount,round($subtotal,2),$discount,round($vatAmount,2),$grandTotal,trim((string)($_POST['note'] ?? '')),$sourceToken !== '' ? $sourceToken : null,$userId,now()]);
         $saleId = (int)$pdo->lastInsertId();
         $receiptNo = pos_receipt_no($saleId, $saleDate);
         $pdo->prepare("UPDATE pos_sales SET receipt_no=? WHERE id=?")->execute([$receiptNo,$saleId]);
@@ -474,6 +500,7 @@ try {
             'grand_total'=>$grandTotal,
             'credit_person_id'=>$personId ?: null,
             'credit_entry_id'=>$creditEntryId ?: null,
+            'source_token'=>$sourceToken !== '' ? $sourceToken : null,
         ], $receiptNo);
         if ($creditEntryId > 0) {
             audit_action('magaza_personel_veresiye_hareketi', $creditEntryId, 'eklendi', null, [
