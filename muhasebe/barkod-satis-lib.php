@@ -567,9 +567,74 @@ function pos_history_audit(string $action, string $date): array
 
 function pos_live_ensure(): void
 {
-    db()->exec("CREATE TABLE IF NOT EXISTS pos_live_carts (
+    $pdo = db();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS pos_live_carts (
         user_id INTEGER NOT NULL, terminal_id TEXT NOT NULL, snapshot TEXT NOT NULL,
         updated_at INTEGER NOT NULL, PRIMARY KEY(user_id,terminal_id))");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS pos_abandoned_carts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        terminal_id TEXT NOT NULL,
+        snapshot TEXT NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        abandoned_at TEXT NOT NULL,
+        UNIQUE(user_id,terminal_id,last_seen_at),
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT
+    )");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_abandoned_carts_date ON pos_abandoned_carts(abandoned_at,id)");
+}
+
+function pos_archive_stale_live_carts(int $staleSeconds = 300): void
+{
+    pos_live_ensure();
+    $pdo = db();
+    $cutoff = time() - max(60, $staleSeconds);
+    $stmt = $pdo->prepare("SELECT user_id,terminal_id,snapshot,updated_at FROM pos_live_carts WHERE updated_at<? ORDER BY updated_at ASC");
+    $stmt->execute([$cutoff]);
+    $insert = $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,snapshot,last_seen_at,abandoned_at) VALUES(?,?,?,?,?)");
+    $delete = $pdo->prepare("DELETE FROM pos_live_carts WHERE user_id=? AND terminal_id=? AND updated_at=?");
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $snapshot = json_decode((string)$row['snapshot'], true);
+        $items = is_array($snapshot['items'] ?? null) ? $snapshot['items'] : [];
+        $state = (string)($snapshot['state'] ?? 'open');
+        if ($state === 'open' && $items) {
+            $insert->execute([
+                (int)$row['user_id'],
+                (string)$row['terminal_id'],
+                (string)$row['snapshot'],
+                (int)$row['updated_at'],
+                now(),
+            ]);
+        }
+        // updated_at eşleşmesi, aynı kasa bu sırada yeniden bağlandıysa yeni kaydın silinmesini engeller.
+        $delete->execute([(int)$row['user_id'], (string)$row['terminal_id'], (int)$row['updated_at']]);
+    }
+}
+
+function pos_abandoned_carts(string $date): array
+{
+    if (!pos_can_delete_sales()) throw new RuntimeException('Terk edilen sepetleri yalnızca Fatih görebilir.');
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date) throw new InvalidArgumentException('Geçerli bir tarih seçin.');
+    pos_archive_stale_live_carts();
+    $stmt = db()->prepare("SELECT a.*,u.display_name,u.username
+        FROM pos_abandoned_carts a
+        JOIN users u ON u.id=a.user_id
+        WHERE a.abandoned_at>=? AND a.abandoned_at<?
+        ORDER BY a.abandoned_at DESC,a.id DESC");
+    $stmt->execute([$date . ' 00:00:00', $parsed->modify('+1 day')->format('Y-m-d') . ' 00:00:00']);
+    $rows = [];
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $snapshot = json_decode((string)$row['snapshot'], true);
+        if (!is_array($snapshot)) continue;
+        $snapshot['id'] = (int)$row['id'];
+        $snapshot['user_name'] = $row['display_name'] ?: $row['username'];
+        $snapshot['terminal'] = substr((string)$row['terminal_id'], 0, 8);
+        $snapshot['last_seen_at'] = date('d.m.Y H:i:s', (int)$row['last_seen_at']);
+        $snapshot['abandoned_at'] = (string)$row['abandoned_at'];
+        $rows[] = $snapshot;
+    }
+    return $rows;
 }
 
 function pos_live_save(array $input): void
@@ -595,6 +660,7 @@ function pos_live_save(array $input): void
     $snapshot = ['items'=>$items,'subtotal'=>$subtotal,'discount_amount'=>$discount,'grand_total'=>round($subtotal-$discount,2),
         'state'=>!$items && ($input['state'] ?? '') === 'completed' ? 'completed' : 'open'];
     pos_live_ensure();
+    pos_archive_stale_live_carts();
     db()->prepare("INSERT INTO pos_live_carts(user_id,terminal_id,snapshot,updated_at) VALUES(?,?,?,?)
         ON CONFLICT(user_id,terminal_id) DO UPDATE SET snapshot=excluded.snapshot,updated_at=excluded.updated_at")
         ->execute([(int)current_user()['id'],$terminal,json_encode($snapshot,JSON_UNESCAPED_UNICODE),time()]);
@@ -605,6 +671,7 @@ function pos_live_carts(): array
 {
     if (!pos_can_delete_sales()) throw new RuntimeException('Canlı sepeti yalnızca Fatih görebilir.');
     pos_live_ensure();
+    pos_archive_stale_live_carts();
     $stmt = db()->prepare("SELECT c.*,u.display_name,u.username FROM pos_live_carts c JOIN users u ON u.id=c.user_id
         WHERE c.updated_at>=? ORDER BY c.updated_at DESC");
     $stmt->execute([time()-86400]);
