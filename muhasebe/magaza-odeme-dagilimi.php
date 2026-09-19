@@ -93,23 +93,47 @@ try {
             audit_action('magaza_odeme_dagilimi', (int)$old['id'], 'kasada_kalan_duzeltildi', $old, $saved, $saleDate);
         } elseif ($action === 'delete') {
             $id = (int)($_POST['id'] ?? 0);
+            $reason = trim((string)($_POST['cancel_reason'] ?? ''));
+            $reasonLength = function_exists('mb_strlen') ? mb_strlen($reason, 'UTF-8') : strlen($reason);
             if ($id <= 0) throw new RuntimeException('Mağaza ödeme kaydı seçimi geçersiz.');
+            if ($reasonLength < 6) throw new RuntimeException('İptal nedeni en az 6 karakter olmalıdır.');
+
             $stmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
             $stmt->execute([$id]);
             $old = $stmt->fetch();
             if (!$old) throw new RuntimeException('Mağaza ödeme kaydı bulunamadı.');
 
-            db()->beginTransaction();
+            $pdo = db();
+            $pdo->beginTransaction();
             try {
                 magaza_odeme_dagilim_hareketlerini_kaldir($old);
-                db()->prepare('DELETE FROM store_daily_payment_breakdown WHERE id=?')->execute([$id]);
-                db()->commit();
+                $snapshot = json_encode($old, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($snapshot === false) throw new RuntimeException('Mağaza ödeme kaydı arşivlenemedi.');
+                $pdo->prepare("INSERT INTO store_daily_payment_breakdown_archive
+                    (original_id,sale_date,snapshot,cancel_reason,cancelled_by,cancelled_at)
+                    VALUES(?,?,?,?,?,?)")
+                    ->execute([
+                        $id,
+                        (string)($old['sale_date'] ?? ''),
+                        $snapshot,
+                        $reason,
+                        current_user()['id'] ?? null,
+                        now(),
+                    ]);
+                $archiveId = (int)$pdo->lastInsertId();
+                $pdo->prepare('DELETE FROM store_daily_payment_breakdown WHERE id=?')->execute([$id]);
+                audit_action('magaza_odeme_dagilimi', $id, 'iptal', $old, [
+                    'archive_id'=>$archiveId,
+                    'cancel_reason'=>$reason,
+                    'active_record_deleted'=>true,
+                    'generated_movements_preserved_as_cancelled'=>true,
+                ], (string)($old['sale_date'] ?? 'Mağaza ödeme dağılımı'));
+                $pdo->commit();
             } catch (Throwable $e) {
-                if (db()->inTransaction()) db()->rollBack();
+                if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $e;
             }
-            log_action('Mağaza günlük ödeme dağılımı silindi', (string)($old['sale_date'] ?? ('#' . $id)));
-            audit_action('magaza_odeme_dagilimi', $id, 'silindi', $old, null, (string)($old['sale_date'] ?? 'Mağaza ödeme dağılımı'));
+            log_action('Mağaza günlük ödeme dağılımı iptal edildi', (string)($old['sale_date'] ?? ('#' . $id)) . ' / ' . $reason);
         } else {
             $saleDate = trim((string)($_POST['sale_date'] ?? date('Y-m-d')));
             $cash = decimal_from_input($_POST['cash_amount'] ?? '0');
