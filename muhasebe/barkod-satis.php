@@ -19,7 +19,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <link rel="stylesheet" href="assets/barkod-pos-hizli.css?v=4" />
 <style>
 .pos-product-entry-tile{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:11px;padding:13px 14px;margin:2px 0 10px;border:1px solid #d8cbb9;border-radius:16px;background:linear-gradient(135deg,#fffaf1,#f3eadc);text-decoration:none;color:#102818;box-shadow:0 8px 22px rgba(7,27,63,.05)}.pos-product-entry-tile:hover{border-color:#b89f7d;transform:translateY(-1px)}.pos-product-entry-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#16482e;color:#fff;font-size:23px;font-weight:900}.pos-product-entry-tile strong{display:block;font-size:14px;color:#102818}.pos-product-entry-tile small{display:block;margin-top:3px;color:#776b5c;font-size:10px;line-height:1.35}.pos-product-entry-arrow{font-size:20px;color:#16482e;font-weight:900}.pos-products-panel.pos-products-legacy{display:none!important}@media(max-width:680px){.pos-product-entry-tile{grid-template-columns:42px 1fr auto;padding:11px}.pos-product-entry-icon{width:42px;height:42px}}
-.pos-payment-modal[hidden]{display:none!important}.pos-payment-modal{position:fixed;inset:0;z-index:10100;display:grid;place-items:center;padding:18px;background:rgba(10,24,16,.7);backdrop-filter:blur(4px)}.pos-payment-dialog{width:min(520px,100%);padding:22px;border-radius:22px;background:#fff;box-shadow:0 25px 80px rgba(0,0,0,.35);display:grid;gap:16px}.pos-payment-head{display:flex;justify-content:space-between;gap:12px;align-items:start}.pos-payment-head h3{margin:3px 0;font-size:27px}.pos-payment-close{width:40px;height:40px;border:0;border-radius:50%;background:#f1eee7;font-size:24px;cursor:pointer}.pos-payment-dialog .pos-payments span{min-height:72px;font-size:15px}.pos-payment-confirm{min-height:54px;font-size:15px}.pos-payment-help{margin:0;color:var(--muted);font-size:11px}.pos-payment-dialog .pos-cari{display:grid;gap:6px}.pos-payment-dialog .pos-cari[hidden]{display:none!important}.pos-credit-collection-balance{display:block;margin-top:4px;color:#16482e;font-weight:900}.pos-credit-collection-dialog .pos-payments{margin:0}.pos-credit-collection-dialog select,.pos-credit-collection-dialog input[type="number"]{width:100%;min-height:44px;border:1px solid #d9cdbf;border-radius:12px;padding:9px 11px;background:#fff;color:#102818}.pos-credit-collection-empty{padding:12px;border-radius:12px;background:#fff7e2;color:#725b32;font-weight:850;font-size:12px}
+.pos-payment-modal[hidden]{display:none!important}.pos-payment-modal{position:fixed;inset:0;z-index:10100;display:grid;place-items:center;padding:18px;background:rgba(10,24,16,.7);backdrop-filter:blur(4px)}.pos-payment-dialog{width:min(520px,100%);padding:22px;border-radius:22px;background:#fff;box-shadow:0 25px 80px rgba(0,0,0,.35);display:grid;gap:16px}.pos-payment-head{display:flex;justify-content:space-between;gap:12px;align-items:start}.pos-payment-head h3{margin:3px 0;font-size:27px}.pos-payment-close{width:40px;height:40px;border:0;border-radius:50%;background:#f1eee7;font-size:24px;cursor:pointer}.pos-payment-dialog .pos-payments span{min-height:72px;font-size:15px}.pos-payment-confirm{min-height:54px;font-size:15px}.pos-payment-help{margin:0;color:var(--muted);font-size:11px}.pos-payment-dialog .pos-cari{display:grid;gap:6px}.pos-payment-dialog .pos-cari[hidden]{display:none!important}.pos-split-payment[hidden]{display:none!important}.pos-split-payment{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:13px;border:1px solid #d9cdbf;border-radius:14px;background:#fffaf1}.pos-split-payment>strong,.pos-split-payment>small{grid-column:1/-1}.pos-split-payment label{display:grid;gap:5px}.pos-split-payment input{width:100%;min-height:44px;border:1px solid #d9cdbf;border-radius:12px;padding:9px 11px;background:#fff;color:#102818}.pos-split-payment input[readonly]{background:#f3eee6;font-weight:900}.pos-credit-collection-balance{display:block;margin-top:4px;color:#16482e;font-weight:900}.pos-credit-collection-dialog .pos-payments{margin:0}.pos-credit-collection-dialog select,.pos-credit-collection-dialog input[type="number"]{width:100%;min-height:44px;border:1px solid #d9cdbf;border-radius:12px;padding:9px 11px;background:#fff;color:#102818}.pos-credit-collection-empty{padding:12px;border-radius:12px;background:#fff7e2;color:#725b32;font-weight:850;font-size:12px}
 @media(min-width:981px){
   .pos-checkout-slot{position:static;align-self:start;min-width:0}
   .pos-checkout-slot.is-locked{position:sticky;top:var(--pos-checkout-sticky-top,18px);z-index:5}
@@ -84,8 +84,16 @@ page_header('Barkodlu Satış', 'barkod_satis');
       <fieldset class="pos-payments"><legend>Ödeme şekli</legend>
         <label><input type="radio" name="pos_payment" value="cash" /><span>💵 Nakit</span></label>
         <label><input type="radio" name="pos_payment" value="card" /><span>💳 Kredi Kartı</span></label>
+        <label><input type="radio" name="pos_payment" value="mixed" /><span>💵 + 💳 Nakit + Kredi Kartı</span></label>
         <label><input type="radio" name="pos_payment" value="credit" /><span>🧾 Veresiye</span></label>
       </fieldset>
+      <div class="pos-split-payment" data-pos-split-wrap hidden>
+        <strong>Bölünmüş ödeme</strong>
+        <small>Nakit tutarını yazın; kalan tutar kredi kartına otomatik aktarılır.</small>
+        <label><span>Nakit</span><input type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00" data-pos-split-cash /></label>
+        <label><span>Kredi Kartı</span><input type="number" step="0.01" readonly tabindex="-1" data-pos-split-card /></label>
+        <small>Satış toplamı: <strong data-pos-split-total>0,00 TL</strong></small>
+      </div>
       <label class="pos-cari" data-pos-person-wrap hidden><span>Personel</span><select data-pos-person><option value="">Personel seçin</option><?php foreach ($creditPeople as $person): ?><option value="<?php echo e($person['id']); ?>"><?php echo e($person['full_name']); ?></option><?php endforeach; ?></select><small>Veresiye satış için müşteri seçimi zorunludur.</small></label>
       <p class="pos-status" data-pos-payment-status></p>
       <button type="button" class="btn btn-primary pos-payment-confirm" data-pos-payment-confirm>Seçimi Onayla ve Satışı Tamamla</button>
@@ -151,11 +159,11 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/barkod-hizli-fiyat.js?v=2"></script>
 <script src="assets/barkod-kamera.js?v=2"></script>
 <script src="assets/barkod-canli-sepet.js?v=1"></script>
-<script src="assets/barkod-satis.js?v=28"></script>
+<script src="assets/barkod-satis.js?v=29"></script>
 <script src="assets/barkod-canli-arama.js?v=8"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=1"></script>
-<script src="assets/barkod-satis-gecmis.js?v=11"></script>
+<script src="assets/barkod-satis-gecmis.js?v=12"></script>
 <script src="assets/barkod-veresiye-tahsilat.js?v=1"></script>
 <script src="assets/barkod-pos-hizli.js?v=4"></script>
 <?php page_footer(); ?>
