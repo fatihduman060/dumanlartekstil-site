@@ -343,12 +343,16 @@
     if(del){
       var id=del.getAttribute('data-history-delete');
       var receipt=del.getAttribute('data-receipt')||'';
-      if(!confirm(receipt+' numaralı satış silinsin mi? Stok ve mağaza toplamları geri alınacak.')) return;
+      var cancelReason=prompt(receipt+' numaralı satış neden iptal ediliyor? (En az 6 karakter)');
+      if(cancelReason===null) return;
+      cancelReason=cancelReason.trim();
+      if(Array.from(cancelReason).length<6){if(status)status.textContent='Satış iptal nedeni en az 6 karakter olmalıdır.';return;}
       del.disabled=true;
       var deleteBody=new FormData();
       deleteBody.set('action','delete_sale');
       deleteBody.set('csrf_token',csrf);
       deleteBody.set('sale_id',id);
+      deleteBody.set('cancel_reason',cancelReason);
       fetch(api,{method:'POST',body:deleteBody,credentials:'same-origin',cache:'no-store'})
         .then(function(r){return r.json();})
         .then(function(data){if(!data||!data.ok)throw new Error((data&&data.error)||'Satış silinemedi.');if(status)status.textContent=data.message;location.reload();})
