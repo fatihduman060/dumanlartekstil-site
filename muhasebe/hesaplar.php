@@ -2,7 +2,15 @@
 require_once __DIR__ . '/layout.php';
 require_login();
 ensure_column(db(), 'account_transactions', 'transfer_group', 'TEXT');
+ensure_column(db(), 'account_transactions', 'request_token', 'TEXT');
 db()->exec("CREATE INDEX IF NOT EXISTS idx_account_transactions_transfer_group ON account_transactions(transfer_group)");
+db()->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_account_transactions_request_token ON account_transactions(request_token) WHERE request_token IS NOT NULL AND request_token<>''");
+
+function hesap_request_token($value): string
+{
+    $token = strtolower(trim((string)$value));
+    return preg_match('/^[a-f0-9]{32,64}$/D', $token) ? $token : '';
+}
 
 function turkiye_banka_listesi(): array
 {
@@ -261,15 +269,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $direction = $_POST['direction'] ?? '';
         $amount = decimal_from_input($_POST['amount'] ?? '0');
         $date = $_POST['transaction_date'] ?: date('Y-m-d');
-        if ($accountId <= 0 || !in_array($direction, ['in','out'], true) || $amount <= 0) {
-            flash('error', 'Hesap, yön ve tutar kontrol edilmeli.');
+        $requestToken = hesap_request_token($_POST['request_token'] ?? '');
+        if ($accountId <= 0 || !in_array($direction, ['in','out'], true) || $amount <= 0 || $requestToken === '') {
+            flash('error', 'Hesap, yön, tutar veya işlem anahtarı kontrol edilmeli.');
             redirect('hesaplar.php');
         }
-        db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)')
-            ->execute([$accountId, $direction, $amount, $date, 'manual', trim($_POST['description'] ?? ''), current_user()['id'], now()]);
-        $newTransactionId = (int)db()->lastInsertId();
-        log_action('Kasa/Banka manuel hareket eklendi', ($direction === 'in' ? 'Giriş ' : 'Çıkış ') . money($amount)); audit_action('hesap_hareketi', $newTransactionId, 'eklendi', null, ['account_id'=>$accountId,'direction'=>$direction,'amount'=>$amount,'date'=>$date], 'manuel');
-        flash('success', 'Manuel hesap hareketi eklendi.');
+        $tokenStmt = db()->prepare("SELECT id FROM account_transactions WHERE request_token=? LIMIT 1");
+        $tokenStmt->execute([$requestToken]);
+        $existingId = (int)($tokenStmt->fetchColumn() ?: 0);
+        if ($existingId > 0) {
+            flash('warning', 'Bu manuel hareket zaten kaydedilmişti; ikinci kayıt oluşturulmadı.');
+            redirect('hesaplar.php');
+        }
+        try {
+            db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, request_token, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)')
+                ->execute([$accountId, $direction, $amount, $date, 'manual', $requestToken, trim($_POST['description'] ?? ''), current_user()['id'], now()]);
+            $newTransactionId = (int)db()->lastInsertId();
+            log_action('Kasa/Banka manuel hareket eklendi', ($direction === 'in' ? 'Giriş ' : 'Çıkış ') . money($amount));
+            audit_action('hesap_hareketi', $newTransactionId, 'eklendi', null, ['account_id'=>$accountId,'direction'=>$direction,'amount'=>$amount,'date'=>$date,'request_token'=>$requestToken], 'manuel');
+            flash('success', 'Manuel hesap hareketi eklendi.');
+        } catch (Throwable $e) {
+            $tokenStmt->execute([$requestToken]);
+            if ($tokenStmt->fetchColumn()) flash('warning', 'Bu manuel hareket zaten kaydedilmişti; ikinci kayıt oluşturulmadı.');
+            else flash('error', 'Manuel hesap hareketi kaydedilemedi: ' . $e->getMessage());
+        }
         redirect('hesaplar.php');
     }
 
@@ -283,12 +306,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('hesaplar.php');
         }
         $desc = trim($_POST['description'] ?? 'Hesaplar arası virman');
+        $requestToken = hesap_request_token($_POST['request_token'] ?? '');
+        if ($requestToken === '') {
+            flash('error', 'Virman işlem anahtarı geçersiz. Sayfayı yenileyip tekrar deneyin.');
+            redirect('hesaplar.php');
+        }
+        $tokenStmt = db()->prepare("SELECT id FROM account_transactions WHERE request_token=? LIMIT 1");
+        $tokenStmt->execute([$requestToken]);
+        if ($tokenStmt->fetchColumn()) {
+            flash('warning', 'Bu virman zaten kaydedilmişti; ikinci kez oluşturulmadı.');
+            redirect('hesaplar.php');
+        }
         $stamp = 'Virman #' . date('YmdHis');
-        $transferGroup = bin2hex(random_bytes(16));
+        $transferGroup = $requestToken;
         db()->beginTransaction();
         try {
-            db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, transfer_group, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)')
-                ->execute([$from, 'out', $amount, $date, 'transfer', $transferGroup, $stamp . ' - ' . $desc, current_user()['id'], now()]);
+            db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, transfer_group, request_token, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)')
+                ->execute([$from, 'out', $amount, $date, 'transfer', $transferGroup, $requestToken, $stamp . ' - ' . $desc, current_user()['id'], now()]);
             $outId = (int)db()->lastInsertId();
             db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, transfer_group, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)')
                 ->execute([$to, 'in', $amount, $date, 'transfer', $transferGroup, $stamp . ' - ' . $desc, current_user()['id'], now()]);
@@ -301,8 +335,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ], $stamp);
             flash('success', 'Virman kaydı oluşturuldu.');
         } catch (Throwable $e) {
-            db()->rollBack();
-            flash('error', 'Virman kaydedilemedi: ' . $e->getMessage());
+            if (db()->inTransaction()) db()->rollBack();
+            $tokenStmt->execute([$requestToken]);
+            if ($tokenStmt->fetchColumn()) flash('warning', 'Bu virman zaten kaydedilmişti; ikinci kez oluşturulmadı.');
+            else flash('error', 'Virman kaydedilemedi: ' . $e->getMessage());
         }
         redirect('hesaplar.php');
     }
@@ -697,7 +733,7 @@ page_header('Kasa / Banka', 'hesaplar');
   <article class="panel-card">
     <div class="card-head"><h3>Manuel kasa/banka hareketi</h3><span>Cari dışı giriş/çıkış</span></div>
     <form method="post" class="stack-form">
-      <?php echo csrf_field(); ?><input type="hidden" name="action" value="manual_transaction">
+      <?php echo csrf_field(); ?><input type="hidden" name="action" value="manual_transaction"><input type="hidden" name="request_token" value="<?php echo e(bin2hex(random_bytes(16))); ?>">
       <label>Hesap<select name="account_id" required><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?> — <?php echo e($a['bank_name'] ?: account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select></label>
       <div class="two-col"><label>Yön<select name="direction"><option value="in">Giriş</option><option value="out">Çıkış</option></select></label><label>Tutar<input name="amount" type="text" inputmode="decimal" required></label></div>
       <label>Tarih<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label>
@@ -708,7 +744,7 @@ page_header('Kasa / Banka', 'hesaplar');
   <article class="panel-card">
     <div class="card-head"><h3>Hesaplar arası virman</h3><span>Kasa → banka / banka → kasa</span></div>
     <form method="post" class="stack-form">
-      <?php echo csrf_field(); ?><input type="hidden" name="action" value="transfer">
+      <?php echo csrf_field(); ?><input type="hidden" name="action" value="transfer"><input type="hidden" name="request_token" value="<?php echo e(bin2hex(random_bytes(16))); ?>">
       <div class="two-col"><label>Çıkış hesabı<select name="from_account_id" required><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?><?php echo $a['bank_name'] ? ' — '.e($a['bank_name']) : ''; ?></option><?php endforeach; ?></select></label><label>Giriş hesabı<select name="to_account_id" required><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?><?php echo $a['bank_name'] ? ' — '.e($a['bank_name']) : ''; ?></option><?php endforeach; ?></select></label></div>
       <div class="two-col"><label>Tutar<input name="amount" type="text" inputmode="decimal" required></label><label>Tarih<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label></div>
       <label>Açıklama<input name="description" value="Hesaplar arası virman"></label>
