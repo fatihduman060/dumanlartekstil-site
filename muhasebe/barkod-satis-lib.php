@@ -25,6 +25,7 @@ function pos_store_credit_ensure(): void
         entry_date TEXT NOT NULL,
         payment_method TEXT,
         daily_breakdown_id INTEGER,
+        source_token TEXT,
         description TEXT,
         is_cancelled INTEGER NOT NULL DEFAULT 0,
         cancelled_at TEXT,
@@ -36,7 +37,11 @@ function pos_store_credit_ensure(): void
         FOREIGN KEY(person_id) REFERENCES store_credit_people(id) ON DELETE RESTRICT,
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
+    ensure_column($pdo, 'store_credit_entries', 'payment_method', 'TEXT');
+    ensure_column($pdo, 'store_credit_entries', 'daily_breakdown_id', 'INTEGER');
+    ensure_column($pdo, 'store_credit_entries', 'source_token', 'TEXT');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_store_credit_person_date ON store_credit_entries(person_id,entry_date)');
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_store_credit_source_token ON store_credit_entries(source_token) WHERE source_token IS NOT NULL AND TRIM(source_token)<>''");
 }
 
 function pos_credit_people(): array
@@ -45,11 +50,49 @@ function pos_credit_people(): array
     return db()->query("SELECT id, full_name FROM store_credit_people WHERE is_active=1 ORDER BY full_name ASC")->fetchAll() ?: [];
 }
 
+function pos_credit_people_with_balance(): array
+{
+    pos_store_credit_ensure();
+    $sql = "SELECT p.id,p.full_name,
+        COALESCE(SUM(CASE
+            WHEN COALESCE(e.is_cancelled,0)=0 AND e.entry_type='debt' THEN e.amount
+            WHEN COALESCE(e.is_cancelled,0)=0 AND e.entry_type='payment' THEN -e.amount
+            ELSE 0 END),0) AS balance
+        FROM store_credit_people p
+        LEFT JOIN store_credit_entries e ON e.person_id=p.id
+        WHERE p.is_active=1
+        GROUP BY p.id,p.full_name
+        HAVING COALESCE(SUM(CASE
+            WHEN COALESCE(e.is_cancelled,0)=0 AND e.entry_type='debt' THEN e.amount
+            WHEN COALESCE(e.is_cancelled,0)=0 AND e.entry_type='payment' THEN -e.amount
+            ELSE 0 END),0) > 0.004
+        ORDER BY p.full_name ASC";
+    return db()->query($sql)->fetchAll() ?: [];
+}
+
 function pos_credit_person(int $personId): ?array
 {
     if ($personId <= 0) return null;
     pos_store_credit_ensure();
     $stmt = db()->prepare("SELECT id, full_name FROM store_credit_people WHERE id=? AND is_active=1 LIMIT 1");
+    $stmt->execute([$personId]);
+    return $stmt->fetch() ?: null;
+}
+
+function pos_credit_person_with_balance(int $personId): ?array
+{
+    if ($personId <= 0) return null;
+    pos_store_credit_ensure();
+    $stmt = db()->prepare("SELECT p.id,p.full_name,
+        COALESCE(SUM(CASE
+            WHEN COALESCE(e.is_cancelled,0)=0 AND e.entry_type='debt' THEN e.amount
+            WHEN COALESCE(e.is_cancelled,0)=0 AND e.entry_type='payment' THEN -e.amount
+            ELSE 0 END),0) AS balance
+        FROM store_credit_people p
+        LEFT JOIN store_credit_entries e ON e.person_id=p.id
+        WHERE p.id=? AND p.is_active=1
+        GROUP BY p.id,p.full_name
+        LIMIT 1");
     $stmt->execute([$personId]);
     return $stmt->fetch() ?: null;
 }
