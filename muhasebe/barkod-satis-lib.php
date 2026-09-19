@@ -584,7 +584,7 @@ function pos_live_ensure(): void
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_abandoned_carts_date ON pos_abandoned_carts(abandoned_at,id)");
 }
 
-function pos_archive_stale_live_carts(int $staleSeconds = 300): void
+function pos_archive_stale_live_carts(int $staleSeconds = 300, ?int $excludeUserId = null, ?string $excludeTerminalId = null): void
 {
     pos_live_ensure();
     $pdo = db();
@@ -594,6 +594,11 @@ function pos_archive_stale_live_carts(int $staleSeconds = 300): void
     $insert = $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,snapshot,last_seen_at,abandoned_at) VALUES(?,?,?,?,?)");
     $delete = $pdo->prepare("DELETE FROM pos_live_carts WHERE user_id=? AND terminal_id=? AND updated_at=?");
     foreach ($stmt->fetchAll() ?: [] as $row) {
+        if ($excludeUserId !== null && $excludeTerminalId !== null
+            && (int)$row['user_id'] === $excludeUserId
+            && hash_equals((string)$row['terminal_id'], $excludeTerminalId)) {
+            continue;
+        }
         $snapshot = json_decode((string)$row['snapshot'], true);
         $items = is_array($snapshot['items'] ?? null) ? $snapshot['items'] : [];
         $state = (string)($snapshot['state'] ?? 'open');
@@ -637,6 +642,15 @@ function pos_abandoned_carts(string $date): array
     return $rows;
 }
 
+function pos_live_clear_terminal(string $terminal, ?int $userId = null): void
+{
+    if (!preg_match('/^[a-f0-9-]{20,64}$/D', $terminal)) return;
+    $userId = $userId ?: (int)(current_user()['id'] ?? 0);
+    if ($userId <= 0) return;
+    pos_live_ensure();
+    db()->prepare("DELETE FROM pos_live_carts WHERE user_id=? AND terminal_id=?")->execute([$userId,$terminal]);
+}
+
 function pos_live_save(array $input): void
 {
     $terminal = (string)($input['terminal_id'] ?? '');
@@ -660,10 +674,11 @@ function pos_live_save(array $input): void
     $snapshot = ['items'=>$items,'subtotal'=>$subtotal,'discount_amount'=>$discount,'grand_total'=>round($subtotal-$discount,2),
         'state'=>!$items && ($input['state'] ?? '') === 'completed' ? 'completed' : 'open'];
     pos_live_ensure();
-    pos_archive_stale_live_carts();
+    $userId = (int)current_user()['id'];
+    pos_archive_stale_live_carts(300, $userId, $terminal);
     db()->prepare("INSERT INTO pos_live_carts(user_id,terminal_id,snapshot,updated_at) VALUES(?,?,?,?)
         ON CONFLICT(user_id,terminal_id) DO UPDATE SET snapshot=excluded.snapshot,updated_at=excluded.updated_at")
-        ->execute([(int)current_user()['id'],$terminal,json_encode($snapshot,JSON_UNESCAPED_UNICODE),time()]);
+        ->execute([$userId,$terminal,json_encode($snapshot,JSON_UNESCAPED_UNICODE),time()]);
     db()->prepare('DELETE FROM pos_live_carts WHERE updated_at<?')->execute([time()-86400]);
 }
 
