@@ -193,7 +193,7 @@
         actions+='<button type="button" data-payment-fix="'+esc(sale.id)+'" data-target="'+target+'">'+(target==='card'?'→ Karta çevir':'→ Nakite çevir')+'</button>';
       }
       if(view==='recent'&&canManage){
-        actions+='<button type="button" class="danger" data-history-delete="'+esc(sale.id)+'" data-receipt="'+receipt+'">Sil</button>';
+        actions+='<button type="button" class="danger" data-history-delete="'+esc(sale.id)+'" data-receipt="'+receipt+'">İptal</button>';
       }
       return '<div class="pos-history-item" data-history-payment="'+esc(sale.payment_method)+'" data-pos-history-hidden="'+hidden+'">'
         +'<a href="barkod-fis.php?id='+encodeURIComponent(sale.id)+'" target="_blank" class="pos-history-row"><span><strong>'+receipt+'</strong><small>'+dateTr(sale.sale_date)+' '+esc(String(sale.sale_time||'').slice(0,5))+' · '+customer+'</small><small class="pos-history-method">'+esc(paymentDetail(sale))+'</small></span><strong>'+money(sale.grand_total)+'</strong></a>'
@@ -355,7 +355,7 @@
       deleteBody.set('cancel_reason',cancelReason);
       fetch(api,{method:'POST',body:deleteBody,credentials:'same-origin',cache:'no-store'})
         .then(function(r){return r.json();})
-        .then(function(data){if(!data||!data.ok)throw new Error((data&&data.error)||'Satış silinemedi.');if(status)status.textContent=data.message;location.reload();})
+        .then(function(data){if(!data||!data.ok)throw new Error((data&&data.error)||'Satış iptal edilemedi.');if(status)status.textContent=data.message;location.reload();})
         .catch(function(error){if(status)status.textContent=error.message;del.disabled=false;});
     }
   });
