@@ -20,6 +20,10 @@ function depo_cikis_db_ensure(): void
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
     try { ensure_column($pdo, 'warehouse_dispatches', 'source_offer_id', 'INTEGER'); } catch (Throwable $e) {}
+    try { ensure_column($pdo, 'warehouse_dispatches', 'is_cancelled', 'INTEGER NOT NULL DEFAULT 0'); } catch (Throwable $e) {}
+    try { ensure_column($pdo, 'warehouse_dispatches', 'cancelled_at', 'TEXT'); } catch (Throwable $e) {}
+    try { ensure_column($pdo, 'warehouse_dispatches', 'cancelled_by', 'INTEGER'); } catch (Throwable $e) {}
+    try { ensure_column($pdo, 'warehouse_dispatches', 'cancel_reason', 'TEXT'); } catch (Throwable $e) {}
     foreach ([
         'subtotal' => 'REAL NOT NULL DEFAULT 0',
         'discount_enabled' => 'INTEGER NOT NULL DEFAULT 0',
@@ -42,7 +46,8 @@ function depo_cikis_db_ensure(): void
         FOREIGN KEY(dispatch_id) REFERENCES warehouse_dispatches(id) ON DELETE CASCADE
     )");
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_date ON warehouse_dispatches(dispatch_date,id)');
-    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer ON warehouse_dispatches(source_offer_id) WHERE source_offer_id IS NOT NULL");
+    $pdo->exec("DROP INDEX IF EXISTS idx_warehouse_dispatch_source_offer");
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer ON warehouse_dispatches(source_offer_id) WHERE source_offer_id IS NOT NULL AND COALESCE(is_cancelled,0)=0");
 }
 
 function depo_cikis_offer_map(array $offerIds): array
@@ -51,7 +56,7 @@ function depo_cikis_offer_map(array $offerIds): array
     $offerIds = array_values(array_unique(array_filter(array_map('intval', $offerIds), static function ($id) { return $id > 0; })));
     if (!$offerIds) return [];
     $placeholders = implode(',', array_fill(0, count($offerIds), '?'));
-    $stmt = db()->prepare("SELECT source_offer_id,id FROM warehouse_dispatches WHERE source_offer_id IN ($placeholders)");
+    $stmt = db()->prepare("SELECT source_offer_id,id FROM warehouse_dispatches WHERE COALESCE(is_cancelled,0)=0 AND source_offer_id IN ($placeholders)");
     $stmt->execute($offerIds);
     $map = [];
     foreach ($stmt->fetchAll() ?: [] as $row) {
@@ -74,7 +79,7 @@ function depo_cikis_from_offer(int $offerId): int
         throw new RuntimeException('Depo Çıkış aktarımı şu anda yalnız TL tekliflerde kullanılabilir.');
     }
 
-    $stmt = db()->prepare('SELECT id FROM warehouse_dispatches WHERE source_offer_id=? LIMIT 1');
+    $stmt = db()->prepare('SELECT id FROM warehouse_dispatches WHERE source_offer_id=? AND COALESCE(is_cancelled,0)=0 LIMIT 1');
     $stmt->execute([$offerId]);
     $existingId = (int)($stmt->fetchColumn() ?: 0);
     if ($existingId > 0) return $existingId;
@@ -176,6 +181,7 @@ function depo_cikis_load(int $id): ?array
 
 function depo_cikis_can_edit(array $row): bool
 {
+    if ((int)($row['is_cancelled'] ?? 0) === 1) return false;
     return can_process_warehouse_dispatch() || (is_warehouse_dispatch_operator() && (int)($row['created_by'] ?? 0)===(int)(current_user()['id'] ?? 0));
 }
 
@@ -204,6 +210,7 @@ function depo_cikis_save(int $id): int
 {
     depo_cikis_db_ensure();
     $existing=$id>0?depo_cikis_load($id):null;
+    if($existing && (int)($existing['is_cancelled']??0)===1) throw new RuntimeException('İptal edilmiş depo çıkış fişi düzenlenemez.');
     if($existing && !depo_cikis_can_edit($existing)) throw new RuntimeException('Bu fişi düzenleme yetkiniz yok.');
     if($existing && is_warehouse_dispatch_operator() && (int)($existing['posted_to_cari']??0)===1) throw new RuntimeException('Cariye işlenmiş fişi yalnızca yönetici düzeltebilir.');
     $items=teklif_parse_items_from_post(); if(!$items) throw new RuntimeException('En az bir ürün girilmeli.');
@@ -281,13 +288,14 @@ function depo_cikis_save(int $id): int
 function depo_cikis_mark_processed(int $id): void
 {
     if(!can_process_warehouse_dispatch()) throw new RuntimeException('Bu işlem için yetkiniz yok.');
-    db()->prepare('UPDATE warehouse_dispatches SET processed=1,processed_at=?,processed_by=?,updated_at=? WHERE id=?')->execute([now(),current_user()['id']??null,now(),$id]);
+    db()->prepare('UPDATE warehouse_dispatches SET processed=1,processed_at=?,processed_by=?,updated_at=? WHERE id=? AND COALESCE(is_cancelled,0)=0')->execute([now(),current_user()['id']??null,now(),$id]);
 }
 
 function depo_cikis_post_to_cari(int $id): int
 {
     if(!can_process_warehouse_dispatch()) throw new RuntimeException('Bu işlem için yetkiniz yok.');
     $row=depo_cikis_load($id); if(!$row)throw new RuntimeException('Fiş bulunamadı.');
+    if((int)($row['is_cancelled']??0)===1)throw new RuntimeException('İptal edilmiş fiş cariye işlenemez.');
     $cariId=(int)($row['cari_id']??0); if($cariId<=0)throw new RuntimeException('Cariye işlemek için fişte cari seçilmeli.');
     $total=(float)($row['total']??0); if($total<=0)throw new RuntimeException('Fiş toplamı bulunamadı.');
     $pdo=db();
