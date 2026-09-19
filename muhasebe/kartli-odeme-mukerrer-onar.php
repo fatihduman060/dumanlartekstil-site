@@ -17,7 +17,14 @@ function kom_norm_name(string $value): string
 }
 
 try {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        http_response_code(405);
+        throw new RuntimeException('Bu bakım işlemi yalnızca güvenli POST isteğiyle çalıştırılabilir.');
+    }
     if (!can_write()) throw new RuntimeException('Bu işlem için düzenleme yetkin yok.');
+    if (!verify_csrf($_POST['csrf_token'] ?? null)) {
+        throw new RuntimeException('Oturum doğrulaması yenilenmeli. Sayfayı yenileyin.');
+    }
 
     $settingKey = 'repair_ilsan_card_duplicate_20260917_v1';
     if (setting_get($settingKey, '0') === '1') {
