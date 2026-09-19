@@ -45,6 +45,17 @@ function magaza_odeme_dagilim_tablosunu_hazirla(): void
         }
     }
 
+    db()->exec("CREATE TABLE IF NOT EXISTS store_daily_payment_breakdown_archive (
+        archive_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        original_id INTEGER,
+        sale_date TEXT,
+        snapshot TEXT NOT NULL,
+        cancel_reason TEXT NOT NULL,
+        cancelled_by INTEGER,
+        cancelled_at TEXT NOT NULL
+    )");
+    db()->exec("CREATE INDEX IF NOT EXISTS idx_store_daily_payment_breakdown_archive_date ON store_daily_payment_breakdown_archive(sale_date,archive_id)");
+
     db()->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_store_daily_payment_breakdown_date ON store_daily_payment_breakdown(sale_date)");
     db()->exec("CREATE INDEX IF NOT EXISTS idx_store_daily_payment_breakdown_cash_movement ON store_daily_payment_breakdown(cash_movement_id)");
     db()->exec("CREATE INDEX IF NOT EXISTS idx_store_daily_payment_breakdown_card_movement ON store_daily_payment_breakdown(card_movement_id)");
@@ -187,8 +198,23 @@ function magaza_odeme_dagilim_satis_kategori_id(): int
 function magaza_odeme_dagilim_hareketi_sil(int $movementId): void
 {
     if ($movementId <= 0) return;
-    db()->prepare("DELETE FROM account_transactions WHERE source_type='movement' AND source_id=?")->execute([$movementId]);
-    db()->prepare("DELETE FROM movements WHERE id=?")->execute([$movementId]);
+    $stmt = db()->prepare("SELECT * FROM movements WHERE id=? LIMIT 1");
+    $stmt->execute([$movementId]);
+    $movement = $stmt->fetch();
+    if (!$movement) return;
+
+    if ((int)($movement['is_cancelled'] ?? 0) === 0) {
+        db()->prepare("UPDATE movements SET is_cancelled=1,cancelled_at=?,cancelled_by=?,cancel_reason=?,updated_at=? WHERE id=?")
+            ->execute([
+                now(),
+                current_user()['id'] ?? null,
+                'Mağaza günlük ödeme dağılımı kaldırıldı veya tutar sıfırlandı',
+                now(),
+                $movementId,
+            ]);
+    }
+    // Hesap bakiyesinden çıkar; hareket kaydı denetim/geçmiş için korunur.
+    sync_movement_account_transaction($movementId);
 }
 
 function magaza_odeme_dagilim_hareketi_yaz(int $movementId, int $accountId, float $amount, string $movementDate, string $paymentMethod, string $description, ?int $createdBy): int
