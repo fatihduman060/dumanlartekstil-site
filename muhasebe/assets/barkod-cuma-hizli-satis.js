@@ -57,17 +57,10 @@
     fastButton.disabled=true;
     fastButton.textContent='Satış kaydediliyor…';
 
-    // Mevcut güvenli satış akışını aynen kullan; yalnızca fiş penceresini sanal bir
-    // pencereye yönlendirerek yazdırma adımını atla. Başarılı satışta mevcut kod
-    // sayfayı yeniler; hata olursa aşağıdaki süre sonunda buton yeniden açılır.
-    var originalOpen=window.open;
-    var fakeWindow={location:{href:''},closed:false,close:function(){this.closed=true;}};
-    window.open=function(){return fakeWindow;};
-    try{
-      normalButton.click();
-    }finally{
-      window.open=originalOpen;
-    }
+    // Mevcut güvenli satış akışını kullan; yalnızca bu ödeme akışı için
+    // fiş yazdırmayı barkod-satis.js tarafında devre dışı bırak.
+    root.dataset.posSkipPrint='1';
+    normalButton.click();
 
     window.setTimeout(function(){
       if(!document.body.contains(fastButton)) return;
