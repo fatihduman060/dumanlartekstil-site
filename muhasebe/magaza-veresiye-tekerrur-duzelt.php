@@ -8,11 +8,18 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 try {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        http_response_code(405);
+        throw new RuntimeException('Bu bakım işlemi yalnızca güvenli POST isteğiyle çalıştırılabilir.');
+    }
     if (!can_manage_store_sales()) {
         throw new RuntimeException('Mağaza satış yetkisi gerekiyor.');
     }
+    if (!verify_csrf($_POST['csrf_token'] ?? null)) {
+        throw new RuntimeException('Oturum doğrulaması yenilenmeli. Sayfayı yenileyin.');
+    }
 
-    $saleDate = trim((string)($_REQUEST['sale_date'] ?? date('Y-m-d')));
+    $saleDate = trim((string)($_POST['sale_date'] ?? date('Y-m-d')));
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) {
         throw new RuntimeException('Tarih geçersiz.');
     }
