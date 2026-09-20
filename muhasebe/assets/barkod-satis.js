@@ -146,11 +146,26 @@
   scan.addEventListener('change',function(){if(scan.value.trim()){lastLookup='';lookup();}});
   root.querySelector('[data-pos-search]').onclick=function(){lastLookup='';lookup();};
   results.addEventListener('click',function(e){var b=e.target.closest('[data-result-id]');if(!b)return;var p=(results._items||[]).find(function(x){return Number(x.id)===Number(b.dataset.resultId);});if(p){add(p);results.hidden=true;}});
-  function cartEventPayload(eventType,items,reason){
-    var body=new FormData();body.set('action','cart_event');body.set('csrf_token',csrf);body.set('event_type',eventType);if(reason)body.set('removal_reason',reason);if(root.dataset.posTerminalId)body.set('terminal_id',root.dataset.posTerminalId);body.set('items_json',JSON.stringify(items.map(function(x){return {product_id:x.id,quantity:x.quantity};})));body.set('discount_amount',discount.value||0);var payment=root.querySelector('input[name="pos_payment"]:checked');body.set('payment_method',payment?payment.value:'cash');return body;
+  function cartEventPayload(eventType,items,reason,eventSource){
+    var body=new FormData();body.set('action','cart_event');body.set('csrf_token',csrf);body.set('event_type',eventType);if(reason)body.set('removal_reason',reason);if(eventSource)body.set('event_source',eventSource);if(root.dataset.posTerminalId)body.set('terminal_id',root.dataset.posTerminalId);body.set('items_json',JSON.stringify(items.map(function(x){return {product_id:x.id,quantity:x.quantity};})));body.set('discount_amount',discount.value||0);var payment=root.querySelector('input[name="pos_payment"]:checked');body.set('payment_method',payment?payment.value:'cash');return body;
   }
-  function logCartEvent(eventType,items,reason){
-    return fetch(api,{method:'POST',body:cartEventPayload(eventType,items,reason),credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(!d.ok)throw new Error(d.error||'Sepet işlemi kaydedilemedi.');return d;});
+  function logCartEvent(eventType,items,reason,eventSource){
+    return fetch(api,{method:'POST',body:cartEventPayload(eventType,items,reason,eventSource),credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(d){if(!d.ok)throw new Error(d.error||'Sepet işlemi kaydedilemedi.');return d;});
+  }
+  function decreaseOneWithoutReason(item){
+    if(!item||Number(item.quantity)<=1)return;
+    var removedItem=Object.assign({},item,{quantity:1});
+    status.textContent='1 adet azaltılıyor…';
+    logCartEvent('item_removed',[removedItem],'','single_decrement').then(function(d){
+      var currentIndex=cart.indexOf(item);
+      if(currentIndex<0)return;
+      invalidateSaleRequest();
+      cart[currentIndex].quantity=Math.max(1,Number(cart[currentIndex].quantity)-1);
+      render();
+      status.textContent=d.message;
+    }).catch(function(error){
+      status.textContent='Adet azaltılmadı: '+error.message;
+    });
   }
   var removalModal=root.querySelector('[data-pos-removal-modal]'),removalReason=root.querySelector('[data-pos-removal-reason]'),removalStatus=root.querySelector('[data-pos-removal-status]'),removalConfirm=root.querySelector('[data-pos-removal-confirm]'),removalCancel=root.querySelector('[data-pos-removal-cancel]'),removalItem=null,removalMode='item',removalNewQuantity=null;
   function openRemoval(mode,item,newQuantity){
@@ -190,7 +205,7 @@
     if(removalMode==='cart'){
       var snapshot=cart.slice();
       if(!snapshot.length){closeRemoval();return;}
-      logCartEvent('cart_cleared',snapshot,reason).then(function(d){
+      logCartEvent('cart_cleared',snapshot,reason,'cart_clear').then(function(d){
         cart=[];discount.value=0;if(noteInput)noteInput.value='';render();status.textContent=d.message;closeRemoval();
       }).catch(function(error){
         removalStatus.textContent='Sepet temizlenmedi: '+error.message;removalConfirm.disabled=false;
@@ -203,14 +218,14 @@
       var target=Math.max(.01,Number(removalNewQuantity||0)),removedQuantity=Math.round((Number(item.quantity)-target)*1000)/1000;
       if(removedQuantity<=0){closeRemoval();return;}
       var removedItem=Object.assign({},item,{quantity:removedQuantity});
-      logCartEvent('item_removed',[removedItem],reason).then(function(d){
+      logCartEvent('item_removed',[removedItem],reason,'quantity_decrease').then(function(d){
         var currentIndex=cart.indexOf(item);if(currentIndex>=0){invalidateSaleRequest();cart[currentIndex].quantity=target;}render();status.textContent=d.message;closeRemoval();
       }).catch(function(error){
         removalStatus.textContent='Adet azaltılmadı: '+error.message;removalConfirm.disabled=false;
       });
       return;
     }
-    logCartEvent('item_removed',[item],reason).then(function(d){
+    logCartEvent('item_removed',[item],reason,'item_remove').then(function(d){
       var currentIndex=cart.indexOf(item);if(currentIndex>=0){invalidateSaleRequest();cart.splice(currentIndex,1);}render();status.textContent=d.message;closeRemoval();
     }).catch(function(error){
       removalStatus.textContent='Ürün silinmedi: '+error.message;removalConfirm.disabled=false;
@@ -220,7 +235,7 @@
     var b=e.target.closest('button');if(!b)return;
     var i=Number(b.dataset.minus||b.dataset.plus||b.dataset.remove);
     if(b.hasAttribute('data-minus')){
-      if(Number(cart[i].quantity)>1){openRemoval('quantity',cart[i],Math.max(1,Number(cart[i].quantity)-1));return;}
+      if(Number(cart[i].quantity)>1){decreaseOneWithoutReason(cart[i]);return;}
       return;
     }
     if(b.hasAttribute('data-plus')){invalidateSaleRequest();cart[i].quantity+=1;}
@@ -230,7 +245,12 @@
   cartBox.addEventListener('change',function(e){
     if(!e.target.hasAttribute('data-qty'))return;
     var i=Number(e.target.dataset.qty),oldQuantity=Number(cart[i].quantity),newQuantity=Math.max(.01,Number(e.target.value||1));
-    if(newQuantity<oldQuantity){e.target.value=oldQuantity;openRemoval('quantity',cart[i],newQuantity);return;}
+    if(newQuantity<oldQuantity){
+      var removedQuantity=Math.round((oldQuantity-newQuantity)*1000)/1000;
+      e.target.value=oldQuantity;
+      if(Math.abs(removedQuantity-1)<0.001){decreaseOneWithoutReason(cart[i]);return;}
+      openRemoval('quantity',cart[i],newQuantity);return;
+    }
     if(newQuantity!==oldQuantity){invalidateSaleRequest();cart[i].quantity=newQuantity;render();}
   });
   discount.addEventListener('input',function(){invalidateSaleRequest();render();syncSplitAmounts();});if(noteInput)noteInput.addEventListener('input',function(){invalidateSaleRequest();persistCart();});root.querySelector('[data-pos-clear]').onclick=function(){if(!cart.length)return;openRemoval('cart',null);};
