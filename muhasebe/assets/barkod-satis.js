@@ -155,7 +155,11 @@
   }
   function decreaseOneWithoutReason(item){
     if(!item||Number(item.quantity)<=1)return;
-    if(item.single_decrement_used||item.single_decrement_pending){
+    if(item.single_decrement_pending){
+      status.textContent='Önceki 1 adetlik düzeltme kaydediliyor…';
+      return;
+    }
+    if(item.single_decrement_used){
       openRemoval('quantity',item,Math.max(1,Number(item.quantity)-1));
       return;
     }
