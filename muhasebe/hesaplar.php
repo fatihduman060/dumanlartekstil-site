@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
 require_login();
+magaza_odeme_dagilim_tablosunu_hazirla();
+magaza_odeme_dagilim_vadesi_gelenleri_isle();
 ensure_column(db(), 'account_transactions', 'transfer_group', 'TEXT');
 ensure_column(db(), 'account_transactions', 'request_token', 'TEXT');
 db()->exec("CREATE INDEX IF NOT EXISTS idx_account_transactions_transfer_group ON account_transactions(transfer_group)");
