@@ -3,8 +3,6 @@ require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
 require_once __DIR__ . '/dashboard-cari-aggregate.php';
 require_login();
-magaza_odeme_dagilim_tablosunu_hazirla();
-magaza_odeme_dagilim_vadesi_gelenleri_isle();
 
 function dashboard_cashflow_periods(): array
 {
