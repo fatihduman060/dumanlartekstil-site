@@ -2,6 +2,8 @@
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
 require_login();
+magaza_odeme_dagilim_tablosunu_hazirla();
+magaza_odeme_dagilim_vadesi_gelenleri_isle();
 
 $period = trim((string)($_GET['period'] ?? date('Y-m')));
 if (!preg_match('/^\d{4}-\d{2}$/', $period)) $period = date('Y-m');
@@ -10,7 +12,6 @@ $reportYear = (int)($_GET['report_year'] ?? date('Y'));
 $currentYear = (int)date('Y');
 if ($reportYear < 2020 || $reportYear > $currentYear + 2) $reportYear = $currentYear;
 
-magaza_odeme_dagilim_tablosunu_hazirla();
 for ($monthNo = 1; $monthNo <= 12; $monthNo++) {
     magaza_odeme_dagilim_veresiye_period_senkronla(sprintf('%04d-%02d', $reportYear, $monthNo));
 }
@@ -74,7 +75,7 @@ page_header('Mağaza', 'magaza');
 ?>
 <section class="dashboard-section magaza-page-shell">
   <div class="dashboard-section-head">
-    <div><span>Mağaza</span><h3>Günlük satışlar</h3><p>Günlük ödeme dağılımını kaydet; nakit aynı gün Mağaza Kasa’ya, kart/POS satışları 13 gün sonra Garanti Dumanlar hesabına otomatik işlensin.</p></div>
+    <div><span>Mağaza</span><h3>Günlük satışlar</h3><p>Günlük ödeme dağılımını kaydet; nakit aynı gün Mağaza Kasa’ya, kart/POS satışları satış günü 1. gün kabul edilerek 14. gün (satış tarihi +13 gün) Garanti Dumanlar hesabına otomatik işlensin.</p></div>
     <a class="btn btn-primary" href="magaza-veresiye.php">Personel Veresiye</a>
   </div>
   <a class="panel-card magaza-veresiye-card" href="magaza-veresiye.php">
