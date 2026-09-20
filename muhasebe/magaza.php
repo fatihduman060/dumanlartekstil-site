@@ -2,8 +2,12 @@
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/magaza-odeme-dagilim-lib.php';
 require_login();
-magaza_odeme_dagilim_tablosunu_hazirla();
-magaza_odeme_dagilim_vadesi_gelenleri_isle();
+try {
+    magaza_odeme_dagilim_tablosunu_hazirla();
+    magaza_odeme_dagilim_vadesi_gelenleri_isle();
+} catch (Throwable $e) {
+    flash('error', 'Vadesi gelen kart hareketleri senkronlanamadı: ' . $e->getMessage());
+}
 
 $period = trim((string)($_GET['period'] ?? date('Y-m')));
 if (!preg_match('/^\d{4}-\d{2}$/', $period)) $period = date('Y-m');
