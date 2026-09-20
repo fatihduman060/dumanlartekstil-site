@@ -1,4 +1,5 @@
 <?php
+const MAGAZA_KART_HESABA_GECIS_GUN = 13; // Satış günü 1. gün: 1 Temmuz -> 14 Temmuz.
 
 function magaza_odeme_dagilim_kolonu_var_mi(string $column): bool
 {
@@ -142,7 +143,7 @@ function magaza_odeme_dagilim_veresiye_period_senkronla(string $period): void
 function magaza_odeme_dagilim_kart_hesaba_gecis_tarihi(string $saleDate): string
 {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) return '';
-    return (new DateTimeImmutable($saleDate))->modify('+13 days')->format('Y-m-d');
+    return (new DateTimeImmutable($saleDate))->modify('+' . MAGAZA_KART_HESABA_GECIS_GUN . ' days')->format('Y-m-d');
 }
 
 function magaza_odeme_dagilim_hesap_anahtari(string $value): string
@@ -287,12 +288,13 @@ function magaza_odeme_dagilim_vadesi_gelenleri_isle(?string $today = null): int
     $today = $today ?: date('Y-m-d');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $today)) $today = date('Y-m-d');
 
+    $cardDelayDays = MAGAZA_KART_HESABA_GECIS_GUN;
     $stmt = db()->prepare("SELECT s.id FROM store_daily_payment_breakdown s WHERE (
         (ROUND(COALESCE(s.cash_amount,0)+COALESCE(s.cash_credit_collection_amount,0),2)>0 AND s.sale_date<=? AND (COALESCE(s.cash_movement_id,0)=0 OR NOT EXISTS (SELECT 1 FROM movements m WHERE m.id=s.cash_movement_id AND COALESCE(m.is_cancelled,0)=0)))
         OR
-        (ROUND(COALESCE(s.card_amount,0)+COALESCE(s.card_credit_collection_amount,0),2)>0 AND date(s.sale_date,'+13 days')<=? AND (COALESCE(s.card_movement_id,0)=0 OR NOT EXISTS (SELECT 1 FROM movements m WHERE m.id=s.card_movement_id AND COALESCE(m.is_cancelled,0)=0)))
+        (ROUND(COALESCE(s.card_amount,0)+COALESCE(s.card_credit_collection_amount,0),2)>0 AND date(s.sale_date,'+' || ? || ' days')<=? AND (COALESCE(s.card_movement_id,0)=0 OR NOT EXISTS (SELECT 1 FROM movements m WHERE m.id=s.card_movement_id AND COALESCE(m.is_cancelled,0)=0)))
     ) ORDER BY s.sale_date ASC, s.id ASC LIMIT 500");
-    $stmt->execute([$today, $today]);
+    $stmt->execute([$today, $cardDelayDays, $today]);
     $ids = array_map('intval', array_column($stmt->fetchAll() ?: [], 'id'));
     foreach ($ids as $id) magaza_odeme_dagilim_hareketlerini_senkronla($id);
     return count($ids);
