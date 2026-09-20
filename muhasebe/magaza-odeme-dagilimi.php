@@ -49,6 +49,7 @@ function magaza_odeme_dagilim_payload(string $period): array
         'can_quick_edit_cash_left' => is_fatih_user(),
         'csrf_token' => csrf_token(),
         'credit_mode' => 'personnel_auto',
+        'card_delay_days' => MAGAZA_KART_HESABA_GECIS_GUN,
     ];
 }
 
