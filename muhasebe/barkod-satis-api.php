@@ -134,13 +134,24 @@ try {
     if ($action === 'cart_event') {
         $eventType = trim((string)($_POST['event_type'] ?? ''));
         if (!in_array($eventType, ['cart_cleared','item_removed'], true)) throw new RuntimeException('Sepet işlemi geçersiz.');
+        $eventSource = trim((string)($_POST['event_source'] ?? ''));
         $removalReason = preg_replace('/^[\s\x{FEFF}]+|[\s\x{FEFF}]+$/u', '', (string)($_POST['removal_reason'] ?? '')) ?? '';
-        if (preg_match_all('/./us', $removalReason) < 6) {
-            throw new RuntimeException('Sepetten ürün kaldırma veya sepet temizleme nedeni en az 6 karakter olmalıdır.');
-        }
         $rawItems = json_decode((string)($_POST['items_json'] ?? ''), true);
         if (!is_array($rawItems) || !$rawItems) throw new RuntimeException('Kaydedilecek sepet bilgisi bulunamadı.');
         $rawItems = array_slice($rawItems, 0, 100);
+
+        $singleDecrement = false;
+        if ($eventType === 'item_removed' && $eventSource === 'single_decrement' && count($rawItems) === 1) {
+            $singleQuantity = max(0, decimal_from_input($rawItems[0]['quantity'] ?? 0));
+            $singleDecrement = abs($singleQuantity - 1.0) < 0.001;
+        }
+        if (!$singleDecrement && preg_match_all('/./us', $removalReason) < 6) {
+            throw new RuntimeException('Sepetten ürün kaldırma veya sepet temizleme nedeni en az 6 karakter olmalıdır.');
+        }
+        if ($singleDecrement) {
+            $removalReason = '1 adet barkod düzeltmesi — açıklama istenmedi';
+        }
+
         $itemStmt = db()->prepare("SELECT id,name,variant_name,barcode,sale_price FROM pos_products WHERE id=? LIMIT 1");
         $loggedItems = [];
         $cartTotal = 0.0;
@@ -171,6 +182,8 @@ try {
         $eventLabel = $eventType === 'cart_cleared' ? 'Sepet temizlendi' : 'Ürün sepetten çıkarıldı';
         audit_action('pos_cart', 0, $eventType === 'cart_cleared' ? 'sepet_temizlendi' : 'urun_cikarildi', null, [
             'event'=>$eventType,
+            'event_source'=>$eventSource,
+            'reason_required'=>!$singleDecrement,
             'removal_reason'=>$removalReason,
             'items'=>$loggedItems,
             'item_count'=>count($loggedItems),
@@ -182,7 +195,10 @@ try {
         if ($eventType === 'cart_cleared') {
             pos_live_clear_terminal(trim((string)($_POST['terminal_id'] ?? '')), (int)(current_user()['id'] ?? 0));
         }
-        pos_json(['ok'=>true,'message'=>$eventLabel . ' ve denetim kaydına işlendi.']);
+        $message = $singleDecrement
+            ? '1 adet azaltıldı ve Sepetten Silinen Ürünler kaydına işlendi.'
+            : $eventLabel . ' ve denetim kaydına işlendi.';
+        pos_json(['ok'=>true,'message'=>$message]);
     }
 
     if ($action === 'bulk_update_products') {
