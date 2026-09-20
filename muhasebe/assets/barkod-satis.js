@@ -78,7 +78,8 @@
       vat_rate:Number(item.vat_rate||0),
       stock_quantity:Number(item.stock_quantity||0),
       track_stock:Number(item.track_stock||0),
-      quantity:quantity
+      quantity:quantity,
+      single_decrement_used:!!item.single_decrement_used
     };
   }
   function persistCart(){
@@ -123,7 +124,7 @@
     root.querySelector('[data-pos-total]').textContent=money(total());root.querySelector('[data-pos-count]').textContent=cart.reduce(function(s,x){return s+Number(x.quantity);},0)+' ürün';persistCart();
   }
   function revealLastAdded(){setTimeout(function(){var row=cartBox.querySelector('[data-pos-last-added]');if(row)row.scrollIntoView({behavior:'smooth',block:'center'});},80);}
-  function add(p){invalidateSaleRequest();var old=cart.find(function(x){return Number(x.id)===Number(p.id);});if(old)old.quantity+=1;else{p.quantity=1;cart.push(p);}lastAddedProductId=Number(p.id);render();scan.value='';lastLookup='';scan.focus({preventScroll:true});status.textContent=productName(p)+' sepete eklendi.';revealLastAdded();}
+  function add(p){invalidateSaleRequest();var old=cart.find(function(x){return Number(x.id)===Number(p.id);});if(old){old.quantity+=1;old.single_decrement_used=false;}else{p.quantity=1;p.single_decrement_used=false;cart.push(p);}lastAddedProductId=Number(p.id);render();scan.value='';lastLookup='';scan.focus({preventScroll:true});status.textContent=productName(p)+' sepete eklendi.';revealLastAdded();}
   function addToLastProduct(amount){
     if(quantityShortcutTimer)clearTimeout(quantityShortcutTimer);
     quantityShortcutTimer=null;lookupRevision++;
@@ -131,7 +132,7 @@
     if(!Number.isSafeInteger(amount)||amount<1){scan.value='';status.textContent='Eklenecek adet pozitif bir tam sayı olmalı.';return;}
     var item=cart.find(function(x){return Number(x.id)===Number(lastAddedProductId);});
     if(!item){status.textContent='Önce bir ürün okutun.';speakStatus(status.textContent);scan.value='';return;}
-    invalidateSaleRequest();item.quantity+=amount;scan.value='';lastLookup='';results.hidden=true;results.innerHTML='';render();scan.focus({preventScroll:true});var message=amount+' adet eklendi. Sepette bu üründen '+new Intl.NumberFormat('tr-TR').format(item.quantity)+' adet oldu.';status.textContent=productName(item)+': '+message;speakStatus(amount+' tane eklendi.');revealLastAdded();
+    invalidateSaleRequest();item.quantity+=amount;item.single_decrement_used=false;scan.value='';lastLookup='';results.hidden=true;results.innerHTML='';render();scan.focus({preventScroll:true});var message=amount+' adet eklendi. Sepette bu üründen '+new Intl.NumberFormat('tr-TR').format(item.quantity)+' adet oldu.';status.textContent=productName(item)+': '+message;speakStatus(amount+' tane eklendi.');revealLastAdded();
   }
   root.addEventListener('pos:add-product',function(event){if(event.detail)add(event.detail);});
   function showResults(items){results.hidden=false;if(!items.length){results.innerHTML='<div class="pos-result-empty">Ürün bulunamadı. Aşağıdan yeni ürün tanımlayabilirsiniz.</div>';root.dispatchEvent(new CustomEvent('pos:product-not-found'));return;}results.innerHTML=items.map(function(p){return '<button type="button" data-result-id="'+p.id+'"><span><strong>'+esc(productName(p))+'</strong><small>'+esc(p.matched_barcode||p.barcode)+' · Stok: '+Number(p.stock_quantity)+'</small></span><strong>'+money(p.sale_price)+'</strong></button>';}).join('');results._items=items;}
@@ -154,6 +155,11 @@
   }
   function decreaseOneWithoutReason(item){
     if(!item||Number(item.quantity)<=1)return;
+    if(item.single_decrement_used||item.single_decrement_pending){
+      openRemoval('quantity',item,Math.max(1,Number(item.quantity)-1));
+      return;
+    }
+    item.single_decrement_pending=true;
     var removedItem=Object.assign({},item,{quantity:1});
     status.textContent='1 adet azaltılıyor…';
     logCartEvent('item_removed',[removedItem],'','single_decrement').then(function(d){
@@ -161,9 +167,12 @@
       if(currentIndex<0)return;
       invalidateSaleRequest();
       cart[currentIndex].quantity=Math.max(1,Number(cart[currentIndex].quantity)-1);
+      cart[currentIndex].single_decrement_used=true;
+      cart[currentIndex].single_decrement_pending=false;
       render();
       status.textContent=d.message;
     }).catch(function(error){
+      item.single_decrement_pending=false;
       status.textContent='Adet azaltılmadı: '+error.message;
     });
   }
@@ -219,7 +228,7 @@
       if(removedQuantity<=0){closeRemoval();return;}
       var removedItem=Object.assign({},item,{quantity:removedQuantity});
       logCartEvent('item_removed',[removedItem],reason,'quantity_decrease').then(function(d){
-        var currentIndex=cart.indexOf(item);if(currentIndex>=0){invalidateSaleRequest();cart[currentIndex].quantity=target;}render();status.textContent=d.message;closeRemoval();
+        var currentIndex=cart.indexOf(item);if(currentIndex>=0){invalidateSaleRequest();cart[currentIndex].quantity=target;cart[currentIndex].single_decrement_used=true;cart[currentIndex].single_decrement_pending=false;}render();status.textContent=d.message;closeRemoval();
       }).catch(function(error){
         removalStatus.textContent='Adet azaltılmadı: '+error.message;removalConfirm.disabled=false;
       });
@@ -238,7 +247,7 @@
       if(Number(cart[i].quantity)>1){decreaseOneWithoutReason(cart[i]);return;}
       return;
     }
-    if(b.hasAttribute('data-plus')){invalidateSaleRequest();cart[i].quantity+=1;}
+    if(b.hasAttribute('data-plus')){invalidateSaleRequest();cart[i].quantity+=1;cart[i].single_decrement_used=false;}
     if(b.hasAttribute('data-remove')){openRemoval('item',cart[i]);return;}
     render();
   });
@@ -251,7 +260,7 @@
       if(Math.abs(removedQuantity-1)<0.001){decreaseOneWithoutReason(cart[i]);return;}
       openRemoval('quantity',cart[i],newQuantity);return;
     }
-    if(newQuantity!==oldQuantity){invalidateSaleRequest();cart[i].quantity=newQuantity;render();}
+    if(newQuantity!==oldQuantity){invalidateSaleRequest();cart[i].quantity=newQuantity;cart[i].single_decrement_used=false;render();}
   });
   discount.addEventListener('input',function(){invalidateSaleRequest();render();syncSplitAmounts();});if(noteInput)noteInput.addEventListener('input',function(){invalidateSaleRequest();persistCart();});root.querySelector('[data-pos-clear]').onclick=function(){if(!cart.length)return;openRemoval('cart',null);};
   root.querySelectorAll('input[name="pos_payment"]').forEach(function(r){r.addEventListener('change',function(){root.querySelector('[data-pos-person-wrap]').hidden=this.value!=='credit';if(splitWrap)splitWrap.hidden=this.value!=='mixed';if(this.value==='mixed')syncSplitAmounts();var customer=root.querySelector('[data-pos-customer-name]');if(customer)customer.textContent=this.value==='credit'?'Veresiye Müşterisi':'Perakende Müşteri';var paymentMessage=root.querySelector('[data-pos-payment-status]');if(paymentMessage)paymentMessage.textContent='';});});
