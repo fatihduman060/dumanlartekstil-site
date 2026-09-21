@@ -15,7 +15,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 }
 $editId=(int)($_GET['edit']??0);$edit=$editId?depo_cikis_load($editId):null;
 if($edit && !depo_cikis_can_edit($edit) && is_warehouse_dispatch_operator()){$edit=null;flash('error','Bu fişi düzenleme yetkiniz yok.');}
-$cariler=db()->query('SELECT id,name,city,address FROM cariler ORDER BY name')->fetchAll();
+$cariHasCity=depo_cikis_table_has_column(db(),'cariler','city');
+$cariler=db()->query('SELECT id,name,'.($cariHasCity?'city':'NULL AS city').',address FROM cariler ORDER BY name')->fetchAll();
 $productRows=teklif_products_for_select();
 $productJson=json_encode(array_map(function($p){return [
     'barcode'=>(string)($p['barcode']??''),
@@ -24,7 +25,8 @@ $productJson=json_encode(array_map(function($p){return [
     'default_unit_price'=>(float)($p['default_unit_price']??0),
 ];},$productRows),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 $listSql='SELECT w.*,u.display_name AS creator_name FROM warehouse_dispatches w LEFT JOIN users u ON u.id=w.created_by';$params=[];
-$listWhere=['COALESCE(w.is_cancelled,0)=0'];
+$warehouseHasCancelled=depo_cikis_table_has_column(db(),'warehouse_dispatches','is_cancelled');
+$listWhere=[$warehouseHasCancelled?'COALESCE(w.is_cancelled,0)=0':'1=1'];
 if(is_warehouse_user()){$listWhere[]='w.created_by=?';$params[]=(int)(current_user()['id']??0);}
 $listSql.=' WHERE '.implode(' AND ',$listWhere).' ORDER BY w.dispatch_date DESC,w.id DESC LIMIT 150';
 $s=db()->prepare($listSql);$s->execute($params);$list=$s->fetchAll();$items=$edit['items']??[];$rows=max(6,count($items)+2);
