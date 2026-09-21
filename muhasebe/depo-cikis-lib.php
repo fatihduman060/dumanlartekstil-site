@@ -1,6 +1,18 @@
 <?php
 require_once __DIR__ . '/teklif-db.php';
 
+function depo_cikis_table_has_column(PDO $pdo, string $table, string $column): bool
+{
+    try {
+        $stmt = $pdo->query('PRAGMA table_info(' . $table . ')');
+        foreach ($stmt->fetchAll() ?: [] as $row) {
+            if ((string)($row['name'] ?? '') === $column) return true;
+        }
+    } catch (Throwable $e) {
+    }
+    return false;
+}
+
 function depo_cikis_db_ensure(): void
 {
     $pdo = db();
@@ -45,23 +57,38 @@ function depo_cikis_db_ensure(): void
         unit_price REAL NOT NULL DEFAULT 0, line_total REAL NOT NULL DEFAULT 0,
         FOREIGN KEY(dispatch_id) REFERENCES warehouse_dispatches(id) ON DELETE CASCADE
     )");
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_date ON warehouse_dispatches(dispatch_date,id)');
-    $indexStmt = $pdo->prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_warehouse_dispatch_source_offer' LIMIT 1");
-    $indexStmt->execute();
-    $existingIndexSql = (string)($indexStmt->fetchColumn() ?: '');
-    if ($existingIndexSql !== '' && stripos($existingIndexSql, 'is_cancelled') === false) {
-        $pdo->exec("DROP INDEX IF EXISTS idx_warehouse_dispatch_source_offer");
-        $existingIndexSql = '';
+    try {
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_date ON warehouse_dispatches(dispatch_date,id)');
+    } catch (Throwable $e) {
     }
 
-    // Eski canlı veride aynı teklife bağlı birden fazla aktif fiş varsa UNIQUE index
-    // oluşturmak modülün tamamını 500 hatasıyla düşürmemeli. Mevcut kayıtları burada
-    // otomatik silme/iptal etme; uygulama seviyesindeki kontrol yeni mükerrer fişi engeller.
-    if ($existingIndexSql === '') {
+    // Şema/index yükseltmeleri sayfa açılışını hiçbir koşulda kilitlememeli.
+    // Canlı veride eski kolon/index yapısı varsa mevcut finansal kayıtları değiştirmeden
+    // uygulama seviyesi mükerrer kontrolüyle devam et.
+    $hasSourceOffer = depo_cikis_table_has_column($pdo, 'warehouse_dispatches', 'source_offer_id');
+    $hasCancelled = depo_cikis_table_has_column($pdo, 'warehouse_dispatches', 'is_cancelled');
+    if ($hasSourceOffer) {
         try {
-            $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer ON warehouse_dispatches(source_offer_id) WHERE source_offer_id IS NOT NULL AND COALESCE(is_cancelled,0)=0");
+            $indexStmt = $pdo->prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_warehouse_dispatch_source_offer' LIMIT 1");
+            $indexStmt->execute();
+            $existingIndexSql = (string)($indexStmt->fetchColumn() ?: '');
+            if ($existingIndexSql !== '' && $hasCancelled && stripos($existingIndexSql, 'is_cancelled') === false) {
+                $pdo->exec("DROP INDEX IF EXISTS idx_warehouse_dispatch_source_offer");
+                $existingIndexSql = '';
+            }
+            if ($existingIndexSql === '') {
+                if ($hasCancelled) {
+                    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer ON warehouse_dispatches(source_offer_id) WHERE source_offer_id IS NOT NULL AND COALESCE(is_cancelled,0)=0");
+                } else {
+                    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer_lookup ON warehouse_dispatches(source_offer_id)");
+                }
+            }
         } catch (Throwable $e) {
-            $pdo->exec("CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer_lookup ON warehouse_dispatches(source_offer_id,is_cancelled)");
+            try {
+                $lookupColumns = $hasCancelled ? 'source_offer_id,is_cancelled' : 'source_offer_id';
+                $pdo->exec("CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer_lookup ON warehouse_dispatches(" . $lookupColumns . ")");
+            } catch (Throwable $ignored) {
+            }
         }
     }
 }
