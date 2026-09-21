@@ -51,8 +51,19 @@ function depo_cikis_db_ensure(): void
     $existingIndexSql = (string)($indexStmt->fetchColumn() ?: '');
     if ($existingIndexSql !== '' && stripos($existingIndexSql, 'is_cancelled') === false) {
         $pdo->exec("DROP INDEX IF EXISTS idx_warehouse_dispatch_source_offer");
+        $existingIndexSql = '';
     }
-    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer ON warehouse_dispatches(source_offer_id) WHERE source_offer_id IS NOT NULL AND COALESCE(is_cancelled,0)=0");
+
+    // Eski canlı veride aynı teklife bağlı birden fazla aktif fiş varsa UNIQUE index
+    // oluşturmak modülün tamamını 500 hatasıyla düşürmemeli. Mevcut kayıtları burada
+    // otomatik silme/iptal etme; uygulama seviyesindeki kontrol yeni mükerrer fişi engeller.
+    if ($existingIndexSql === '') {
+        try {
+            $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer ON warehouse_dispatches(source_offer_id) WHERE source_offer_id IS NOT NULL AND COALESCE(is_cancelled,0)=0");
+        } catch (Throwable $e) {
+            $pdo->exec("CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_source_offer_lookup ON warehouse_dispatches(source_offer_id,is_cancelled)");
+        }
+    }
 }
 
 function depo_cikis_offer_map(array $offerIds): array
