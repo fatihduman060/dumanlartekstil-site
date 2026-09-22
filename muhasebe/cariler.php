@@ -252,13 +252,27 @@ page_header('Cariler', 'cariler');
     return bestScore>0?best:null;
   }
 
-  form.addEventListener('submit',function(event){
+  form.addEventListener('submit',function(){
     var match=bestCari(input.value);
     if(!match) return;
-    event.preventDefault();
-    var url='cari-detay.php?id='+encodeURIComponent(match.id);
-    var opened=window.open(url,'_blank','noopener,noreferrer');
-    if(opened) opened.opener=null;
+    var oldAction=form.getAttribute('action')||'cariler.php';
+    var oldTarget=form.getAttribute('target')||'';
+    var hidden=form.querySelector('input[name="id"][data-cari-search-target]');
+    if(!hidden){
+      hidden=document.createElement('input');
+      hidden.type='hidden';
+      hidden.name='id';
+      hidden.setAttribute('data-cari-search-target','1');
+      form.appendChild(hidden);
+    }
+    hidden.value=String(match.id);
+    form.setAttribute('action','cari-detay.php');
+    form.setAttribute('target','_blank');
+    window.setTimeout(function(){
+      form.setAttribute('action',oldAction);
+      if(oldTarget) form.setAttribute('target',oldTarget); else form.removeAttribute('target');
+      hidden.value='';
+    },0);
   });
 })();
 </script>
