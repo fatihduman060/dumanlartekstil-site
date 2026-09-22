@@ -540,6 +540,14 @@ page_header('Genel Bakış', 'dashboard');
   </div>
 </section>
 
+<script>
+(function(){
+  document.querySelectorAll('a[href^="cari-detay.php?id="]').forEach(function(link){
+    link.setAttribute('target','_blank');
+    link.setAttribute('rel','noopener noreferrer');
+  });
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous"></script>
 <script>
 (function() {
