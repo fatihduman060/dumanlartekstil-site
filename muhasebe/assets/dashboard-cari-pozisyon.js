@@ -20,7 +20,7 @@
     var p=panel(), b=document.getElementById('cariPozisyonIcerik');
     p.querySelector('h3').textContent=type==='alacak'?'Kimden net ne kadar alacağımız var?':'Kime net ne kadar borcumuz var?';
     if(!rows.length){b.innerHTML='<p class="muted">Açık kayıt yok.</p>';}else{
-      b.innerHTML=rows.map(function(r){return '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px;border:1px solid #eee;border-radius:12px;margin:7px 0;background:#fff"><a href="cari-detay.php?id='+Number(r.id||0)+'"><strong>'+esc(r.name)+'</strong><small style="display:block">'+esc(r.city||'-')+'</small></a><strong>'+fmt(r.amount,r.currency)+'</strong></div>';}).join('');
+      b.innerHTML=rows.map(function(r){return '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px;border:1px solid #eee;border-radius:12px;margin:7px 0;background:#fff"><a target="_blank" rel="noopener noreferrer" href="cari-detay.php?id='+Number(r.id||0)+'"><strong>'+esc(r.name)+'</strong><small style="display:block">'+esc(r.city||'-')+'</small></a><strong>'+fmt(r.amount,r.currency)+'</strong></div>';}).join('');
     }
     p.style.display='block';p.scrollIntoView({behavior:'smooth',block:'nearest'});
   }
@@ -97,7 +97,7 @@
     content.innerHTML='<div class="cari-net-scan-list">'+mixed.map(function(r){
       var net=Number(r.net||0),resultClass=Math.abs(net)<.005?'closed':(net>0?'positive':'negative');
       var resultLabel=Math.abs(net)<.005?'Hesap kapalı':(net>0?'Net alacak':'Net borç');
-      return '<a class="cari-net-scan-row" href="cari-detay.php?id='+Number(r.id||0)+'">'+
+      return '<a class="cari-net-scan-row" target="_blank" rel="noopener noreferrer" href="cari-detay.php?id='+Number(r.id||0)+'">'+
         '<div><strong>'+esc(r.name)+'</strong><small>'+esc(r.city||'-')+' · '+esc(r.currency||'TL')+' · Mahsup: '+fmt(r.offset,r.currency||'TL')+'</small></div>'+
         '<div class="cari-net-scan-cell"><span>Açık alacak</span><strong>'+fmt(r.net_alacak,r.currency||'TL')+'</strong></div>'+
         '<div class="cari-net-scan-cell"><span>Açık borç</span><strong>'+fmt(r.net_verecek,r.currency||'TL')+'</strong></div>'+
