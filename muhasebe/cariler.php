@@ -154,6 +154,12 @@ if ($type !== '') { $where[]='cari_type = ?'; $params[]=$type; }
 $sql='SELECT * FROM cariler'; if ($where) $sql .= ' WHERE ' . implode(' AND ', $where); $sql .= ' ORDER BY name ASC';
 $stmt = db()->prepare($sql); $stmt->execute($params); $cariler = $stmt->fetchAll();
 $cariSearchOptions = $cariler;
+$cariSearchJson = json_encode(array_map(function ($cari) {
+    return [
+        'id'=>(int)($cari['id'] ?? 0),
+        'name'=>(string)($cari['name'] ?? ''),
+    ];
+}, $cariSearchOptions), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 
 if ($q !== '') {
     $scored = [];
@@ -188,8 +194,8 @@ page_header('Cariler', 'cariler');
       <?php if (can_write()): ?><a class="btn btn-primary cari-new-btn" href="cariler.php?new=1" data-cari-modal-open>+ Yeni cari</a><?php endif; ?>
     </div>
   </div>
-  <form class="filterbar" method="get">
-    <input name="q" list="cariSearchOptions" autocomplete="off" placeholder="Cari, yetkili, vergi no, telefon ara..." value="<?php echo e($q); ?>">
+  <form class="filterbar" method="get" id="cariSearchForm">
+    <input name="q" id="cariSearchInput" list="cariSearchOptions" autocomplete="off" placeholder="Cari, yetkili, vergi no, telefon ara..." value="<?php echo e($q); ?>">
     <datalist id="cariSearchOptions">
       <?php foreach ($cariSearchOptions as $suggestCari): ?>
         <option value="<?php echo e($suggestCari['name'] ?? ''); ?>"><?php echo e(trim((string)($suggestCari['city'] ?? ''))); ?></option>
@@ -205,7 +211,7 @@ page_header('Cariler', 'cariler');
       <?php if (!$cariler): ?><tr><td colspan="6" class="empty">Cari bulunamadı.</td></tr><?php endif; ?>
       <?php foreach ($cariler as $c): $b=cari_balance((int)$c['id']); ?>
         <tr>
-          <td class="cari-primary"><a href="cari-detay.php?id=<?php echo e($c['id']); ?>"><strong><?php echo e($c['name']); ?></strong></a><small><?php echo badge($c['cari_type'], 'neutral'); ?></small></td>
+          <td class="cari-primary"><a href="cari-detay.php?id=<?php echo e($c['id']); ?>" target="_blank" rel="noopener noreferrer"><strong><?php echo e($c['name']); ?></strong></a><small><?php echo badge($c['cari_type'], 'neutral'); ?></small></td>
           <td class="cari-meta"><?php echo e($c['authorized_person'] ?: '-'); ?><small><?php echo e($c['city'] ?: ''); ?></small></td>
           <td class="cari-tax"><?php echo e($c['tax_no'] ?: '-'); ?><small><?php echo e($c['tax_office'] ?: ''); ?></small></td>
           <td class="cari-contact"><small><?php echo e(trim(($c['phone'] ?: '') . ' ' . ($c['email'] ?: '')) ?: '-'); ?></small></td>
@@ -217,6 +223,45 @@ page_header('Cariler', 'cariler');
     </table>
   </div>
 </section>
+
+<script>
+(function(){
+  var form=document.getElementById('cariSearchForm');
+  var input=document.getElementById('cariSearchInput');
+  var cariler=<?php echo $cariSearchJson ?: '[]'; ?>;
+  if(!form||!input) return;
+
+  function normalizeCari(value){
+    var map={'ç':'c','ğ':'g','ı':'i','i':'i','ö':'o','ş':'s','ü':'u','â':'a','î':'i','û':'u','ä':'a','ë':'e','ï':'i','ô':'o','è':'e','é':'e','ê':'e'};
+    return String(value||'').trim().toLocaleLowerCase('tr-TR').split('').map(function(ch){return map[ch]||ch;}).join('').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+  }
+
+  function bestCari(query){
+    var q=normalizeCari(query);
+    if(!q) return null;
+    var best=null,bestScore=0;
+    cariler.forEach(function(cari){
+      var name=normalizeCari(cari.name);
+      var score=0;
+      if(name===q) score=300;
+      else if(name.indexOf(q)===0) score=180;
+      else if(name.indexOf(' '+q)!==-1) score=130;
+      else if(name.indexOf(q)!==-1) score=90;
+      if(score>bestScore){best=cari;bestScore=score;}
+    });
+    return bestScore>0?best:null;
+  }
+
+  form.addEventListener('submit',function(event){
+    var match=bestCari(input.value);
+    if(!match) return;
+    event.preventDefault();
+    var url='cari-detay.php?id='+encodeURIComponent(match.id);
+    var opened=window.open(url,'_blank','noopener,noreferrer');
+    if(opened) opened.opener=null;
+  });
+})();
+</script>
 
 <?php if (can_write()): ?>
 <div class="cari-modal<?php echo $modalOpen ? ' is-open' : ''; ?>" id="cariModal" role="dialog" aria-modal="true" aria-labelledby="cariModalTitle" aria-hidden="<?php echo $modalOpen ? 'false' : 'true'; ?>">
