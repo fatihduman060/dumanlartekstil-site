@@ -297,9 +297,8 @@ function depo_cikis_save(int $id): int
         $s=$pdo->prepare('INSERT INTO warehouse_dispatch_items(dispatch_id,sort_order,product_barcode,product_name,product_type,quantity,unit_price,line_total) VALUES(?,?,?,?,?,?,?,?)');
         foreach($items as $i=>$item){
             $s->execute([$id,$i,$item['product_barcode'],$item['product_name'],$item['product_type'],$item['quantity'],$item['unit_price'],$item['line_total']]);
+            teklif_save_product_suggestion($item['product_name'],$item['product_type'],(float)$item['unit_price'],$item['product_barcode']);
         }
-        // Depo Çıkış'ta serbest yazılan ürünleri global ürün hafızasına ekleme.
-        // Bu ekrandaki hatırlatmalar yalnız Sipariş Ver bölümünde kayıtlı ürünlerden gelsin.
 
         if($existing && (int)($existing['posted_to_cari']??0)===1){
             $movementId=teklif_active_movement_id((int)($existing['cari_movement_id']??0));
