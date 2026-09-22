@@ -5,6 +5,8 @@ require_once __DIR__ . '/barkod-satis-lib.php';
 require_once __DIR__ . '/barkod-satis-urun-kaynagi.php';
 require_once __DIR__ . '/magaza-veresiye-auto-only.php';
 require_login();
+// Product/history reads must not hold up other requests from this cashier.
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') session_write_close();
 header('Content-Type: application/json; charset=utf-8');
 
 function pos_json(array $payload, int $status = 200): void

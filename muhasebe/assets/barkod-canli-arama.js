@@ -9,6 +9,7 @@
 
   var timer=null;
   var requestNo=0;
+  var searchController=null;
   var activeIndex=-1;
   var currentItems=[];
 
@@ -96,9 +97,10 @@
     if(!query){hide();if(status)status.textContent='';return;}
     if(isQuantityShortcut(query)){hide();return;}
     var current=++requestNo;
+    if(searchController) searchController.abort();
+    searchController=new AbortController();
     if(status) status.textContent='Ürünler aranıyor…';
-    fetch(searchApi+'?q='+encodeURIComponent(query)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
-      .then(function(response){return response.json();})
+    window.posReadJson(searchApi+'?q='+encodeURIComponent(query)+'&_='+Date.now(),searchController)
       .then(function(data){
         if(current!==requestNo) return;
         if(!data||data.ok===false) throw new Error((data&&data.error)||'Arama yapılamadı.');
@@ -114,6 +116,7 @@
     if(timer) clearTimeout(timer);
     timer=null;
     requestNo++;
+    if(searchController) searchController.abort();
     var query=String(input.value||'').trim();
     if(!query){hide();if(status)status.textContent='';return;}
     if(isQuantityShortcut(query)){hide();return;}
