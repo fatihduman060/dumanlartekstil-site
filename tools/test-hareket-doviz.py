@@ -55,6 +55,9 @@ echo $id;
     except urllib.error.HTTPError as e: response=e
     return response.status,response.headers,response.read()
    con=sqlite3.connect(str(site/'muhasebe/storage/bitke_muhasebe.sqlite'))
+   con.execute('ALTER TABLE movements DROP COLUMN exchange_rate')
+   con.execute('ALTER TABLE movements DROP COLUMN account_amount_tl')
+   con.execute("UPDATE settings SET value='5024' WHERE key='db_schema_version'");con.commit()
    con.execute("INSERT INTO accounts (id,name,account_type,opening_balance,is_active,created_at,updated_at) VALUES (900,'QA Kasa','kasa',0,1,'2026-01-01','2026-01-01')");con.commit()
    def save(currency,rate,amount='100',kind='tahsilat',id=0,account='900'):
     status,h,b=req('hareketler.php',101,{'action':'save','id':id,'csrf_token':'qatoken','movement_type':kind,'amount':amount,'currency':currency,'exchange_rate':rate,'movement_date':'2026-09-22','account_id':account,'category_id':'','cari_id':'','due_date':'','document_type':'','payment_method':'Nakit','description':'FX QA'})

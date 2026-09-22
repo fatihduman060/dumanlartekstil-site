@@ -6,7 +6,7 @@ const APP_NAME = 'Bitke Muhasebe Paneli';
 const APP_VERSION = 'v50.24.0';
 const APP_TIMEZONE = 'Europe/Istanbul';
 const APP_BASE_PATH = '/muhasebe';
-const DB_SCHEMA_VERSION = 5024;
+const DB_SCHEMA_VERSION = 5025;
 
 const DB_PATH = __DIR__ . '/storage/bitke_muhasebe.sqlite';
 const UPLOAD_DIR = __DIR__ . '/storage/uploads';
