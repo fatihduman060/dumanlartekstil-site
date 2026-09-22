@@ -41,8 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'to_warehouse') {
             $id = (int)($_POST['id'] ?? 0);
             $dispatchId = depo_cikis_from_offer($id);
-            flash('success', 'Teklif Depo Çıkışa aktarıldı. Fiş depoda Bekliyor durumunda hazır.');
-            redirect('depo-cikis.php?edit=' . $dispatchId);
+            flash('success', 'Teklif Depo Çıkışına gönderildi. Gönderilmiş fişler bölümüne taşındı.');
+            redirect('teklif-ver.php#sent-offers');
         }
         if ($action === 'delete') {
             $id = (int)($_POST['id'] ?? 0);
@@ -89,10 +89,45 @@ if ($editId > 0 && !$edit) {
     flash('error', 'Düzenlemek istediğiniz teklif bulunamadı veya kayıt artık aktif değil.');
     redirect('teklif-ver.php');
 }
-$list = teklifler_list(120);
-$warehouseOfferMap = can_access_warehouse_dispatch()
-    ? depo_cikis_offer_map(array_column($list, 'id'))
-    : [];
+$list = db()->query('SELECT o.*, c.name AS cari_name FROM offers o LEFT JOIN cariler c ON c.id=o.cari_id WHERE COALESCE(o.is_deleted,0)=0 ORDER BY o.offer_date DESC, o.id DESC')->fetchAll();
+$warehouseOfferMap = depo_cikis_offer_map(array_column($list, 'id'));
+
+function teklif_group_by_customer(array $offers): array
+{
+    $groups = [];
+    foreach ($offers as $offer) {
+        $cariId = (int)($offer['cari_id'] ?? 0);
+        $name = trim((string)($offer['cari_name'] ?? ''));
+        if ($name === '') $name = trim((string)($offer['customer_name'] ?? ''));
+        if ($name === '') $name = 'Cari seçilmemiş';
+        $keyName = strtolower(trim((string)(preg_replace('/\\s+/u', ' ', $name) ?: $name)));
+        $key = $cariId > 0 ? 'cari:' . $cariId : 'name:' . $keyName;
+        if (!isset($groups[$key])) {
+            $groups[$key] = [
+                'name'=>$name,
+                'city'=>trim((string)($offer['customer_city'] ?? '')),
+                'offers'=>[],
+            ];
+        }
+        $groups[$key]['offers'][] = $offer;
+    }
+    return array_values($groups);
+}
+
+$pendingOffers = [];
+$sentOffers = [];
+foreach ($list as $offer) {
+    $dispatchId = (int)($warehouseOfferMap[(int)($offer['id'] ?? 0)] ?? 0);
+    if ($dispatchId > 0) $sentOffers[] = $offer;
+    else $pendingOffers[] = $offer;
+}
+$pendingGroups = teklif_group_by_customer($pendingOffers);
+$sentGroups = teklif_group_by_customer($sentOffers);
+$offerSections = [
+    ['id'=>'pending-offers','title'=>'İşlem Bekleyen Fişler','note'=>'Depo Çıkışına Aktar denene kadar fişler burada kalır.','offers'=>$pendingOffers,'groups'=>$pendingGroups,'sent'=>false],
+    ['id'=>'sent-offers','title'=>'Depo Çıkışına Gönderilmiş Fişler','note'=>'Depo Çıkışına aktarılan fişler cari bazında burada saklanır.','offers'=>$sentOffers,'groups'=>$sentGroups,'sent'=>true],
+];
+
 $titleOptions = ['SİPARİŞ FİŞİ', 'TEKLİF FORMU', 'PROFORMA', 'PROFORMA FATURA', 'SİPARİŞ FORMU'];
 
 function offer_field($offer, string $key, string $default = ''): string
@@ -111,7 +146,7 @@ if ($pageTitleValue === '') $pageTitleValue = 'SİPARİŞ FİŞİ';
 page_header('Teklif Ver', 'teklif_ver');
 ?>
 <style>
-.offer-builder{display:grid;gap:16px;max-width:1500px;margin:0 auto}.offer-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.offer-hero h2{margin:5px 0 6px;color:#fff;font-size:clamp(24px,3vw,38px);line-height:1}.offer-hero p{margin:0;color:#e9f5ed;max-width:760px}.offer-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.offer-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.offer-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.offer-card h3{margin:0;color:#102818}.offer-body{padding:18px}.offer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.offer-grid label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.offer-grid input,.offer-grid select,.offer-grid textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.offer-grid small{color:#7b6c5a;font-weight:700}.offer-grid .wide{grid-column:span 2}.offer-grid .full{grid-column:1/-1}.offer-table-wrap{overflow:auto;border:1px solid #e5dccf;border-radius:18px}.offer-table{width:100%;min-width:1180px;border-collapse:collapse}.offer-table th{background:#16482e;color:#fff;text-align:left;padding:10px 9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.offer-table td{border-bottom:1px solid #efe7dc;padding:8px}.offer-table input{width:100%;min-height:38px;border:1px solid #e5dccf;border-radius:11px;padding:7px 9px}.offer-table .right{text-align:right}.offer-totals{display:grid;justify-content:end;gap:5px;margin-top:12px;color:#102818}.offer-total-line{display:grid;grid-template-columns:160px 150px;gap:10px;text-align:right;align-items:center}.offer-total-line strong{font-size:22px}.offer-total-line.discount strong{color:#b64242}.offer-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.offer-actions button,.offer-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:999px;padding:9px 16px;font-weight:900;text-decoration:none;cursor:pointer}.offer-actions .primary{background:#16482e;color:#fff}.offer-actions .secondary{background:#efe6d9;color:#102818}.offer-actions .danger{background:#fff1ed;color:#b64242}.mini-help{margin-top:12px;padding:12px;border-radius:14px;background:#fbf6ed;color:#776b5c;font-weight:700}.row-remove{border:0!important;background:#fff1ed!important;color:#b64242!important;font-weight:900!important;cursor:pointer}.cari-selected-note{display:none;margin-top:4px;padding:8px 10px;border-radius:12px;background:#eef8f1;color:#16482e;font-size:12px;font-weight:850}.cari-selected-note.active{display:block}.vat-box{display:flex;align-items:center;gap:9px;min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff}.vat-box input{width:auto!important;min-height:auto!important}.saved-offers{width:100%;border-collapse:collapse;min-width:900px}.saved-offers th{background:#16482e;color:#fff;text-align:left;padding:10px;font-size:11px}.saved-offers td{border-bottom:1px solid #efe7dc;padding:10px;vertical-align:top}.saved-offers small{display:block;color:#776b5c;margin-top:3px}.saved-actions{display:flex;gap:6px;flex-wrap:wrap}.saved-actions a,.saved-actions button{border:1px solid #e5dccf;background:#fff;border-radius:999px;padding:7px 10px;color:#102818;font-weight:850;text-decoration:none;cursor:pointer}.saved-actions button{color:#b64242}.saved-actions .warehouse{background:#eef8f1!important;color:#16482e!important;border-color:#bad8c4!important}.pill{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900;background:#eef8f1;color:#16482e}.pill.off{background:#f1f3f5;color:#667085}.pill.discount{background:#fff1ed;color:#b64242}@media(max-width:1000px){.offer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.offer-grid .wide{grid-column:span 2}}@media(max-width:640px){.offer-hero{display:block}.offer-grid{grid-template-columns:1fr}.offer-grid .wide{grid-column:1}.offer-card header{display:block}.offer-actions button,.offer-actions a{width:100%}.offer-total-line{grid-template-columns:1fr 1fr}.saved-offers{min-width:760px}}
+.offer-builder{display:grid;gap:16px;max-width:1500px;margin:0 auto}.offer-hero{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:22px 24px;border-radius:24px;background:linear-gradient(135deg,#102818,#23613c);color:#fff;box-shadow:0 18px 50px rgba(7,27,63,.10)}.offer-hero h2{margin:5px 0 6px;color:#fff;font-size:clamp(24px,3vw,38px);line-height:1}.offer-hero p{margin:0;color:#e9f5ed;max-width:760px}.offer-hero span{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:11px;font-weight:900;letter-spacing:.08em}.offer-card{background:#fff;border:1px solid #e5dccf;border-radius:22px;box-shadow:0 12px 34px rgba(7,27,63,.06);overflow:hidden}.offer-card header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:#fbf6ed;border-bottom:1px solid #e5dccf}.offer-card h3{margin:0;color:#102818}.offer-body{padding:18px}.offer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.offer-grid label{display:grid;gap:6px;font-size:12px;color:#102818;font-weight:850}.offer-grid input,.offer-grid select,.offer-grid textarea{min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff;color:#102818;width:100%}.offer-grid small{color:#7b6c5a;font-weight:700}.offer-grid .wide{grid-column:span 2}.offer-grid .full{grid-column:1/-1}.offer-table-wrap{overflow:auto;border:1px solid #e5dccf;border-radius:18px}.offer-table{width:100%;min-width:1180px;border-collapse:collapse}.offer-table th{background:#16482e;color:#fff;text-align:left;padding:10px 9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.offer-table td{border-bottom:1px solid #efe7dc;padding:8px}.offer-table input{width:100%;min-height:38px;border:1px solid #e5dccf;border-radius:11px;padding:7px 9px}.offer-table .right{text-align:right}.offer-totals{display:grid;justify-content:end;gap:5px;margin-top:12px;color:#102818}.offer-total-line{display:grid;grid-template-columns:160px 150px;gap:10px;text-align:right;align-items:center}.offer-total-line strong{font-size:22px}.offer-total-line.discount strong{color:#b64242}.offer-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.offer-actions button,.offer-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:999px;padding:9px 16px;font-weight:900;text-decoration:none;cursor:pointer}.offer-actions .primary{background:#16482e;color:#fff}.offer-actions .secondary{background:#efe6d9;color:#102818}.offer-actions .danger{background:#fff1ed;color:#b64242}.mini-help{margin-top:12px;padding:12px;border-radius:14px;background:#fbf6ed;color:#776b5c;font-weight:700}.row-remove{border:0!important;background:#fff1ed!important;color:#b64242!important;font-weight:900!important;cursor:pointer}.cari-selected-note{display:none;margin-top:4px;padding:8px 10px;border-radius:12px;background:#eef8f1;color:#16482e;font-size:12px;font-weight:850}.cari-selected-note.active{display:block}.vat-box{display:flex;align-items:center;gap:9px;min-height:42px;border:1px solid #e5dccf;border-radius:13px;padding:9px 11px;background:#fff}.vat-box input{width:auto!important;min-height:auto!important}.saved-offers{width:100%;border-collapse:collapse;min-width:900px}.saved-offers th{background:#16482e;color:#fff;text-align:left;padding:10px;font-size:11px}.saved-offers td{border-bottom:1px solid #efe7dc;padding:10px;vertical-align:top}.saved-offers small{display:block;color:#776b5c;margin-top:3px}.saved-actions{display:flex;gap:6px;flex-wrap:wrap}.saved-actions a,.saved-actions button{border:1px solid #e5dccf;background:#fff;border-radius:999px;padding:7px 10px;color:#102818;font-weight:850;text-decoration:none;cursor:pointer}.saved-actions button{color:#b64242}.saved-actions .warehouse{background:#eef8f1!important;color:#16482e!important;border-color:#bad8c4!important}.offer-status-block{display:grid;gap:10px}.offer-status-block+.offer-status-block{margin-top:24px;padding-top:22px;border-top:1px solid #e9e0d4}.offer-status-head{display:flex;align-items:center;justify-content:space-between;gap:14px}.offer-status-head h4{margin:0;color:#102818;font-size:17px}.offer-status-head small{display:block;margin-top:3px;color:#776b5c}.offer-status-count{display:inline-flex;align-items:center;justify-content:center;min-width:72px;padding:6px 10px;border-radius:999px;background:#f2eee7;color:#5b5043;font-size:11px;font-weight:900}.offer-status-block.pending .offer-status-count{background:#fff2d8;color:#885f0b}.offer-status-block.sent .offer-status-count{background:#e7f6eb;color:#216b39}.offer-cari-groups{display:grid;gap:9px}.offer-cari-group{border:1px solid #e5dccf;border-radius:15px;background:#fff;overflow:hidden}.offer-cari-group>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;cursor:pointer;list-style:none;padding:12px 14px;background:#fbf8f2}.offer-cari-group>summary::-webkit-details-marker{display:none}.offer-cari-group>summary strong{color:#102818}.offer-cari-group>summary small{display:block;color:#776b5c;margin-top:2px}.offer-cari-count{display:inline-flex;white-space:nowrap;border-radius:999px;padding:5px 9px;background:#fff;color:#16482e;border:1px solid #d9e5dc;font-size:11px;font-weight:900}.offer-cari-group[open]>summary{border-bottom:1px solid #e5dccf;background:#f5fbf7}.offer-cari-group .offer-table-wrap{border:0;border-radius:0}.offer-cari-group .saved-offers{min-width:760px}.pill{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900;background:#eef8f1;color:#16482e}.pill.off{background:#f1f3f5;color:#667085}.pill.discount{background:#fff1ed;color:#b64242}@media(max-width:1000px){.offer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.offer-grid .wide{grid-column:span 2}}@media(max-width:640px){.offer-hero{display:block}.offer-grid{grid-template-columns:1fr}.offer-grid .wide{grid-column:1}.offer-card header{display:block}.offer-actions button,.offer-actions a{width:100%}.offer-total-line{grid-template-columns:1fr 1fr}.saved-offers{min-width:760px}}
 </style>
 
 <div class="offer-builder">
@@ -198,25 +233,56 @@ page_header('Teklif Ver', 'teklif_ver');
   </section>
 
   <section class="offer-card">
-    <header><div><h3>Kayıtlı teklifler</h3><small>Düzenle, sil veya sonradan PDF al.</small></div><strong><?php echo e(count($list)); ?> teklif</strong></header>
+    <header><div><h3>Teklif / Sipariş Fişleri</h3><small>Fişler cari bazında, depo aktarım durumuna göre ayrılır.</small></div><strong><?php echo e(count($list)); ?> fiş</strong></header>
     <div class="offer-body">
-      <div class="offer-table-wrap">
-        <table class="saved-offers">
-          <thead><tr><th>Tarih / No</th><th>Firma</th><th>Tutar</th><th>KDV / İskonto</th><th>İşlem</th></tr></thead>
-          <tbody>
-            <?php if(!$list): ?><tr><td colspan="5" class="empty">Kayıtlı teklif yok.</td></tr><?php endif; ?>
-            <?php foreach($list as $offer): ?>
-            <tr>
-              <td><strong><?php echo e(tr_date($offer['offer_date'])); ?></strong><small><?php echo e($offer['offer_no']); ?></small></td>
-              <td><strong><?php echo e($offer['customer_name']); ?></strong><small><?php echo e($offer['customer_city'] ?: '-'); ?><?php echo !empty($offer['customer_phone']) ? ' · Tel: ' . e($offer['customer_phone']) : ''; ?></small></td>
-              <td><strong><?php echo e(teklif_money((float)$offer['grand_total']) . ' ' . $offer['currency']); ?></strong><small>Ara toplam: <?php echo e(teklif_money((float)$offer['subtotal'])); ?></small></td>
-              <td><?php echo ((int)($offer['discount_enabled'] ?? 0)===1) ? '<span class="pill discount">%'.e((string)($offer['discount_rate'] ?? 0)).' iskonto</span><small>-'.e(teklif_money((float)($offer['discount_amount'] ?? 0))).'</small>' : '<span class="pill off">İskonto yok</span>'; ?><?php echo ((int)$offer['vat_enabled']===1) ? '<span class="pill" style="margin-left:4px">%'.e((string)$offer['vat_rate']).' KDV</span><small>'.e(teklif_money((float)$offer['vat_amount'])).'</small>' : '<small>KDV yok</small>'; ?></td>
-              <td><div class="saved-actions"><?php if(can_access_warehouse_dispatch()): ?><?php $dispatchId=(int)($warehouseOfferMap[(int)$offer['id']]??0); ?><?php if($dispatchId>0): ?><a class="warehouse" href="depo-cikis.php?edit=<?php echo e($dispatchId); ?>">Depoda Aç</a><?php elseif(can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif Depo Çıkışa aktarılsın mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="to_warehouse"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button class="warehouse" type="submit">Depo Çıkışa Aktar</button></form><?php endif; ?><?php endif; ?><a href="teklif-ver.php?edit=<?php echo e($offer['id']); ?>#offer-form">Düzenle</a><a target="_blank" href="teklif-yazdir.php?id=<?php echo e($offer['id']); ?>">PDF</a><?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?></div></td>
-            </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
+      <?php foreach($offerSections as $section): ?>
+      <section id="<?php echo e($section['id']); ?>" class="offer-status-block <?php echo $section['sent'] ? 'sent' : 'pending'; ?>">
+        <div class="offer-status-head">
+          <div><h4><?php echo e($section['title']); ?></h4><small><?php echo e($section['note']); ?></small></div>
+          <span class="offer-status-count"><?php echo e(count($section['offers'])); ?> fiş</span>
+        </div>
+
+        <?php if(!$section['groups']): ?>
+          <p class="muted"><?php echo $section['sent'] ? 'Henüz Depo Çıkışına gönderilmiş fiş yok.' : 'İşlem bekleyen fiş yok.'; ?></p>
+        <?php else: ?>
+        <div class="offer-cari-groups">
+          <?php foreach($section['groups'] as $group): ?>
+          <details class="offer-cari-group">
+            <summary>
+              <span><strong><?php echo e($group['name']); ?></strong><?php if($group['city']!==''): ?><small><?php echo e($group['city']); ?></small><?php endif; ?></span>
+              <span class="offer-cari-count"><?php echo e(count($group['offers'])); ?> fiş</span>
+            </summary>
+            <div class="offer-table-wrap">
+              <table class="saved-offers">
+                <thead><tr><th>Tarih / No</th><th>Tutar</th><th>KDV / İskonto</th><th>İşlem</th></tr></thead>
+                <tbody>
+                  <?php foreach($group['offers'] as $offer): ?>
+                  <?php $dispatchId=(int)($warehouseOfferMap[(int)$offer['id']]??0); ?>
+                  <tr>
+                    <td><strong><?php echo e(tr_date($offer['offer_date'])); ?></strong><small><?php echo e($offer['offer_no']); ?></small></td>
+                    <td><strong><?php echo e(teklif_money((float)$offer['grand_total']) . ' ' . $offer['currency']); ?></strong><small>Ara toplam: <?php echo e(teklif_money((float)$offer['subtotal'])); ?></small></td>
+                    <td><?php echo ((int)($offer['discount_enabled'] ?? 0)===1) ? '<span class="pill discount">%'.e((string)($offer['discount_rate'] ?? 0)).' iskonto</span><small>-'.e(teklif_money((float)($offer['discount_amount'] ?? 0))).'</small>' : '<span class="pill off">İskonto yok</span>'; ?><?php echo ((int)$offer['vat_enabled']===1) ? '<span class="pill" style="margin-left:4px">%'.e((string)$offer['vat_rate']).' KDV</span><small>'.e(teklif_money((float)$offer['vat_amount'])).'</small>' : '<small>KDV yok</small>'; ?></td>
+                    <td><div class="saved-actions">
+                      <?php if($section['sent']): ?>
+                        <?php if(can_access_warehouse_dispatch() && $dispatchId>0): ?><a class="warehouse" href="depo-cikis.php?edit=<?php echo e($dispatchId); ?>">Depoda Aç</a><?php endif; ?>
+                      <?php else: ?>
+                        <?php if(can_access_warehouse_dispatch() && can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif Depo Çıkışına aktarılsın mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="to_warehouse"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button class="warehouse" type="submit">Depo Çıkışına Aktar</button></form><?php endif; ?>
+                      <?php endif; ?>
+                      <a href="teklif-ver.php?edit=<?php echo e($offer['id']); ?>#offer-form">Düzenle</a>
+                      <a target="_blank" rel="noopener noreferrer" href="teklif-yazdir.php?id=<?php echo e($offer['id']); ?>">PDF</a>
+                      <?php if(can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif silinsin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button type="submit">Sil</button></form><?php endif; ?>
+                    </div></td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          </details>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+      </section>
+      <?php endforeach; ?>
     </div>
   </section>
 </div>
