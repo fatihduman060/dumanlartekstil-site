@@ -203,6 +203,7 @@ page_header('Cariler', 'cariler');
     </datalist>
     <select name="type"><option value="">Tümü</option><option value="Firma" <?php echo $type==='Firma'?'selected':''; ?>>Firma</option><option value="Kişi" <?php echo $type==='Kişi'?'selected':''; ?>>Kişi</option></select>
     <button class="btn btn-secondary" type="submit">Filtrele</button>
+    <button type="submit" id="cariSearchOpenButton" name="id" value="" formaction="cari-detay.php" formtarget="_blank" style="display:none" aria-hidden="true" tabindex="-1"></button>
   </form>
   <div class="table-wrap">
     <table class="cari-mobile-table" data-mobile-table="card">
@@ -252,27 +253,28 @@ page_header('Cariler', 'cariler');
     return bestScore>0?best:null;
   }
 
-  form.addEventListener('submit',function(){
+  var openButton=document.getElementById('cariSearchOpenButton');
+
+  input.addEventListener('keydown',function(event){
+    if(event.key!=='Enter') return;
     var match=bestCari(input.value);
-    if(!match) return;
-    var oldAction=form.getAttribute('action')||'cariler.php';
-    var oldTarget=form.getAttribute('target')||'';
-    var hidden=form.querySelector('input[name="id"][data-cari-search-target]');
-    if(!hidden){
-      hidden=document.createElement('input');
-      hidden.type='hidden';
-      hidden.name='id';
-      hidden.setAttribute('data-cari-search-target','1');
+    if(!match||!openButton) return;
+    event.preventDefault();
+    openButton.value=String(match.id);
+    if(typeof form.requestSubmit==='function'){
+      form.requestSubmit(openButton);
+    }else{
+      var oldAction=form.action,oldTarget=form.target;
+      form.action='cari-detay.php';
+      form.target='_blank';
+      var hidden=document.createElement('input');
+      hidden.type='hidden';hidden.name='id';hidden.value=String(match.id);
       form.appendChild(hidden);
+      form.submit();
+      hidden.remove();
+      form.action=oldAction;
+      form.target=oldTarget;
     }
-    hidden.value=String(match.id);
-    form.setAttribute('action','cari-detay.php');
-    form.setAttribute('target','_blank');
-    window.setTimeout(function(){
-      form.setAttribute('action',oldAction);
-      if(oldTarget) form.setAttribute('target',oldTarget); else form.removeAttribute('target');
-      hidden.value='';
-    },0);
   });
 })();
 </script>
