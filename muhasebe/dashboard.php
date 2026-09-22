@@ -542,10 +542,16 @@ page_header('Genel Bakış', 'dashboard');
 
 <script>
 (function(){
-  document.querySelectorAll('a[href^="cari-detay.php?id="]').forEach(function(link){
+  function markCariLink(link){
+    if(!link)return;
     link.setAttribute('target','_blank');
     link.setAttribute('rel','noopener noreferrer');
-  });
+  }
+  document.querySelectorAll('a[href^="cari-detay.php?id="]').forEach(markCariLink);
+  document.addEventListener('click',function(event){
+    var link=event.target.closest&&event.target.closest('a[href^="cari-detay.php?id="]');
+    if(link)markCariLink(link);
+  },true);
 })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous"></script>
