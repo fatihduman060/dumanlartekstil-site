@@ -114,18 +114,30 @@ function teklif_group_by_customer(array $offers): array
     return array_values($groups);
 }
 
+$warehouseOfferIntegrationCutoff = '2026-09-19 17:50:00'; // Teklif -> Depo Çıkış aktarımının canlıya alındığı zaman (Europe/Istanbul).
 $pendingOffers = [];
 $sentOffers = [];
 foreach ($list as $offer) {
     $dispatchId = (int)($warehouseOfferMap[(int)($offer['id'] ?? 0)] ?? 0);
-    if ($dispatchId > 0) $sentOffers[] = $offer;
+    $postedToCari = (int)($offer['posted_to_cari'] ?? 0) === 1;
+    $activeCariMovement = teklif_active_movement_id((int)($offer['cari_movement_id'] ?? 0)) > 0;
+    $createdAt = trim((string)($offer['created_at'] ?? ''));
+    $legacyProcessed = $dispatchId <= 0 && (
+        $postedToCari ||
+        $activeCariMovement ||
+        ($createdAt !== '' && strcmp($createdAt, $warehouseOfferIntegrationCutoff) < 0)
+    );
+    $offer['_dispatch_id'] = $dispatchId;
+    $offer['_legacy_processed'] = $legacyProcessed ? 1 : 0;
+
+    if ($dispatchId > 0 || $legacyProcessed) $sentOffers[] = $offer;
     else $pendingOffers[] = $offer;
 }
 $pendingGroups = teklif_group_by_customer($pendingOffers);
 $sentGroups = teklif_group_by_customer($sentOffers);
 $offerSections = [
-    ['id'=>'pending-offers','title'=>'İşlem Bekleyen Fişler','note'=>'Depo Çıkışına Aktar denene kadar fişler burada kalır.','offers'=>$pendingOffers,'groups'=>$pendingGroups,'sent'=>false],
-    ['id'=>'sent-offers','title'=>'Depo Çıkışına Gönderilmiş Fişler','note'=>'Depo Çıkışına aktarılan fişler cari bazında burada saklanır.','offers'=>$sentOffers,'groups'=>$sentGroups,'sent'=>true],
+    ['id'=>'pending-offers','title'=>'İşlem Bekleyen Fişler','note'=>'Depo Çıkışına Aktar denene kadar yeni fişler burada kalır.','offers'=>$pendingOffers,'groups'=>$pendingGroups,'sent'=>false],
+    ['id'=>'sent-offers','title'=>'İşlenmiş / Depo Çıkışına Gönderilmiş Fişler','note'=>'Depo sistemi öncesinde cariye işlenmiş eski fişler ile Depo Çıkışına aktarılan yeni fişler burada birlikte saklanır.','offers'=>$sentOffers,'groups'=>$sentGroups,'sent'=>true],
 ];
 
 $titleOptions = ['SİPARİŞ FİŞİ', 'TEKLİF FORMU', 'PROFORMA', 'PROFORMA FATURA', 'SİPARİŞ FORMU'];
@@ -257,14 +269,14 @@ page_header('Teklif Ver', 'teklif_ver');
                 <thead><tr><th>Tarih / No</th><th>Tutar</th><th>KDV / İskonto</th><th>İşlem</th></tr></thead>
                 <tbody>
                   <?php foreach($group['offers'] as $offer): ?>
-                  <?php $dispatchId=(int)($warehouseOfferMap[(int)$offer['id']]??0); ?>
+                  <?php $dispatchId=(int)($offer['_dispatch_id']??($warehouseOfferMap[(int)$offer['id']]??0)); $legacyProcessed=(int)($offer['_legacy_processed']??0)===1; ?>
                   <tr>
                     <td><strong><?php echo e(tr_date($offer['offer_date'])); ?></strong><small><?php echo e($offer['offer_no']); ?></small></td>
                     <td><strong><?php echo e(teklif_money((float)$offer['grand_total']) . ' ' . $offer['currency']); ?></strong><small>Ara toplam: <?php echo e(teklif_money((float)$offer['subtotal'])); ?></small></td>
                     <td><?php echo ((int)($offer['discount_enabled'] ?? 0)===1) ? '<span class="pill discount">%'.e((string)($offer['discount_rate'] ?? 0)).' iskonto</span><small>-'.e(teklif_money((float)($offer['discount_amount'] ?? 0))).'</small>' : '<span class="pill off">İskonto yok</span>'; ?><?php echo ((int)$offer['vat_enabled']===1) ? '<span class="pill" style="margin-left:4px">%'.e((string)$offer['vat_rate']).' KDV</span><small>'.e(teklif_money((float)$offer['vat_amount'])).'</small>' : '<small>KDV yok</small>'; ?></td>
                     <td><div class="saved-actions">
                       <?php if($section['sent']): ?>
-                        <?php if(can_access_warehouse_dispatch() && $dispatchId>0): ?><a class="warehouse" href="depo-cikis.php?edit=<?php echo e($dispatchId); ?>">Depoda Aç</a><?php endif; ?>
+                        <?php if(can_access_warehouse_dispatch() && $dispatchId>0): ?><a class="warehouse" href="depo-cikis.php?edit=<?php echo e($dispatchId); ?>">Depoda Aç</a><?php elseif($legacyProcessed): ?><span class="pill">Geçmişte işlendi</span><?php endif; ?>
                       <?php else: ?>
                         <?php if(can_access_warehouse_dispatch() && can_write()): ?><form method="post" onsubmit="return confirm('Bu teklif Depo Çıkışına aktarılsın mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="to_warehouse"><input type="hidden" name="id" value="<?php echo e($offer['id']); ?>"><button class="warehouse" type="submit">Depo Çıkışına Aktar</button></form><?php endif; ?>
                       <?php endif; ?>
