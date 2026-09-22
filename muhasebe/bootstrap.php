@@ -259,6 +259,8 @@ function init_db(PDO $pdo): void
     )");
 
     ensure_column($pdo, 'movements', 'account_id', 'INTEGER');
+    ensure_column($pdo, 'movements', 'exchange_rate', 'REAL');
+    ensure_column($pdo, 'movements', 'account_amount_tl', 'REAL');
     ensure_column($pdo, 'movements', 'document_type', 'TEXT');
     ensure_column($pdo, 'movements', 'is_cancelled', 'INTEGER NOT NULL DEFAULT 0');
     ensure_column($pdo, 'movements', 'cancelled_at', 'TEXT');
@@ -994,11 +996,19 @@ function sync_movement_account_transaction(int $movementId): void
     if (!$m || (int)($m['is_cancelled'] ?? 0) === 1) return;
     $direction = movement_cash_direction($m['movement_type']);
     if (!$direction || empty($m['account_id'])) return;
+    $accountAmount = (float)$m['amount'];
+    $currency = strtoupper((string)($m['currency'] ?? 'TL'));
+    if ($currency !== 'TL') {
+        // Legacy foreign-currency entries without a recorded rate have no TL effect.
+        if (!in_array($currency, ['USD','EUR'], true) || (float)($m['exchange_rate'] ?? 0) <= 0 || (float)($m['account_amount_tl'] ?? 0) <= 0) return;
+        $accountAmount = (float)$m['account_amount_tl'];
+    }
     $desc = movement_label($m['movement_type']);
+    if ($currency !== 'TL') $desc .= ' / ' . $m['amount'] . ' ' . $currency . ' × ' . $m['exchange_rate'] . ' = ' . money($accountAmount);
     if (!empty($m['cari_name'])) $desc .= ' - ' . $m['cari_name'];
     if (!empty($m['description'])) $desc .= ' / ' . $m['description'];
     db()->prepare('INSERT INTO account_transactions (account_id, direction, amount, transaction_date, source_type, source_id, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        ->execute([(int)$m['account_id'], $direction, (float)$m['amount'], $m['movement_date'], 'movement', $movementId, $desc, $m['created_by'] ?: (current_user()['id'] ?? null), now()]);
+        ->execute([(int)$m['account_id'], $direction, $accountAmount, $m['movement_date'], 'movement', $movementId, $desc, $m['created_by'] ?: (current_user()['id'] ?? null), now()]);
 }
 function sync_check_account_transaction(int $checkId): void
 {
