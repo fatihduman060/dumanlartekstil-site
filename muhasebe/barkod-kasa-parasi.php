@@ -28,7 +28,20 @@ try {
 
     magaza_odeme_dagilim_tablosunu_hazirla();
     $today = date('Y-m-d');
-    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    $canEditPast = is_fatih_user();
+    $method = $_SERVER['REQUEST_METHOD'] ?? '';
+    if (!in_array($method, ['GET', 'POST'], true)) {
+        barkod_kasa_json(['ok'=>false,'error'=>'Geçersiz istek yöntemi.'], 405);
+    }
+    $date = ($method === 'GET' ? ($_GET['date'] ?? $today) : ($_POST['date'] ?? $today));
+    $parsed = is_string($date) ? DateTimeImmutable::createFromFormat('!Y-m-d', $date) : false;
+    if (!$parsed || $parsed->format('Y-m-d') !== $date || $date > $today) {
+        throw new RuntimeException('Bugün veya geçmiş bir tarih seçin.');
+    }
+    if ($date !== $today && !$canEditPast) {
+        barkod_kasa_json(['ok'=>false,'error'=>'Önceki günlerin kasa tutarını yalnızca Fatih güncelleyebilir.'], 403);
+    }
+    $yesterday = $parsed->modify('-1 day')->format('Y-m-d');
 
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         barkod_kasa_json([
@@ -36,6 +49,9 @@ try {
             'today_date' => $today,
             'yesterday_date' => $yesterday,
             'today_amount' => barkod_kasa_tutar($today),
+            'selected_date' => $date,
+            'selected_amount' => barkod_kasa_tutar($date),
+            'can_edit_past' => $canEditPast,
             'yesterday_amount' => barkod_kasa_tutar($yesterday),
             'csrf_token' => csrf_token(),
         ]);
@@ -52,7 +68,7 @@ try {
 
     $pdo = db();
     $stmt = $pdo->prepare("SELECT * FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1");
-    $stmt->execute([$today]);
+    $stmt->execute([$date]);
     $old = $stmt->fetch() ?: null;
     $userId = current_user()['id'] ?? null;
     $now = now();
@@ -63,7 +79,7 @@ try {
         $recordId = (int)$old['id'];
     } else {
         $pdo->prepare("INSERT INTO store_daily_payment_breakdown (sale_date,cash_amount,card_amount,credit_amount,manual_credit_amount,credit_collection_amount,cash_credit_collection_amount,card_credit_collection_amount,cash_change_left_amount,daily_total,created_by,created_at,updated_by,updated_at) VALUES (?,0,0,0,0,0,0,0,?,0,?,?,?,?)")
-            ->execute([$today,$amount,$userId,$now,$userId,$now]);
+            ->execute([$date,$amount,$userId,$now,$userId,$now]);
         $recordId = (int)$pdo->lastInsertId();
     }
 
@@ -71,15 +87,17 @@ try {
     $newStmt->execute([$recordId]);
     $saved = $newStmt->fetch() ?: [];
 
-    log_action('Barkodlu satış kasada bırakılan para güncellendi', $today . ' · ' . number_format($amount, 2, ',', '.') . ' TL');
-    audit_action('magaza_odeme_dagilimi', $recordId, 'kasada_birakilan_guncellendi', $old, $saved, $today);
+    log_action('Barkodlu satış kasada bırakılan para güncellendi', $date . ' · ' . number_format($amount, 2, ',', '.') . ' TL');
+    audit_action('magaza_odeme_dagilimi', $recordId, 'kasada_birakilan_guncellendi', $old, $saved, $date);
 
     barkod_kasa_json([
         'ok' => true,
-        'message' => 'Bugün kasada bırakılan para kaydedildi.',
+        'message' => tr_date($date) . ' için kasada bırakılan para kaydedildi.',
+        'selected_date' => $date,
+        'selected_amount' => $amount,
         'today_date' => $today,
         'yesterday_date' => $yesterday,
-        'today_amount' => $amount,
+        'today_amount' => barkod_kasa_tutar($today),
         'yesterday_amount' => barkod_kasa_tutar($yesterday),
     ]);
 } catch (Throwable $e) {

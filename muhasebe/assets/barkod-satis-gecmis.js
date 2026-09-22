@@ -29,6 +29,7 @@
     +'.pos-history-item{display:flex;align-items:center;gap:8px}.pos-history-row{flex:1;min-width:0}'
     +'@media(max-width:980px){.pos-history-cash-grid{grid-template-columns:1fr}}@media(max-width:680px){.pos-history-toggle-inner{padding:14px}.pos-history-summary{display:grid;grid-template-columns:1fr}.pos-history-summary button{width:100%;min-width:0}.pos-history-item{align-items:stretch;flex-direction:column}.pos-history-actions{padding:0 10px 10px}.pos-history-actions button{flex:1}.pos-cash-left-entry{grid-template-columns:1fr}.pos-cash-left-entry button{width:100%}}';
   style.textContent+='.pos-history-views{display:flex;gap:8px;flex-wrap:wrap;padding:14px}.pos-history-views button{padding:10px 14px;border:1px solid #d9cdbf;border-radius:12px;background:#fff;color:#16482e;cursor:pointer;font-weight:800}.pos-history-views button[aria-pressed="true"]{background:#16482e;color:#fff}.pos-history-date{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 14px 14px}.pos-history-date input{padding:8px;border:1px solid #d9cdbf;border-radius:8px}.pos-history-message{padding:14px}';
+  style.textContent+='[data-cash-left-date-wrap][hidden]{display:none!important}';
   style.textContent+='.pos-history-total{display:grid;gap:4px;padding:9px 11px;border:1px solid #e1d6c8;border-radius:14px;background:#fff;color:#16482e;font-size:13px}.pos-history-total small{font-size:10px;color:#7d6f61}';
   style.textContent+='.pos-audit-record{margin:10px 14px;padding:12px;border:1px solid #e1d6c8;border-radius:12px;overflow-wrap:anywhere}.pos-audit-record summary{cursor:pointer}.pos-audit-record small{display:block;margin-top:6px;color:#7d6f61}.pos-audit-record li{margin:8px 0}.pos-audit-record p{line-height:1.6}';
   document.head.appendChild(style);
@@ -41,9 +42,9 @@
   var cashCard=document.createElement('aside');
   cashCard.className='panel-card pos-cash-left-card';
   cashCard.innerHTML=''
-    +'<div><h3>Kasada Bırakılan Para</h3><small>Dünkü tutarı gör, bugün kasada bırakacağın tutarı yaz.</small></div>'
-    +'<div class="pos-cash-left-yesterday"><span>Dün</span><strong data-cash-left-yesterday>0,00 TL</strong><small data-cash-left-yesterday-date>—</small></div>'
-    +'<div class="pos-cash-left-today"><label><span>Bugün</span><div class="pos-cash-left-entry"><input type="text" inputmode="decimal" autocomplete="off" placeholder="Örn. 2.500" data-cash-left-today><button type="button" data-cash-left-save>Kaydet</button></div></label><p class="pos-cash-left-status" data-cash-left-status></p></div>';
+    +'<div><h3>Kasada Bırakılan Para</h3><small data-cash-left-hint>Dünkü tutarı gör, bugün kasada bırakacağın tutarı yaz.</small></div>'
+    +'<div class="pos-cash-left-yesterday"><span data-cash-left-previous-label>Dün</span><strong data-cash-left-yesterday>0,00 TL</strong><small data-cash-left-yesterday-date>—</small></div>'
+    +'<div class="pos-cash-left-today"><label data-cash-left-date-wrap hidden>Tarih <input type="date" data-cash-left-date></label><label><span data-cash-left-label>Bugün</span><div class="pos-cash-left-entry"><input type="text" inputmode="decimal" autocomplete="off" placeholder="Örn. 2.500" data-cash-left-today><button type="button" data-cash-left-save>Kaydet</button></div></label><p class="pos-cash-left-status" data-cash-left-status></p></div>';
   cashGrid.appendChild(cashCard);
 
   var cashYesterday=cashCard.querySelector('[data-cash-left-yesterday]');
@@ -51,6 +52,14 @@
   var cashToday=cashCard.querySelector('[data-cash-left-today]');
   var cashSave=cashCard.querySelector('[data-cash-left-save]');
   var cashStatus=cashCard.querySelector('[data-cash-left-status]');
+
+  var cashDate=cashCard.querySelector('[data-cash-left-date]');
+  var cashDateWrap=cashCard.querySelector('[data-cash-left-date-wrap]');
+  var cashLoadedDate='';
+  var cashRequestId=0;
+  var cashBusy=false;
+  cashSave.disabled=true;
+  cashDate.addEventListener('change',function(){loadCashLeft();});
 
   function esc(value){
     return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];});
@@ -228,39 +237,62 @@
       +'</div>';
   }
 
+  function renderCashLeft(data){
+    cashLoadedDate=data.selected_date||data.today_date;
+    cashDate.value=cashLoadedDate;
+    cashDate.max=data.today_date;
+    if(typeof data.can_edit_past==='boolean') cashDateWrap.hidden=!data.can_edit_past;
+    if(data.can_edit_past) cashCard.querySelector('[data-cash-left-hint]').textContent='Tarih seçerek bugün veya önceki günlerin kasada bırakılan tutarını güncelle.';
+    cashCard.querySelector('[data-cash-left-label]').textContent=cashLoadedDate===data.today_date?'Bugün':dateTr(cashLoadedDate)+' için tutar';
+    cashCard.querySelector('[data-cash-left-previous-label]').textContent=cashLoadedDate===data.today_date?'Dün':'Önceki gün';
+    cashYesterday.textContent=money(data.yesterday_amount||0);
+    cashYesterdayDate.textContent=dateTr(data.yesterday_date||'');
+    cashToday.value=new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(data.selected_amount??data.today_amount??0));
+    if(data.csrf_token) csrf=data.csrf_token;
+  }
+
   function loadCashLeft(){
-    fetch('barkod-kasa-parasi.php?_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+    var id=++cashRequestId;
+    cashLoadedDate='';
+    cashSave.disabled=true;
+    cashToday.disabled=true;
+    cashStatus.textContent='Yükleniyor…';
+    fetch('barkod-kasa-parasi.php?'+(cashDate.value?'date='+encodeURIComponent(cashDate.value)+'&':'')+'_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
       .then(function(r){return r.json();})
       .then(function(data){
+        if(id!==cashRequestId) return;
         if(!data||!data.ok) throw new Error((data&&data.error)||'Kasa bilgisi alınamadı.');
-        cashYesterday.textContent=money(data.yesterday_amount||0);
-        cashYesterdayDate.textContent=dateTr(data.yesterday_date||'');
-        cashToday.value=Number(data.today_amount||0)>0?new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(data.today_amount||0)):'';
-        if(data.csrf_token) csrf=data.csrf_token;
+        renderCashLeft(data);
+        cashStatus.textContent='';
+        cashToday.disabled=false;
+        cashSave.disabled=false;
       })
-      .catch(function(error){cashStatus.textContent=error.message||'Kasa bilgisi alınamadı.';});
+      .catch(function(error){if(id===cashRequestId) cashStatus.textContent=error.message||'Kasa bilgisi alınamadı.';});
   }
 
   function saveCashLeft(){
+    if(cashBusy||!cashLoadedDate||cashDate.value!==cashLoadedDate) return;
     var amount=parseAmount(cashToday.value);
     if(amount<0){cashStatus.textContent='Geçerli bir tutar yaz.';cashToday.focus();return;}
+    cashBusy=true;
     cashSave.disabled=true;
+    cashDate.disabled=true;
+    cashToday.disabled=true;
     cashSave.textContent='Kaydediliyor…';
     cashStatus.textContent='';
     var body=new FormData();
     body.set('csrf_token',csrf);
     body.set('amount',String(amount));
+    body.set('date',cashLoadedDate);
     fetch('barkod-kasa-parasi.php',{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
       .then(function(r){return r.json();})
       .then(function(data){
         if(!data||!data.ok) throw new Error((data&&data.error)||'Kasa tutarı kaydedilemedi.');
-        cashYesterday.textContent=money(data.yesterday_amount||0);
-        cashYesterdayDate.textContent=dateTr(data.yesterday_date||'');
-        cashToday.value=new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(data.today_amount||0));
+        renderCashLeft(data);
         cashStatus.textContent=data.message||'Kaydedildi.';
       })
       .catch(function(error){cashStatus.textContent=error.message||'Kasa tutarı kaydedilemedi.';})
-      .finally(function(){cashSave.disabled=false;cashSave.textContent='Kaydet';});
+      .finally(function(){cashBusy=false;cashDate.disabled=false;cashToday.disabled=false;cashSave.disabled=false;cashSave.textContent='Kaydet';});
   }
 
   function load(){
