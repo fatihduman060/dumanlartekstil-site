@@ -310,10 +310,18 @@ function teklif_save_from_post(int $id = 0): int
     foreach ($items as $item) $subtotal += (float)$item['line_total'];
 
     $discountEnabled = isset($_POST['discount_enabled']) && (string)$_POST['discount_enabled'] === '1' ? 1 : 0;
-    $discountRate = teklif_decimal($_POST['discount_rate'] ?? '0');
-    if ($discountRate < 0) $discountRate = 0;
-    if ($discountRate > 100) $discountRate = 100;
-    $discountAmount = $discountEnabled ? ($subtotal * $discountRate / 100) : 0.0;
+    $discountMode = (string)($_POST['discount_input_mode'] ?? 'rate');
+    $discountRate = max(0.0, min(100.0, teklif_decimal($_POST['discount_rate'] ?? '0')));
+    $discountAmountInput = max(0.0, teklif_decimal($_POST['discount_amount'] ?? '0'));
+    if (!$discountEnabled) {
+        $discountRate = 0.0;
+        $discountAmount = 0.0;
+    } elseif ($discountMode === 'amount') {
+        $discountAmount = min($subtotal, round($discountAmountInput, 2));
+        $discountRate = $subtotal > 0 ? round(($discountAmount / $subtotal) * 100, 4) : 0.0;
+    } else {
+        $discountAmount = round($subtotal * $discountRate / 100, 2);
+    }
     $discountedSubtotal = max(0.0, $subtotal - $discountAmount);
 
     $vatEnabled = isset($_POST['vat_enabled']) && (string)$_POST['vat_enabled'] === '1' ? 1 : 0;
