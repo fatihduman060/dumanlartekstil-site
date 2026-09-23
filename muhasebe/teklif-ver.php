@@ -193,7 +193,9 @@ page_header('Teklif Ver', 'teklif_ver');
           <label><span>Vergi no / T.C.</span><input id="customerTaxNo" name="customer_tax_no" value="<?php echo offer_field($edit, 'customer_tax_no'); ?>" placeholder="Vergi numarası"></label>
           <label class="wide"><span>Miktar başlığı</span><input name="quantity_label" value="<?php echo offer_field($edit, 'quantity_label', 'DZ'); ?>"></label>
           <label><span>İskonto uygulansın mı?</span><div class="vat-box"><input type="checkbox" id="discountEnabled" name="discount_enabled" value="1" <?php echo ((int)($edit['discount_enabled'] ?? 0)===1)?'checked':''; ?>> <strong>Evet, iskonto uygula</strong></div></label>
-          <label><span>İskonto oranı</span><input id="discountRate" name="discount_rate" value="<?php echo e((string)($edit['discount_rate'] ?? '0')); ?>" inputmode="decimal"><small>Yüzde olarak yaz: 5, 10 gibi</small></label>
+          <label><span>İskonto oranı (%)</span><input id="discountRate" name="discount_rate" value="<?php echo e((string)($edit['discount_rate'] ?? '0')); ?>" inputmode="decimal"><small>Örn. 10 = %10</small></label>
+          <label><span>İskonto tutarı</span><input id="discountAmountInput" name="discount_amount" value="<?php echo e((string)($edit['discount_amount'] ?? '0')); ?>" inputmode="decimal"><small>İstersen yüzde yerine doğrudan tutar yaz.</small></label>
+          <input type="hidden" id="discountInputMode" name="discount_input_mode" value="<?php echo $edit && (float)($edit['discount_amount'] ?? 0)>0 ? 'amount' : 'rate'; ?>">
           <label><span>KDV uygulansın mı?</span><div class="vat-box"><input type="checkbox" id="vatEnabled" name="vat_enabled" value="1" <?php echo ((int)($edit['vat_enabled'] ?? 0)===1)?'checked':''; ?>> <strong>Evet, KDV ekle</strong></div></label>
           <label><span>KDV oranı</span><input id="vatRate" name="vat_rate" value="<?php echo e((string)($edit['vat_rate'] ?? '10')); ?>" inputmode="decimal"><small>Varsayılan %10</small></label>
           <label class="full"><span>Adres</span><textarea id="customerAddress" name="customer_address" rows="2" placeholder="Müşteri adresi"><?php echo e($edit['customer_address'] ?? ''); ?></textarea></label>
@@ -236,7 +238,7 @@ page_header('Teklif Ver', 'teklif_ver');
           <button class="primary" type="submit"><?php echo $edit ? 'Teklifi Güncelle' : 'Teklifi Kaydet'; ?></button>
           <?php if($edit): ?><a class="secondary" target="_blank" href="teklif-yazdir.php?id=<?php echo e($edit['id']); ?>">PDF / Yazdır</a><?php endif; ?>
         </div>
-        <p class="mini-help">İskonto işaretlenirse ara toplamdan düşülür; KDV kalan tutar üzerinden hesaplanır. PDF ve cariye işlenen tutar da buna göre kaydedilir.</p>
+        <p class="mini-help">İskontoyu ister yüzde, ister doğrudan tutar olarak girebilirsin. Son değiştirdiğin alan esas alınır; diğer alan otomatik hesaplanır. KDV, iskonto sonrası kalan tutar üzerinden hesaplanır.</p>
       </form>
       <?php else: ?>
         <p class="muted">Görüntüleme yetkisindesiniz. Teklif oluşturma kapalı.</p>
@@ -343,10 +345,26 @@ page_header('Teklif Ver', 'teklif_ver');
   const add = document.getElementById('addRow');
   const discountEnabled = document.getElementById('discountEnabled');
   const discountRate = document.getElementById('discountRate');
+  const discountAmountInput = document.getElementById('discountAmountInput');
+  const discountInputMode = document.getElementById('discountInputMode');
   const vatEnabled = document.getElementById('vatEnabled');
   const vatRate = document.getElementById('vatRate');
   const fmt = new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
-  function num(v){ v = String(v || '').replace(/\s/g,'').replace(/\./g,'').replace(',', '.'); const n = parseFloat(v); return Number.isFinite(n) ? n : 0; }
+  function num(v){
+    v = String(v || '').replace(/\s/g,'');
+    if (!v) return 0;
+    const hasComma = v.includes(','), hasDot = v.includes('.');
+    if (hasComma) v = v.replace(/\./g,'').replace(',', '.');
+    else if (hasDot) {
+      const parts = v.split('.'), last = parts[parts.length - 1] || '';
+      if (parts.length > 2 || last.length === 3) v = v.replace(/\./g,'');
+    }
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  function inputNumber(v, decimals=2){
+    return Number(v || 0).toFixed(decimals).replace(/0+$/,'').replace(/\.$/,'').replace('.',',');
+  }
   function recalc(){
     let sum = 0;
     tbody.querySelectorAll('tr').forEach(row => {
@@ -357,10 +375,18 @@ page_header('Teklif Ver', 'teklif_ver');
       const out = row.querySelector('.line-total');
       if (out) out.textContent = fmt.format(total);
     });
-    let dRate = discountEnabled?.checked ? num(discountRate?.value || '0') : 0;
-    if (dRate < 0) dRate = 0;
-    if (dRate > 100) dRate = 100;
-    const discount = sum * dRate / 100;
+    let dRate = Math.max(0, Math.min(100, num(discountRate?.value || '0')));
+    let discount = 0;
+    if (discountEnabled?.checked) {
+      if ((discountInputMode?.value || 'rate') === 'amount') {
+        discount = Math.max(0, Math.min(sum, num(discountAmountInput?.value || '0')));
+        dRate = sum > 0 ? (discount / sum) * 100 : 0;
+        if (discountRate) discountRate.value = inputNumber(dRate, 4);
+      } else {
+        discount = Math.max(0, Math.min(sum, sum * dRate / 100));
+        if (discountAmountInput) discountAmountInput.value = inputNumber(discount, 2);
+      }
+    }
     const vatBase = Math.max(0, sum - discount);
     const rate = vatEnabled?.checked ? num(vatRate?.value || '10') : 0;
     const vat = vatBase * rate / 100;
@@ -385,7 +411,8 @@ page_header('Teklif Ver', 'teklif_ver');
   tbody.addEventListener('input', e => { if (e.target.classList.contains('calc')) recalc(); });
   tbody.addEventListener('change', e => { if (e.target.classList.contains('product-name')) applyProduct(e.target.closest('tr')); });
   discountEnabled?.addEventListener('change', recalc);
-  discountRate?.addEventListener('input', recalc);
+  discountRate?.addEventListener('input', () => { if (discountInputMode) discountInputMode.value = 'rate'; recalc(); });
+  discountAmountInput?.addEventListener('input', () => { if (discountInputMode) discountInputMode.value = 'amount'; recalc(); });
   vatEnabled?.addEventListener('change', recalc);
   vatRate?.addEventListener('input', recalc);
   tbody.addEventListener('click', e => {
