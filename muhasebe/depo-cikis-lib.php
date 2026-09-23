@@ -225,7 +225,7 @@ function depo_cikis_load(int $id): ?array
 function depo_cikis_can_edit(array $row): bool
 {
     if ((int)($row['is_cancelled'] ?? 0) === 1) return false;
-    return can_process_warehouse_dispatch() || (is_warehouse_dispatch_operator() && (int)($row['created_by'] ?? 0)===(int)(current_user()['id'] ?? 0));
+    return can_process_warehouse_dispatch() || is_warehouse_dispatch_operator();
 }
 
 function depo_cikis_sync_cari_movement(array $row, int $movementId): void
@@ -255,7 +255,6 @@ function depo_cikis_save(int $id): int
     $existing=$id>0?depo_cikis_load($id):null;
     if($existing && (int)($existing['is_cancelled']??0)===1) throw new RuntimeException('İptal edilmiş depo çıkış fişi düzenlenemez.');
     if($existing && !depo_cikis_can_edit($existing)) throw new RuntimeException('Bu fişi düzenleme yetkiniz yok.');
-    if($existing && is_warehouse_dispatch_operator() && (int)($existing['posted_to_cari']??0)===1) throw new RuntimeException('Cariye işlenmiş fişi yalnızca yönetici düzeltebilir.');
     $items=teklif_parse_items_from_post(); if(!$items) throw new RuntimeException('En az bir ürün girilmeli.');
 
     $subtotal=round((float)array_sum(array_column($items,'line_total')),2);
