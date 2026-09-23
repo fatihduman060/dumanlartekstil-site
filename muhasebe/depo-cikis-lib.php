@@ -259,9 +259,18 @@ function depo_cikis_save(int $id): int
 
     $subtotal=round((float)array_sum(array_column($items,'line_total')),2);
     $discountEnabled=isset($_POST['discount_enabled']) && (string)$_POST['discount_enabled']==='1' ? 1 : 0;
-    $discountRate=teklif_decimal($_POST['discount_rate']??'0');
-    $discountRate=max(0,min(100,$discountRate));
-    $discountAmount=$discountEnabled?round($subtotal*$discountRate/100,2):0.0;
+    $discountMode=(string)($_POST['discount_input_mode']??'rate');
+    $discountRate=max(0,min(100,teklif_decimal($_POST['discount_rate']??'0')));
+    $discountAmountInput=max(0,teklif_decimal($_POST['discount_amount']??'0'));
+    if(!$discountEnabled){
+        $discountRate=0.0;
+        $discountAmount=0.0;
+    }elseif($discountMode==='amount'){
+        $discountAmount=min($subtotal,round($discountAmountInput,2));
+        $discountRate=$subtotal>0?round(($discountAmount/$subtotal)*100,4):0.0;
+    }else{
+        $discountAmount=round($subtotal*$discountRate/100,2);
+    }
     $discountedSubtotal=max(0,round($subtotal-$discountAmount,2));
     $vatEnabled=isset($_POST['vat_enabled']) && (string)$_POST['vat_enabled']==='1' ? 1 : 0;
     $vatRate=max(0,teklif_decimal($_POST['vat_rate']??'10'));
