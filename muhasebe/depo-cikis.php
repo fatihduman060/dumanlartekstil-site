@@ -46,6 +46,8 @@ page_header('Depo Çıkış','depo_cikis');
     <label class="wide">Firma / Müşteri<input name="customer_name" id="wdCustomer" required value="<?php echo e($edit['customer_name']??''); ?>"></label><label class="wide">Şehir<input name="customer_city" id="wdCity" value="<?php echo e($edit['customer_city']??''); ?>"></label><label class="wide">Adres<textarea name="customer_address" id="wdAddress"><?php echo e($edit['customer_address']??''); ?></textarea></label><label class="wide">Not<textarea name="note"><?php echo e($edit['note']??''); ?></textarea></label>
     <label><span>İskonto uygulansın mı?</span><span class="wd-check"><input type="checkbox" id="wdDiscountEnabled" name="discount_enabled" value="1" <?php echo (int)($edit['discount_enabled']??0)===1?'checked':''; ?>><strong>Evet, iskonto uygula</strong></span></label>
     <label><span>İskonto oranı (%)</span><input id="wdDiscountRate" name="discount_rate" inputmode="decimal" value="<?php echo e((string)($edit['discount_rate']??'0')); ?>" placeholder="Örn. 10"></label>
+    <label><span>İskonto tutarı (TL)</span><input id="wdDiscountAmountInput" name="discount_amount" inputmode="decimal" value="<?php echo e((string)($edit['discount_amount']??'0')); ?>" placeholder="Örn. 1.500"></label>
+    <input type="hidden" id="wdDiscountInputMode" name="discount_input_mode" value="<?php echo $edit && (float)($edit['discount_amount']??0)>0 ? 'amount' : 'rate'; ?>">
     <label><span>KDV uygulansın mı?</span><span class="wd-check"><input type="checkbox" id="wdVatEnabled" name="vat_enabled" value="1" <?php echo (int)($edit['vat_enabled']??0)===1?'checked':''; ?>><strong>Evet, KDV ekle</strong></span></label>
     <label><span>KDV oranı (%)</span><input id="wdVatRate" name="vat_rate" inputmode="decimal" value="<?php echo e((string)($edit['vat_rate']??'10')); ?>" placeholder="10"></label>
    </div>
@@ -68,6 +70,124 @@ $shareIds=array_map('intval',array_column($list,'id'));
 if($edit) $shareIds[]=(int)$edit['id'];
 foreach(array_unique($shareIds) as $shareId) depo_cikis_share_form($shareId);
 ?>
-<script>(function(){const cariler=<?php echo $cariJson?:'[]'; ?>,products=<?php echo $productJson?:'[]'; ?>,sel=document.querySelector('#wdCari');sel?.addEventListener('change',()=>{const c=cariler.find(x=>String(x.id)===sel.value);if(!c)return;document.querySelector('#wdCustomer').value=c.name||'';document.querySelector('#wdCity').value=c.city||'';document.querySelector('#wdAddress').value=c.address||''});const body=document.querySelector('#wdRows tbody'),fmt=new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}),discountEnabled=document.querySelector('#wdDiscountEnabled'),discountRate=document.querySelector('#wdDiscountRate'),vatEnabled=document.querySelector('#wdVatEnabled'),vatRate=document.querySelector('#wdVatRate');function num(v){v=String(v||'').replace(/\s/g,'');if(!v)return 0;const hasComma=v.includes(','),hasDot=v.includes('.');if(hasComma){v=v.replace(/\./g,'').replace(',','.')}else if(hasDot){const parts=v.split('.'),last=parts[parts.length-1]||'';if(parts.length>2||last.length===3)v=v.replace(/\./g,'')}const n=parseFloat(v);return Number.isFinite(n)?n:0}function norm(v){return String(v||'').trim().toLocaleUpperCase('tr-TR')}function calc(){let subtotal=0;body.querySelectorAll('tr').forEach(r=>{const n=num(r.querySelector('.qty').value)*num(r.querySelector('.price').value);subtotal+=n;r.querySelector('.line').textContent=fmt.format(n)});let dr=discountEnabled?.checked?Math.max(0,Math.min(100,num(discountRate?.value))):0;const discount=subtotal*dr/100;const afterDiscount=Math.max(0,subtotal-discount);let vr=vatEnabled?.checked?Math.max(0,num(vatRate?.value)):0;const vat=afterDiscount*vr/100;const total=afterDiscount+vat;document.querySelector('#wdSubtotal').textContent=fmt.format(subtotal)+' TL';document.querySelector('#wdDiscountTotal').textContent='-'+fmt.format(discount)+' TL';document.querySelector('#wdVatTotal').textContent=fmt.format(vat)+' TL';document.querySelector('#wdTotal').textContent=fmt.format(total)+' TL'}function applyProduct(row,source){if(!row)return;const name=row.querySelector('.product-name'),barcode=row.querySelector('.product-barcode'),type=row.querySelector('.product-type'),price=row.querySelector('.price');let p=null;if(source==='barcode'&&barcode?.value){p=products.find(x=>String(x.barcode||'').trim()===String(barcode.value||'').trim())||null}if(!p&&name?.value){const wanted=norm(name.value);p=products.find(x=>norm(x.name)===wanted)||null}if(!p)return;if(name&&!name.value)name.value=p.name||'';if(barcode&&p.barcode)barcode.value=p.barcode;if(type&&p.product_type)type.value=p.product_type;if(price&&!price.value&&Number(p.default_unit_price||0)>0)price.value=String(p.default_unit_price).replace('.',',');calc()}body.addEventListener('input',e=>{if(e.target.classList.contains('calc'))calc()});body.addEventListener('change',e=>{if(e.target.classList.contains('product-name'))applyProduct(e.target.closest('tr'),'name');if(e.target.classList.contains('product-barcode'))applyProduct(e.target.closest('tr'),'barcode')});[discountEnabled,discountRate,vatEnabled,vatRate].forEach(el=>{el?.addEventListener('input',calc);el?.addEventListener('change',calc)});body.addEventListener('click',e=>{if(e.target.classList.contains('remove')){e.target.closest('tr').remove();calc()}});document.querySelector('#wdAdd').addEventListener('click',()=>{const r=body.rows[0].cloneNode(true);r.querySelectorAll('input').forEach(i=>i.value='');r.querySelector('.line').textContent='0,00';body.appendChild(r)});calc()})();</script>
+<script>
+(function(){
+  const cariler=<?php echo $cariJson?:'[]'; ?>;
+  const products=<?php echo $productJson?:'[]'; ?>;
+  const sel=document.querySelector('#wdCari');
+  sel?.addEventListener('change',()=>{
+    const cari=cariler.find(x=>String(x.id)===sel.value);
+    if(!cari)return;
+    document.querySelector('#wdCustomer').value=cari.name||'';
+    document.querySelector('#wdCity').value=cari.city||'';
+    document.querySelector('#wdAddress').value=cari.address||'';
+  });
+
+  const body=document.querySelector('#wdRows tbody');
+  const fmt=new Intl.NumberFormat('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const discountEnabled=document.querySelector('#wdDiscountEnabled');
+  const discountRate=document.querySelector('#wdDiscountRate');
+  const discountAmountInput=document.querySelector('#wdDiscountAmountInput');
+  const discountInputMode=document.querySelector('#wdDiscountInputMode');
+  const vatEnabled=document.querySelector('#wdVatEnabled');
+  const vatRate=document.querySelector('#wdVatRate');
+
+  function num(v){
+    v=String(v||'').replace(/\s/g,'');
+    if(!v)return 0;
+    const hasComma=v.includes(','),hasDot=v.includes('.');
+    if(hasComma)v=v.replace(/\./g,'').replace(',','.');
+    else if(hasDot){
+      const parts=v.split('.'),last=parts[parts.length-1]||'';
+      if(parts.length>2||last.length===3)v=v.replace(/\./g,'');
+    }
+    const n=parseFloat(v);
+    return Number.isFinite(n)?n:0;
+  }
+  function inputNumber(v,decimals){
+    return Number(v||0).toFixed(decimals).replace(/0+$/,'').replace(/\.$/,'').replace('.',',');
+  }
+  function norm(v){return String(v||'').trim().toLocaleUpperCase('tr-TR')}
+  function calc(){
+    let subtotal=0;
+    body.querySelectorAll('tr').forEach(row=>{
+      const line=num(row.querySelector('.qty')?.value)*num(row.querySelector('.price')?.value);
+      subtotal+=line;
+      const out=row.querySelector('.line');
+      if(out)out.textContent=fmt.format(line);
+    });
+
+    let dr=Math.max(0,Math.min(100,num(discountRate?.value)));
+    let discount=0;
+    if(discountEnabled?.checked){
+      if((discountInputMode?.value||'rate')==='amount'){
+        discount=Math.max(0,Math.min(subtotal,num(discountAmountInput?.value)));
+        dr=subtotal>0?(discount/subtotal)*100:0;
+        if(discountRate)discountRate.value=inputNumber(dr,4);
+      }else{
+        discount=Math.max(0,Math.min(subtotal,subtotal*dr/100));
+        if(discountAmountInput)discountAmountInput.value=inputNumber(discount,2);
+      }
+    }
+
+    const afterDiscount=Math.max(0,subtotal-discount);
+    const vr=vatEnabled?.checked?Math.max(0,num(vatRate?.value)):0;
+    const vat=afterDiscount*vr/100;
+    const total=afterDiscount+vat;
+    document.querySelector('#wdSubtotal').textContent=fmt.format(subtotal)+' TL';
+    document.querySelector('#wdDiscountTotal').textContent='-'+fmt.format(discount)+' TL';
+    document.querySelector('#wdVatTotal').textContent=fmt.format(vat)+' TL';
+    document.querySelector('#wdTotal').textContent=fmt.format(total)+' TL';
+  }
+  function applyProduct(row,source){
+    if(!row)return;
+    const name=row.querySelector('.product-name');
+    const barcode=row.querySelector('.product-barcode');
+    const type=row.querySelector('.product-type');
+    const price=row.querySelector('.price');
+    let product=null;
+    if(source==='barcode'&&barcode?.value){
+      product=products.find(x=>String(x.barcode||'').trim()===String(barcode.value||'').trim())||null;
+    }
+    if(!product&&name?.value){
+      const wanted=norm(name.value);
+      product=products.find(x=>norm(x.name)===wanted)||null;
+    }
+    if(!product)return;
+    if(name&&!name.value)name.value=product.name||'';
+    if(barcode&&product.barcode)barcode.value=product.barcode;
+    if(type&&product.product_type)type.value=product.product_type;
+    if(price&&!price.value&&Number(product.default_unit_price||0)>0)price.value=String(product.default_unit_price).replace('.',',');
+    calc();
+  }
+
+  body.addEventListener('input',e=>{if(e.target.classList.contains('calc'))calc()});
+  body.addEventListener('change',e=>{
+    if(e.target.classList.contains('product-name'))applyProduct(e.target.closest('tr'),'name');
+    if(e.target.classList.contains('product-barcode'))applyProduct(e.target.closest('tr'),'barcode');
+  });
+  discountEnabled?.addEventListener('change',calc);
+  discountRate?.addEventListener('input',()=>{if(discountInputMode)discountInputMode.value='rate';calc()});
+  discountAmountInput?.addEventListener('input',()=>{if(discountInputMode)discountInputMode.value='amount';calc()});
+  vatEnabled?.addEventListener('input',calc);
+  vatEnabled?.addEventListener('change',calc);
+  vatRate?.addEventListener('input',calc);
+  vatRate?.addEventListener('change',calc);
+
+  body.addEventListener('click',e=>{
+    if(e.target.classList.contains('remove')){
+      e.target.closest('tr').remove();
+      calc();
+    }
+  });
+  document.querySelector('#wdAdd').addEventListener('click',()=>{
+    const row=body.rows[0].cloneNode(true);
+    row.querySelectorAll('input').forEach(i=>i.value='');
+    row.querySelector('.line').textContent='0,00';
+    body.appendChild(row);
+  });
+  calc();
+})();
+</script>
 <script src="assets/musteri-urun-son-fiyat.js?v=1"></script>
 <?php page_footer(); ?>
