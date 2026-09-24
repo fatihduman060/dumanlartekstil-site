@@ -83,6 +83,8 @@ function teklif_db_ensure(): void
         updated_at TEXT NOT NULL
     )");
     try { ensure_column($pdo, 'offer_products', 'barcode', 'TEXT'); } catch (Throwable $e) {}
+    // Explicit list price is separate from prices learned from customer documents.
+    ensure_column($pdo, 'offer_products', 'list_unit_price', 'REAL');
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offers_date ON offers(offer_date, id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offer_items_offer ON offer_items(offer_id, sort_order)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offer_products_barcode ON offer_products(barcode)");

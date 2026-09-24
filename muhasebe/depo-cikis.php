@@ -22,8 +22,8 @@ $productJson=json_encode(array_map(function($p){return [
     'barcode'=>(string)($p['barcode']??''),
     'name'=>(string)($p['name']??''),
     'product_type'=>(string)($p['product_type']??''),
-    'default_unit_price'=>(float)($p['default_unit_price']??0),
-];},$productRows),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    'list_unit_price'=>isset($p['list_unit_price']) ? (float)$p['list_unit_price'] : null,
+];},$productRows),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
 $listSql='SELECT w.*,u.display_name AS creator_name FROM warehouse_dispatches w LEFT JOIN users u ON u.id=w.created_by';$params=[];
 $warehouseHasCancelled=depo_cikis_table_has_column(db(),'warehouse_dispatches','is_cancelled');
 $listWhere=[$warehouseHasCancelled?'COALESCE(w.is_cancelled,0)=0':'1=1'];
@@ -39,6 +39,7 @@ page_header('Depo Çıkış','depo_cikis');
  <section class="wd-hero"><small>MAĞAZA / DEPO ÇIKIŞ</small><h2>Sipariş fişi hazırla</h2><p>Depodan çıkan ürünleri kaydet, düzenle ve yazdır.</p></section>
  <section class="wd-card">
   <h3><?php echo $edit?'Fişi düzenle':'Yeni depo çıkış fişi'; ?></h3>
+  <div class="wd-actions"><a href="urun-fiyat-listesi.php" target="_blank" rel="noopener">Ürün Fiyat Listesi</a></div>
   <form method="post" id="wdForm"><?php echo csrf_field(); ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id']??0); ?>">
    <div class="wd-grid">
     <label>Fiş başlığı<input value="SİPARİŞ FİŞİ" disabled></label><label>Fiş no<input name="dispatch_no" required value="<?php echo e($edit['dispatch_no']??depo_cikis_next_no()); ?>"></label><label>Tarih<input type="date" name="dispatch_date" required value="<?php echo e($edit['dispatch_date']??date('Y-m-d')); ?>"></label>
@@ -73,7 +74,7 @@ foreach(array_unique($shareIds) as $shareId) depo_cikis_share_form($shareId);
 <script>
 (function(){
   const cariler=<?php echo $cariJson?:'[]'; ?>;
-  const products=<?php echo $productJson?:'[]'; ?>;
+  window.dispatchPriceProducts=<?php echo $productJson?:'[]'; ?>;
   const sel=document.querySelector('#wdCari');
   sel?.addEventListener('change',()=>{
     const cari=cariler.find(x=>String(x.id)===sel.value);
@@ -107,7 +108,6 @@ foreach(array_unique($shareIds) as $shareId) depo_cikis_share_form($shareId);
   function inputNumber(v,decimals){
     return Number(v||0).toFixed(decimals).replace(/0+$/,'').replace(/\.$/,'').replace('.',',');
   }
-  function norm(v){return String(v||'').trim().toLocaleUpperCase('tr-TR')}
   function calc(){
     let subtotal=0;
     body.querySelectorAll('tr').forEach(row=>{
@@ -139,33 +139,7 @@ foreach(array_unique($shareIds) as $shareId) depo_cikis_share_form($shareId);
     document.querySelector('#wdVatTotal').textContent=fmt.format(vat)+' TL';
     document.querySelector('#wdTotal').textContent=fmt.format(total)+' TL';
   }
-  function applyProduct(row,source){
-    if(!row)return;
-    const name=row.querySelector('.product-name');
-    const barcode=row.querySelector('.product-barcode');
-    const type=row.querySelector('.product-type');
-    const price=row.querySelector('.price');
-    let product=null;
-    if(source==='barcode'&&barcode?.value){
-      product=products.find(x=>String(x.barcode||'').trim()===String(barcode.value||'').trim())||null;
-    }
-    if(!product&&name?.value){
-      const wanted=norm(name.value);
-      product=products.find(x=>norm(x.name)===wanted)||null;
-    }
-    if(!product)return;
-    if(name&&!name.value)name.value=product.name||'';
-    if(barcode&&product.barcode)barcode.value=product.barcode;
-    if(type&&product.product_type)type.value=product.product_type;
-    if(price&&!price.value&&Number(product.default_unit_price||0)>0)price.value=String(product.default_unit_price).replace('.',',');
-    calc();
-  }
-
   body.addEventListener('input',e=>{if(e.target.classList.contains('calc'))calc()});
-  body.addEventListener('change',e=>{
-    if(e.target.classList.contains('product-name'))applyProduct(e.target.closest('tr'),'name');
-    if(e.target.classList.contains('product-barcode'))applyProduct(e.target.closest('tr'),'barcode');
-  });
   discountEnabled?.addEventListener('change',calc);
   discountRate?.addEventListener('input',()=>{if(discountInputMode)discountInputMode.value='rate';calc()});
   discountAmountInput?.addEventListener('input',()=>{if(discountInputMode)discountInputMode.value='amount';calc()});
@@ -189,5 +163,5 @@ foreach(array_unique($shareIds) as $shareId) depo_cikis_share_form($shareId);
   calc();
 })();
 </script>
-<script src="assets/musteri-urun-son-fiyat.js?v=1"></script>
+<script src="assets/musteri-urun-son-fiyat.js?v=4"></script>
 <?php page_footer(); ?>

@@ -1,159 +1,114 @@
 (function(){
   'use strict';
-
   var cariSelect=document.querySelector('#cariSelect, #wdCari');
   var body=document.querySelector('#offerRows tbody, #wdRows tbody');
   if(!cariSelect||!body) return;
-
-  var editing=Number(document.querySelector('input[name="id"]')?.value||0)>0;
+  var form=body.closest('form');
+  var currencySelect=form.querySelector('[name="currency"]');
+  var products=window.dispatchPriceProducts||[];
+  var editing=Number(form.querySelector('input[name="id"]')?.value||0)>0;
+  var states=new WeakMap(); // Cloning a row must never clone manual/preserved price flags.
   var cache={};
-  var currentItems=[];
-  var currentCari=0;
-  var settingPrice=false;
+  var items=[];
   var requestSeq=0;
+  var settingPrice=false;
+  var pending=null;
+  var loadedKey='';
+  var status=document.createElement('small');
+  status.setAttribute('role','status');
+  status.style.cssText='display:block;margin:8px 0;color:#885f0b';
+  body.closest('table').parentNode.insertAdjacentElement('afterend',status);
 
-  function norm(value){
-    return String(value||'').trim().replace(/\s+/g,' ').toLocaleUpperCase('tr-TR');
-  }
-
-  function priceText(value){
-    var n=Number(value||0);
-    if(!Number.isFinite(n)||n<=0) return '';
-    if(Math.abs(n-Math.round(n))<0.000001) return String(Math.round(n));
-    return String(n).replace('.',',');
-  }
-
-  function triggerRecalc(row){
-    var price=row?.querySelector('.price');
-    if(!price) return;
+  function norm(v){return String(v||'').trim().replace(/\s+/g,' ').toLocaleUpperCase('tr-TR');}
+  function currency(){return currencySelect?currencySelect.value:'TL';}
+  function context(){return String(cariSelect.value||0)+'|'+currency();}
+  function state(row){if(!states.has(row))states.set(row,{});return states.get(row);}
+  function textPrice(v){return String(Number(v)).replace('.',',');}
+  function recalc(row){
     settingPrice=true;
-    price.dispatchEvent(new Event('input',{bubbles:true}));
+    row.querySelector('.price').dispatchEvent(new Event('input',{bubbles:true}));
     settingPrice=false;
   }
-
-  function matchForRow(row){
+  function match(list,row){
     var barcode=String(row.querySelector('.product-barcode')?.value||'').trim();
-    var name=norm(row.querySelector('.product-name')?.value||'');
-    var type=norm(row.querySelector('.product-type')?.value||'');
-    if(!barcode&&!name) return null;
-
-    if(barcode){
-      var byBarcode=currentItems.find(function(item){
-        return String(item.barcode||'').trim()===barcode;
-      });
-      if(byBarcode) return byBarcode;
-    }
-
-    if(name&&type){
-      var byNameType=currentItems.find(function(item){
-        return norm(item.name)===name&&norm(item.product_type)===type;
-      });
-      if(byNameType) return byNameType;
-    }
-
-    if(name){
-      var byName=currentItems.find(function(item){return norm(item.name)===name;});
-      if(byName) return byName;
-    }
-    return null;
+    var name=norm(row.querySelector('.product-name')?.value);
+    var type=norm(row.querySelector('.product-type')?.value);
+    if(barcode){var exact=list.find(function(p){return String(p.barcode||'').trim()===barcode;});if(exact)return exact;}
+    if(!name)return null;
+    var named=list.filter(function(p){return norm(p.name)===name;});
+    var typed=named.find(function(p){return norm(p.product_type)===type;});
+    if(typed)return typed;
+    // Do not reuse another variant's price when an explicit variant differs.
+    return named.find(function(p){return !type||!norm(p.product_type);})||null;
   }
-
-  function applyRow(row){
-    if(!row) return;
-    var price=row.querySelector('.price');
-    if(!price) return;
-    if(price.dataset.priceManual==='1'||price.dataset.pricePreserve==='1') return;
-
-    var match=currentCari>0?matchForRow(row):null;
-    settingPrice=true;
-    if(match&&Number(match.unit_price||0)>0){
-      price.value=priceText(match.unit_price);
-      price.dataset.customerAuto='1';
-      price.title='Bu müşteriye en son kullanılan fiyat: '+price.value;
-    }else{
-      price.value='';
-      delete price.dataset.customerAuto;
-      price.title=currentCari>0?'Bu müşteride bu ürün için geçmiş fiyat yok.':'Müşteri seçilince son fiyat otomatik gelir.';
+  function apply(row){
+    var price=row.querySelector('.price'),s=state(row);
+    if(!price||s.manual||s.preserve)return;
+    var customer=loadedKey===context()?match(items,row):null;
+    var product=match(products,row);
+    var amount=customer?Number(customer.unit_price):null;
+    var source='Bu müşteriye en son kullanılan fiyat';
+    if(amount===null&&currency()==='TL'&&product&&product.list_unit_price!==null&&product.list_unit_price!==undefined){
+      amount=Number(product.list_unit_price);source='Liste fiyatı';
     }
-    settingPrice=false;
-    triggerRecalc(row);
+    price.value=amount!==null&&Number.isFinite(amount)?textPrice(amount):'';
+    price.title=price.value!==''?source+': '+price.value+' '+currency():'Bu ürün için fiyat tanımlanmamış.';
+    recalc(row);
   }
-
-  function applyAll(){
-    body.querySelectorAll('tr').forEach(applyRow);
-  }
-
-  function loadPrices(){
-    var cariId=Number(cariSelect.value||0);
-    currentCari=cariId;
-    if(cariId<=0){
-      currentItems=[];
-      applyAll();
-      return Promise.resolve([]);
-    }
-    if(cache[cariId]){
-      currentItems=cache[cariId];
-      applyAll();
-      return Promise.resolve(currentItems);
-    }
-
-    var seq=++requestSeq;
-    return fetch('musteri-urun-son-fiyat.php?cari_id='+encodeURIComponent(cariId)+'&_='+Date.now(),{
-      credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}
-    })
-      .then(function(response){return response.json();})
+  function applyAll(){body.querySelectorAll('tr').forEach(apply);}
+  function load(){
+    var key=context(),seq=++requestSeq,cari=Number(cariSelect.value||0);
+    items=[];loadedKey='';status.textContent='';
+    if(cari<=0){loadedKey=key;applyAll();pending=null;return Promise.resolve();}
+    if(Object.prototype.hasOwnProperty.call(cache,key)){items=cache[key];loadedKey=key;applyAll();pending=null;return Promise.resolve();}
+    applyAll();
+    status.textContent='Müşteriye özel fiyatlar kontrol ediliyor…';
+    pending=fetch('musteri-urun-son-fiyat.php?cari_id='+encodeURIComponent(cari)+'&currency='+encodeURIComponent(currency()),{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
       .then(function(data){
-        if(seq!==requestSeq) return [];
-        if(!data||!data.ok) throw new Error((data&&data.error)||'Müşteri fiyat geçmişi okunamadı.');
-        cache[cariId]=Array.isArray(data.items)?data.items:[];
-        currentItems=cache[cariId];
-        applyAll();
-        return currentItems;
-      })
-      .catch(function(error){
-        console.error('Müşteri ürün fiyatı:',error);
-        return [];
-      });
+        if(seq!==requestSeq||key!==context())return;
+        if(!data||!data.ok)throw new Error('Fiyat geçmişi okunamadı');
+        items=cache[key]=Array.isArray(data.items)?data.items:[];loadedKey=key;status.textContent='';applyAll();
+      }).catch(function(){if(seq===requestSeq){status.textContent='Müşteriye özel fiyatlar alınamadı. Fiyatları kontrol edin; müşteri seçimini yenileyerek tekrar deneyebilirsiniz.';}})
+      .finally(function(){if(seq===requestSeq)pending=null;});
+    return pending;
   }
-
-  if(editing){
-    // Düzenleme ekranı ilk açıldığında kayıtlı teklife hiç dokunma.
-    // Boş fiyatlar da dahil olmak üzere belge, kullanıcı değişiklik yapana kadar aynen korunur.
-    body.querySelectorAll('.price').forEach(function(price){
-      price.dataset.pricePreserve='1';
-    });
-  }
-
-  body.addEventListener('input',function(event){
-    if(!event.target.classList.contains('price')||settingPrice) return;
-    event.target.dataset.priceManual='1';
-    delete event.target.dataset.customerAuto;
-    delete event.target.dataset.pricePreserve;
-  },true);
-
-  body.addEventListener('change',function(event){
-    if(!event.target.classList.contains('product-name')&&!event.target.classList.contains('product-barcode')) return;
-    var row=event.target.closest('tr');
-    var price=row?row.querySelector('.price'):null;
-    if(price&&price.dataset.priceManual!=='1'){
-      delete price.dataset.pricePreserve;
-      setTimeout(function(){
-        if(currentCari===Number(cariSelect.value||0)&&cache[currentCari]) applyRow(row);
-        else loadPrices().then(function(){applyRow(row);});
-      },0);
+  function chooseProduct(row,source,allowPartial){
+    var name=row.querySelector('.product-name'),barcode=row.querySelector('.product-barcode'),type=row.querySelector('.product-type');
+    var value=source==='barcode'?String(barcode.value||'').trim():norm(name.value);
+    var product=products.find(function(p){return source==='barcode'?String(p.barcode||'').trim()===value:norm(p.name)===value;});
+    if(!product&&allowPartial&&source==='name'&&value.length>=3){
+      var words=value.split(' ');
+      var matches=products.filter(function(p){var label=norm(p.name);return words.every(function(w){return label.includes(w);});});
+      if(matches.length===1)product=matches[0];
     }
+    if(product){name.value=product.name||'';barcode.value=product.barcode||'';type.value=product.product_type||'';}
+    else if(source==='name'){barcode.value='';type.value='';}
+    else if(source==='barcode'){name.value='';type.value='';}
+    return product;
+  }
+  if(editing)body.querySelectorAll('tr').forEach(function(row){state(row).preserve=true;});
+  body.addEventListener('input',function(e){
+    var row=e.target.closest('tr');if(!row)return;
+    if(e.target.classList.contains('price')&&!settingPrice){state(row).manual=true;state(row).preserve=false;}
+  },true);
+  body.addEventListener('change',function(e){
+    var source=e.target.classList.contains('product-name')?'name':e.target.classList.contains('product-barcode')?'barcode':e.target.classList.contains('product-type')?'type':'';
+    if(!source)return;
+    var row=e.target.closest('tr');state(row).manual=false;state(row).preserve=false;
+    if(source!=='type')chooseProduct(row,source,true);
+    // Run after the existing article/barcode normalization listener.
+    setTimeout(function(){apply(row);if(loadedKey!==context()&&!pending)load();},0);
   });
-
-  cariSelect.addEventListener('change',function(){
-    body.querySelectorAll('.price').forEach(function(price){
-      delete price.dataset.pricePreserve;
-      if(price.dataset.customerAuto==='1'){
-        delete price.dataset.customerAuto;
-        if(price.dataset.priceManual!=='1') price.value='';
-      }
-    });
-    loadPrices();
+  function changeContext(){
+    body.querySelectorAll('tr').forEach(function(row){state(row).manual=false;state(row).preserve=false;});
+    load();
+  }
+  cariSelect.addEventListener('change',changeContext);
+  if(currencySelect)currencySelect.addEventListener('change',changeContext);
+  form.addEventListener('submit',function(e){
+    applyAll();
+    if(pending){e.preventDefault();status.textContent='Müşteri fiyatları yükleniyor. Tamamlanınca tekrar Kaydet’e basın.';}
   });
-
-  if(!editing&&Number(cariSelect.value||0)>0) loadPrices();
+  load();
 })();

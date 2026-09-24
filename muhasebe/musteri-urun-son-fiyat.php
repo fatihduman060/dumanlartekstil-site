@@ -15,6 +15,8 @@ function muf_json(array $payload, int $status = 200): void
 
 try {
     $cariId = (int)($_GET['cari_id'] ?? 0);
+    $currency = strtoupper(trim((string)($_GET['currency'] ?? 'TL')));
+    if (!in_array($currency, ['TL','USD','EUR'], true)) muf_json(['ok'=>false, 'error'=>'Geçersiz para birimi.'], 400);
     if ($cariId <= 0) {
         muf_json(['ok' => true, 'items' => []]);
     }
@@ -24,6 +26,8 @@ try {
     hareket_satis_db_ensure();
     $pdo = db();
 
+    $movementCurrency = depo_cikis_table_has_column($pdo, 'movements', 'currency')
+        ? "COALESCE(NULLIF(UPPER(TRIM(m.currency)),''),'TL')" : "'TL'";
     $sql = "
         SELECT
             'teklif' AS source_type,
@@ -39,6 +43,7 @@ try {
         INNER JOIN offers o ON o.id=oi.offer_id
         WHERE o.cari_id=?
           AND COALESCE(o.is_deleted,0)=0
+          AND COALESCE(NULLIF(UPPER(TRIM(o.currency)),''),'TL')=?
           AND oi.unit_price>0
 
         UNION ALL
@@ -56,6 +61,8 @@ try {
         FROM warehouse_dispatch_items wi
         INNER JOIN warehouse_dispatches w ON w.id=wi.dispatch_id
         WHERE w.cari_id=?
+          AND COALESCE(w.is_cancelled,0)=0
+          AND COALESCE(NULLIF(UPPER(TRIM(w.currency)),''),'TL')=?
           AND wi.unit_price>0
 
         UNION ALL
@@ -76,13 +83,14 @@ try {
         WHERE m.cari_id=?
           AND COALESCE(m.is_cancelled,0)=0
           AND m.movement_type='alacak'
+          AND {$movementCurrency}=?
           AND msi.unit_price>0
 
         ORDER BY updated_at DESC, document_date DESC, source_id DESC, item_id DESC
     ";
 
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$cariId, $cariId, $cariId]);
+    $stmt->execute([$cariId, $currency, $cariId, $currency, $cariId, $currency]);
     $rows = $stmt->fetchAll() ?: [];
 
     // Aynı ürün geçmişte birçok kez kullanılmış olabilir. Sorgu en yeniden eskiye

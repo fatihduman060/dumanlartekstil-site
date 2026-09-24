@@ -79,9 +79,9 @@ $productJson = json_encode(array_map(function ($p) {
         'barcode' => (string)($p['barcode'] ?? ''),
         'name' => (string)($p['name'] ?? ''),
         'product_type' => (string)($p['product_type'] ?? ''),
-        'default_unit_price' => (float)($p['default_unit_price'] ?? 0),
+        'list_unit_price' => isset($p['list_unit_price']) ? (float)$p['list_unit_price'] : null,
     ];
-}, $productRows), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}, $productRows), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
 $editId = (int)($_GET['edit'] ?? 0);
 $edit = $editId > 0 ? teklif_load($editId) : null;
@@ -175,6 +175,7 @@ page_header('Teklif Ver', 'teklif_ver');
     <header><div><h3><?php echo $edit ? 'Teklif düzenle' : 'Yeni teklif'; ?></h3><small><?php echo $edit ? 'Kayıt no #' . e($edit['id']) : 'Kaydedince alttaki listede görünür.'; ?></small></div><strong><?php echo $edit ? e($edit['offer_no']) : 'Yeni teklif'; ?></strong></header>
     <div class="offer-body">
       <?php if (can_write()): ?>
+      <p><a class="btn" href="urun-fiyat-listesi.php" target="_blank" rel="noopener">Ürün Fiyat Listesi</a></p>
       <form method="post" id="offerForm">
         <?php echo csrf_field(); ?>
         <input type="hidden" name="action" value="save">
@@ -304,7 +305,7 @@ page_header('Teklif Ver', 'teklif_ver');
 <script>
 (function(){
   const cariler = <?php echo $cariJson ?: '[]'; ?>;
-  const products = <?php echo $productJson ?: '[]'; ?>;
+  window.dispatchPriceProducts = <?php echo $productJson ?: '[]'; ?>;
   const cariSelect = document.getElementById('cariSelect');
   const customerName = document.getElementById('customerName');
   const customerCity = document.getElementById('customerCity');
@@ -395,21 +396,7 @@ page_header('Teklif Ver', 'teklif_ver');
     if (vatEl) vatEl.textContent = fmt.format(vat);
     if (grand) grand.textContent = fmt.format(vatBase + vat);
   }
-  function applyProduct(row){
-    const nameInput = row.querySelector('.product-name');
-    const name = (nameInput?.value || '').trim();
-    const p = products.find(item => item.name === name);
-    if (!p) return;
-    const barcode = row.querySelector('.product-barcode');
-    const type = row.querySelector('.product-type');
-    const price = row.querySelector('.price');
-    if (barcode && !barcode.value && p.barcode) barcode.value = p.barcode;
-    if (type && !type.value && p.product_type) type.value = p.product_type;
-    if (price && !price.value && Number(p.default_unit_price || 0) > 0) price.value = String(p.default_unit_price).replace('.', ',');
-    recalc();
-  }
   tbody.addEventListener('input', e => { if (e.target.classList.contains('calc')) recalc(); });
-  tbody.addEventListener('change', e => { if (e.target.classList.contains('product-name')) applyProduct(e.target.closest('tr')); });
   discountEnabled?.addEventListener('change', recalc);
   discountRate?.addEventListener('input', () => { if (discountInputMode) discountInputMode.value = 'rate'; recalc(); });
   discountAmountInput?.addEventListener('input', () => { if (discountInputMode) discountInputMode.value = 'amount'; recalc(); });
@@ -431,5 +418,5 @@ page_header('Teklif Ver', 'teklif_ver');
   recalc();
 })();
 </script>
-<script src="assets/musteri-urun-son-fiyat.js?v=3"></script>
+<script src="assets/musteri-urun-son-fiyat.js?v=4"></script>
 <?php page_footer(); ?>
