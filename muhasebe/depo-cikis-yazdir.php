@@ -94,7 +94,6 @@ $editUrl = 'depo-cikis.php?edit='.(int)$row['id'];
 <?php foreach (['old'=>'Eski Bakiye', 'dispatch'=>'Bu Fiş', 'new'=>'Yeni Bakiye'] as $key=>$label): ?>
 <div class="balance-row"><span><?php echo e($label); ?></span><strong><?php echo $balanceSummary[$key] === null ? '—' : e(teklif_money($balanceSummary[$key]).' '.$balanceSummary['currency']); ?></strong></div>
 <?php endforeach; ?>
-<p class="balance-note">Güncel cari bakiyesine göre hesaplanır. (+) Biz alacaklıyız, (−) biz borçluyuz.</p>
 <?php if ($balanceSummary['note'] !== ''): ?><p class="balance-note"><?php echo e($balanceSummary['note']); ?></p><?php endif; ?>
 </section>
 <div class="note"><span class="note-mark">N</span><span>NOT</span><span class="note-text"><?php echo $note !== '' ? nl2br(e($note)) : ''; ?></span></div></section>
