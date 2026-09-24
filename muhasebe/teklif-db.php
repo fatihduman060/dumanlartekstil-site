@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/urun-fiyat-listesi-2026.php';
 
 function teklif_db_ensure(): void
 {
@@ -85,6 +86,7 @@ function teklif_db_ensure(): void
     try { ensure_column($pdo, 'offer_products', 'barcode', 'TEXT'); } catch (Throwable $e) {}
     // Explicit list price is separate from prices learned from customer documents.
     ensure_column($pdo, 'offer_products', 'list_unit_price', 'REAL');
+    urun_fiyat_listesi_2026_import($pdo);
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offers_date ON offers(offer_date, id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offer_items_offer ON offer_items(offer_id, sort_order)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offer_products_barcode ON offer_products(barcode)");

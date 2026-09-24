@@ -17,6 +17,12 @@ require __DIR__.'/muhasebe/depo-cikis-paylas-lib.php';
 teklif_db_ensure();
 depo_cikis_db_ensure();
 $pdo=db();
+$pdo->exec("DELETE FROM settings WHERE key='urun_fiyat_listesi_2026_v1'");
+$pdo->beginTransaction();
+teklif_db_ensure();
+if (!$pdo->inTransaction()) throw new RuntimeException('List import committed caller transaction');
+$pdo->rollBack();
+teklif_db_ensure();
 ensure_column($pdo,'movements','currency',"TEXT NOT NULL DEFAULT 'TL'");
 foreach ([[101,'qa-admin','admin'],[102,'qa-depo','warehouse'],[103,'qa-view','viewer'],[104,'magaza','editor']] as $u) {
  $pdo->prepare('INSERT INTO users(id,username,display_name,password_hash,role,is_active,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?)')->execute([$u[0],$u[1],$u[1],'disabled',$u[2],now(),now()]);
@@ -24,19 +30,24 @@ foreach ([[101,'qa-admin','admin'],[102,'qa-depo','warehouse'],[103,'qa-view','v
 foreach ([101,102,103] as $id) $pdo->prepare('INSERT INTO cariler(id,name,created_at,updated_at) VALUES(?,?,?,?)')->execute([$id,'Test müşteri '.$id,now(),now()]);
 $_SESSION['user_id']=101;
 setting_set('auto_backup_last_date',date('Y-m-d'));
-teklif_save_product_suggestion('6000 MODAL ÇORAP','Modal',999,'');
-teklif_save_product_suggestion('7000 BAMBU ÇORAP','Bambu',888,'');
-$pdo->exec("UPDATE offer_products SET list_unit_price=CASE WHEN name LIKE '6000%' THEN 444 ELSE 300 END");
+$count = (int)$pdo->query('SELECT COUNT(*) FROM offer_products WHERE list_unit_price IS NOT NULL')->fetchColumn();
+$distinct = (int)$pdo->query("SELECT COUNT(DISTINCT barcode) FROM offer_products WHERE list_unit_price IS NOT NULL AND TRIM(COALESCE(barcode,''))!=''")->fetchColumn();
+if ($count !== 76 || $distinct !== 76) throw new RuntimeException('2026 list import count: '.$count.'/'.$distinct);
+$samples = ['8699234860003'=>444.0,'8699234860119'=>444.0,'8699923460200'=>480.0,'8699923425308'=>300.0];
+foreach ($samples as $barcode=>$expected) {
+ $s=$pdo->prepare('SELECT list_unit_price FROM offer_products WHERE barcode=?');$s->execute([$barcode]);
+ if ((float)$s->fetchColumn()!==$expected) throw new RuntimeException('Imported list price: '.$barcode);
+}
 // Customer documents must not overwrite the explicit list price.
-teklif_save_product_suggestion('6000 MODAL ÇORAP','Modal',280,'');
-if ((float)$pdo->query("SELECT list_unit_price FROM offer_products WHERE name LIKE '6000%'")->fetchColumn()!==444.0) throw new RuntimeException('List price overwritten');
-foreach ([[102,'6000 MODAL ÇORAP','Modal',280,'TL'],[102,'7000 BAMBU ÇORAP','Bambu',380,'TL'],[102,'6000 MODAL ÇORAP','Modal',99,'USD'],[103,'6000 MODAL ÇORAP','Modal',77,'TL']] as $i=>$data) {
+teklif_save_product_suggestion('6000 ERKEK MODAL LİKRALI ÇORAP (YIKAMALI)','4 Mevsim / Yazlık',280,'8699234860003');
+if ((float)$pdo->query("SELECT list_unit_price FROM offer_products WHERE barcode='8699234860003'")->fetchColumn()!==444.0) throw new RuntimeException('List price overwritten');
+foreach ([[102,'6000 ERKEK MODAL LİKRALI ÇORAP (YIKAMALI)','4 Mevsim / Yazlık',280,'TL'],[102,'6011 ERKEK BAMBU LİKRALI ÇORAP (YIKAMALI)','4 Mevsim / Yazlık',380,'TL'],[102,'6000 ERKEK MODAL LİKRALI ÇORAP (YIKAMALI)','4 Mevsim / Yazlık',99,'USD'],[103,'6000 ERKEK MODAL LİKRALI ÇORAP (YIKAMALI)','4 Mevsim / Yazlık',77,'TL']] as $i=>$data) {
  $_POST=['customer_name'=>'Test müşteri '.$data[0],'cari_id'=>$data[0],'offer_no'=>'QA'.$i,'offer_date'=>'2026-09-24','currency'=>$data[4],
  'product_name'=>[$data[1]],'product_type'=>[$data[2]],'quantity'=>['1'],'unit_price'=>[(string)$data[3]]];
  teklif_save_from_post();
 }
 $_POST=['customer_name'=>'Test müşteri 102','cari_id'=>102,'dispatch_no'=>'CANCEL','dispatch_date'=>'2026-09-24',
- 'product_name'=>['6000 MODAL ÇORAP'],'product_type'=>['Modal'],'quantity'=>['1'],'unit_price'=>['9999']];
+ 'product_name'=>['6000 ERKEK MODAL LİKRALI ÇORAP (YIKAMALI)'],'product_type'=>['4 Mevsim / Yazlık'],'quantity'=>['1'],'unit_price'=>['9999']];
 $id=depo_cikis_save(0);
 $pdo->prepare("UPDATE warehouse_dispatches SET is_cancelled=1,updated_at='2099-01-01' WHERE id=?")->execute([$id]);
 session_write_close();
@@ -66,13 +77,14 @@ foreach ([101,102,103,104] as $userId) {session_id('qa'.$userId);session_start()
             import json
             data=json.loads(request('musteri-urun-son-fiyat.php?cari_id=102&currency=TL')[1])
             prices={i['name']:i['unit_price'] for i in data['items']}
-            assert prices=={'6000 MODAL ÇORAP':280,'7000 BAMBU ÇORAP':380},prices
+            assert prices=={'6000 ERKEK MODAL LİKRALI ÇORAP (YIKAMALI)':280,'6011 ERKEK BAMBU LİKRALI ÇORAP (YIKAMALI)':380},prices
             data=json.loads(request('musteri-urun-son-fiyat.php?cari_id=102&currency=USD')[1])
             assert [i['unit_price'] for i in data['items']]==[99]
             con=sqlite3.connect(site/'muhasebe/storage/bitke_muhasebe.sqlite')
-            product_id=con.execute("SELECT id FROM offer_products WHERE name LIKE '6000%'").fetchone()[0]
+            product_id=con.execute("SELECT id FROM offer_products WHERE barcode='8699234860003'").fetchone()[0]
+            product_name=con.execute('SELECT name FROM offer_products WHERE id=?',(product_id,)).fetchone()[0]
             original=con.execute('SELECT * FROM offer_items').fetchall()
-            post={'id':product_id,'name':'6000 MODAL ÇORAP','product_type':'Modal','barcode':'','list_unit_price':'445,50','csrf_token':'qatoken'}
+            post={'id':product_id,'name':product_name,'product_type':'4 Mevsim / Yazlık','barcode':'8699234860003','list_unit_price':'445,50','csrf_token':'qatoken'}
             assert request('urun-fiyat-listesi.php',102,post)[0]==302
             assert con.execute('SELECT list_unit_price FROM offer_products WHERE id=?',(product_id,)).fetchone()[0]==444
             assert request('urun-fiyat-listesi.php',101,dict(post,csrf_token='wrong'))[0]==302
