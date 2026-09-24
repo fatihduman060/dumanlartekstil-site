@@ -770,11 +770,20 @@ function private_receivable_totals(array $filters = []): array
     return $summary;
 }
 
-function cari_balance(?int $cariId): array
+function cari_balance(?int $cariId, ?string $currency = null): array
 {
     if (!$cariId) return ['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0,'net_alacak'=>0,'net_verecek'=>0,'net'=>0];
-    $stmt = db()->prepare('SELECT movement_type, SUM(amount) AS total FROM movements WHERE cari_id = ? AND COALESCE(is_cancelled,0)=0 GROUP BY movement_type');
-    $stmt->execute([$cariId]);
+    $sql = 'SELECT movement_type, SUM(amount) AS total FROM movements WHERE cari_id = ? AND COALESCE(is_cancelled,0)=0';
+    $params = [$cariId];
+    if ($currency !== null) {
+        // Older databases have only TL movements and no currency column yet.
+        $columns = array_column(db()->query('PRAGMA table_info(movements)')->fetchAll(), 'name');
+        $currencySql = in_array('currency', $columns, true) ? "COALESCE(NULLIF(UPPER(TRIM(currency)),''),'TL')" : "'TL'";
+        $sql .= ' AND ' . $currencySql . '=?';
+        $params[] = strtoupper(trim($currency));
+    }
+    $stmt = db()->prepare($sql . ' GROUP BY movement_type');
+    $stmt->execute($params);
     $totals = ['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
     foreach ($stmt->fetchAll() as $row) if (isset($totals[$row['movement_type']])) $totals[$row['movement_type']] = (float)$row['total'];
     $totals['net_alacak'] = $totals['alacak'] - $totals['tahsilat'] - $totals['ciro_primi'];

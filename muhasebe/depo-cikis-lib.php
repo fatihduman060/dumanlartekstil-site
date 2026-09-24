@@ -222,6 +222,48 @@ function depo_cikis_load(int $id): ?array
     $row['items']=$s->fetchAll(); return $row;
 }
 
+/** Read-only, current balance summary; this is not a historical balance snapshot. */
+function depo_cikis_balance_summary(array $row): array
+{
+    $currency = strtoupper(trim((string)($row['currency'] ?? 'TL'))) ?: 'TL';
+    $summary = ['old'=>null, 'dispatch'=>round((float)($row['total'] ?? 0), 2),
+        'new'=>null, 'currency'=>$currency, 'note'=>''];
+    $cariId = (int)($row['cari_id'] ?? 0);
+    $stmt = db()->prepare('SELECT id FROM cariler WHERE id=?');
+    $stmt->execute([$cariId]);
+    if ($cariId <= 0 || !$stmt->fetchColumn()) {
+        $summary['note'] = 'Cari seçilmediği için bakiye hesaplanamadı.';
+        return $summary;
+    }
+
+    $balance = cari_balance($cariId, $currency);
+    $current = (float)$balance['net'];
+    $currencySql = depo_cikis_table_has_column(db(), 'movements', 'currency')
+        ? "COALESCE(NULLIF(UPPER(TRIM(currency)),''),'TL')" : "'TL'";
+    $stmt = db()->prepare("SELECT movement_type, amount FROM movements
+        WHERE id=? AND cari_id=? AND COALESCE(is_cancelled,0)=0
+        AND " . $currencySql . "=?");
+    $stmt->execute([(int)($row['cari_movement_id'] ?? 0), $cariId, $currency]);
+    $movement = $stmt->fetch();
+    // Same company-side signs as cari_balance(): positive means receivable.
+    $signs = ['alacak'=>1, 'odeme'=>1, 'tahsilat'=>-1, 'ciro_primi'=>-1, 'verecek'=>-1];
+    $posted = (int)($row['posted_to_cari'] ?? 0) === 1 || $movement;
+    if ($posted) {
+        $effect = $movement ? (float)$movement['amount'] * ($signs[$movement['movement_type']] ?? 0) : 0.0;
+        $summary['old'] = round($current - $effect, 2);
+        $summary['new'] = round($current, 2);
+        if (!$movement) $summary['note'] = 'Bu fişin aktif cari hareketi bulunamadı; mevcut bakiye gösteriliyor.';
+    } else {
+        $summary['old'] = round($current, 2);
+        $summary['new'] = round($current + $summary['dispatch'], 2);
+    }
+    if ((int)($row['is_cancelled'] ?? 0) === 1) {
+        $summary['new'] = round($current, 2);
+        $summary['note'] = 'İptal edilmiş fiş; yeni bakiye mevcut cari bakiyesidir.';
+    }
+    return $summary;
+}
+
 function depo_cikis_can_edit(array $row): bool
 {
     if ((int)($row['is_cancelled'] ?? 0) === 1) return false;
