@@ -18,6 +18,58 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
 <style>
 .pos-product-page{max-width:1320px;margin:0 auto;display:grid;gap:16px}.pos-product-page-head{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:18px 20px;border:1px solid #e5dccf;border-radius:22px;background:#fff;box-shadow:0 12px 32px rgba(7,27,63,.06)}.pos-product-page-head h2{margin:0;color:#102818}.pos-product-page-head p{margin:5px 0 0;color:#776b5c}.pos-product-page-actions{display:flex;gap:8px;flex-wrap:wrap}.pos-product-page-actions a,.pos-product-page-actions button{white-space:nowrap}.pos-product-page .pos-products-panel{display:block!important}.pos-product-page .pos-product-form{display:grid!important}.pos-product-page .pos-product-manager{display:block!important}.pos-product-page .pos-product-manager-toolbar{margin-top:0}.pos-product-status{min-height:22px;margin:0;font-weight:850}.pos-product-status[data-tone="success"]{color:#167243}.pos-product-status[data-tone="error"]{color:#b64242}.pos-product-page .card-head{align-items:flex-start}.pos-product-page .pos-product-table-wrap{max-height:none}.pos-product-page .pos-product-manager-footer{position:sticky;bottom:10px;z-index:3;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);padding-top:10px}.pos-back-sale{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-weight:900}@media(max-width:760px){.pos-product-page-head{display:block}.pos-product-page-actions{margin-top:12px}.pos-product-page-actions a,.pos-product-page-actions button{flex:1}.pos-product-page .pos-product-form{grid-template-columns:1fr}.pos-product-page .pos-product-form .wide{grid-column:1}}
 </style>
+<style>
+/* stok-mobile-fix */
+#stokta-urunler{scroll-margin-top:18px}
+@media(max-width:760px){
+  .pos-product-page{gap:12px;min-width:0}
+  .pos-product-page-head{display:block;padding:14px;border-radius:16px}
+  .pos-product-page-head h2{font-size:22px}
+  .pos-product-page-head p{font-size:12px;line-height:1.45}
+  .pos-product-page-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .pos-product-page-actions a,.pos-product-page-actions button{width:100%;min-width:0;white-space:normal;text-align:center;justify-content:center;line-height:1.2}
+  .pos-product-page-actions .pos-back-sale{grid-column:1/-1}
+  .pos-product-page .pos-products-panel{min-width:0;padding:14px;border-radius:16px}
+  .pos-product-page .card-head h3{font-size:18px}
+  .pos-product-page .card-head p{font-size:11px;line-height:1.4}
+  .pos-product-page .pos-product-form{grid-template-columns:1fr;gap:10px}
+  .pos-product-page .pos-product-form .wide{grid-column:1}
+  .pos-product-page .pos-product-form input{min-width:0;width:100%;font-size:16px}
+  .pos-product-page .pos-product-form>button[type="submit"]{width:100%;min-height:48px}
+  #stokta-urunler .pos-product-manager{margin-top:10px;padding-top:0;border-top:0}
+  #stokta-urunler .pos-product-manager-toolbar{display:grid;grid-template-columns:1fr;gap:9px;margin-bottom:12px}
+  #stokta-urunler .pos-product-manager-toolbar label{max-width:none;width:100%}
+  #stokta-urunler .pos-product-manager-toolbar input{width:100%;min-width:0;min-height:50px;font-size:16px}
+  #stokta-urunler .pos-product-manager-toolbar .btn{width:100%;min-height:46px}
+  #stokta-urunler .pos-product-table-wrap{overflow:visible;border:0;background:transparent}
+  #stokta-urunler .pos-product-table{display:block;min-width:0;width:100%}
+  #stokta-urunler .pos-product-table thead{display:none}
+  #stokta-urunler .pos-product-table tbody{display:grid;gap:10px}
+  #stokta-urunler .pos-product-table tr{display:grid;grid-template-columns:1fr 1fr;gap:10px 8px;padding:13px;border:1px solid #e0d4bd;border-radius:15px;background:#fff;min-width:0}
+  #stokta-urunler .pos-product-table td{width:auto!important;min-width:0;padding:0;border:0}
+  #stokta-urunler .pos-product-table td:before{display:block;margin-bottom:4px;font-size:10px;font-weight:900;color:#7a7469;text-transform:uppercase}
+  #stokta-urunler .pos-product-table td:nth-child(1),
+  #stokta-urunler .pos-product-table td:nth-child(2),
+  #stokta-urunler .pos-product-table td:nth-child(5){grid-column:1/-1;display:block}
+  #stokta-urunler .pos-product-table td:nth-child(1){padding-bottom:7px;border-bottom:1px solid #f0e8db}
+  #stokta-urunler .pos-product-table td:nth-child(1) strong{display:block;font-size:15px;line-height:1.35;overflow-wrap:anywhere}
+  #stokta-urunler .pos-product-table td:nth-child(2) span{font-size:13px;overflow-wrap:anywhere}
+  #stokta-urunler .pos-product-table td:nth-child(3),
+  #stokta-urunler .pos-product-table td:nth-child(4){display:block}
+  #stokta-urunler .pos-product-table td input{width:100%;min-width:0;min-height:46px;font-size:16px}
+  #stokta-urunler .pos-product-table td:nth-child(5) .btn{width:100%;min-height:44px}
+  .pos-product-page .pos-product-manager-footer{position:static!important;margin-top:10px;padding-top:0;background:transparent;backdrop-filter:none}
+  .pos-product-page .pos-product-manager-footer .btn{width:100%;min-height:48px}
+}
+@media(max-width:390px){
+  .pos-product-page-actions{grid-template-columns:1fr}
+  .pos-product-page-actions .pos-back-sale{grid-column:auto}
+  #stokta-urunler .pos-product-table tr{grid-template-columns:1fr}
+  #stokta-urunler .pos-product-table td:nth-child(3),
+  #stokta-urunler .pos-product-table td:nth-child(4){grid-column:1}
+}
+</style>
+
 
 <div class="pos-product-page" data-product-root data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <section class="pos-product-page-head">
