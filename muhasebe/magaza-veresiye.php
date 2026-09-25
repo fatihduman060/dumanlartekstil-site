@@ -97,6 +97,42 @@ function pv_person($id)
     return $stmt->fetch() ?: null;
 }
 
+function pv_pos_sales_credit_entry_supported(): bool
+{
+    static $supported = null;
+    if ($supported !== null) return $supported;
+    $table = db()->query("SELECT name FROM sqlite_master WHERE type='table' AND name='pos_sales' LIMIT 1")->fetchColumn();
+    if (!$table) return $supported = false;
+    $columns = db()->query('PRAGMA table_info(pos_sales)')->fetchAll() ?: [];
+    foreach ($columns as $column) {
+        if (($column['name'] ?? '') === 'credit_entry_id') return $supported = true;
+    }
+    return $supported = false;
+}
+
+function pv_pos_sale_id_for_credit_entry(int $entryId): int
+{
+    if ($entryId <= 0 || !pv_pos_sales_credit_entry_supported()) return 0;
+    $stmt = db()->prepare('SELECT id FROM pos_sales WHERE credit_entry_id=? LIMIT 1');
+    $stmt->execute([$entryId]);
+    return (int)($stmt->fetchColumn() ?: 0);
+}
+
+function pv_pos_sale_entry_map(array $entryIds): array
+{
+    if (!pv_pos_sales_credit_entry_supported()) return [];
+    $ids = array_values(array_unique(array_filter(array_map('intval', $entryIds), static function ($id) { return $id > 0; })));
+    if (!$ids) return [];
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = db()->prepare('SELECT id,credit_entry_id FROM pos_sales WHERE credit_entry_id IN (' . $placeholders . ')');
+    $stmt->execute($ids);
+    $map = [];
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $map[(int)$row['credit_entry_id']] = (int)$row['id'];
+    }
+    return $map;
+}
+
 pv_db_ensure();
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
@@ -168,6 +204,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $stmt->execute([$id]);
         $entry = $stmt->fetch() ?: null;
         if ($entry) {
+            $linkedSaleId = pv_pos_sale_id_for_credit_entry($id);
+            if ($linkedSaleId > 0) {
+                flash('error', 'Barkodlu Satıştan oluşan veresiye kaydı buradan iptal edilemez. Satış iptali Barkodlu Satış fişi üzerinden yapılmalıdır.');
+                redirect('magaza-veresiye.php?person=' . (int)$entry['person_id']);
+            }
             db()->beginTransaction();
             try {
                 pv_daily_sync((string)$entry['entry_date'], (string)$entry['entry_type'], (string)($entry['payment_method'] ?? ''), -(float)$entry['amount']);
@@ -215,6 +256,7 @@ if ($selected) {
     $stmt->execute([$selectedId]);
     $entries = $stmt->fetchAll() ?: [];
 }
+$posSaleEntryMap = pv_pos_sale_entry_map(array_column($entries, 'id'));
 
 $dailySql = "SELECT e.*, p.full_name, u.display_name AS user_name
     FROM store_credit_entries e
@@ -292,7 +334,7 @@ body.store-sales-user .main>.alert{display:block!important}
       </form>
       <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th class="right">Borç</th><th class="right">Ödeme</th><th></th></tr></thead><tbody>
         <?php if(!$entries): ?><tr><td colspan="6" class="empty">Bu personelin henüz hareketi yok.</td></tr><?php endif; ?>
-        <?php foreach($entries as $entry): $cancelled=(int)$entry['is_cancelled']===1; ?><tr class="<?php echo $cancelled?'pv-cancelled':''; ?>"><td><?php echo e(tr_date($entry['entry_date'])); ?></td><td><?php echo $cancelled?badge('İptal','neutral'):badge($entry['entry_type']==='debt'?'Veresiye':'Tahsilat',$entry['entry_type']==='debt'?'warning':'success'); ?></td><td><?php echo e($entry['description'] ?: '-'); ?><small><?php echo e($entry['user_name'] ?: '-'); ?></small></td><td class="right"><?php echo !$cancelled&&$entry['entry_type']==='debt'?e(money((float)$entry['amount'])):'-'; ?></td><td class="right"><?php echo !$cancelled&&$entry['entry_type']==='payment'?e(money((float)$entry['amount'])):'-'; ?></td><td><?php if(!$cancelled&&can_manage_store_sales()): ?><form method="post" onsubmit="return confirm('Bu hareket iptal edilsin mi? Kayıt silinmez.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel_entry"><input type="hidden" name="id" value="<?php echo e($entry['id']); ?>"><button>İptal</button></form><?php endif; ?></td></tr><?php endforeach; ?>
+        <?php foreach($entries as $entry): $cancelled=(int)$entry['is_cancelled']===1; $linkedPosSaleId=(int)($posSaleEntryMap[(int)$entry['id']]??0); ?><tr class="<?php echo $cancelled?'pv-cancelled':''; ?>"><td><?php echo e(tr_date($entry['entry_date'])); ?></td><td><?php echo $cancelled?badge('İptal','neutral'):badge($entry['entry_type']==='debt'?'Veresiye':'Tahsilat',$entry['entry_type']==='debt'?'warning':'success'); ?></td><td><?php echo e($entry['description'] ?: '-'); ?><small><?php echo e($entry['user_name'] ?: '-'); ?></small></td><td class="right"><?php echo !$cancelled&&$entry['entry_type']==='debt'?e(money((float)$entry['amount'])):'-'; ?></td><td class="right"><?php echo !$cancelled&&$entry['entry_type']==='payment'?e(money((float)$entry['amount'])):'-'; ?></td><td><?php if(!$cancelled&&$linkedPosSaleId>0): ?><?php echo badge('Satışa bağlı','neutral'); ?><?php elseif(!$cancelled&&can_manage_store_sales()): ?><form method="post" onsubmit="return confirm('Bu hareket iptal edilsin mi? Kayıt silinmez.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel_entry"><input type="hidden" name="id" value="<?php echo e($entry['id']); ?>"><button>İptal</button></form><?php endif; ?></td></tr><?php endforeach; ?>
       </tbody></table></div>
     <?php endif; ?>
   </article>
