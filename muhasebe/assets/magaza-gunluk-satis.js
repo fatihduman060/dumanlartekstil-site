@@ -93,7 +93,7 @@
     panel.setAttribute('data-magaza-gunluk-satis','1');
     panel.innerHTML=''
       +'<div class="magaza-satis-head"><div><strong>Mağaza Günlük Z Raporu</strong><small>Her günün Z raporundaki KDV dahil toplamı gir; sistem %10 KDV’yi ve matrahı otomatik ayırsın.</small></div><span data-magaza-status></span></div>'
-      +'<article class="magaza-mobile-latest" data-magaza-mobile-latest><div class="magaza-mobile-latest-head"><span>Günlük toplam satış</span><strong data-magaza-latest-date>Dağılım yükleniyor…</strong></div><strong class="magaza-mobile-latest-total" data-magaza-latest-total>0,00 TL</strong><div class="magaza-mobile-latest-breakdown"><span>Nakit <strong data-magaza-latest-cash>0,00 TL</strong></span><span>Kart / POS <strong data-magaza-latest-card>0,00 TL</strong></span><span>Veresiye <strong data-magaza-latest-credit>0,00 TL</strong></span></div><div class="magaza-mobile-latest-collections"><span>Nakit tahsilat <strong data-magaza-latest-cash-collection>0,00 TL</strong></span><span>Kart tahsilat <strong data-magaza-latest-card-collection>0,00 TL</strong></span></div><div class="magaza-mobile-cash-left"><span>Kasada kalan para</span><strong data-magaza-latest-cash-left>0,00 TL</strong><small>Gün sonunda mağaza kasasında bırakılan tutar</small></div></article>'
+      +'<article class="magaza-mobile-latest" data-magaza-mobile-latest><div class="magaza-mobile-latest-head"><span>Günlük toplam satış</span><strong data-magaza-latest-date>Dağılım yükleniyor…</strong></div><strong class="magaza-mobile-latest-total" data-magaza-latest-total>0,00 TL</strong><div class="magaza-mobile-latest-breakdown"><span>Nakit <strong data-magaza-latest-cash>0,00 TL</strong></span><span>Kart / POS <strong data-magaza-latest-card>0,00 TL</strong></span><span>Veresiye <strong data-magaza-latest-credit>0,00 TL</strong></span></div><div class="magaza-mobile-latest-collections"><span>Nakit tahsilat <strong data-magaza-latest-cash-collection>0,00 TL</strong></span><span>Kart tahsilat <strong data-magaza-latest-card-collection>0,00 TL</strong></span></div><div class="magaza-mobile-cash-left"><span>Kasada kalan para</span><strong data-magaza-latest-cash-left>0,00 TL</strong><small>Gün sonunda mağaza kasasında bırakılan tutar</small></div><div class="magaza-mobile-payment-actions" data-magaza-latest-actions hidden></div></article>'
       +'<div class="magaza-mobile-payment-history" data-magaza-mobile-payment-history></div>'
       +'<div class="magaza-satis-summary"><article><span>Aylık Z raporu toplamı</span><strong data-magaza-gross>0,00 TL</strong></article><article><span>Matrah</span><strong data-magaza-subtotal>0,00 TL</strong></article><article><span>%10 hesaplanan KDV</span><strong data-magaza-vat>0,00 TL</strong></article><article><span>Satış günü</span><strong data-magaza-count>0</strong></article></div>'
       +'<form class="magaza-satis-form" data-magaza-form autocomplete="off">'
@@ -197,6 +197,16 @@
       }
     }
 
+    var latestActions=card.querySelector('[data-magaza-latest-actions]');
+    if(latestActions){
+      var latestId=row?String(row.getAttribute('data-id')||''):'';
+      var latestCanWrite=!!(row&&row.querySelector('[data-magaza-odeme-edit]'));
+      latestActions.hidden=!latestCanWrite;
+      latestActions.innerHTML=latestCanWrite
+        ?'<button type="button" data-magaza-payment-edit-proxy="'+esc(latestId)+'">Düzenle</button><button type="button" data-magaza-payment-delete-proxy="'+esc(latestId)+'">İptal</button>'
+        :'';
+    }
+
     var historyRows=window.BITKE_STORE_SALES_ONLY?rows.slice(1,2):rows.slice(1);
     history.innerHTML=historyRows.map(function(item){
       var itemCash=Number(item.getAttribute('data-cash')||0);
@@ -206,6 +216,8 @@
       var itemCardCollection=Number(item.getAttribute('data-card-collection')||0);
       var itemCashLeft=Number(item.getAttribute('data-cash-change-left')||0);
       var itemDate=String(item.getAttribute('data-date')||'').split('-').reverse().join('.');
+      var itemId=String(item.getAttribute('data-id')||'');
+      var itemCanWrite=!!item.querySelector('[data-magaza-odeme-edit]');
       return '<article class="magaza-mobile-payment-card">'
         +'<div class="magaza-mobile-payment-head"><span>Günlük toplam satış</span><strong>'+esc(itemDate)+'</strong></div>'
         +'<strong class="magaza-mobile-payment-total">'+money(itemCash+itemCard+itemCredit)+'</strong>'
@@ -216,12 +228,28 @@
         +'</div><div class="magaza-mobile-payment-collections">'
         +'<span>Nakit tahsilat <strong>'+money(itemCashCollection)+'</strong></span>'
         +'<span>Kart tahsilat <strong>'+money(itemCardCollection)+'</strong></span>'
-        +'</div><div class="magaza-mobile-cash-left"><span>Kasada kalan para</span><strong>'+money(itemCashLeft)+'</strong><small>Gün sonu mağaza kasası</small></div></article>';
+        +'</div><div class="magaza-mobile-cash-left"><span>Kasada kalan para</span><strong>'+money(itemCashLeft)+'</strong><small>Gün sonu mağaza kasası</small></div>'
+        +(itemCanWrite?'<div class="magaza-mobile-payment-actions"><button type="button" data-magaza-payment-edit-proxy="'+esc(itemId)+'">Düzenle</button><button type="button" data-magaza-payment-delete-proxy="'+esc(itemId)+'">İptal</button></div>':'')
+        +'</article>';
     }).join('');
   }
 
   document.addEventListener('bitke:magaza-odeme-updated',function(){
     updateMobileLatestPayment();
+  });
+
+  document.addEventListener('click',function(event){
+    var editProxy=event.target.closest('[data-magaza-payment-edit-proxy]');
+    var deleteProxy=event.target.closest('[data-magaza-payment-delete-proxy]');
+    var proxy=editProxy||deleteProxy;
+    if(!proxy) return;
+    var sourceId=proxy.getAttribute(editProxy?'data-magaza-payment-edit-proxy':'data-magaza-payment-delete-proxy')||'';
+    var sourceRow=Array.from(document.querySelectorAll('[data-magaza-odeme-row]')).find(function(item){
+      return String(item.getAttribute('data-id')||'')===String(sourceId);
+    });
+    if(!sourceRow) return;
+    var sourceButton=sourceRow.querySelector(editProxy?'[data-magaza-odeme-edit]':'[data-magaza-odeme-delete]');
+    if(sourceButton) sourceButton.click();
   });
 
   function render(data){
@@ -330,7 +358,7 @@
     +'.magaza-satis-form{display:grid;grid-template-columns:150px minmax(220px,1fr) minmax(220px,1.2fr) minmax(210px,.9fr) auto;gap:9px;align-items:end}.magaza-satis-form label{display:grid;gap:5px;font-size:10px;font-weight:800}.magaza-satis-form input{width:100%;border:1px solid var(--border);background:#fff;border-radius:10px;padding:9px 10px;user-select:text!important;-webkit-user-select:text!important}.magaza-satis-preview{font-size:10px;color:#6d5018;padding:9px 10px;border-radius:10px;background:#fff2d7}.magaza-satis-form>.btn{white-space:nowrap}'
     +'.magaza-satis-list table{min-width:760px}.magaza-satis-list th,.magaza-satis-list td{font-size:10px;padding:8px}.magaza-row-actions{display:flex;gap:8px}.magaza-row-actions button{border:0;background:transparent;color:var(--accent);font-weight:800;cursor:pointer;padding:0}.magaza-row-actions button:last-child{color:var(--danger)}.magaza-total-row td{border-top:2px solid #d8c6a5;background:#fff6e5;font-size:10px}.magaza-total-row strong{font-size:11px}'
     +'@media(max-width:1100px){.magaza-satis-form{grid-template-columns:1fr 1fr 1fr}.magaza-satis-preview{grid-column:1/3}.magaza-satis-summary{grid-template-columns:1fr 1fr}}'
-    +'@media(max-width:650px){.magaza-satis-panel{gap:10px;padding:12px}.magaza-satis-head{display:none}.magaza-mobile-latest{display:grid;order:2;gap:8px;padding:14px;border:1px solid #d7bd83;border-radius:16px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 12px 26px rgba(15,45,32,.18)}.magaza-mobile-latest.is-empty{opacity:.72}.magaza-mobile-latest-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-latest-head span{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-latest-head strong{font-size:11px}.magaza-mobile-latest-total{font-size:28px;line-height:1.05;color:#fff}.magaza-mobile-latest-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-latest-breakdown span{display:grid;gap:3px;padding:8px 7px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-latest-breakdown strong{font-size:11px;color:#fff}.magaza-mobile-payment-history{display:grid;order:3;gap:10px}.magaza-mobile-payment-card{display:grid;gap:7px;padding:12px;border:1px solid #d7bd83;border-radius:15px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 8px 18px rgba(15,45,32,.14)}.magaza-mobile-payment-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-payment-head span{font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-payment-head strong{font-size:10px}.magaza-mobile-payment-total{font-size:23px;line-height:1.05;color:#fff}.magaza-mobile-payment-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-payment-breakdown span{display:grid;gap:3px;padding:7px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-payment-breakdown strong{font-size:10px;color:#fff}.magaza-mobile-latest-collections,.magaza-mobile-payment-collections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12)}.magaza-mobile-latest-collections span,.magaza-mobile-payment-collections span{display:flex;justify-content:space-between;gap:6px;padding:7px 8px;border-radius:9px;background:rgba(230,199,130,.1);font-size:8px;color:#e6c782}.magaza-mobile-latest-collections strong,.magaza-mobile-payment-collections strong{font-size:10px;color:#fff;white-space:nowrap}.magaza-mobile-cash-left{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;padding:10px 11px;border:1px solid rgba(230,199,130,.35);border-radius:11px;background:rgba(230,199,130,.16)}.magaza-mobile-cash-left span{font-size:9px;font-weight:900;color:#e6c782}.magaza-mobile-cash-left strong{font-size:15px;color:#fff}.magaza-mobile-cash-left small{grid-column:1/-1;font-size:8px;color:rgba(255,255,255,.65)}.magaza-satis-list,.magaza-satis-summary,.magaza-satis-form{display:none!important}}';
+    +'@media(max-width:650px){.magaza-satis-panel{gap:10px;padding:12px}.magaza-satis-head{display:none}.magaza-mobile-latest{display:grid;order:2;gap:8px;padding:14px;border:1px solid #d7bd83;border-radius:16px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 12px 26px rgba(15,45,32,.18)}.magaza-mobile-latest.is-empty{opacity:.72}.magaza-mobile-latest-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-latest-head span{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-latest-head strong{font-size:11px}.magaza-mobile-latest-total{font-size:28px;line-height:1.05;color:#fff}.magaza-mobile-latest-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-latest-breakdown span{display:grid;gap:3px;padding:8px 7px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-latest-breakdown strong{font-size:11px;color:#fff}.magaza-mobile-payment-history{display:grid;order:3;gap:10px}.magaza-mobile-payment-card{display:grid;gap:7px;padding:12px;border:1px solid #d7bd83;border-radius:15px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 8px 18px rgba(15,45,32,.14)}.magaza-mobile-payment-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-payment-head span{font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-payment-head strong{font-size:10px}.magaza-mobile-payment-total{font-size:23px;line-height:1.05;color:#fff}.magaza-mobile-payment-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-payment-breakdown span{display:grid;gap:3px;padding:7px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-payment-breakdown strong{font-size:10px;color:#fff}.magaza-mobile-latest-collections,.magaza-mobile-payment-collections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12)}.magaza-mobile-latest-collections span,.magaza-mobile-payment-collections span{display:flex;justify-content:space-between;gap:6px;padding:7px 8px;border-radius:9px;background:rgba(230,199,130,.1);font-size:8px;color:#e6c782}.magaza-mobile-latest-collections strong,.magaza-mobile-payment-collections strong{font-size:10px;color:#fff;white-space:nowrap}.magaza-mobile-cash-left{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;padding:10px 11px;border:1px solid rgba(230,199,130,.35);border-radius:11px;background:rgba(230,199,130,.16)}.magaza-mobile-cash-left span{font-size:9px;font-weight:900;color:#e6c782}.magaza-mobile-cash-left strong{font-size:15px;color:#fff}.magaza-mobile-cash-left small{grid-column:1/-1;font-size:8px;color:rgba(255,255,255,.65)}.magaza-mobile-payment-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12)}.magaza-mobile-payment-actions[hidden]{display:none!important}.magaza-mobile-payment-actions button{min-height:38px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:10px;font-weight:900}.magaza-mobile-payment-actions button:last-child{border-color:rgba(240,155,155,.32);color:#ffd4d4}.magaza-satis-list,.magaza-satis-summary,.magaza-satis-form{display:none!important}}';
   document.head.appendChild(style);
 
   state.period=periodValue();
