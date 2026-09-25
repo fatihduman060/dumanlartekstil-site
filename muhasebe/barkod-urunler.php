@@ -58,8 +58,8 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
     <p class="pos-product-status" data-product-status></p>
   </section>
 
-  <section class="panel-card pos-products-panel">
-    <div class="card-head"><div><h3>Ürün Listesi</h3><p class="muted"><?php echo e(count($products)); ?> aktif Barkodlu Satış ürünü. Buradan fiyat ve stokları hızlıca düzenleyebilirsin.</p></div></div>
+  <section class="panel-card pos-products-panel" id="stokta-urunler">
+    <div class="card-head"><div><h3>Stoktaki Ürünler</h3><p class="muted"><?php echo e(count($products)); ?> aktif Barkodlu Satış ürünü. Ürün adına veya barkoda göre ara; fiyat, stok ve barkod bilgilerini düzenle.</p></div></div>
     <div class="pos-product-manager" data-product-manager>
       <div class="pos-product-manager-toolbar">
         <label><span>Ürünlerde ara</span><input type="search" autocomplete="off" placeholder="Ürün adı, barkod veya beden" data-product-list-search /></label>
@@ -90,6 +90,15 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
   </section>
 </div>
 <script src="assets/barkod-urun-yonetimi.js?v=1"></script>
+<script>
+(function(){
+  if(location.hash!=='#stokta-urunler')return;
+  var section=document.getElementById('stokta-urunler');
+  var search=document.querySelector('[data-product-list-search]');
+  if(section)setTimeout(function(){section.scrollIntoView({behavior:'smooth',block:'start'});},80);
+  if(search)setTimeout(function(){search.focus();},350);
+})();
+</script>
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
 <script src="assets/barkod-kamera.js?v=3"></script>
 <?php page_footer(); ?>
