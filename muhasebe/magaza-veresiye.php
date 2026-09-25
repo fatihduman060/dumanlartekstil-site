@@ -162,17 +162,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
     if ($action === 'add_entry') {
         $personId = (int)($_POST['person_id'] ?? 0);
-        $type = (string)($_POST['entry_type'] ?? 'debt');
+        $type = (string)($_POST['entry_type'] ?? 'payment');
+        if ($type !== 'payment') {
+            flash('error', 'Manuel veresiye satışı kapalıdır. Veresiye satış yalnızca Barkodlu Satış ekranından oluşturulabilir.');
+            redirect('magaza-veresiye.php' . ($personId ? '?person=' . $personId : ''));
+        }
         $amount = max(0, decimal_from_input($_POST['amount'] ?? 0));
         $paymentMethod = trim((string)($_POST['payment_method'] ?? ''));
         $date = trim((string)($_POST['entry_date'] ?? date('Y-m-d')));
         $description = trim((string)($_POST['description'] ?? ''));
-        if (!in_array($type, ['debt','payment'], true)) $type = 'debt';
-        if ($type === 'payment' && !in_array($paymentMethod, ['cash','card'], true)) {
+        if (!in_array($paymentMethod, ['cash','card'], true)) {
             flash('error', 'Tahsilat için Nakit veya Kart seçmelisiniz.');
             redirect('magaza-veresiye.php?person=' . $personId);
         }
-        if ($type === 'debt') $paymentMethod = '';
         $person = pv_person($personId);
         if (!$person || $amount <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             flash('error', 'Personel, tarih ve tutarı kontrol edin.');
@@ -194,7 +196,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             throw $e;
         }
         audit_action('magaza_personel_veresiye_hareketi', $entryId, 'eklendi', null, ['person_id'=>$personId,'type'=>$type,'amount'=>$amount,'payment_method'=>$paymentMethod,'date'=>$date,'description'=>$description], $person['full_name']);
-        flash('success', $type === 'debt' ? 'Veresiye alışveriş kaydedildi.' : 'Tahsilat kaydedildi.');
+        flash('success', 'Tahsilat kaydedildi.');
         redirect('magaza-veresiye.php?person=' . $personId);
     }
 
@@ -326,11 +328,11 @@ body.store-sales-user .main>.alert{display:block!important}
       <div class="card-head"><h3>Veresiye hareketleri</h3></div><p class="empty">İsim aramasından bir personel seç veya yeni personel ekle.</p>
     <?php else: ?>
       <div class="card-head"><div><h3><?php echo e($selected['full_name']); ?></h3><span>Kişi bazında veresiye ve ödeme geçmişi</span></div><strong class="<?php echo (float)$selected['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$selected['balance'])); ?> kalan</strong></div>
-      <form method="post" class="pv-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>">
-        <div class="two-col"><label>İşlem<select name="entry_type" id="pv-entry-type"><option value="debt">Veresiye alışveriş</option><option value="payment">Ödeme / tahsilat</option></select></label><label>Tutar<input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
-        <label id="pv-payment-method" style="display:none">Tahsilat şekli<select name="payment_method"><option value="">Nakit veya kart seç</option><option value="cash">Nakit</option><option value="card">Kart / POS</option></select><small>Seçilen tutar günlük mağaza kaydına otomatik yansır.</small></label>
-        <div class="two-col"><label>Tarih<input type="date" name="entry_date" value="<?php echo e(date('Y-m-d')); ?>" required></label><label>Açıklama<input name="description" placeholder="Alınan ürünler veya ödeme açıklaması"></label></div>
-        <button class="btn btn-primary" type="submit">Hareketi kaydet</button>
+      <form method="post" class="pv-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>"><input type="hidden" name="entry_type" value="payment">
+        <div class="two-col"><label>İşlem<input value="Ödeme / tahsilat" readonly></label><label>Tutar<input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
+        <label id="pv-payment-method">Tahsilat şekli<select name="payment_method" required><option value="">Nakit veya kart seç</option><option value="cash">Nakit</option><option value="card">Kart / POS</option></select><small>Veresiye satışları yalnızca Barkodlu Satış ekranından oluşur.</small></label>
+        <div class="two-col"><label>Tarih<input type="date" name="entry_date" value="<?php echo e(date('Y-m-d')); ?>" required></label><label>Açıklama<input name="description" placeholder="Ödeme açıklaması"></label></div>
+        <button class="btn btn-primary" type="submit">Tahsilatı kaydet</button>
       </form>
       <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th class="right">Borç</th><th class="right">Ödeme</th><th></th></tr></thead><tbody>
         <?php if(!$entries): ?><tr><td colspan="6" class="empty">Bu personelin henüz hareketi yok.</td></tr><?php endif; ?>
@@ -367,12 +369,5 @@ body.store-sales-user .main>.alert{display:block!important}
     </article>
   <?php endforeach; ?>
 </section>
-<script>
-(function(){
-  var type=document.getElementById('pv-entry-type'),method=document.getElementById('pv-payment-method');
-  if(!type||!method)return;
-  function sync(){method.style.display=type.value==='payment'?'grid':'none';method.querySelector('select').required=type.value==='payment';}
-  type.addEventListener('change',sync);sync();
-})();
-</script>
+
 <?php page_footer(); ?>
