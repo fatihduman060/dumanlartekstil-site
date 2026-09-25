@@ -20,6 +20,13 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
 </style>
 <style>
 /* stok-mobile-fix */
+.pos-stock-search-box{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;flex:1;max-width:620px}
+.pos-stock-search-box label{max-width:none!important;width:100%}
+.pos-stock-search-box .btn{min-height:44px}
+.pos-stock-search-info{margin:2px 0 10px;color:#6e695f;font-size:12px;font-weight:800}
+.pos-stock-search-empty{margin:10px 0 0;padding:14px;border:1px dashed #d8c7a9;border-radius:12px;background:#fffaf1;color:#7a5e2e;font-weight:800}
+#stokta-urunler [data-product-search][hidden]{display:none!important}
+
 #stokta-urunler{scroll-margin-top:18px}
 @media(max-width:760px){
   .pos-product-page{gap:12px;min-width:0}
@@ -37,10 +44,12 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
   .pos-product-page .pos-product-form input{min-width:0;width:100%;font-size:16px}
   .pos-product-page .pos-product-form>button[type="submit"]{width:100%;min-height:48px}
   #stokta-urunler .pos-product-manager{margin-top:10px;padding-top:0;border-top:0}
-  #stokta-urunler .pos-product-manager-toolbar{display:grid;grid-template-columns:1fr;gap:9px;margin-bottom:12px}
+  #stokta-urunler .pos-product-manager-toolbar{display:grid;grid-template-columns:1fr;gap:9px;margin-bottom:8px}
+  #stokta-urunler .pos-stock-search-box{display:grid;grid-template-columns:minmax(0,1fr) 74px;gap:8px;max-width:none;width:100%}
   #stokta-urunler .pos-product-manager-toolbar label{max-width:none;width:100%}
   #stokta-urunler .pos-product-manager-toolbar input{width:100%;min-width:0;min-height:50px;font-size:16px}
-  #stokta-urunler .pos-product-manager-toolbar .btn{width:100%;min-height:46px}
+  #stokta-urunler .pos-stock-search-box .btn{width:74px;min-height:50px;padding:8px}
+  #stokta-urunler .pos-product-manager-toolbar>[data-product-bulk-save]{width:100%;min-height:46px}
   #stokta-urunler .pos-product-table-wrap{overflow:visible;border:0;background:transparent}
   #stokta-urunler .pos-product-table{display:block;min-width:0;width:100%}
   #stokta-urunler .pos-product-table thead{display:none}
@@ -114,9 +123,14 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
     <div class="card-head"><div><h3>Stoktaki Ürünler</h3><p class="muted"><?php echo e(count($products)); ?> aktif Barkodlu Satış ürünü. Ürün adına veya barkoda göre ara; fiyat, stok ve barkod bilgilerini düzenle.</p></div></div>
     <div class="pos-product-manager" data-product-manager>
       <div class="pos-product-manager-toolbar">
-        <label><span>Ürünlerde ara</span><input type="search" autocomplete="off" placeholder="Ürün adı, barkod veya beden" data-product-list-search /></label>
+        <div class="pos-stock-search-box">
+          <label><span>Ürünlerde ara</span><input type="search" autocomplete="off" enterkeyhint="search" placeholder="Ürün adı, barkod veya beden" data-product-list-search /></label>
+          <button type="button" class="btn btn-secondary" data-product-search-button>Ara</button>
+        </div>
         <button type="button" class="btn btn-primary" data-product-bulk-save>Tüm Değişiklikleri Kaydet</button>
       </div>
+      <p class="pos-stock-search-info" data-product-search-info><?php echo e(count($products)); ?> ürün gösteriliyor.</p>
+      <p class="pos-stock-search-empty" data-product-search-empty hidden>Aradığın ürünü bulamadım. Ürün adından başka bir kelime veya barkod deneyebilirsin.</p>
       <div class="pos-product-table-wrap">
         <table class="pos-product-table">
           <thead><tr><th>Ürün</th><th>Barkod</th><th>Satış fiyatı</th><th>Stok adedi</th><th>İşlem</th></tr></thead>
@@ -144,11 +158,54 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
 <script src="assets/barkod-urun-yonetimi.js?v=1"></script>
 <script>
 (function(){
-  if(location.hash!=='#stokta-urunler')return;
   var section=document.getElementById('stokta-urunler');
   var search=document.querySelector('[data-product-list-search]');
-  if(section)setTimeout(function(){section.scrollIntoView({behavior:'smooth',block:'start'});},80);
-  if(search)setTimeout(function(){search.focus();},350);
+  var button=document.querySelector('[data-product-search-button]');
+  var info=document.querySelector('[data-product-search-info]');
+  var empty=document.querySelector('[data-product-search-empty]');
+  if(!section||!search)return;
+
+  function normalize(value){
+    return String(value||'')
+      .toLocaleLowerCase('tr-TR')
+      .replace(/[çÇ]/g,'c').replace(/[ğĞ]/g,'g').replace(/[ıİI]/g,'i')
+      .replace(/[öÖ]/g,'o').replace(/[şŞ]/g,'s').replace(/[üÜ]/g,'u')
+      .replace(/[^a-z0-9]+/g,' ')
+      .trim();
+  }
+
+  function runSearch(){
+    var query=normalize(search.value);
+    var tokens=query?query.split(/\s+/).filter(Boolean):[];
+    var total=0;
+    var visible=0;
+    section.querySelectorAll('[data-product-search]').forEach(function(row){
+      total++;
+      var hay=normalize((row.getAttribute('data-product-search')||'')+' '+(row.textContent||''));
+      var match=!tokens.length||tokens.every(function(token){return hay.indexOf(token)!==-1;});
+      row.hidden=!match;
+      if(match)visible++;
+    });
+    if(info)info.textContent=tokens.length ? (visible+' ürün bulundu.') : (total+' ürün gösteriliyor.');
+    if(empty)empty.hidden=visible!==0;
+  }
+
+  search.addEventListener('input',runSearch);
+  search.addEventListener('search',runSearch);
+  search.addEventListener('keydown',function(event){
+    if(event.key==='Enter'){
+      event.preventDefault();
+      runSearch();
+      search.blur();
+    }
+  });
+  if(button)button.addEventListener('click',function(){runSearch();search.focus();});
+  runSearch();
+
+  if(location.hash==='#stokta-urunler'){
+    setTimeout(function(){section.scrollIntoView({behavior:'smooth',block:'start'});},80);
+    setTimeout(function(){search.focus();},350);
+  }
 })();
 </script>
 <script src="assets/zxing-browser-0.1.5.min.js?v=1"></script>
