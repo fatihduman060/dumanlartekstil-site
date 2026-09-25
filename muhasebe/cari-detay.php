@@ -11,6 +11,13 @@ if (!$cari) {
     redirect('cariler.php');
 }
 
+$cariNameKey = strtoupper(strtr(trim((string)($cari['name'] ?? '')), [
+    'Ç'=>'C','Ğ'=>'G','İ'=>'I','Ö'=>'O','Ş'=>'S','Ü'=>'U',
+    'ç'=>'C','ğ'=>'G','ı'=>'I','i'=>'I','ö'=>'O','ş'=>'S','ü'=>'U',
+]));
+$cariNameKey = trim((string)(preg_replace('/[^A-Z0-9]+/', ' ', $cariNameKey) ?: $cariNameKey));
+$isResmiBirimOdemeleriCari = strpos($cariNameKey, 'RESMI BIRIM ODEMELERI') !== false;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_write();
     require_csrf();
@@ -96,6 +103,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'quick_movement') {
         $type = $_POST['movement_type'] ?? '';
+        $resmiBirimCashExpense = $isResmiBirimOdemeleriCari && $type === 'odeme';
+        if ($resmiBirimCashExpense) $type = 'gider';
         $amount = decimal_from_input($_POST['amount'] ?? '0');
         $date = $_POST['movement_date'] ?: date('Y-m-d');
         if (!isset(movement_entry_types()[$type]) || $amount <= 0) {
@@ -116,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $accountId = ($_POST['account_id'] ?? '') !== '' ? (int)$_POST['account_id'] : null;
         $docTypeInput = $_POST['document_type'] ?: null;
         $paymentMethodInput = trim($_POST['payment_method'] ?? '');
-        $dueDateInput = $_POST['due_date'] ?: null;
+        $dueDateInput = $resmiBirimCashExpense ? null : ($_POST['due_date'] ?: null);
         $checkLikeInput = ['movement_type'=>$type, 'due_date'=>$dueDateInput, 'payment_method'=>$paymentMethodInput, 'document_type'=>$docTypeInput];
         if (!movement_cash_direction($type) || movement_is_check_like($checkLikeInput)) $accountId = null;
         try { $doc = handle_upload('document'); }
@@ -128,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         sync_movement_to_check($newId);
         log_action('Hızlı cari hareketi eklendi', $cari['name'] . ' - ' . movement_label($type) . ' ' . money($amount));
         audit_action('hareket', $newId, 'eklendi', null, ['cari_id'=>$id,'type'=>$type,'amount'=>$amount,'date'=>$date,'account_id'=>$accountId], $cari['name']);
-        flash('success', 'Hızlı hareket eklendi.');
+        flash('success', $resmiBirimCashExpense ? 'Resmi Birim Ödemeleri gider olarak kaydedildi. Cari bakiyesi etkilenmedi; seçilen banka/kasa hesabından düşüldü.' : 'Hızlı hareket eklendi.');
         redirect('cari-detay.php?id=' . $id);
     }
 }
@@ -244,11 +253,11 @@ page_header($cari['name'], 'cariler');
 
 <?php if (can_write()): ?>
 <section class="panel-card">
-  <div class="card-head"><h3>Hızlı tahsilat / ödeme</h3><span>Bu cariye direkt hareket ekle</span></div>
+  <div class="card-head"><h3>Hızlı tahsilat / ödeme</h3><span><?php echo $isResmiBirimOdemeleriCari ? 'Bu caride ödeme gider sayılır; cari bakiyesi etkilenmez.' : 'Bu cariye direkt hareket ekle'; ?></span></div>
   <form method="post" enctype="multipart/form-data" class="filterbar multi ultra">
     <?php echo csrf_field(); ?>
     <input type="hidden" name="action" value="quick_movement">
-    <select name="movement_type" required><?php foreach (movement_entry_types() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo $key==='tahsilat' ? 'selected' : ''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select>
+    <select name="movement_type" required><?php foreach (movement_entry_types() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo $key===($isResmiBirimOdemeleriCari?'gider':'tahsilat') ? 'selected' : ''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select>
     <input name="amount" type="text" inputmode="decimal" placeholder="Tutar" required>
     <input name="movement_date" type="date" value="<?php echo e(date('Y-m-d')); ?>" required>
     <input name="due_date" type="date" title="Vade tarihi">
