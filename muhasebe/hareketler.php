@@ -15,9 +15,9 @@ function hareket_money($amount, ?string $currency = 'TL'): string
     return number_format((float)$amount, 2, ',', '.') . ' ' . $currency;
 }
 
-function hareket_muhtelif_cari_mi(?int $cariId): bool
+function hareket_cari_adi_anahtari(?int $cariId): string
 {
-    if (!$cariId) return false;
+    if (!$cariId) return '';
     $stmt = db()->prepare('SELECT name FROM cariler WHERE id=? LIMIT 1');
     $stmt->execute([$cariId]);
     $name = strtoupper(strtr(trim((string)($stmt->fetchColumn() ?: '')), [
@@ -25,7 +25,17 @@ function hareket_muhtelif_cari_mi(?int $cariId): bool
         'ç'=>'C','ğ'=>'G','ı'=>'I','i'=>'I','ö'=>'O','ş'=>'S','ü'=>'U',
     ]));
     $name = preg_replace('/[^A-Z0-9]+/', ' ', $name) ?: $name;
-    return strpos(trim($name), 'MUHTELIF FATURA GIRISI') !== false;
+    return trim($name);
+}
+
+function hareket_muhtelif_cari_mi(?int $cariId): bool
+{
+    return strpos(hareket_cari_adi_anahtari($cariId), 'MUHTELIF FATURA GIRISI') !== false;
+}
+
+function hareket_resmi_birim_odemeleri_cari_mi(?int $cariId): bool
+{
+    return strpos(hareket_cari_adi_anahtari($cariId), 'RESMI BIRIM ODEMELERI') !== false;
 }
 
 function hareket_muhtelif_nakitlerini_duzelt(): void
@@ -82,7 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $type = $_POST['movement_type'] ?? '';
         $postedCariId = ($_POST['cari_id'] ?? '') !== '' ? (int)$_POST['cari_id'] : null;
         $muhtelifCashExpense = hareket_muhtelif_cari_mi($postedCariId) && $type === 'odeme';
-        if ($muhtelifCashExpense) $type = 'gider';
+        $resmiBirimCashExpense = hareket_resmi_birim_odemeleri_cari_mi($postedCariId) && $type === 'odeme';
+        $neutralCashExpense = $muhtelifCashExpense || $resmiBirimCashExpense;
+        if ($neutralCashExpense) $type = 'gider';
         $amount = decimal_from_input($_POST['amount'] ?? '0');
         $currency = hareket_currency_value($_POST['currency'] ?? 'TL');
         $date = $_POST['movement_date'] ?: date('Y-m-d');
@@ -145,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $accountId = ($_POST['account_id'] ?? '') !== '' ? (int)$_POST['account_id'] : null;
         $docTypeInput = $_POST['document_type'] ?: null;
         $paymentMethodInput = trim($_POST['payment_method'] ?? '');
-        $dueDateInput = $_POST['due_date'] ?: null;
+        $dueDateInput = $neutralCashExpense ? null : ($_POST['due_date'] ?: null);
         $checkLikeInput = ['movement_type' => $type, 'due_date' => $dueDateInput, 'payment_method' => $paymentMethodInput, 'document_type' => $docTypeInput];
         if (!movement_cash_direction($type) || movement_is_check_like($checkLikeInput)) $accountId = null;
         $rateInput = trim((string)($_POST['exchange_rate'] ?? ''));
@@ -188,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sync_movement_account_transaction($id);
             if ($currency === 'TL') sync_movement_to_check($id);
             log_action('Hareket güncellendi', '#' . $id . ' ' . movement_label($type) . ' ' . hareket_money($amount, $currency)); audit_action('hareket', $id, 'guncellendi', $oldMovement, ['type'=>$type,'amount'=>$amount,'currency'=>$currency,'exchange_rate'=>$exchangeRate,'account_amount_tl'=>$accountAmountTl,'date'=>$date,'cari_id'=>$payload[0],'account_id'=>$accountId], movement_label($type));
-            flash('success', $muhtelifCashExpense ? 'Muhtelif ödeme gider olarak güncellendi. Cari bakiyesi etkilenmedi; seçilen banka/kasa hesabından düşüldü.' : 'Hareket güncellendi.');
+            flash('success', $neutralCashExpense ? ($resmiBirimCashExpense ? 'Resmi Birim Ödemeleri hareketi gider olarak güncellendi. Cari bakiyesi etkilenmedi; seçilen banka/kasa hesabından düşüldü.' : 'Muhtelif ödeme gider olarak güncellendi. Cari bakiyesi etkilenmedi; seçilen banka/kasa hesabından düşüldü.') : 'Hareket güncellendi.');
         } else {
             $stmt = db()->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, currency, exchange_rate, account_amount_tl, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute(array_merge($payload, [current_user()['id'], now(), now()]));
@@ -196,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sync_movement_account_transaction($newId);
             if ($currency === 'TL') sync_movement_to_check($newId);
             log_action('Hareket eklendi', movement_label($type) . ' ' . hareket_money($amount, $currency)); audit_action('hareket', $newId, 'eklendi', null, ['type'=>$type,'amount'=>$amount,'currency'=>$currency,'exchange_rate'=>$exchangeRate,'account_amount_tl'=>$accountAmountTl,'date'=>$date,'cari_id'=>$payload[0],'account_id'=>$accountId], movement_label($type));
-            flash('success', $muhtelifCashExpense ? 'Muhtelif ödeme gider olarak kaydedildi. Cari bakiyesi etkilenmedi; seçilen banka/kasa hesabından düşüldü.' : 'Hareket eklendi.');
+            flash('success', $neutralCashExpense ? ($resmiBirimCashExpense ? 'Resmi Birim Ödemeleri hareketi gider olarak kaydedildi. Cari bakiyesi etkilenmedi; seçilen banka/kasa hesabından düşüldü.' : 'Muhtelif ödeme gider olarak kaydedildi. Cari bakiyesi etkilenmedi; seçilen banka/kasa hesabından düşüldü.') : 'Hareket eklendi.');
         }
         redirect('hareketler.php');
     }
