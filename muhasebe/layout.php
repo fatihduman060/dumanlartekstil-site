@@ -9,6 +9,56 @@ if (setting_get('migration_odeme_category_v1', '0') !== '1') {
     setting_set('migration_odeme_category_v1', '1');
 }
 
+// Resmi Birim Ödemeleri carisindeki eski "Ödeme" hareketlerini bir kez "Gider"e çevir.
+// Böylece banka/kasa çıkışı korunur; cari alacak/verecek bakiyesi etkilenmez.
+if (setting_get('migration_resmi_birim_odeme_gider_v1', '0') !== '1') {
+    $rows = db()->query("SELECT m.*, c.name AS cari_name
+        FROM movements m
+        JOIN cariler c ON c.id=m.cari_id
+        WHERE COALESCE(m.is_cancelled,0)=0
+          AND m.movement_type='odeme'
+        ORDER BY m.id ASC")->fetchAll();
+
+    $fixed = 0;
+    $skippedChecks = 0;
+    foreach ($rows as $row) {
+        $name = strtoupper(strtr(trim((string)($row['cari_name'] ?? '')), [
+            'Ç'=>'C','Ğ'=>'G','İ'=>'I','Ö'=>'O','Ş'=>'S','Ü'=>'U',
+            'ç'=>'C','ğ'=>'G','ı'=>'I','i'=>'I','ö'=>'O','ş'=>'S','ü'=>'U',
+        ]));
+        $name = trim((string)(preg_replace('/[^A-Z0-9]+/', ' ', $name) ?: $name));
+        if (strpos($name, 'RESMI BIRIM ODEMELERI') === false) continue;
+
+        $movementId = (int)($row['id'] ?? 0);
+        if ($movementId <= 0) continue;
+        if ((int)($row['check_id'] ?? 0) > 0) {
+            $skippedChecks++;
+            continue;
+        }
+
+        db()->prepare("UPDATE movements
+            SET movement_type='gider', due_date=NULL, updated_at=?
+            WHERE id=? AND COALESCE(is_cancelled,0)=0 AND movement_type='odeme'")
+            ->execute([now(), $movementId]);
+
+        sync_movement_account_transaction($movementId);
+        audit_action('hareket', $movementId, 'resmi_birim_odeme_gidere_cevrildi', $row, [
+            'movement_type'=>'gider',
+            'due_date'=>null,
+            'cari_bakiye_etkisi'=>'yok',
+            'banka_kasa_etkisi'=>'cikis',
+        ], (string)($row['cari_name'] ?? 'Resmi Birim Ödemeleri'));
+        $fixed++;
+    }
+
+    setting_set('migration_resmi_birim_odeme_gider_v1', '1');
+    setting_set('migration_resmi_birim_odeme_gider_v1_fixed', (string)$fixed);
+    setting_set('migration_resmi_birim_odeme_gider_v1_skipped_checks', (string)$skippedChecks);
+    if ($fixed > 0 || $skippedChecks > 0) {
+        log_action('Resmi Birim Ödemeleri eski kayıtları düzeltildi', $fixed . ' kayıt Gider yapıldı; ' . $skippedChecks . ' çek bağlantılı kayıt güvenlik için atlandı.');
+    }
+}
+
 function super_admin_user_ids(): array { $raw=setting_get('super_admin_user_ids','[]')?:'[]'; $decoded=json_decode($raw,true); if(!is_array($decoded)) return []; $ids=[]; foreach($decoded as $id){$id=(int)$id;if($id>0)$ids[]=$id;} return array_values(array_unique($ids)); }
 function is_super_admin(?int $userId=null): bool { if($userId===null){$u=current_user();$userId=(int)($u['id']??0);} return $userId>0&&in_array($userId,super_admin_user_ids(),true); }
 function can_manage_users(): bool { $ids=super_admin_user_ids(); return empty($ids)?is_admin():is_super_admin(); }
