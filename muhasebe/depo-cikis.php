@@ -163,5 +163,5 @@ foreach(array_unique($shareIds) as $shareId) depo_cikis_share_form($shareId);
   calc();
 })();
 </script>
-<script src="assets/musteri-urun-son-fiyat.js?v=4"></script>
+<script src="assets/musteri-urun-son-fiyat.js?v=5"></script>
 <?php page_footer(); ?>
