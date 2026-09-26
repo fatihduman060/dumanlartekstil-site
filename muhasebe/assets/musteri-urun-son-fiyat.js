@@ -100,12 +100,18 @@
     // Run after the existing article/barcode normalization listener.
     setTimeout(function(){apply(row);if(loadedKey!==context()&&!pending)load();},0);
   });
-  function changeContext(){
+  function changeCustomerContext(){
+    // Cari değişince kullanıcının elle girdiği mevcut fiyatları koru.
+    // Otomatik/listeden gelen fiyatlar ise yeni müşterinin geçmiş fiyatına göre güncellenebilir.
+    load();
+  }
+  function changeCurrencyContext(){
+    // Para birimi değiştiğinde eski para birimine ait fiyat bayraklarını sıfırla.
     body.querySelectorAll('tr').forEach(function(row){state(row).manual=false;state(row).preserve=false;});
     load();
   }
-  cariSelect.addEventListener('change',changeContext);
-  if(currencySelect)currencySelect.addEventListener('change',changeContext);
+  cariSelect.addEventListener('change',changeCustomerContext);
+  if(currencySelect)currencySelect.addEventListener('change',changeCurrencyContext);
   form.addEventListener('submit',function(e){
     applyAll();
     if(pending){e.preventDefault();status.textContent='Müşteri fiyatları yükleniyor. Tamamlanınca tekrar Kaydet’e basın.';}
