@@ -16,7 +16,7 @@ try {
         $currency = strtoupper(trim((string)($row['currency'] ?? 'TL')));
         if (!in_array($currency, ['TL','USD','EUR'], true)) $currency = 'TL';
 
-        $netAlacak = (float)$row['alacak'] - (float)$row['tahsilat'];
+        $netAlacak = (float)$row['alacak'] - (float)$row['tahsilat'] - (float)($row['ciro_primi'] ?? 0);
         $netVerecek = (float)$row['verecek'] - (float)$row['odeme'];
         $net = $netAlacak - $netVerecek;
 
