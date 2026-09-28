@@ -205,7 +205,7 @@ $topReceivables = db()->query("SELECT c.id, c.name,
   FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
   GROUP BY c.id HAVING net > 0 ORDER BY net DESC LIMIT 5")->fetchAll();
 $topPayables = db()->query("SELECT c.id, c.name,
-    COALESCE(SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0) -
+    COALESCE(SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='ciro_primi' THEN m.amount ELSE 0 END),0) -
     (COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END),0)) AS net
   FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
   GROUP BY c.id HAVING net < 0 ORDER BY net ASC LIMIT 5")->fetchAll();
