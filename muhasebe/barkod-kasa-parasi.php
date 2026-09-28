@@ -21,6 +21,58 @@ function barkod_kasa_tutar(string $date): float
     return round((float)($stmt->fetchColumn() ?: 0), 2);
 }
 
+function barkod_kasa_gun_kaydi(string $date): ?array
+{
+    $stmt = db()->prepare("SELECT * FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1");
+    $stmt->execute([$date]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function barkod_kasa_devreden_tutar(string $date): array
+{
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    $row = barkod_kasa_gun_kaydi($date);
+    $amount = $row ? round((float)($row['cash_change_left_amount'] ?? 0), 2) : 0.0;
+
+    // Normal günlerde kendi gününün kasa tutarını kullan.
+    if (!$parsed || $parsed->format('N') !== '7') {
+        return ['amount'=>$amount, 'source_date'=>$date, 'carried'=>false];
+    }
+
+    // Pazar günü gerçekten mağaza hareketi varsa o güne ait değer geçerlidir.
+    $hasSundayActivity = false;
+    if ($row) {
+        foreach ([
+            'cash_amount',
+            'card_amount',
+            'credit_amount',
+            'manual_credit_amount',
+            'credit_collection_amount',
+            'cash_credit_collection_amount',
+            'card_credit_collection_amount',
+            'daily_total',
+        ] as $field) {
+            if (abs((float)($row[$field] ?? 0)) >= 0.005) {
+                $hasSundayActivity = true;
+                break;
+            }
+        }
+    }
+    if ($hasSundayActivity || abs($amount) >= 0.005) {
+        return ['amount'=>$amount, 'source_date'=>$date, 'carried'=>false];
+    }
+
+    // Mağaza Pazar çalışmıyorsa Cumartesi kasada bırakılan para Pazar'a devreder.
+    $saturday = $parsed->modify('-1 day')->format('Y-m-d');
+    $saturdayAmount = barkod_kasa_tutar($saturday);
+    if ($saturdayAmount > 0) {
+        return ['amount'=>$saturdayAmount, 'source_date'=>$saturday, 'carried'=>true];
+    }
+
+    return ['amount'=>$amount, 'source_date'=>$date, 'carried'=>false];
+}
+
 try {
     if (!can_manage_store_sales()) {
         throw new RuntimeException('Bu bölüm için mağaza satış yetkisi gerekiyor.');
@@ -42,6 +94,7 @@ try {
         barkod_kasa_json(['ok'=>false,'error'=>'Önceki günlerin kasa tutarını yalnızca Fatih güncelleyebilir.'], 403);
     }
     $yesterday = $parsed->modify('-1 day')->format('Y-m-d');
+    $yesterdayCarry = barkod_kasa_devreden_tutar($yesterday);
 
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         barkod_kasa_json([
@@ -52,7 +105,9 @@ try {
             'selected_date' => $date,
             'selected_amount' => barkod_kasa_tutar($date),
             'can_edit_past' => $canEditPast,
-            'yesterday_amount' => barkod_kasa_tutar($yesterday),
+            'yesterday_amount' => (float)$yesterdayCarry['amount'],
+            'yesterday_source_date' => (string)$yesterdayCarry['source_date'],
+            'yesterday_carried' => !empty($yesterdayCarry['carried']),
             'csrf_token' => csrf_token(),
         ]);
     }
@@ -90,6 +145,7 @@ try {
     log_action('Barkodlu satış kasada bırakılan para güncellendi', $date . ' · ' . number_format($amount, 2, ',', '.') . ' TL');
     audit_action('magaza_odeme_dagilimi', $recordId, 'kasada_birakilan_guncellendi', $old, $saved, $date);
 
+    $yesterdayCarry = barkod_kasa_devreden_tutar($yesterday);
     barkod_kasa_json([
         'ok' => true,
         'message' => tr_date($date) . ' için kasada bırakılan para kaydedildi.',
@@ -98,7 +154,9 @@ try {
         'today_date' => $today,
         'yesterday_date' => $yesterday,
         'today_amount' => barkod_kasa_tutar($today),
-        'yesterday_amount' => barkod_kasa_tutar($yesterday),
+        'yesterday_amount' => (float)$yesterdayCarry['amount'],
+        'yesterday_source_date' => (string)$yesterdayCarry['source_date'],
+        'yesterday_carried' => !empty($yesterdayCarry['carried']),
     ]);
 } catch (Throwable $e) {
     barkod_kasa_json(['ok'=>false,'error'=>$e->getMessage()], 422);
