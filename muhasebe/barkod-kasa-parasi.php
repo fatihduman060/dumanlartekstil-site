@@ -40,30 +40,13 @@ function barkod_kasa_devreden_tutar(string $date): array
         return ['amount'=>$amount, 'source_date'=>$date, 'carried'=>false];
     }
 
-    // Pazar günü gerçekten mağaza hareketi varsa o güne ait değer geçerlidir.
-    $hasSundayActivity = false;
-    if ($row) {
-        foreach ([
-            'cash_amount',
-            'card_amount',
-            'credit_amount',
-            'manual_credit_amount',
-            'credit_collection_amount',
-            'cash_credit_collection_amount',
-            'card_credit_collection_amount',
-            'daily_total',
-        ] as $field) {
-            if (abs((float)($row[$field] ?? 0)) >= 0.005) {
-                $hasSundayActivity = true;
-                break;
-            }
-        }
-    }
-    if ($hasSundayActivity || abs($amount) >= 0.005) {
+    // Pazar mağaza kapalı kabul edilir. Pazar için özel olarak kasa tutarı girilmişse onu kullan;
+    // aksi halde Cumartesi kasada bırakılan tutarı Pazar'a devret.
+    if (abs($amount) >= 0.005) {
         return ['amount'=>$amount, 'source_date'=>$date, 'carried'=>false];
     }
 
-    // Mağaza Pazar çalışmıyorsa Cumartesi kasada bırakılan para Pazar'a devreder.
+    // Cumartesi kasada bırakılan para Pazar'a devreder.
     $saturday = $parsed->modify('-1 day')->format('Y-m-d');
     $saturdayAmount = barkod_kasa_tutar($saturday);
     if ($saturdayAmount > 0) {
