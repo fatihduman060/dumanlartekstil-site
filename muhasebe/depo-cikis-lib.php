@@ -410,6 +410,7 @@ function depo_cikis_post_to_cari(int $id): int
     if(!can_process_warehouse_dispatch()) throw new RuntimeException('Bu işlem için yetkiniz yok.');
     $row=depo_cikis_load($id); if(!$row)throw new RuntimeException('Fiş bulunamadı.');
     if((int)($row['is_cancelled']??0)===1)throw new RuntimeException('İptal edilmiş fiş cariye işlenemez.');
+    if((int)($row['posted_to_cari']??0)!==1 && (int)($row['processed']??0)!==1) throw new RuntimeException('Önce fişi Çıkış Yapıldı olarak işaretleyin.');
     $cariId=(int)($row['cari_id']??0); if($cariId<=0)throw new RuntimeException('Cariye işlemek için fişte cari seçilmeli.');
     $total=(float)($row['total']??0); if($total<=0)throw new RuntimeException('Fiş toplamı bulunamadı.');
     $pdo=db();
