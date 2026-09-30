@@ -378,10 +378,31 @@ function depo_cikis_save(int $id): int
     } catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
 
+function depo_cikis_can_mark_processed(): bool
+{
+    return can_process_warehouse_dispatch() || is_warehouse_dispatch_operator();
+}
+
 function depo_cikis_mark_processed(int $id): void
 {
-    if(!can_process_warehouse_dispatch()) throw new RuntimeException('Bu işlem için yetkiniz yok.');
-    db()->prepare('UPDATE warehouse_dispatches SET processed=1,processed_at=?,processed_by=?,updated_at=? WHERE id=? AND COALESCE(is_cancelled,0)=0')->execute([now(),current_user()['id']??null,now(),$id]);
+    if(!depo_cikis_can_mark_processed()) throw new RuntimeException('Bu işlem için yetkiniz yok.');
+    $row=depo_cikis_load($id);
+    if(!$row) throw new RuntimeException('Fiş bulunamadı.');
+    if((int)($row['is_cancelled']??0)===1) throw new RuntimeException('İptal edilmiş fiş çıkışı yapıldı olarak işaretlenemez.');
+    if((int)($row['posted_to_cari']??0)===1) return;
+    if((int)($row['processed']??0)===1) return;
+
+    $now=now();
+    $userId=current_user()['id']??null;
+    db()->prepare('UPDATE warehouse_dispatches SET processed=1,processed_at=?,processed_by=?,updated_at=? WHERE id=? AND COALESCE(is_cancelled,0)=0')
+        ->execute([$now,$userId,$now,$id]);
+
+    audit_action('depo_cikis',$id,'cikis_yapildi',$row,[
+        'processed'=>1,
+        'processed_at'=>$now,
+        'processed_by'=>$userId,
+    ],trim((string)($row['dispatch_no']??'')));
+    log_action('Depo çıkışı yapıldı',trim((string)($row['dispatch_no']??('#'.$id))));
 }
 
 function depo_cikis_post_to_cari(int $id): int
