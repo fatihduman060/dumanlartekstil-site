@@ -25,7 +25,8 @@
     var realRows=rows.filter(function(row){return row.children.length>=6;});
     if(!realRows.length) return;
 
-    var openRows=[];
+    var pendingRows=[];
+    var completedRows=[];
     var groups={};
     var order=[];
 
@@ -33,36 +34,42 @@
       var cells=row.children;
       var status=(cells[3].textContent||'').replace(/\s+/g,' ').trim();
       var customer=(cells[1].textContent||'').replace(/\s+/g,' ').trim()||'Cari seçilmemiş';
-      if(!/Cariye işlendi/i.test(status)){
-        openRows.push(row);
+
+      if(/Cariye işlendi/i.test(status)){
+        var key=norm(customer);
+        if(!groups[key]){
+          groups[key]={name:customer,rows:[]};
+          order.push(key);
+        }
+        groups[key].rows.push(row);
         return;
       }
-      var key=norm(customer);
-      if(!groups[key]){
-        groups[key]={name:customer,rows:[]};
-        order.push(key);
-      }
-      groups[key].rows.push(row);
-    });
 
-    // Cariye işlenmiş kayıt yoksa sayfaya müdahale etme.
-    if(!order.length) return;
+      if(/Çıkışı yapıldı|Çıkış yapıldı|İşlendi/i.test(status)){
+        completedRows.push(row);
+        return;
+      }
+
+      pendingRows.push(row);
+    });
 
     table.dataset.cariGrouped='1';
     tbody.innerHTML='';
 
-    if(openRows.length){
-      var activeHead=document.createElement('tr');
-      activeHead.className='wd-group-section-title';
-      activeHead.innerHTML='<td colspan="6"><strong>Aktif / cariye işlenmemiş fişler</strong><small>'+openRows.length+' kayıt</small></td>';
-      tbody.appendChild(activeHead);
-      openRows.forEach(function(row){tbody.appendChild(row);});
+    function sectionTitle(title,count,className,emptyText){
+      var head=document.createElement('tr');
+      head.className='wd-group-section-title '+(className||'');
+      head.innerHTML='<td colspan="6"><strong>'+escapeHtml(title)+'</strong><small>'+(count?count+' kayıt':escapeHtml(emptyText||'Kayıt yok'))+'</small></td>';
+      tbody.appendChild(head);
     }
 
-    var archivedHead=document.createElement('tr');
-    archivedHead.className='wd-group-section-title wd-group-archived-title';
-    archivedHead.innerHTML='<td colspan="6"><strong>Cariye işlenmiş fişler</strong><small>Müşteriye göre kapalı gösteriliyor</small></td>';
-    tbody.appendChild(archivedHead);
+    sectionTitle('Bekleyenler',pendingRows.length,'wd-group-pending-title','Bekleyen fiş yok');
+    pendingRows.forEach(function(row){tbody.appendChild(row);});
+
+    sectionTitle('Çıkışı Yapılanlar',completedRows.length,'wd-group-completed-title','Çıkışı tamamlanan fiş yok');
+    completedRows.forEach(function(row){tbody.appendChild(row);});
+
+    sectionTitle('Cariye İşlenenler',order.reduce(function(total,key){return total+groups[key].rows.length;},0),'wd-group-archived-title',order.length?'Müşteriye göre aşağıda gruplanıyor':'Henüz cariye işlenen fiş yok');
 
     order.forEach(function(key,index){
       var group=groups[key];
@@ -112,7 +119,7 @@
     var style=document.createElement('style');
     style.id='wdCariGroupStyle';
     style.textContent=''
-      +'.wd-group-section-title td{background:#f7f1e7!important;padding:10px 12px!important;border-bottom:1px solid #e5dccf!important}.wd-group-section-title strong{color:#173f29}.wd-group-section-title small{display:block;margin-top:2px;color:#776f64;font-size:11px}.wd-group-archived-title td{background:#eef5f0!important}'
+      +'.wd-group-section-title td{background:#f7f1e7!important;padding:10px 12px!important;border-bottom:1px solid #e5dccf!important}.wd-group-section-title strong{color:#173f29}.wd-group-section-title small{display:block;margin-top:2px;color:#776f64;font-size:11px}.wd-group-pending-title td{background:#fff6df!important}.wd-group-completed-title td{background:#edf7f0!important}.wd-group-archived-title td{background:#e8f1f8!important}'
       +'.wd-cari-group-head td{padding:0!important;background:#fff!important;border-bottom:1px solid #e5dccf!important}.wd-cari-group-toggle{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;width:100%;border:0;background:#fbfaf7;color:#173f29;text-align:left;padding:11px 13px;cursor:pointer}.wd-cari-group-toggle:hover{background:#f4f8f5}.wd-cari-group-toggle strong{font-size:13px}.wd-cari-group-toggle small{color:#776f64;font-size:11px;font-weight:750}.wd-cari-group-arrow{width:18px;color:#216b39;font-size:11px}.wd-cari-group-head[aria-expanded="true"] .wd-cari-group-toggle{background:#edf7f0}.wd-cari-group-row[hidden]{display:none!important}'
       +'@media(max-width:700px){.wd-cari-group-toggle{grid-template-columns:auto 1fr}.wd-cari-group-toggle small{grid-column:2}}';
     document.head.appendChild(style);
