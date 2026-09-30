@@ -207,7 +207,7 @@
         :'';
     }
 
-    var historyRows=window.BITKE_STORE_SALES_ONLY?rows.slice(1,2):rows.slice(1);
+    var historyRows=window.BITKE_STORE_SALES_ONLY?rows.slice(1,5):rows.slice(1);
     history.innerHTML=historyRows.map(function(item){
       var itemCash=Number(item.getAttribute('data-cash')||0);
       var itemCard=Number(item.getAttribute('data-card')||0);
