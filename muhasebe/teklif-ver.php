@@ -89,7 +89,7 @@ if ($editId > 0 && !$edit) {
     flash('error', 'Düzenlemek istediğiniz teklif bulunamadı veya kayıt artık aktif değil.');
     redirect('teklif-ver.php');
 }
-$list = db()->query('SELECT o.*, c.name AS cari_name FROM offers o LEFT JOIN cariler c ON c.id=o.cari_id WHERE COALESCE(o.is_deleted,0)=0 ORDER BY o.offer_date DESC, o.id DESC')->fetchAll();
+$list = teklifler_list(500);
 $warehouseOfferMap = depo_cikis_offer_map(array_column($list, 'id'));
 
 function teklif_group_by_customer(array $offers): array
