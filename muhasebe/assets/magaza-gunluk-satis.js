@@ -32,6 +32,50 @@
     return today.slice(0,7)===period?today:period+'-01';
   }
 
+  function monthBounds(period){
+    if(!/^\d{4}-\d{2}$/.test(period)) period=new Date().toISOString().slice(0,7);
+    var parts=period.split('-');
+    var year=Number(parts[0]||0);
+    var month=Number(parts[1]||0);
+    var lastDay=new Date(year,month,0).getDate();
+    return {
+      min:period+'-01',
+      max:period+'-'+String(lastDay).padStart(2,'0')
+    };
+  }
+
+  function syncPeriodControls(){
+    var panel=document.querySelector('[data-magaza-gunluk-satis]');
+    if(!panel) return;
+    var picker=panel.querySelector('[data-magaza-z-period]');
+    if(picker) picker.value=state.period;
+    var label=panel.querySelector('[data-magaza-z-period-label]');
+    if(label){
+      try{
+        var parts=state.period.split('-');
+        label.textContent=new Intl.DateTimeFormat('tr-TR',{month:'long',year:'numeric'}).format(new Date(Number(parts[0]),Number(parts[1])-1,1));
+      }catch(e){ label.textContent=state.period; }
+    }
+    var form=panel.querySelector('[data-magaza-form]');
+    var dateInput=form?form.querySelector('[name="sale_date"]'):null;
+    if(dateInput){
+      var bounds=monthBounds(state.period);
+      dateInput.min=bounds.min;
+      dateInput.max=bounds.max;
+      if(!dateInput.value||dateInput.value.slice(0,7)!==state.period) dateInput.value=defaultDate(state.period);
+    }
+  }
+
+  function changePeriod(period){
+    if(!/^\d{4}-\d{2}$/.test(String(period||''))) return;
+    state.period=String(period);
+    syncPeriodControls();
+    var url=new URL(location.href);
+    url.searchParams.set('period',state.period);
+    history.replaceState(null,'',url.pathname+url.search+url.hash);
+    load();
+  }
+
   function findCard(title){
     var cards=document.querySelectorAll('.dashboard-section .stats-grid .stat-card');
     for(var i=0;i<cards.length;i++){
@@ -93,6 +137,7 @@
     panel.setAttribute('data-magaza-gunluk-satis','1');
     panel.innerHTML=''
       +'<div class="magaza-satis-head"><div><strong>Mağaza Günlük Z Raporu</strong><small>Her günün Z raporundaki KDV dahil toplamı gir; sistem %10 KDV’yi ve matrahı otomatik ayırsın.</small></div><span data-magaza-status></span></div>'
+      +'<div class="magaza-satis-period-bar"><label><span>Z Raporu Ayı</span><input type="month" data-magaza-z-period></label><div class="magaza-satis-period-current">Gösterilen dönem: <strong data-magaza-z-period-label></strong></div></div>'
       +'<article class="magaza-mobile-latest" data-magaza-mobile-latest><div class="magaza-mobile-latest-head"><span>Günlük toplam satış</span><strong data-magaza-latest-date>Dağılım yükleniyor…</strong></div><strong class="magaza-mobile-latest-total" data-magaza-latest-total>0,00 TL</strong><div class="magaza-mobile-latest-breakdown"><span>Nakit <strong data-magaza-latest-cash>0,00 TL</strong></span><span>Kart / POS <strong data-magaza-latest-card>0,00 TL</strong></span><span>Veresiye <strong data-magaza-latest-credit>0,00 TL</strong></span></div><div class="magaza-mobile-latest-collections"><span>Nakit tahsilat <strong data-magaza-latest-cash-collection>0,00 TL</strong></span><span>Kart tahsilat <strong data-magaza-latest-card-collection>0,00 TL</strong></span></div><div class="magaza-mobile-cash-left"><span>Kasada kalan para</span><strong data-magaza-latest-cash-left>0,00 TL</strong><small>Gün sonunda mağaza kasasında bırakılan tutar</small></div><div class="magaza-mobile-payment-actions" data-magaza-latest-actions hidden></div></article>'
       +'<div class="magaza-mobile-payment-history" data-magaza-mobile-payment-history></div>'
       +'<div class="magaza-satis-summary"><article><span>Aylık Z raporu toplamı</span><strong data-magaza-gross>0,00 TL</strong></article><article><span>Matrah</span><strong data-magaza-subtotal>0,00 TL</strong></article><article><span>%10 hesaplanan KDV</span><strong data-magaza-vat>0,00 TL</strong></article><article><span>Satış günü</span><strong data-magaza-count>0</strong></article></div>'
@@ -109,8 +154,17 @@
     if(expensePanel) expensePanel.insertAdjacentElement('afterend',panel); else body.appendChild(panel);
     unlockPanel(panel);
 
+    var periodPicker=panel.querySelector('[data-magaza-z-period]');
+    if(periodPicker){
+      periodPicker.value=state.period;
+      periodPicker.addEventListener('change',function(){
+        changePeriod(periodPicker.value);
+      });
+    }
+
     var form=panel.querySelector('[data-magaza-form]');
     form.querySelector('[name="sale_date"]').value=defaultDate(state.period);
+    syncPeriodControls();
     form.addEventListener('input',updatePreview);
     form.addEventListener('change',updatePreview);
     form.addEventListener('submit',saveSale);
@@ -287,6 +341,7 @@
         }).join('')+'</tbody><tfoot><tr class="magaza-total-row"><td><strong>GENEL TOPLAM</strong></td><td><strong>'+money(summary.gross)+'</strong></td><td><strong>'+money(summary.subtotal)+'</strong></td><td><strong>'+money(summary.vat)+'</strong></td><td colspan="2"></td></tr></tfoot></table></div>';
     }
     setStatus((summary.count||0)+' gün · '+money(summary.gross)+' satış · '+money(summary.vat)+' KDV','success');
+    syncPeriodControls();
     updatePreview();
     refreshKdvCards();
   }
@@ -353,12 +408,13 @@
     +'.magaza-satis-panel{display:grid;gap:14px;padding:15px;border:1px solid #d8c6a5;background:linear-gradient(135deg,#fff9ed,#fff);border-radius:16px;position:relative;z-index:34;pointer-events:auto!important}'
     +'.magaza-satis-panel *{pointer-events:auto}'
     +'.magaza-satis-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.magaza-satis-head>div{display:grid;gap:4px}.magaza-satis-head strong{font-size:15px}.magaza-satis-head small{font-size:10px;color:var(--muted)}.magaza-satis-head>span{font-size:10px;color:var(--muted)}.magaza-satis-head>span.is-success{color:var(--success)}.magaza-satis-head>span.is-danger{color:var(--danger)}'
+    +'.magaza-satis-period-bar{display:flex;align-items:end;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #dfd2b8;border-radius:12px;background:#fff}.magaza-satis-period-bar label{display:grid;gap:5px;font-size:10px;font-weight:900;color:#173f29}.magaza-satis-period-bar input{min-width:180px;min-height:40px;border:1px solid var(--border);border-radius:10px;background:#fff;padding:7px 9px;font-weight:800}.magaza-satis-period-current{font-size:10px;color:var(--muted)}.magaza-satis-period-current strong{color:#173f29;text-transform:capitalize}'
     +'.magaza-satis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.magaza-satis-summary article{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--border);background:#fff;border-radius:12px}.magaza-satis-summary span{font-size:9px;color:var(--muted);font-weight:800}.magaza-satis-summary strong{font-size:13px}'
     +'.magaza-mobile-latest,.magaza-mobile-payment-history{display:none}'
     +'.magaza-satis-form{display:grid;grid-template-columns:150px minmax(220px,1fr) minmax(220px,1.2fr) minmax(210px,.9fr) auto;gap:9px;align-items:end}.magaza-satis-form label{display:grid;gap:5px;font-size:10px;font-weight:800}.magaza-satis-form input{width:100%;border:1px solid var(--border);background:#fff;border-radius:10px;padding:9px 10px;user-select:text!important;-webkit-user-select:text!important}.magaza-satis-preview{font-size:10px;color:#6d5018;padding:9px 10px;border-radius:10px;background:#fff2d7}.magaza-satis-form>.btn{white-space:nowrap}'
     +'.magaza-satis-list table{min-width:760px}.magaza-satis-list th,.magaza-satis-list td{font-size:10px;padding:8px}.magaza-row-actions{display:flex;gap:8px}.magaza-row-actions button{border:0;background:transparent;color:var(--accent);font-weight:800;cursor:pointer;padding:0}.magaza-row-actions button:last-child{color:var(--danger)}.magaza-total-row td{border-top:2px solid #d8c6a5;background:#fff6e5;font-size:10px}.magaza-total-row strong{font-size:11px}'
     +'@media(max-width:1100px){.magaza-satis-form{grid-template-columns:1fr 1fr 1fr}.magaza-satis-preview{grid-column:1/3}.magaza-satis-summary{grid-template-columns:1fr 1fr}}'
-    +'@media(max-width:650px){.magaza-satis-panel{gap:10px;padding:12px}.magaza-satis-head{display:none}.magaza-mobile-latest{display:grid;order:2;gap:8px;padding:14px;border:1px solid #d7bd83;border-radius:16px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 12px 26px rgba(15,45,32,.18)}.magaza-mobile-latest.is-empty{opacity:.72}.magaza-mobile-latest-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-latest-head span{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-latest-head strong{font-size:11px}.magaza-mobile-latest-total{font-size:28px;line-height:1.05;color:#fff}.magaza-mobile-latest-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-latest-breakdown span{display:grid;gap:3px;padding:8px 7px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-latest-breakdown strong{font-size:11px;color:#fff}.magaza-mobile-payment-history{display:grid;order:3;gap:10px}.magaza-mobile-payment-card{display:grid;gap:7px;padding:12px;border:1px solid #d7bd83;border-radius:15px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 8px 18px rgba(15,45,32,.14)}.magaza-mobile-payment-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-payment-head span{font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-payment-head strong{font-size:10px}.magaza-mobile-payment-total{font-size:23px;line-height:1.05;color:#fff}.magaza-mobile-payment-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-payment-breakdown span{display:grid;gap:3px;padding:7px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-payment-breakdown strong{font-size:10px;color:#fff}.magaza-mobile-latest-collections,.magaza-mobile-payment-collections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12)}.magaza-mobile-latest-collections span,.magaza-mobile-payment-collections span{display:flex;justify-content:space-between;gap:6px;padding:7px 8px;border-radius:9px;background:rgba(230,199,130,.1);font-size:8px;color:#e6c782}.magaza-mobile-latest-collections strong,.magaza-mobile-payment-collections strong{font-size:10px;color:#fff;white-space:nowrap}.magaza-mobile-cash-left{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;padding:10px 11px;border:1px solid rgba(230,199,130,.35);border-radius:11px;background:rgba(230,199,130,.16)}.magaza-mobile-cash-left span{font-size:9px;font-weight:900;color:#e6c782}.magaza-mobile-cash-left strong{font-size:15px;color:#fff}.magaza-mobile-cash-left small{grid-column:1/-1;font-size:8px;color:rgba(255,255,255,.65)}.magaza-mobile-payment-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12)}.magaza-mobile-payment-actions[hidden]{display:none!important}.magaza-mobile-payment-actions button{min-height:38px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:10px;font-weight:900}.magaza-mobile-payment-actions button:last-child{border-color:rgba(240,155,155,.32);color:#ffd4d4}.magaza-satis-list,.magaza-satis-summary,.magaza-satis-form{display:none!important}}';
+    +'@media(max-width:650px){.magaza-satis-panel{gap:10px;padding:12px}.magaza-satis-head{display:none}.magaza-satis-period-bar{order:1;display:grid;grid-template-columns:1fr;gap:7px;padding:10px}.magaza-satis-period-bar input{width:100%;min-width:0;font-size:16px}.magaza-satis-period-current{font-size:9px}.magaza-mobile-latest{display:grid;order:2;gap:8px;padding:14px;border:1px solid #d7bd83;border-radius:16px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 12px 26px rgba(15,45,32,.18)}.magaza-mobile-latest.is-empty{opacity:.72}.magaza-mobile-latest-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-latest-head span{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-latest-head strong{font-size:11px}.magaza-mobile-latest-total{font-size:28px;line-height:1.05;color:#fff}.magaza-mobile-latest-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-latest-breakdown span{display:grid;gap:3px;padding:8px 7px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-latest-breakdown strong{font-size:11px;color:#fff}.magaza-mobile-payment-history{display:grid;order:3;gap:10px}.magaza-mobile-payment-card{display:grid;gap:7px;padding:12px;border:1px solid #d7bd83;border-radius:15px;background:linear-gradient(145deg,#173e2b,#0f2d20);color:#fff;box-shadow:0 8px 18px rgba(15,45,32,.14)}.magaza-mobile-payment-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.magaza-mobile-payment-head span{font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#e6c782}.magaza-mobile-payment-head strong{font-size:10px}.magaza-mobile-payment-total{font-size:23px;line-height:1.05;color:#fff}.magaza-mobile-payment-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.magaza-mobile-payment-breakdown span{display:grid;gap:3px;padding:7px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.06);font-size:8px;color:rgba(255,255,255,.7)}.magaza-mobile-payment-breakdown strong{font-size:10px;color:#fff}.magaza-mobile-latest-collections,.magaza-mobile-payment-collections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12)}.magaza-mobile-latest-collections span,.magaza-mobile-payment-collections span{display:flex;justify-content:space-between;gap:6px;padding:7px 8px;border-radius:9px;background:rgba(230,199,130,.1);font-size:8px;color:#e6c782}.magaza-mobile-latest-collections strong,.magaza-mobile-payment-collections strong{font-size:10px;color:#fff;white-space:nowrap}.magaza-mobile-cash-left{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;padding:10px 11px;border:1px solid rgba(230,199,130,.35);border-radius:11px;background:rgba(230,199,130,.16)}.magaza-mobile-cash-left span{font-size:9px;font-weight:900;color:#e6c782}.magaza-mobile-cash-left strong{font-size:15px;color:#fff}.magaza-mobile-cash-left small{grid-column:1/-1;font-size:8px;color:rgba(255,255,255,.65)}.magaza-mobile-payment-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12)}.magaza-mobile-payment-actions[hidden]{display:none!important}.magaza-mobile-payment-actions button{min-height:38px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:10px;font-weight:900}.magaza-mobile-payment-actions button:last-child{border-color:rgba(240,155,155,.32);color:#ffd4d4}.magaza-satis-list,.magaza-satis-summary,.magaza-satis-form{display:none!important}}';
   document.head.appendChild(style);
 
   state.period=periodValue();
