@@ -278,6 +278,11 @@ function teklif_recalculate_totals(array $offer, float $subtotal): array
 
 function teklif_recalculate_from_items(array $offer, array $items): array
 {
+    if (!$items) {
+        $offer['items'] = [];
+        return $offer;
+    }
+
     $subtotal = 0.0;
     foreach ($items as &$item) {
         $qty = (float)($item['quantity'] ?? 0);
@@ -473,7 +478,10 @@ function teklifler_list(int $limit = 100): array
         LIMIT ' . $limit)->fetchAll() ?: [];
 
     foreach ($rows as &$row) {
-        $row = teklif_recalculate_totals($row, (float)($row['calculated_subtotal'] ?? 0));
+        $calculatedSubtotal = (float)($row['calculated_subtotal'] ?? 0);
+        $storedSubtotal = (float)($row['subtotal'] ?? 0);
+        $subtotal = $calculatedSubtotal > 0 || $storedSubtotal <= 0 ? $calculatedSubtotal : $storedSubtotal;
+        $row = teklif_recalculate_totals($row, $subtotal);
         unset($row['calculated_subtotal']);
     }
     unset($row);
