@@ -246,6 +246,52 @@ function teklif_next_offer_no(): string
     return str_pad((string)($max + 1), 5, '0', STR_PAD_LEFT);
 }
 
+function teklif_recalculate_totals(array $offer, float $subtotal): array
+{
+    $subtotal = round(max(0.0, $subtotal), 2);
+    $discountEnabled = (int)($offer['discount_enabled'] ?? 0) === 1;
+    $discountRate = max(0.0, min(100.0, (float)($offer['discount_rate'] ?? 0)));
+    $discountAmount = max(0.0, (float)($offer['discount_amount'] ?? 0));
+
+    if (!$discountEnabled) {
+        $discountRate = 0.0;
+        $discountAmount = 0.0;
+    } elseif ($discountAmount <= 0 && $discountRate > 0) {
+        $discountAmount = round($subtotal * $discountRate / 100, 2);
+    } else {
+        $discountAmount = min($subtotal, round($discountAmount, 2));
+    }
+
+    $vatEnabled = (int)($offer['vat_enabled'] ?? 0) === 1;
+    $vatRate = max(0.0, (float)($offer['vat_rate'] ?? 0));
+    $discountedSubtotal = max(0.0, $subtotal - $discountAmount);
+    $vatAmount = $vatEnabled ? round($discountedSubtotal * $vatRate / 100, 2) : 0.0;
+    $grandTotal = round($discountedSubtotal + $vatAmount, 2);
+
+    $offer['subtotal'] = $subtotal;
+    $offer['discount_rate'] = $discountRate;
+    $offer['discount_amount'] = $discountAmount;
+    $offer['vat_amount'] = $vatAmount;
+    $offer['grand_total'] = $grandTotal;
+    return $offer;
+}
+
+function teklif_recalculate_from_items(array $offer, array $items): array
+{
+    $subtotal = 0.0;
+    foreach ($items as &$item) {
+        $qty = (float)($item['quantity'] ?? 0);
+        $price = (float)($item['unit_price'] ?? 0);
+        $line = round($qty * $price, 2);
+        $item['line_total'] = $line;
+        $subtotal += $line;
+    }
+    unset($item);
+
+    $offer['items'] = $items;
+    return teklif_recalculate_totals($offer, $subtotal);
+}
+
 function teklif_load(int $id): ?array
 {
     teklif_db_ensure();
@@ -268,8 +314,8 @@ function teklif_load(int $id): ?array
 
     $stmt = db()->prepare('SELECT * FROM offer_items WHERE offer_id=? ORDER BY sort_order ASC, id ASC');
     $stmt->execute([$id]);
-    $offer['items'] = $stmt->fetchAll();
-    return $offer;
+    $items = $stmt->fetchAll() ?: [];
+    return teklif_recalculate_from_items($offer, $items);
 }
 
 function teklif_parse_items_from_post(): array
@@ -418,5 +464,18 @@ function teklifler_list(int $limit = 100): array
 {
     teklif_db_ensure();
     $limit = max(1, min(500, $limit));
-    return db()->query('SELECT o.*, c.name AS cari_name FROM offers o LEFT JOIN cariler c ON c.id=o.cari_id WHERE COALESCE(o.is_deleted,0)=0 ORDER BY o.offer_date DESC, o.id DESC LIMIT ' . $limit)->fetchAll();
+    $rows = db()->query('SELECT o.*, c.name AS cari_name,
+        COALESCE((SELECT SUM(COALESCE(oi.quantity,0) * COALESCE(oi.unit_price,0)) FROM offer_items oi WHERE oi.offer_id=o.id),0) AS calculated_subtotal
+        FROM offers o
+        LEFT JOIN cariler c ON c.id=o.cari_id
+        WHERE COALESCE(o.is_deleted,0)=0
+        ORDER BY o.offer_date DESC, o.id DESC
+        LIMIT ' . $limit)->fetchAll() ?: [];
+
+    foreach ($rows as &$row) {
+        $row = teklif_recalculate_totals($row, (float)($row['calculated_subtotal'] ?? 0));
+        unset($row['calculated_subtotal']);
+    }
+    unset($row);
+    return $rows;
 }
