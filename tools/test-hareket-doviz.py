@@ -105,6 +105,8 @@ echo $id;
    position=next(x for x in data['positions'] if x['id']==cari and x['currency']=='TL'); assert position['net']==-120,position
    for path in ['cari-detay.php?id='+str(cari),'cari-ekstre.php?id='+str(cari),'dashboard.php','iade-onar.php']:
     status,h,b=req(path,101); assert status==200 and b'Fatal error' not in b and b'Warning:' not in b,(path,status,b[:500])
+   status,h,b=req('cari-ekstre.php?id='+str(cari),101)
+   footer=b.split(b'<tfoot>')[1].split(b'</tfoot>')[0]; assert b'120,00 TL' in footer,footer
    status,h,b=req('iade-onar.php',103); assert status==302 # Viewer cannot repair.
    status,h,b=req('iade-onar.php',101,{'expected[1]':'bad'}); assert status==302 and h.get('Location')=='dashboard.php' # CSRF rejection.
    print('PASS return POST category normalization, quick entry, cash neutrality, currency and overview endpoints, pages, repair authorization and CSRF.')

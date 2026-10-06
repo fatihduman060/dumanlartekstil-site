@@ -127,7 +127,7 @@ page_header('Cari Ekstresi', 'raporlar');
           <td colspan="4"><strong>TOPLAM</strong></td>
           <td class="right"><strong><?php
             $totalD = 0;
-            foreach ($movements as $m) if (in_array($m['movement_type'], ['verecek','gider','tahsilat'], true)) $totalD += (float)$m['amount'];
+            foreach ($movements as $m) if (in_array($m['movement_type'], ['verecek','gider','tahsilat','ciro_primi','iade'], true)) $totalD += (float)$m['amount'];
             echo e(money($totalD));
           ?></strong></td>
           <td class="right"><strong><?php
