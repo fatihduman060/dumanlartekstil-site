@@ -361,7 +361,7 @@
 
   if (slug === 'hareketler' && !document.querySelector('script[data-hareket-turleri-sadelestir]')) {
     var hareketScript = document.createElement('script');
-    hareketScript.src = 'assets/hareket-turleri-sadelestir.js?v=1';
+    hareketScript.src = 'assets/hareket-turleri-sadelestir.js?v=2';
     hareketScript.setAttribute('data-hareket-turleri-sadelestir', '1');
     document.head.appendChild(hareketScript);
   }

@@ -17,7 +17,7 @@ $running = 0;
 $totalDebt = 0; $totalCredit = 0;
 foreach ($movements as $m) {
     if (in_array($m['movement_type'], ['alacak', 'gelir'], true)) $totalCredit += (float)$m['amount'];
-    elseif (in_array($m['movement_type'], ['tahsilat'], true)) $totalDebt += (float)$m['amount']; // reduces our receivable
+    elseif (in_array($m['movement_type'], ['tahsilat', 'ciro_primi', 'iade'], true)) $totalDebt += (float)$m['amount']; // reduces our receivable
     elseif (in_array($m['movement_type'], ['verecek', 'gider'], true)) $totalDebt += (float)$m['amount'];
     elseif ($m['movement_type'] === 'odeme') $totalCredit += (float)$m['amount']; // reduces payable
 }
@@ -107,7 +107,7 @@ page_header('Cari Ekstresi', 'raporlar');
                 $sign = -1;
             }
             $running += $sign * (float)$m['amount'];
-            $isDebit = in_array($m['movement_type'], ['verecek', 'gider', 'tahsilat'], true);
+            $isDebit = in_array($m['movement_type'], ['verecek', 'gider', 'tahsilat', 'ciro_primi', 'iade'], true);
             $isCredit = !$isDebit;
         ?>
         <tr>

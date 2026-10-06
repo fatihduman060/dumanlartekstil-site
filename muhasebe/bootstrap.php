@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/iade-lib.php';
 
 date_default_timezone_set(APP_TIMEZONE);
 
@@ -671,6 +672,7 @@ function movement_types(): array
         'alacak' => ['label'=>'Alacak','tone'=>'info'],
         'tahsilat' => ['label'=>'Tahsilat','tone'=>'success'],
         'ciro_primi' => ['label'=>'Ciro Primi','tone'=>'special'],
+        'iade' => ['label'=>'İade','tone'=>'special'],
         'verecek' => ['label'=>'Verecek','tone'=>'warning'],
         'odeme' => ['label'=>'Ödeme','tone'=>'danger'],
         'gelir' => ['label'=>'Gelir','tone'=>'success'],
@@ -772,7 +774,7 @@ function private_receivable_totals(array $filters = []): array
 
 function cari_balance(?int $cariId, ?string $currency = null): array
 {
-    if (!$cariId) return ['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0,'net_alacak'=>0,'net_verecek'=>0,'net'=>0];
+    if (!$cariId) return ['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'iade'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0,'net_alacak'=>0,'net_verecek'=>0,'net'=>0];
     $sql = 'SELECT movement_type, SUM(amount) AS total FROM movements WHERE cari_id = ? AND COALESCE(is_cancelled,0)=0';
     $params = [$cariId];
     if ($currency !== null) {
@@ -784,9 +786,9 @@ function cari_balance(?int $cariId, ?string $currency = null): array
     }
     $stmt = db()->prepare($sql . ' GROUP BY movement_type');
     $stmt->execute($params);
-    $totals = ['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
+    $totals = ['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'iade'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
     foreach ($stmt->fetchAll() as $row) if (isset($totals[$row['movement_type']])) $totals[$row['movement_type']] = (float)$row['total'];
-    $totals['net_alacak'] = $totals['alacak'] - $totals['tahsilat'] - $totals['ciro_primi'];
+    $totals['net_alacak'] = $totals['alacak'] - $totals['tahsilat'] - $totals['ciro_primi'] - $totals['iade'];
     $totals['net_verecek'] = $totals['verecek'] - $totals['odeme'];
     $totals['net'] = $totals['net_alacak'] - $totals['net_verecek'];
     return $totals;
@@ -796,7 +798,7 @@ function cari_balance(?int $cariId, ?string $currency = null): array
 function cari_open_period_balance(?int $cariId): array
 {
     $empty = [
-        'alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'net_alacak'=>0,
+        'alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'iade'=>0,'net_alacak'=>0,
         'verecek'=>0,'odeme'=>0,'net_verecek'=>0,'net'=>0,
         'alacak_close_date'=>null,'verecek_close_date'=>null,
         'alacak_close_id'=>0,'verecek_close_id'=>0,
@@ -804,7 +806,7 @@ function cari_open_period_balance(?int $cariId): array
     ];
     if (!$cariId) return $empty;
 
-    $stmt = db()->prepare("SELECT id, movement_type, amount, movement_date FROM movements WHERE cari_id = ? AND COALESCE(is_cancelled,0)=0 AND movement_type IN ('alacak','tahsilat','ciro_primi','verecek','odeme') ORDER BY movement_date ASC, id ASC");
+    $stmt = db()->prepare("SELECT id, movement_type, amount, movement_date FROM movements WHERE cari_id = ? AND COALESCE(is_cancelled,0)=0 AND movement_type IN ('alacak','tahsilat','ciro_primi','iade','verecek','odeme') ORDER BY movement_date ASC, id ASC");
     $stmt->execute([$cariId]);
     $rows = $stmt->fetchAll();
     if (!$rows) return $empty;
@@ -822,11 +824,11 @@ function cari_open_period_balance(?int $cariId): array
         $type = $row['movement_type'];
         $amount = (float)$row['amount'];
         if ($type === 'alacak') $alacakRunning += $amount;
-        if ($type === 'tahsilat' || $type === 'ciro_primi') $alacakRunning -= $amount;
+        if ($type === 'tahsilat' || $type === 'ciro_primi' || $type === 'iade') $alacakRunning -= $amount;
         if ($type === 'verecek') $verecekRunning += $amount;
         if ($type === 'odeme') $verecekRunning -= $amount;
 
-        if (in_array($type, ['alacak','tahsilat','ciro_primi'], true) && abs(round($alacakRunning, 2)) < 0.005) {
+        if (in_array($type, ['alacak','tahsilat','ciro_primi','iade'], true) && abs(round($alacakRunning, 2)) < 0.005) {
             $alacakCloseIndex = $idx;
             $alacakCloseDate = $row['movement_date'] ?? null;
             $alacakCloseId = (int)$row['id'];
@@ -849,7 +851,7 @@ function cari_open_period_balance(?int $cariId): array
     foreach ($rows as $idx => $row) {
         $type = $row['movement_type'];
         $amount = (float)$row['amount'];
-        if (in_array($type, ['alacak','tahsilat','ciro_primi'], true) && $idx > $alacakCloseIndex) {
+        if (in_array($type, ['alacak','tahsilat','ciro_primi','iade'], true) && $idx > $alacakCloseIndex) {
             $period[$type] += $amount;
         }
         if (($type === 'verecek' || $type === 'odeme') && $idx > $verecekCloseIndex) {
@@ -857,7 +859,7 @@ function cari_open_period_balance(?int $cariId): array
         }
     }
 
-    $period['net_alacak'] = $period['alacak'] - $period['tahsilat'] - $period['ciro_primi'];
+    $period['net_alacak'] = $period['alacak'] - $period['tahsilat'] - $period['ciro_primi'] - $period['iade'];
     $period['net_verecek'] = $period['verecek'] - $period['odeme'];
     $period['net'] = $period['net_alacak'] - $period['net_verecek'];
     return $period;
@@ -873,9 +875,9 @@ function dashboard_totals(?string $start = null, ?string $end = null): array
     if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
     $sql .= ' GROUP BY movement_type';
     $stmt = db()->prepare($sql); $stmt->execute($params);
-    $totals=['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
+    $totals=['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'iade'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
     foreach ($stmt->fetchAll() as $row) if (isset($totals[$row['movement_type']])) $totals[$row['movement_type']] = (float)$row['total'];
-    $totals['net_alacak']=$totals['alacak']-$totals['tahsilat']-$totals['ciro_primi'];
+    $totals['net_alacak']=$totals['alacak']-$totals['tahsilat']-$totals['ciro_primi']-$totals['iade'];
     $totals['net_verecek']=$totals['verecek']-$totals['odeme'];
     $totals['net_gelir_gider']=$totals['gelir']-$totals['gider'];
     return $totals;
@@ -998,6 +1000,9 @@ function movement_cash_direction(string $type): ?string
 }
 function sync_movement_account_transaction(int $movementId): void
 {
+    $returnStmt = db()->prepare('SELECT movement_type FROM movements WHERE id=?');
+    $returnStmt->execute([$movementId]);
+    if ($returnStmt->fetchColumn() === 'iade') return;
     db()->prepare("DELETE FROM account_transactions WHERE source_type='movement' AND source_id=?")->execute([$movementId]);
     $stmt = db()->prepare('SELECT m.*, c.name AS cari_name FROM movements m LEFT JOIN cariler c ON c.id=m.cari_id WHERE m.id=?');
     $stmt->execute([$movementId]);

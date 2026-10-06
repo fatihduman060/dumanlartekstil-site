@@ -12,7 +12,7 @@ try {
         $cur = strtoupper(trim((string)($row['currency'] ?? 'TL')));
         if (!in_array($cur, ['TL','USD','EUR'], true)) $cur = 'TL';
         if (!isset($raw[$cariId])) $raw[$cariId] = [];
-        if (!isset($raw[$cariId][$cur])) $raw[$cariId][$cur] = ['alacak'=>0,'tahsilat'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
+        if (!isset($raw[$cariId][$cur])) $raw[$cariId][$cur] = ['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'iade'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
         $type = (string)($row['movement_type'] ?? '');
         if (array_key_exists($type, $raw[$cariId][$cur])) $raw[$cariId][$cur][$type] += (float)($row['total'] ?? 0);
     }
@@ -20,8 +20,8 @@ try {
     foreach ($raw as $cariId => $byCurrency) {
         $items = [];
         foreach (['TL','USD','EUR'] as $cur) {
-            $t = $byCurrency[$cur] ?? ['alacak'=>0,'tahsilat'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
-            $net = ($t['alacak'] - $t['tahsilat']) - ($t['verecek'] - $t['odeme']);
+            $t = $byCurrency[$cur] ?? ['alacak'=>0,'tahsilat'=>0,'ciro_primi'=>0,'iade'=>0,'verecek'=>0,'odeme'=>0,'gelir'=>0,'gider'=>0];
+            $net = ($t['alacak'] - $t['tahsilat'] - $t['ciro_primi'] - $t['iade']) - ($t['verecek'] - $t['odeme']);
             if (abs(round($net, 2)) >= 0.005 || $cur === 'TL') $items[] = ['currency'=>$cur, 'net'=>$net];
         }
         $out[(string)$cariId] = $items;

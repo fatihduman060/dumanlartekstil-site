@@ -17,7 +17,8 @@
       ['verecek','Alış Faturası'],
       ['tahsilat','Tahsilat'],
       ['odeme','Ödeme'],
-      ['gider','İade'],
+      ['iade','İade'],
+      ['gider','Diğer Gider'],
       ['ciro_primi','Ciro Primi']
     ];
 
@@ -45,8 +46,44 @@
       select.value='alacak';
     }
 
+    var form = select.closest('form');
+    var category = form.querySelector('select[name="category_id"]');
+    function isReturnOption(option) {
+      return option && String(option.textContent || '').trim().toLocaleLowerCase('tr-TR') === 'iade';
+    }
+    function syncReturnFields() {
+      if (select.value !== 'iade') return;
+      var account = form.querySelector('[name="account_id"]');
+      if (account) account.value = '';
+      var due = form.querySelector('[name="due_date"]');
+      if (due) due.value = '';
+      var method = form.querySelector('[name="payment_method"]');
+      if (method) method.value = '';
+    }
+    if (category) {
+      // Capture before the sales-detail listener can replace the chosen category.
+      category.addEventListener('change', function () {
+        if (isReturnOption(category.options[category.selectedIndex])) {
+          select.value = 'iade';
+          select.dispatchEvent(new Event('change', {bubbles:true}));
+        }
+      }, true);
+      select.addEventListener('change', function () {
+        if (select.value === 'iade') {
+          Array.prototype.some.call(category.options, function (option) {
+            if (!isReturnOption(option)) return false;
+            category.value = option.value;
+            return true;
+          });
+        } else if (isReturnOption(category.options[category.selectedIndex])) {
+          category.value = '';
+        }
+        syncReturnFields();
+      }, true);
+    }
+    syncReturnFields();
     // Kasa/banka görünürlük mantığının yeni seçime göre tekrar hesaplanmasını sağla.
-    try{select.dispatchEvent(new Event('change',{bubbles:true}));}catch(e){}
+    if (!editing) { try{select.dispatchEvent(new Event('change',{bubbles:true}));}catch(e){} }
   }
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);

@@ -246,7 +246,7 @@ function depo_cikis_balance_summary(array $row): array
     $stmt->execute([(int)($row['cari_movement_id'] ?? 0), $cariId, $currency]);
     $movement = $stmt->fetch();
     // Same company-side signs as cari_balance(): positive means receivable.
-    $signs = ['alacak'=>1, 'odeme'=>1, 'tahsilat'=>-1, 'ciro_primi'=>-1, 'verecek'=>-1];
+    $signs = ['alacak'=>1, 'odeme'=>1, 'tahsilat'=>-1, 'ciro_primi'=>-1, 'iade'=>-1, 'verecek'=>-1];
     $posted = (int)($row['posted_to_cari'] ?? 0) === 1 || $movement;
     if ($posted) {
         $effect = $movement ? (float)$movement['amount'] * ($signs[$movement['movement_type']] ?? 0) : 0.0;

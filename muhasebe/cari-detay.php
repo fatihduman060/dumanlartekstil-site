@@ -125,7 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $accountId = ($_POST['account_id'] ?? '') !== '' ? (int)$_POST['account_id'] : null;
         $docTypeInput = $_POST['document_type'] ?: null;
         $paymentMethodInput = trim($_POST['payment_method'] ?? '');
-        $dueDateInput = $resmiBirimCashExpense ? null : ($_POST['due_date'] ?: null);
+        $dueDateInput = ($resmiBirimCashExpense || $type === 'iade') ? null : ($_POST['due_date'] ?: null);
+        if ($type === 'iade') { $paymentMethodInput = ''; if ($docTypeInput === 'cek') $docTypeInput = null; }
         $checkLikeInput = ['movement_type'=>$type, 'due_date'=>$dueDateInput, 'payment_method'=>$paymentMethodInput, 'document_type'=>$docTypeInput];
         if (!movement_cash_direction($type) || movement_is_check_like($checkLikeInput)) $accountId = null;
         try { $doc = handle_upload('document'); }
@@ -245,6 +246,7 @@ page_header($cari['name'], 'cariler');
   <div class="stats-grid five cari-rontgen-grid compact-rontgen">
     <article class="stat-card soft"><span>Son hareket tarihi</span><strong><?php echo $lastMovement ? e(tr_date($lastMovement['movement_date'])) : '-'; ?></strong><small><?php echo $lastMovement ? e(movement_label($lastMovement['movement_type']) . ' · ' . money($lastMovement['amount'])) : 'Hareket yok'; ?></small></article>
     <article class="stat-card"><span>Toplam alacak işlemi</span><strong><?php echo e(money($balance['alacak'])); ?></strong><small>Genel brüt / ciro</small></article>
+    <article class="stat-card"><span>Toplam ürün iadesi</span><strong><?php echo e(money($balance['iade'])); ?></strong><small>Alacaktan düşer; kasa/bankayı etkilemez</small></article>
     <article class="stat-card"><span>Toplam tahsilat</span><strong><?php echo e(money($balance['tahsilat'])); ?></strong><small>Bugüne kadar alınan</small></article>
     <article class="stat-card"><span>Toplam verecek işlemi</span><strong><?php echo e(money($balance['verecek'])); ?></strong><small>Genel brüt verecek</small></article>
     <article class="stat-card"><span>Toplam ödeme</span><strong><?php echo e(money($balance['odeme'])); ?></strong><small>Bugüne kadar yapılan</small></article>

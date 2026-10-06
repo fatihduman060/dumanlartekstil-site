@@ -86,6 +86,28 @@ echo $id;
    assert con.execute('SELECT is_cancelled FROM movements WHERE id=?',(second[0],)).fetchone()[0]==1
    audit=con.execute("SELECT new_value FROM audit_logs WHERE entity_type='hareket' AND entity_id=? AND action='guncellendi' ORDER BY id DESC LIMIT 1",(first[0],)).fetchone()
    assert json.loads(audit[0])['exchange_rate']==43
+   # Customer returns through both real POST routes and overview JSON endpoints.
+   con.execute("INSERT INTO cariler(id,name,created_at,updated_at) VALUES (900,'Return QA','2026-01-01','2026-01-01')"); con.commit()
+   cari=900
+   category=con.execute("SELECT id FROM categories WHERE name='İade'").fetchone()[0]
+   payload={'action':'save','csrf_token':'qatoken','movement_type':'gider','amount':'100','currency':'TL','movement_date':'2026-09-22','account_id':'900','category_id':category,'cari_id':cari,'due_date':'2026-12-31','document_type':'','payment_method':'Nakit','description':'Return QA'}
+   status,h,b=req('hareketler.php',101,payload); assert status==302
+   returned=last()[0]
+   assert con.execute('SELECT movement_type,account_id,due_date,payment_method FROM movements WHERE id=?',(returned,)).fetchone()==('iade',None,None,'')
+   assert entries(returned)==[]
+   payload.update(action='quick_movement',movement_type='iade',amount='20')
+   status,h,b=req('cari-detay.php?id='+str(cari),101,payload); assert status==302
+   assert con.execute('SELECT movement_type,account_id FROM movements ORDER BY id DESC LIMIT 1').fetchone()==('iade',None)
+   assert entries(last()[0])==[]
+   status,h,b=req('cari-doviz-bakiye.php',101); data=json.loads(b); assert data['ok']
+   net=next(x['net'] for x in data['balances'][str(cari)] if x['currency']=='TL'); assert net==-120,net
+   status,h,b=req('dashboard-cari-net-tarama.php',101); data=json.loads(b); assert data['ok'],data
+   position=next(x for x in data['positions'] if x['id']==cari and x['currency']=='TL'); assert position['net']==-120,position
+   for path in ['cari-detay.php?id='+str(cari),'cari-ekstre.php?id='+str(cari),'dashboard.php','iade-onar.php']:
+    status,h,b=req(path,101); assert status==200 and b'Fatal error' not in b and b'Warning:' not in b,(path,status,b[:500])
+   status,h,b=req('iade-onar.php',103); assert status==302 # Viewer cannot repair.
+   status,h,b=req('iade-onar.php',101,{'expected[1]':'bad'}); assert status==302 and h.get('Location')=='dashboard.php' # CSRF rejection.
+   print('PASS return POST category normalization, quick entry, cash neutrality, currency and overview endpoints, pages, repair authorization and CSRF.')
    print('PASS USD/EUR in/out conversion; editing replaces balance effect; TL unchanged; invalid rates rejected; noncash remains foreign; rounding; edit form; cancellation preserves movement and removes balance effect; audit rate.')
   finally:
    server.terminate(); server.wait(timeout=10)
