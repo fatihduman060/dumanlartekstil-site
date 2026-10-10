@@ -69,7 +69,7 @@ function dashboard_cari_aggregate(?string $startDate = null, ?string $endDate = 
         COALESCE(m.created_at,'') AS created_at
       FROM movements m
       WHERE COALESCE(m.is_cancelled,0)=0
-        AND m.movement_type IN ('alacak','tahsilat','ciro_primi','iade','verecek','odeme')
+        AND m.movement_type IN ('alacak','tahsilat','ciro_primi','iade','iade_borc_azalt','verecek','odeme')
         " . $dateSql . "
       ORDER BY m.id ASC");
     $stmt->execute($dateParams);
@@ -108,6 +108,7 @@ function dashboard_cari_aggregate(?string $startDate = null, ?string $endDate = 
                 'tahsilat'=>0.0,
                 'ciro_primi'=>0.0,
                 'iade'=>0.0,
+                'iade_borc_azalt'=>0.0,
                 'verecek'=>0.0,
                 'odeme'=>0.0,
                 'last_date'=>'',

@@ -19,7 +19,7 @@ foreach ($movements as $m) {
     if (in_array($m['movement_type'], ['alacak', 'gelir'], true)) $totalCredit += (float)$m['amount'];
     elseif (in_array($m['movement_type'], ['tahsilat', 'ciro_primi', 'iade'], true)) $totalDebt += (float)$m['amount']; // reduces our receivable
     elseif (in_array($m['movement_type'], ['verecek', 'gider'], true)) $totalDebt += (float)$m['amount'];
-    elseif ($m['movement_type'] === 'odeme') $totalCredit += (float)$m['amount']; // reduces payable
+    elseif (in_array($m['movement_type'], ['odeme', 'iade_borc_azalt'], true)) $totalCredit += (float)$m['amount']; // reduces payable
 }
 page_header('Cari Ekstresi', 'raporlar');
 ?>
@@ -101,7 +101,7 @@ page_header('Cari Ekstresi', 'raporlar');
         $running = 0;
         foreach ($movements as $m):
             // Bakiye hesabı: alacak ve odeme pozitif (bize gelecek/borç azaldı), tahsilat ve verecek negatif
-            if (in_array($m['movement_type'], ['alacak', 'gelir', 'odeme'], true)) {
+            if (in_array($m['movement_type'], ['alacak', 'gelir', 'odeme', 'iade_borc_azalt'], true)) {
                 $sign = 1;
             } else {
                 $sign = -1;
@@ -132,7 +132,7 @@ page_header('Cari Ekstresi', 'raporlar');
           ?></strong></td>
           <td class="right"><strong><?php
             $totalC = 0;
-            foreach ($movements as $m) if (in_array($m['movement_type'], ['alacak','gelir','odeme'], true)) $totalC += (float)$m['amount'];
+            foreach ($movements as $m) if (in_array($m['movement_type'], ['alacak','gelir','odeme','iade_borc_azalt'], true)) $totalC += (float)$m['amount'];
             echo e(money($totalC));
           ?></strong></td>
           <td class="right"><strong class="<?php echo $running >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo e(money($running)); ?></strong></td>

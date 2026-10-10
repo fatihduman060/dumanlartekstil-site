@@ -72,7 +72,8 @@ try {
             if (strtoupper((string)($positionRow['currency'] ?? 'TL')) !== 'TL') continue;
             $amount = (float)$positionRow['alacak'] - (float)$positionRow['tahsilat']
                 - (float)($positionRow['ciro_primi'] ?? 0) - (float)($positionRow['iade'] ?? 0)
-                - (float)$positionRow['verecek'] + (float)$positionRow['odeme'];
+                - (float)$positionRow['verecek'] + (float)$positionRow['odeme']
+                + (float)($positionRow['iade_borc_azalt'] ?? 0);
             if ($amount <= 0.005) continue;
             $rows[] = [
                 'date'=>(string)($positionRow['last_date'] ?? ''),

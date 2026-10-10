@@ -21,6 +21,7 @@
       ['gider','Diğer Gider'],
       ['ciro_primi','Ciro Primi']
     ];
+    if(editing && current==='iade_borc_azalt') items.splice(5,0,['iade_borc_azalt','İade (borcu azaltır)']);
 
     select.innerHTML='';
     items.forEach(function(item){
@@ -52,7 +53,7 @@
       return option && String(option.textContent || '').trim().toLocaleLowerCase('tr-TR') === 'iade';
     }
     function syncReturnFields() {
-      if (select.value !== 'iade') return;
+      if (!['iade', 'iade_borc_azalt'].includes(select.value)) return;
       var account = form.querySelector('[name="account_id"]');
       if (account) account.value = '';
       var due = form.querySelector('[name="due_date"]');

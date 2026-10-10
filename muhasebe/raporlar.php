@@ -179,7 +179,8 @@ if ($movementReady) {
             if (strtoupper((string)($positionRow['currency'] ?? 'TL')) !== 'TL') continue;
             $positionNet = (float)$positionRow['alacak'] - (float)$positionRow['tahsilat']
                 - (float)($positionRow['ciro_primi'] ?? 0) - (float)($positionRow['iade'] ?? 0)
-                - (float)$positionRow['verecek'] + (float)$positionRow['odeme'];
+                - (float)$positionRow['verecek'] + (float)$positionRow['odeme']
+                + (float)($positionRow['iade_borc_azalt'] ?? 0);
             if ($positionNet > 0.005) $netReceivable += $positionNet;
             elseif ($positionNet < -0.005) $netPayable += abs($positionNet);
         }

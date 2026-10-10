@@ -39,9 +39,9 @@ function cari_haftalik_rows(): array
     $totalPayable = 0.0;
     foreach ($rows as $row) {
         $balance = cari_balance((int)$row['id']);
-        $receivable = max(0, (float)($balance['net_alacak'] ?? 0));
-        $payable = max(0, (float)($balance['net_verecek'] ?? 0));
-        $net = (float)($balance['net'] ?? ($receivable - $payable));
+        $net = (float)($balance['net'] ?? ((float)($balance['net_alacak'] ?? 0) - (float)($balance['net_verecek'] ?? 0)));
+        $receivable = max(0, $net);
+        $payable = max(0, -$net);
         $totalReceivable += $receivable;
         $totalPayable += $payable;
         $status = abs($net) < 0.005 ? 'Kapalı' : ($net > 0 ? 'Biz alacaklıyız' : 'Biz borçluyuz');
