@@ -90,6 +90,8 @@ echo $id;
    con.execute("INSERT INTO cariler(id,name,created_at,updated_at) VALUES (900,'Return QA','2026-01-01','2026-01-01')"); con.commit()
    cari=900
    category=con.execute("SELECT id FROM categories WHERE name='İade'").fetchone()[0]
+   sale={'action':'save','csrf_token':'qatoken','movement_type':'alacak','amount':'300','currency':'TL','movement_date':'2026-09-22','account_id':'','category_id':'','cari_id':cari,'due_date':'','document_type':'','payment_method':'','description':'Prior sale'}
+   status,h,b=req('hareketler.php',101,sale); assert status==302
    payload={'action':'save','csrf_token':'qatoken','movement_type':'gider','amount':'100','currency':'TL','movement_date':'2026-09-22','account_id':'900','category_id':category,'cari_id':cari,'due_date':'2026-12-31','document_type':'','payment_method':'Nakit','description':'Return QA'}
    status,h,b=req('hareketler.php',101,payload); assert status==302
    returned=last()[0]
@@ -99,8 +101,17 @@ echo $id;
    status,h,b=req('cari-detay.php?id='+str(cari),101,payload); assert status==302
    assert con.execute('SELECT movement_type,account_id FROM movements ORDER BY id DESC LIMIT 1').fetchone()==('iade',None)
    assert entries(last()[0])==[]
+   con.execute("INSERT INTO cariler(id,name,created_at,updated_at) VALUES (901,'Supplier Return QA','2026-01-01','2026-01-01')"); con.commit()
+   supplier_purchase=dict(sale,cari_id=901,movement_type='verecek',amount='500',description='Prior purchase')
+   status,h,b=req('hareketler.php',101,supplier_purchase); assert status==302
+   supplier_return=dict(payload,cari_id=901,movement_type='iade',amount='80',description='Supplier return QA')
+   status,h,b=req('hareketler.php',101,supplier_return); assert status==302
+   supplier_return_id=last()[0]
+   assert con.execute('SELECT movement_type,account_id FROM movements WHERE id=?',(supplier_return_id,)).fetchone()==('iade_borc_azalt',None)
+   assert entries(supplier_return_id)==[]
    status,h,b=req('cari-doviz-bakiye.php',101); data=json.loads(b); assert data['ok']
-   net=next(x['net'] for x in data['balances'][str(cari)] if x['currency']=='TL'); assert net==-120,net
+   net=next(x['net'] for x in data['balances'][str(cari)] if x['currency']=='TL'); assert net==180,net
+   supplier_net=next(x['net'] for x in data['balances']['901'] if x['currency']=='TL'); assert supplier_net==-420,supplier_net
    status,h,b=req('dashboard-cari-net-tarama.php',101); data=json.loads(b); assert data['ok'],data
    position=next(x for x in data['positions'] if x['id']==cari and x['currency']=='TL'); assert position['net']==-120,position
    for path in ['cari-detay.php?id='+str(cari),'cari-ekstre.php?id='+str(cari),'dashboard.php','iade-onar.php']:

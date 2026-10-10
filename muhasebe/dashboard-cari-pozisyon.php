@@ -17,7 +17,7 @@ try {
         if (!in_array($currency, ['TL','USD','EUR'], true)) $currency = 'TL';
 
         $netAlacak = (float)$row['alacak'] - (float)$row['tahsilat'] - (float)($row['ciro_primi'] ?? 0) - (float)($row['iade'] ?? 0);
-        $netVerecek = (float)$row['verecek'] - (float)$row['odeme'];
+        $netVerecek = (float)$row['verecek'] - (float)$row['odeme'] - (float)($row['iade_borc_azalt'] ?? 0);
         $net = $netAlacak - $netVerecek;
 
         if ($type === 'alacak') {

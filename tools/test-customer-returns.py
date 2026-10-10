@@ -12,7 +12,7 @@ require __DIR__.'/muhasebe/bootstrap.php';
 require __DIR__.'/muhasebe/dashboard-cari-aggregate.php';
 $p = db();
 ensure_column($p, 'movements', 'currency', "TEXT NOT NULL DEFAULT 'TL'");
-$p->exec("INSERT INTO cariler(id,name,created_at,updated_at) VALUES (101,'Test customer','2026-01-01','2026-01-01'),(102,'Test closure','2026-01-01','2026-01-01')");
+$p->exec("INSERT INTO cariler(id,name,created_at,updated_at) VALUES (101,'Test customer','2026-01-01','2026-01-01'),(102,'Test closure','2026-01-01','2026-01-01'),(103,'Test supplier','2026-01-01','2026-01-01'),(104,'Test debtor','2026-01-01','2026-01-01')");
 $p->exec("INSERT INTO categories(id,name,type,created_at) VALUES (900,'İade','genel','2026-01-01'),(901,'Other','genel','2026-01-01')");
 function eq($a, $b, $message) { if ($a != $b) throw new RuntimeException($message.': '.json_encode([$a,$b])); }
 function movement($id,$type,$amount,$category=null,$currency='TL',$cancelled=0,$cari=101) {
@@ -56,6 +56,24 @@ $p->exec("CREATE TRIGGER reject_audit BEFORE INSERT ON audit_logs BEGIN SELECT R
 try { customer_return_repair($p,$fp,[]);throw new Exception('audit failure accepted'); } catch(PDOException $e) {}
 eq($p->query('SELECT movement_type FROM movements WHERE id=15')->fetchColumn(),'alacak','audit failure rollback');
 $p->exec('DROP TRIGGER reject_audit');$before=cari_balance(101,'TL')['net']; customer_return_repair($p,$fp,[]);eq(cari_balance(101,'TL')['net'],$before-202,'legacy alacak sign corrected');
-echo "PASS: return balances, dashboard, currency, cancelled rows, period closure, cash neutrality, audit, rollback, concurrency guard, idempotence\n";
+movement(16,'verecek',1000,null,'TL',0,103); movement(17,'odeme',200,null,'TL',0,103);
+eq(resolve_return_movement_type($p,103,'TL','2026-10-07'),'iade_borc_azalt','supplier return direction');
+movement(18,'iade_borc_azalt',300,null,'TL',0,103);
+eq(cari_balance(103,'TL')['net'],-500,'supplier payable reduced');
+eq(cari_open_period_balance(103)['net'],-500,'supplier return open period');
+eq(movement_cash_direction('iade_borc_azalt'),null,'supplier return is cash neutral');
+$supplierPosition=null; foreach(dashboard_cari_aggregate()['positions'] as $position) if($position['id']===103) $supplierPosition=$position;
+eq($supplierPosition['verecek']-$supplierPosition['odeme']-$supplierPosition['iade_borc_azalt'],500,'supplier dashboard balance');
+sync_movement_account_transaction(18); eq($p->query("SELECT COUNT(*) FROM account_transactions WHERE source_type='movement' AND source_id=18")->fetchColumn(),0,'supplier return no cash link');
+movement(19,'alacak',500,null,'TL',0,104);
+eq(resolve_return_movement_type($p,104,'TL','2026-10-07'),'iade','customer return direction');
+movement(20,'iade',600,null,'TL',0,104);
+eq(cari_balance(104,'TL')['net'],-100,'return can turn receivable into payable');
+movement(21,'verecek',100,null,'TL',0,103); movement(22,'odeme',100,null,'TL',0,103);
+eq(resolve_return_movement_type($p,103,'TL','2026-10-07'),'iade_borc_azalt','zero balance follows supplier history');
+$p->exec("INSERT INTO cariler(id,name,created_at,updated_at) VALUES (105,'Empty account','2026-01-01','2026-01-01')");
+try { resolve_return_movement_type($p,105,'TL','2026-10-07'); throw new Exception('ambiguous zero balance accepted'); } catch (RuntimeException $e) {}
+eq(resolve_return_movement_type($p,105,'TL','2026-10-07',0,'borc'),'iade_borc_azalt','explicit direction for empty account');
+echo "PASS: return balances, supplier/customer direction, zero balance, dashboard, currency, cancelled rows, period closure, cash neutrality, audit, rollback, concurrency guard, idempotence\n";
 ''')
     subprocess.run([os.environ.get('PHP_BINARY','php'),str(site/'test.php')],check=True)

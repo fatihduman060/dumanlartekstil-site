@@ -111,6 +111,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Hızlı hareket için tip ve tutar kontrol edilmeli.');
             redirect('cari-detay.php?id=' . $id);
         }
+        if ($type === 'iade') {
+            try {
+                $type = resolve_return_movement_type(db(), $id, 'TL', $date, 0, (string)($_POST['return_direction'] ?? ''));
+            } catch (Throwable $e) {
+                flash('error', $e->getMessage());
+                redirect('cari-detay.php?id=' . $id);
+            }
+        }
         if (is_private_receivable_movement($type)) {
             try { $doc = handle_upload('document'); }
             catch (Throwable $e) { flash('error', $e->getMessage()); redirect('cari-detay.php?id=' . $id); }
@@ -125,8 +133,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $accountId = ($_POST['account_id'] ?? '') !== '' ? (int)$_POST['account_id'] : null;
         $docTypeInput = $_POST['document_type'] ?: null;
         $paymentMethodInput = trim($_POST['payment_method'] ?? '');
-        $dueDateInput = ($resmiBirimCashExpense || $type === 'iade') ? null : ($_POST['due_date'] ?: null);
-        if ($type === 'iade') { $paymentMethodInput = ''; if ($docTypeInput === 'cek') $docTypeInput = null; }
+        $isReturn = in_array($type, ['iade', RETURN_PAYABLE_REDUCTION_TYPE], true);
+        $dueDateInput = ($resmiBirimCashExpense || $isReturn) ? null : ($_POST['due_date'] ?: null);
+        if ($isReturn) { $paymentMethodInput = ''; if ($docTypeInput === 'cek') $docTypeInput = null; }
         $checkLikeInput = ['movement_type'=>$type, 'due_date'=>$dueDateInput, 'payment_method'=>$paymentMethodInput, 'document_type'=>$docTypeInput];
         if (!movement_cash_direction($type) || movement_is_check_like($checkLikeInput)) $accountId = null;
         try { $doc = handle_upload('document'); }
@@ -246,7 +255,7 @@ page_header($cari['name'], 'cariler');
   <div class="stats-grid five cari-rontgen-grid compact-rontgen">
     <article class="stat-card soft"><span>Son hareket tarihi</span><strong><?php echo $lastMovement ? e(tr_date($lastMovement['movement_date'])) : '-'; ?></strong><small><?php echo $lastMovement ? e(movement_label($lastMovement['movement_type']) . ' · ' . money($lastMovement['amount'])) : 'Hareket yok'; ?></small></article>
     <article class="stat-card"><span>Toplam alacak işlemi</span><strong><?php echo e(money($balance['alacak'])); ?></strong><small>Genel brüt / ciro</small></article>
-    <article class="stat-card"><span>Toplam ürün iadesi</span><strong><?php echo e(money($balance['iade'])); ?></strong><small>Alacaktan düşer; kasa/bankayı etkilemez</small></article>
+    <article class="stat-card"><span>Toplam ürün iadesi</span><strong><?php echo e(money($balance['iade'] + $balance['iade_borc_azalt'])); ?></strong><small>Cari bakiyesine göre borcu veya alacağı azaltır; kasa/bankayı etkilemez</small></article>
     <article class="stat-card"><span>Toplam tahsilat</span><strong><?php echo e(money($balance['tahsilat'])); ?></strong><small>Bugüne kadar alınan</small></article>
     <article class="stat-card"><span>Toplam verecek işlemi</span><strong><?php echo e(money($balance['verecek'])); ?></strong><small>Genel brüt verecek</small></article>
     <article class="stat-card"><span>Toplam ödeme</span><strong><?php echo e(money($balance['odeme'])); ?></strong><small>Bugüne kadar yapılan</small></article>
@@ -255,11 +264,12 @@ page_header($cari['name'], 'cariler');
 
 <?php if (can_write()): ?>
 <section class="panel-card">
-  <div class="card-head"><h3>Hızlı tahsilat / ödeme</h3><span><?php echo $isResmiBirimOdemeleriCari ? 'Bu caride ödeme gider sayılır; cari bakiyesi etkilenmez.' : 'Bu cariye direkt hareket ekle'; ?></span></div>
+  <div class="card-head"><h3>Hızlı tahsilat / ödeme</h3><span><?php echo $isResmiBirimOdemeleriCari ? 'Bu caride ödeme gider sayılır; cari bakiyesi etkilenmez.' : 'İade cari bakiyesinin yönüne göre borcu veya alacağı azaltır.'; ?></span></div>
   <form method="post" enctype="multipart/form-data" class="filterbar multi ultra">
     <?php echo csrf_field(); ?>
     <input type="hidden" name="action" value="quick_movement">
     <select name="movement_type" required><?php foreach (movement_entry_types() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo $key===($isResmiBirimOdemeleriCari?'gider':'tahsilat') ? 'selected' : ''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select>
+    <select name="return_direction" aria-label="Bakiye sıfırken iade yönü"><option value="">İade yönü: otomatik</option><option value="borc">Borcu azalt</option><option value="alacak">Alacağı azalt</option></select>
     <input name="amount" type="text" inputmode="decimal" placeholder="Tutar" required>
     <input name="movement_date" type="date" value="<?php echo e(date('Y-m-d')); ?>" required>
     <input name="due_date" type="date" title="Vade tarihi">

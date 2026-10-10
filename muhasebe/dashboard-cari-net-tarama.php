@@ -22,7 +22,7 @@ try {
         if (!isset($totals[$currency])) $currency = 'TL';
 
         $netAlacak = round((float)$row['alacak'] - (float)$row['tahsilat'] - (float)($row['ciro_primi'] ?? 0) - (float)($row['iade'] ?? 0), 2);
-        $netVerecek = round((float)$row['verecek'] - (float)$row['odeme'], 2);
+        $netVerecek = round((float)$row['verecek'] - (float)$row['odeme'] - (float)($row['iade_borc_azalt'] ?? 0), 2);
         $net = round($netAlacak - $netVerecek, 2);
         $receivable = $net > 0.004 ? $net : 0.0;
         $payable = $net < -0.004 ? abs($net) : 0.0;

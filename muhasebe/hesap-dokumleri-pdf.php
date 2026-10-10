@@ -205,7 +205,7 @@ $movementStmt = db()->prepare("SELECT m.*, c.name AS cari_name
     LEFT JOIN cariler c ON c.id=m.cari_id
     WHERE COALESCE(m.is_cancelled,0)=0
       AND m.movement_date BETWEEN ? AND ?
-      AND m.movement_type IN ('alacak','tahsilat','ciro_primi','iade','verecek','odeme','gelir','gider')
+      AND m.movement_type IN ('alacak','tahsilat','ciro_primi','iade','iade_borc_azalt','verecek','odeme','gelir','gider')
     ORDER BY m.movement_date ASC, m.id ASC");
 $movementStmt->execute([$start, $end]);
 $movements = $movementStmt->fetchAll();

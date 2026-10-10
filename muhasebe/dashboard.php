@@ -163,7 +163,8 @@ try {
         $initialCariNet = (float)$initialCariPosition['alacak'] - (float)$initialCariPosition['tahsilat']
             - (float)($initialCariPosition['ciro_primi'] ?? 0)
             - (float)($initialCariPosition['iade'] ?? 0)
-            - (float)$initialCariPosition['verecek'] + (float)$initialCariPosition['odeme'];
+            - (float)$initialCariPosition['verecek'] + (float)$initialCariPosition['odeme']
+            + (float)($initialCariPosition['iade_borc_azalt'] ?? 0);
         if ($initialCariNet > 0.005) $initialNetReceivable += $initialCariNet;
         elseif ($initialCariNet < -0.005) $initialNetPayable += abs($initialCariNet);
     }
@@ -196,18 +197,18 @@ $dueCheckStmt->execute([$today, $weekAhead]);
 $dueChecks = $dueCheckStmt->fetchAll();
 $topStmt = db()->query("SELECT c.id, c.name,
     SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END) - SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END) - SUM(CASE WHEN m.movement_type IN ('ciro_primi','iade') THEN m.amount ELSE 0 END) AS net_alacak,
-    SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END) - SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END) AS net_verecek
+    SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END) - SUM(CASE WHEN m.movement_type IN ('odeme','iade_borc_azalt') THEN m.amount ELSE 0 END) AS net_verecek
   FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0 GROUP BY c.id ORDER BY ABS((COALESCE(net_alacak,0)-COALESCE(net_verecek,0))) DESC LIMIT 6");
 $topCariler = $topStmt->fetchAll();
 
 $topReceivables = db()->query("SELECT c.id, c.name,
     COALESCE(SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type IN ('ciro_primi','iade') THEN m.amount ELSE 0 END),0) -
-    (COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END),0)) AS net
+    (COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type IN ('odeme','iade_borc_azalt') THEN m.amount ELSE 0 END),0)) AS net
   FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
   GROUP BY c.id HAVING net > 0 ORDER BY net DESC LIMIT 5")->fetchAll();
 $topPayables = db()->query("SELECT c.id, c.name,
     COALESCE(SUM(CASE WHEN m.movement_type='alacak' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type IN ('ciro_primi','iade') THEN m.amount ELSE 0 END),0) -
-    (COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END),0)) AS net
+    (COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0) - COALESCE(SUM(CASE WHEN m.movement_type IN ('odeme','iade_borc_azalt') THEN m.amount ELSE 0 END),0)) AS net
   FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
   GROUP BY c.id HAVING net < 0 ORDER BY net ASC LIMIT 5")->fetchAll();
 $upcomingPayments = [];
@@ -227,7 +228,7 @@ $noCollectionStmt = db()->prepare("SELECT * FROM (
         - COALESCE(SUM(CASE WHEN m.movement_type='tahsilat' THEN m.amount ELSE 0 END),0)
         - COALESCE(SUM(CASE WHEN m.movement_type IN ('ciro_primi','iade') THEN m.amount ELSE 0 END),0)
         - COALESCE(SUM(CASE WHEN m.movement_type='verecek' THEN m.amount ELSE 0 END),0)
-        + COALESCE(SUM(CASE WHEN m.movement_type='odeme' THEN m.amount ELSE 0 END),0) AS net_bakiye,
+        + COALESCE(SUM(CASE WHEN m.movement_type IN ('odeme','iade_borc_azalt') THEN m.amount ELSE 0 END),0) AS net_bakiye,
       MAX(CASE WHEN m.movement_type='tahsilat' THEN m.movement_date ELSE NULL END) AS last_tahsilat
     FROM cariler c LEFT JOIN movements m ON m.cari_id=c.id AND COALESCE(m.is_cancelled,0)=0
     GROUP BY c.id

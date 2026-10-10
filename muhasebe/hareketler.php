@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // A return category is authoritative even for old/cached forms posting gider.
         try {
             $type = customer_return_entry_type((string)$type, (int)($_POST['category_id'] ?? 0), $postedCariId);
-            if ($type === 'iade' && $id > 0) customer_return_assert_unlinked(db(), $id);
+            if (in_array($type, ['iade', RETURN_PAYABLE_REDUCTION_TYPE], true) && $id > 0) customer_return_assert_unlinked(db(), $id);
         } catch (Throwable $e) {
             flash('error', $e->getMessage());
             redirect('hareketler.php' . ($id > 0 ? '?edit=' . $id : ''));
@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount = decimal_from_input($_POST['amount'] ?? '0');
         $currency = hareket_currency_value($_POST['currency'] ?? 'TL');
         $date = $_POST['movement_date'] ?: date('Y-m-d');
-        if (!isset(movement_entry_types()[$type]) || $amount <= 0) {
+        if (!isset(movement_types()[$type]) || $amount <= 0) {
             flash('error', 'Hareket tipi ve tutar kontrol edilmeli.');
             redirect('hareketler.php');
         }
@@ -156,6 +156,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $oldMovement = $stmt->fetch() ?: null;
             $oldDoc = $oldMovement ? ['path'=>$oldMovement['document_path'] ?? null, 'name'=>$oldMovement['document_name'] ?? null, 'mime'=>$oldMovement['document_mime'] ?? null] : null;
         }
+        if ($type === 'iade') {
+            try {
+                if (!$postedCariId) throw new RuntimeException('İade için cari seçilmeli.');
+                $type = resolve_return_movement_type(db(), $postedCariId, $currency, $date, $id, (string)($_POST['return_direction'] ?? ''));
+            } catch (Throwable $e) {
+                flash('error', $e->getMessage());
+                redirect('hareketler.php' . ($id > 0 ? '?edit=' . $id : ''));
+            }
+        }
         try {
             $doc = handle_upload('document', $oldDoc);
         } catch (Throwable $e) {
@@ -165,8 +174,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $accountId = ($_POST['account_id'] ?? '') !== '' ? (int)$_POST['account_id'] : null;
         $docTypeInput = $_POST['document_type'] ?: null;
         $paymentMethodInput = trim($_POST['payment_method'] ?? '');
-        $dueDateInput = ($neutralCashExpense || $type === 'iade') ? null : ($_POST['due_date'] ?: null);
-        if ($type === 'iade') { $paymentMethodInput = ''; if ($docTypeInput === 'cek') $docTypeInput = null; }
+        $isReturn = in_array($type, ['iade', RETURN_PAYABLE_REDUCTION_TYPE], true);
+        $dueDateInput = ($neutralCashExpense || $isReturn) ? null : ($_POST['due_date'] ?: null);
+        if ($isReturn) { $paymentMethodInput = ''; if ($docTypeInput === 'cek') $docTypeInput = null; }
         $checkLikeInput = ['movement_type' => $type, 'due_date' => $dueDateInput, 'payment_method' => $paymentMethodInput, 'document_type' => $docTypeInput];
         if (!movement_cash_direction($type) || movement_is_check_like($checkLikeInput)) $accountId = null;
         $rateInput = trim((string)($_POST['exchange_rate'] ?? ''));
@@ -425,7 +435,8 @@ page_header('Hareketler', 'hareketler');
       <input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id'] ?? 0); ?>">
       <div class="movement-top-row">
         <label class="movement-cari-wide">Cari<select name="cari_id"><option value="">Cari seçilmedi</option><?php foreach($cariler as $c): $selected=(string)($edit['cari_id'] ?? ($_GET['cari_id'] ?? ''))===(string)$c['id']; ?><option value="<?php echo e($c['id']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($c['name']); ?> — <?php echo e($c['cari_type']); ?></option><?php endforeach; ?></select></label>
-        <label>Tip<select name="movement_type" required data-cash-type><?php $entryTypes = $edit ? movement_types() : movement_entry_types(); foreach ($entryTypes as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['movement_type'] ?? ($_GET['movement_type'] ?? ''))===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select><small>İade müşteriden alacağımızı azaltır, kasa/bankayı etkilemez. Özel Alacak seçilirse genel bakiyeye işlemez; sadece seçilen carinin özel alanına kaydolur.</small></label>
+      <label>Tip<select name="movement_type" required data-cash-type><?php $entryTypes = $edit ? movement_types() : movement_entry_types(); foreach ($entryTypes as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['movement_type'] ?? ($_GET['movement_type'] ?? ''))===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select><small>İade, işlem öncesi cari bakiyesinin yönüne göre borcu veya alacağı azaltır; kasa/bankayı etkilemez. Özel Alacak genel bakiyeye işlemez.</small></label>
+      <label>İade yönü<select name="return_direction"><option value="">Cari bakiyesine göre otomatik</option><option value="borc">Borcu azalt</option><option value="alacak">Alacağı azalt</option></select><small>Yalnızca bakiye sıfırsa ve önceki alış/satış yönü belli değilse kullanılır.</small></label>
         <label>Kategori<select name="category_id"><option value="">Kategori yok</option><?php foreach($movementFormCategories as $cat): ?><option value="<?php echo e($cat['id']); ?>" <?php echo ((string)($edit['category_id'] ?? '')===(string)$cat['id'])?'selected':''; ?>><?php echo e($cat['name']); ?></option><?php endforeach; ?></select></label>
       </div>
       <div class="two-col">
