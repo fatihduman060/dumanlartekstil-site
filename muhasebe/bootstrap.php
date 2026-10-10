@@ -674,7 +674,7 @@ function movement_types(): array
         'tahsilat' => ['label'=>'Tahsilat','tone'=>'success'],
         'ciro_primi' => ['label'=>'Ciro Primi','tone'=>'special'],
         'iade' => ['label'=>'İade','tone'=>'special'],
-        RETURN_PAYABLE_REDUCTION_TYPE => ['label'=>'İade (borcu azaltır)','tone'=>'special'],
+        RETURN_PAYABLE_REDUCTION_TYPE => ['label'=>'İade','tone'=>'special'],
         'verecek' => ['label'=>'Verecek','tone'=>'warning'],
         'odeme' => ['label'=>'Ödeme','tone'=>'danger'],
         'gelir' => ['label'=>'Gelir','tone'=>'success'],
