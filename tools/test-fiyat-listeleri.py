@@ -24,6 +24,11 @@ def run(request, opener, url, con, product_id):
     def count(): return con.execute('SELECT COUNT(*) FROM price_lists').fetchone()[0]
     def price(): return con.execute('SELECT list_unit_price FROM offer_products WHERE id=?',(product_id,)).fetchone()[0]
     def post(action,id,user=101,csrf='qatoken'): return request('fiyat-listeleri.php',user,{'action':action,'id':id,'csrf_token':csrf})
+    def fetch(path,user=101):
+        req=urllib.request.Request(url+path,headers={'Cookie':f'bitke_muhasebe_session=qa{user}'})
+        try: res=opener.open(req)
+        except urllib.error.HTTPError as e: res=e
+        return res.status,res.headers,res.read()
     assert request('fiyat-listeleri.php')[0]==200
     assert request('fiyat-listeleri.php',103)[0]==200
     for user in [102,104]: assert request('fiyat-listeleri.php',user)[0]==302
@@ -39,6 +44,9 @@ def run(request, opener, url, con, product_id):
     assert price()==555.5
     assert con.execute('SELECT COUNT(*) FROM offer_products WHERE list_unit_price IS NOT NULL').fetchone()[0]==1
     assert request('fiyat-listeleri.php?download='+str(first))[0]==200
+    status,_,preview=fetch('fiyat-listeleri.php?preview='+str(first))
+    assert status==200 and b'555,50' in preview and b'6000 ERKEK' in preview
+    assert fetch('fiyat-listeleri.php?view='+str(first))[0]==404
     assert request('fiyat-listeleri.php?download='+str(first),102)[0]==302
     assert post('delete',first,103)[0]==302 and price()==555.5
     assert post('delete',first,csrf='bad')[0]==302 and price()==555.5
@@ -54,6 +62,9 @@ def run(request, opener, url, con, product_id):
     second=con.execute('SELECT MAX(id) FROM price_lists').fetchone()[0]
     assert price()==555.5
     assert post('current',second)[0]==302 and price()==666.75
+    status,headers,body=fetch('fiyat-listeleri.php?preview='+str(second))
+    assert status==200 and b'666,75' in body
+    assert fetch('fiyat-listeleri.php?download='+str(second))[0]==200
     assert con.execute('SELECT COUNT(*) FROM price_lists WHERE is_current=1').fetchone()[0]==1
     assert post('current',first)[0]==302 and price()==555.5
     # Failure to persist audit must roll back the switch.
@@ -74,7 +85,10 @@ def run(request, opener, url, con, product_id):
     assert all(con.execute('SELECT * FROM '+t).fetchall()==rows for t,rows in financial.items())
     # PDF archive-only, paired structured data, ordinary editor and existing limited-document access.
     pdf=b'%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF'
-    assert upload(pdf,True,filename='list.pdf')[0]==200 and count()==2
+    assert upload(pdf,False,filename='list.pdf')[0]==302 and count()==3
+    pdf_only=con.execute('SELECT MAX(id) FROM price_lists').fetchone()[0]
+    status,headers,body=fetch('fiyat-listeleri.php?view='+str(pdf_only))
+    assert status==200 and headers.get('Content-Type','').startswith('application/pdf') and headers.get('Content-Disposition','').startswith('inline') and body.startswith(b'%PDF'),(status,dict(headers),body[:20])
     assert upload(pdf,False,user=105,filename='list.pdf')[0]==302
     pdf_id=con.execute('SELECT MAX(id) FROM price_lists').fetchone()[0]
     assert request('fiyat-listeleri.php',106)[0]==200
@@ -82,12 +96,14 @@ def run(request, opener, url, con, product_id):
     assert upload(pdf,True,user=106,filename='list.pdf',extra='Artikel;Birim Fiyat\n6000;777')[0]==302
     paired_id=con.execute('SELECT MAX(id) FROM price_lists').fetchone()[0]
     assert price()==777
+    assert fetch('fiyat-listeleri.php?view='+str(paired_id))[0]==200
+    assert fetch('fiyat-listeleri.php?preview='+str(paired_id))[0]==200
     assert post('delete',paired_id,106)[0]==302 and price() is None
-    assert upload('<?php echo 1;',filename='bad.php')[0]==200 and count()==4
+    assert upload('<?php echo 1;',filename='bad.php')[0]==200 and count()==5
     bad=io.BytesIO()
     with zipfile.ZipFile(bad,'w') as z:
         z.writestr('xl/worksheets/sheet1.xml','<!DOCTYPE x [<!ENTITY y SYSTEM "file:///etc/passwd">]><worksheet/>')
-    assert upload(bad.getvalue(),True,filename='unsafe.xlsx')[0]==200 and count()==4
+    assert upload(bad.getvalue(),True,filename='unsafe.xlsx')[0]==200 and count()==5
     assert all(con.execute('SELECT * FROM '+t).fetchall()==rows for t,rows in financial.items())
     # Restore test fixture only, never touches a live database.
     con.executemany('UPDATE offer_products SET list_unit_price=? WHERE id=?',[(v,i) for i,v in before]);con.commit()

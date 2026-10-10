@@ -61,6 +61,30 @@ if (($_SERVER['REQUEST_METHOD']??'')==='POST') {
         $error=$e instanceof PDOException?'İşlem kaydedilemedi. Lütfen tekrar deneyin.':$e->getMessage();
     }
 }
+if(isset($_GET['view'])) {
+    $s=db()->prepare('SELECT file_path FROM price_lists WHERE id=? AND deleted_at IS NULL');$s->execute([(int)$_GET['view']]);$r=$s->fetch();
+    if(!$r || strtolower(pathinfo($r['file_path'],PATHINFO_EXTENSION))!=='pdf') { http_response_code(404);exit('PDF bulunamadı.'); }
+    $path=UPLOAD_DIR.'/'.$r['file_path'];
+    if(!is_file($path)) { http_response_code(404);exit('PDF dosyası bulunamadı.'); }
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: inline; filename="fiyat-listesi.pdf"');
+    header('Content-Length: '.filesize($path));
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: private, no-store');
+    readfile($path);exit;
+}
+if(isset($_GET['preview'])) {
+    $id=(int)$_GET['preview'];
+    $s=db()->prepare('SELECT title,file_name FROM price_lists WHERE id=? AND deleted_at IS NULL');$s->execute([$id]);$list=$s->fetch();
+    if(!$list) { http_response_code(404);exit('Liste bulunamadı.'); }
+    $s=db()->prepare('SELECT product_name,barcode,unit_price FROM price_list_items WHERE list_id=? ORDER BY product_name COLLATE NOCASE');$s->execute([$id]);$items=$s->fetchAll();
+    page_header('Fiyat Listesi Önizleme','fiyat_listeleri');
+    echo '<section class="panel-card"><h2>'.e($list['title']).'</h2><p>'.e($list['file_name']).' · '.count($items).' ürün</p><p><a href="fiyat-listeleri.php">Fiyat listelerine dön</a></p><div class="table-wrap"><table><thead><tr><th>Ürün</th><th>Barkod</th><th>Birim fiyat</th></tr></thead><tbody>';
+    foreach($items as $item) echo '<tr><td>'.e($item['product_name']).'</td><td>'.e($item['barcode']).'</td><td>'.e(teklif_money((float)$item['unit_price'])).' TL</td></tr>';
+    if(!$items) echo '<tr><td colspan="3">Bu PDF arşivlenmiş; fiyat tablosu eklenmediği için ürün fiyatı bulunmuyor.</td></tr>';
+    echo '</tbody></table></div></section>';
+    page_footer();exit;
+}
 if(isset($_GET['download'])) {
     $s=db()->prepare('SELECT * FROM price_lists WHERE id=? AND deleted_at IS NULL');$s->execute([(int)$_GET['download']]);$r=$s->fetch();
     if(!$r){http_response_code(404);exit('Liste bulunamadı.');}
@@ -97,9 +121,9 @@ page_header('Fiyat Listeleri','fiyat_listeleri');
 <section class="panel-card"><h3>Liste arşivi</h3>
 <div class="table-wrap"><table><thead><tr><th>Liste</th><th>Durum</th><th>Ürün</th><th>Yükleme</th><th>İşlemler</th></tr></thead><tbody>
 <?php foreach($rows as $r): ?>
-<tr><td><strong><?php echo e($r['title']); ?></strong><br><a href="fiyat-listeleri.php?download=<?php echo (int)$r['id']; ?>"><?php echo e($r['file_name']); ?></a></td>
+<tr><td><strong><?php echo e($r['title']); ?></strong><br><?php if(strtolower(pathinfo($r['file_path'],PATHINFO_EXTENSION))==='pdf'): ?><a href="fiyat-listeleri.php?view=<?php echo (int)$r['id']; ?>" target="_blank" rel="noopener">PDF’yi görüntüle</a><?php elseif((int)$r['item_count']>0): ?><a href="fiyat-listeleri.php?preview=<?php echo (int)$r['id']; ?>"><?php echo e($r['file_name']); ?> · Fiyatları görüntüle</a><?php else: ?><span><?php echo e($r['file_name']); ?></span><?php endif; ?></td>
 <td><?php echo $r['is_current']?'Güncel':'Arşiv'; ?></td><td><?php echo (int)$r['item_count']; ?></td><td><?php echo e($r['created_at']); ?></td>
-<td><div class="pl-actions"><?php if(can_write()): ?>
+<td><div class="pl-actions"><a href="fiyat-listeleri.php?download=<?php echo (int)$r['id']; ?>">İndir</a><?php if(strtolower(pathinfo($r['file_path'],PATHINFO_EXTENSION))==='pdf' && (int)$r['item_count']>0): ?><a href="fiyat-listeleri.php?preview=<?php echo (int)$r['id']; ?>">Fiyatları görüntüle</a><?php endif; ?><?php if(can_write()): ?>
 <?php if(!$r['is_current'] && $r['item_count']): ?><form method="post" onsubmit="return confirm('Bu liste güncel yapılsın mı? Listede olmayan ürünlerin liste fiyatları boş kalır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="current"><input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>"><button class="btn btn-secondary">Güncel yap</button></form><?php endif; ?>
 <form method="post" onsubmit="return confirm('Liste silinsin mi? Güncelse otomatik liste fiyatları kaldırılır. İşlem geçmişi korunur.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>"><button class="btn btn-secondary">Sil</button></form>
 <?php endif; ?></div></td></tr>
