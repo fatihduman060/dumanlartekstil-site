@@ -48,8 +48,12 @@ const listExpected=process.env.LIST_EXPECTED||'444';
   }
   if(process.env.LIST_EXPECTED){
    await page.goto(base+'sirket-evraklari.php');
-   await page.getByRole('link',{name:'Fiyat Listeleri',exact:true}).click();
-   assert.equal(await page.locator('h2').textContent(),'Şirket Evrakları / Fiyat Listeleri');
+   const menu=page.locator('.side-nav a');
+   const labels=await menu.locator('span:last-child').allTextContents();
+   assert(labels.indexOf('Fiyat Listeleri')===labels.indexOf('Üretim Takibi')+1);
+   assert(labels.indexOf('Stok Takibi')===labels.indexOf('Fiyat Listeleri')+1);
+   await menu.filter({hasText:'Fiyat Listeleri'}).click();
+   assert.equal(await page.locator('h2').textContent(),'Fiyat listesi arşivi');
    for(const width of [1280,390]){
     await page.setViewportSize({width,height:844});
     assert(await page.locator('input[name="document"]').isVisible());

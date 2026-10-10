@@ -66,7 +66,7 @@ page_header('Ürün Fiyat Listesi');
 <section class="price-card">
 <h2>Ürün Fiyat Listesi</h2><?php if ($hasCurrentList): ?><p>Fiyatlar güncel dosyadan yönetilir. Fiyat değiştirmek için Fiyat Listeleri Arşivi’nden yeni liste yükleyin.</p><?php endif; ?>
 <p>Teklif Ver ve Depo Çıkış için ortak TL fiyatları. Müşterinin o üründe kayıtlı fiyatı varsa önce o kullanılır; yoksa liste fiyatı gelir. Fişte fiyatı değiştirebilirsiniz.</p>
-<div class="price-links"><?php if(!is_store_sales_user() && !is_warehouse_user()): ?><a href="fiyat-listeleri.php">Fiyat Listeleri Arşivi</a><?php endif; ?><a href="teklif-ver.php">Teklif Ver</a><a href="depo-cikis.php">Depo Çıkış</a></div>
+<div class="price-links"><a href="teklif-ver.php">Teklif Ver</a><a href="depo-cikis.php">Depo Çıkış</a></div>
 </section>
 <?php if ($canEdit): ?>
 <section class="price-card">

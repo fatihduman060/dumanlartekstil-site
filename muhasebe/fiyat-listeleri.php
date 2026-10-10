@@ -68,15 +68,15 @@ if(isset($_GET['download'])) {
     download_file(UPLOAD_DIR.'/'.$r['file_path'],$r['file_name'],'application/octet-stream');exit;
 }
 $rows=db()->query('SELECT p.*, (SELECT COUNT(*) FROM price_list_items i WHERE i.list_id=p.id) AS item_count FROM price_lists p WHERE deleted_at IS NULL ORDER BY is_current DESC,id DESC')->fetchAll();
-page_header('Fiyat Listeleri','sirket_evraklari');
+page_header('Fiyat Listeleri','fiyat_listeleri');
 ?>
 <style>.pl-wrap{display:grid;gap:18px;min-width:0}.pl-actions{display:flex;flex-wrap:wrap;gap:10px}.pl-wrap .panel-card{min-width:0}.pl-wrap input[type=file]{max-width:100%}.pl-wrap td{overflow-wrap:anywhere}.pl-wrap .pl-current{display:flex;align-items:center;gap:10px}.pl-wrap input[type=checkbox]{width:20px!important;height:20px!important;min-height:20px!important;flex:0 0 20px;margin:0}@media(max-width:600px){.pl-wrap .panel-card{padding:14px}.pl-actions>*{max-width:100%}}</style>
 <div class="pl-wrap">
 <section class="panel-card">
-<h2>Şirket Evrakları / Fiyat Listeleri</h2>
+<h2>Fiyat listesi arşivi</h2>
 <p>Güncel liste, müşterinin ürüne ait geçmiş fiyatı yoksa Teklif Ver ve Depo Çıkış’ta kullanılır. Fiyatlar TL, KDV hariç ve fişteki birimle aynı olmalıdır (ör. DZ / düzine).</p>
 <p>Yalnızca bir liste güncel olabilir. Yeni listede bulunmayan ürünün otomatik liste fiyatı boş kalır. Geçmiş müşteri fiyatları ve kaydedilmiş fişler değişmez.</p>
-<div class="pl-actions"><a href="sirket-evraklari.php">Şirket Evrakları</a><?php if(!is_murat_limited_user()): ?><a href="urun-fiyat-listesi.php">Ürün tanımları ve fiyatlar</a><?php endif; ?></div>
+<div class="pl-actions"><?php if(!is_murat_limited_user()): ?><a href="urun-fiyat-listesi.php">Ürün tanımları ve fiyatlar</a><?php endif; ?></div>
 </section>
 <?php if(can_write()): ?>
 <section class="panel-card">
