@@ -24,7 +24,7 @@ if (!$pdo->inTransaction()) throw new RuntimeException('List import committed ca
 $pdo->rollBack();
 teklif_db_ensure();
 ensure_column($pdo,'movements','currency',"TEXT NOT NULL DEFAULT 'TL'");
-foreach ([[101,'qa-admin','admin'],[102,'qa-depo','warehouse'],[103,'qa-view','viewer'],[104,'magaza','editor']] as $u) {
+foreach ([[101,'qa-admin','admin'],[102,'qa-depo','warehouse'],[103,'qa-view','viewer'],[104,'magaza','editor'],[105,'qa-editor','editor'],[106,'murat','editor']] as $u) {
  $pdo->prepare('INSERT INTO users(id,username,display_name,password_hash,role,is_active,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?)')->execute([$u[0],$u[1],$u[1],'disabled',$u[2],now(),now()]);
 }
 foreach ([101,102,103] as $id) $pdo->prepare('INSERT INTO cariler(id,name,created_at,updated_at) VALUES(?,?,?,?)')->execute([$id,'Test müşteri '.$id,now(),now()]);
@@ -51,7 +51,7 @@ $_POST=['customer_name'=>'Test müşteri 102','cari_id'=>102,'dispatch_no'=>'CAN
 $id=depo_cikis_save(0);
 $pdo->prepare("UPDATE warehouse_dispatches SET is_cancelled=1,updated_at='2099-01-01' WHERE id=?")->execute([$id]);
 session_write_close();
-foreach ([101,102,103,104] as $userId) {session_id('qa'.$userId);session_start();$_SESSION=['user_id'=>$userId,'csrf_token'=>'qatoken','last_activity'=>time()];session_write_close();}
+foreach ([101,102,103,104,105,106] as $userId) {session_id('qa'.$userId);session_start();$_SESSION=['user_id'=>$userId,'csrf_token'=>'qatoken','last_activity'=>time()];session_write_close();}
 ''')
     command=[php,'-d','session.save_path='+str(site/'sessions')]
     subprocess.run(command+[str(site/'seed.php')],check=True)
@@ -96,6 +96,8 @@ foreach ([101,102,103,104] as $userId) {session_id('qa'.$userId);session_start()
             for user in [101,102,104]: assert request('urun-fiyat-listesi.php',user)[0]==200
             assert request('urun-fiyat-listesi.php',103)[0]==302
             print('API: customer, currency, cancelled dispatch, list editing, CSRF and permissions passed',flush=True)
+            import runpy
+            runpy.run_path(str(root/'tools/test-fiyat-listeleri.py'))['run'](request,opener,url,con,product_id)
             subprocess.run([os.environ.get('NODE_BINARY','node'),str(root/'tools/test-urun-fiyat.js'),url],check=True)
         finally:
             server.terminate();server.wait(timeout=10)

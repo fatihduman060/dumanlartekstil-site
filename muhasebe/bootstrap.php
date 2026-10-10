@@ -450,6 +450,7 @@ function murat_limited_route_allowed(string $script): bool
         'logout.php',
         'faturalar.php',
         'sirket-evraklari.php',
+        'fiyat-listeleri.php',
         'serbest-belge-indir.php',
         'vergi-odemeleri.php',
         'vergi-belge-indir.php',

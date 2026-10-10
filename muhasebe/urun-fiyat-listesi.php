@@ -1,10 +1,11 @@
 <?php
 require_once __DIR__.'/layout.php';
-require_once __DIR__.'/teklif-db.php';
+require_once __DIR__.'/fiyat-listeleri-lib.php';
 require_login();
 if (!can_write() && !can_access_warehouse_dispatch()) redirect('dashboard.php');
 header('Cache-Control: private, no-store');
-teklif_db_ensure();
+fiyat_listeleri_ensure();
+$hasCurrentList = (bool)db()->query('SELECT id FROM price_lists WHERE is_current=1')->fetchColumn();
 $canEdit = can_write();
 $error = '';
 $edit = ['id'=>0, 'name'=>'', 'barcode'=>'', 'product_type'=>'', 'list_unit_price'=>null];
@@ -15,12 +16,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         'barcode'=>trim((string)($_POST['barcode'] ?? '')), 'product_type'=>trim((string)($_POST['product_type'] ?? '')),
         'list_unit_price'=>trim((string)($_POST['list_unit_price'] ?? ''))];
     try {
+        db()->beginTransaction();
+        db()->exec('UPDATE price_lists SET is_current=is_current WHERE is_current=1');
+        $hasCurrentList = (bool)db()->query('SELECT id FROM price_lists WHERE is_current=1')->fetchColumn();
+        if ($hasCurrentList && $edit['list_unit_price'] !== '') throw new RuntimeException('Güncel liste varken fiyat değişikliği için Fiyat Listeleri bölümünden yeni liste yükleyin. Ürün tanımı için fiyatı boş bırakın.');
         if ($edit['name'] === '') throw new RuntimeException('Ürün adı gerekli.');
         $rawPrice = $edit['list_unit_price'];
         if ($rawPrice !== '' && !preg_match('/^[0-9]+(?:[.,][0-9]+)*$/', $rawPrice)) {
             throw new RuntimeException('Fiyatı sayı olarak yazın. Örn: 444 veya 444,50.');
         }
         $price = $rawPrice === '' ? null : round(teklif_decimal($rawPrice), 2);
+        if ($hasCurrentList && $edit['id'] > 0) {
+            $s = db()->prepare('SELECT list_unit_price FROM offer_products WHERE id=?');
+            $s->execute([$edit['id']]); $value = $s->fetchColumn();
+            $price = $value === null || $value === false ? null : (float)$value;
+        }
         if ($price !== null && (!is_finite($price) || $price <= 0)) throw new RuntimeException('Liste fiyatı sıfırdan büyük olmalı. Tanımı kaldırmak için boş bırakın.');
         $barcode = teklif_normalize_barcode($edit['barcode'], $edit['name'], $edit['product_type']);
         $pdo = db();
@@ -34,9 +44,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $pdo->prepare('INSERT INTO offer_products(name,barcode,product_type,list_unit_price,default_unit_price,is_active,created_at,updated_at) VALUES(?,?,?,?,0,1,?,?)')
                 ->execute([$edit['name'],$barcode,$edit['product_type'],$price,now(),now()]);
         }
+        db()->commit();
         flash('success', 'Ürün fiyat listesi kaydedildi. Açık teklif veya depo çıkış ekranını yenileyerek yeni fiyatı kullanabilirsiniz.');
         redirect('urun-fiyat-listesi.php');
     } catch (Throwable $e) {
+        if (db()->inTransaction()) db()->rollBack();
         $error = $e instanceof PDOException ? 'Bu ürün adı zaten kayıtlı olabilir. Listedeki ürünü düzenleyin.' : $e->getMessage();
     }
 } elseif ((int)($_GET['edit'] ?? 0) > 0 && $canEdit) {
@@ -52,9 +64,9 @@ page_header('Ürün Fiyat Listesi');
 </style>
 <div class="price-list">
 <section class="price-card">
-<h2>Ürün Fiyat Listesi</h2>
+<h2>Ürün Fiyat Listesi</h2><?php if ($hasCurrentList): ?><p>Fiyatlar güncel dosyadan yönetilir. Fiyat değiştirmek için Fiyat Listeleri Arşivi’nden yeni liste yükleyin.</p><?php endif; ?>
 <p>Teklif Ver ve Depo Çıkış için ortak TL fiyatları. Müşterinin o üründe kayıtlı fiyatı varsa önce o kullanılır; yoksa liste fiyatı gelir. Fişte fiyatı değiştirebilirsiniz.</p>
-<div class="price-links"><a href="teklif-ver.php">Teklif Ver</a><a href="depo-cikis.php">Depo Çıkış</a></div>
+<div class="price-links"><?php if(!is_store_sales_user() && !is_warehouse_user()): ?><a href="fiyat-listeleri.php">Fiyat Listeleri Arşivi</a><?php endif; ?><a href="teklif-ver.php">Teklif Ver</a><a href="depo-cikis.php">Depo Çıkış</a></div>
 </section>
 <?php if ($canEdit): ?>
 <section class="price-card">
@@ -66,7 +78,7 @@ page_header('Ürün Fiyat Listesi');
 <label>Ürün adı<input name="name" required value="<?php echo e($edit['name']); ?>" placeholder="Örn: 6000 Modal Çorap"></label>
 <label>Barkod<input name="barcode" value="<?php echo e($edit['barcode'] ?? ''); ?>"></label>
 <label>Ürün cinsi / açıklama<input name="product_type" value="<?php echo e($edit['product_type'] ?? ''); ?>"></label>
-<label>Liste birim fiyatı (TL)<input name="list_unit_price" inputmode="decimal" value="<?php echo e($edit['list_unit_price'] === null ? '' : str_replace('.', ',', (string)$edit['list_unit_price'])); ?>" placeholder="Fiyat tanımlanmamış"></label>
+<label>Liste birim fiyatı (TL)<input name="list_unit_price" <?php echo $hasCurrentList ? 'disabled' : ''; ?> inputmode="decimal" value="<?php echo e($edit['list_unit_price'] === null ? '' : str_replace('.', ',', (string)$edit['list_unit_price'])); ?>" placeholder="Fiyat tanımlanmamış"></label>
 </div>
 <div class="price-actions"><button type="submit">Kaydet</button><?php if ($edit['id']): ?><a href="urun-fiyat-listesi.php">Vazgeç / Yeni ürün</a><?php endif; ?></div>
 </form>

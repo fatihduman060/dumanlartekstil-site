@@ -2,6 +2,7 @@
 const assert=require('assert/strict');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const base=process.argv[2];
+const listExpected=process.env.LIST_EXPECTED||'444';
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CHROME_BINARY?{executablePath:process.env.CHROME_BINARY}:{})});
  try{
@@ -20,10 +21,11 @@ const base=process.argv[2];
     await page.waitForFunction(()=>!document.querySelector('small[role="status"]').textContent.includes('kontrol'));
    }
    async function product(name){await row.locator('.product-name').fill(name);await row.locator('.product-name').dispatchEvent('change');}
-   async function expectPrice(value){await page.waitForFunction(([selector,value])=>document.querySelector(selector+' tbody tr .price').value===value,[table,value]);}
-   await customer(101);await product('6000 modal');await expectPrice('444');
+   async function expectPrice(value){try{await page.waitForFunction(([selector,value])=>document.querySelector(selector+' tbody tr .price').value===value,[table,value]);}catch(e){console.error({file,expected:value,actual:await price.inputValue(),row:await row.locator('input').evaluateAll(xs=>xs.map(x=>[x.name,x.value]))});throw e;}}
+   await customer(101);await product('6000 modal');await expectPrice(listExpected);
    await price.fill('420');await row.locator('.qty').fill('2');assert.equal(await price.inputValue(),'420');
-   await customer(102);await expectPrice('280');
+   await customer(102);await expectPrice('420'); // Existing policy preserves a manually entered price.
+   await product('6000 modal');await expectPrice('280');
    await product('6011 bambu');await expectPrice('380');
    await product('6000 modal');await expectPrice('280');
    await price.fill('275');
@@ -32,16 +34,31 @@ const base=process.argv[2];
    await newRow.locator('.product-name').fill('6011 bambu');await newRow.locator('.product-name').dispatchEvent('change');
    await page.waitForFunction(selector=>[...document.querySelectorAll(selector+' tbody tr .price')].at(-1).value==='380',table);
    assert.equal(await price.inputValue(),'275');
-   await page.selectOption(cari,'101');await expectPrice('444'); // Cached customer without history.
-   await page.selectOption(cari,'');await expectPrice('444');
+   await page.selectOption(cari,'101');await expectPrice('275');
+   await product('6000 modal');await expectPrice(listExpected); // Product selection requests an automatic price.
+   await page.selectOption(cari,'');await expectPrice(listExpected);
    await product('Bilinmeyen ürün');await expectPrice('');
-   await product('6000 modal');await expectPrice('444');
+   await product('6000 modal');await expectPrice(listExpected);
    if(file==='teklif-ver.php'){
     await page.selectOption('[name="currency"]','USD');await expectPrice('');
     await customer(102);await expectPrice('99');
     await page.selectOption('[name="currency"]','TL');await expectPrice('280');
    }
    console.log(file+': list fallback, customer override, manual edit, cloned row, customer/product/currency changes passed');
+  }
+  if(process.env.LIST_EXPECTED){
+   await page.goto(base+'sirket-evraklari.php');
+   await page.getByRole('link',{name:'Fiyat Listeleri',exact:true}).click();
+   assert.equal(await page.locator('h2').textContent(),'Şirket Evrakları / Fiyat Listeleri');
+   for(const width of [1280,390]){
+    await page.setViewportSize({width,height:844});
+    assert(await page.locator('input[name="document"]').isVisible());
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+    if(process.env.PRICE_ARCHIVE_SCREENSHOT)await page.screenshot({path:process.env.PRICE_ARCHIVE_SCREENSHOT+'-'+width+'.png',fullPage:true});
+   }
+   assert.deepEqual(errors,[]);
+   console.log('Price-list navigation and desktop/mobile layout passed');
+   return;
   }
   await page.goto(base+'teklif-ver.php?edit=1');
   await page.waitForTimeout(300);
