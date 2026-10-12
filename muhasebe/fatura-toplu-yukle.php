@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/depo-cikis-lib.php';
 require_login();
 
 db()->exec("CREATE TABLE IF NOT EXISTS invoices (
@@ -36,6 +37,8 @@ ensure_column(db(), 'invoices', 'issuer_source', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_confidence', 'INTEGER NOT NULL DEFAULT 0');
 ensure_column(db(), 'invoices', 'issuer_parser_version', 'TEXT');
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_file_hash ON invoices(file_hash)");
+
+depo_cikis_db_ensure();
 
 function toplu_fatura_para_birimi($value): string
 {
@@ -131,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $file = toplu_fatura_dosya($i);
         $meta = is_array($items[$i] ?? null) ? $items[$i] : [];
         $fileName = trim((string)($file['name'] ?? ('Dosya ' . ($i + 1))));
-
+        $doc = null;
         try {
             if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
                 throw new RuntimeException('Dosya yükleme hatası.');
@@ -254,6 +257,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $doc = handle_upload('document');
             unset($_FILES['document']);
 
+            db()->beginTransaction();
+            satis_bag_lock();
             db()->prepare("INSERT INTO invoices (
                 direction, cari_id, invoice_no, invoice_date, due_date, subtotal, vat_amount, total_amount,
                 currency, description, document_path, document_name, document_mime, file_hash, import_batch,
@@ -269,6 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
             $invoiceId = (int)db()->lastInsertId();
+            if (!empty($meta['related_dispatch_id'])) satis_bag_set($invoiceId,(int)$meta['related_dispatch_id'],($meta['confirm_date_difference']??'')==='1','Toplu PDF yüklemesinde bağlandı');
             log_action('Toplu fatura arşive eklendi', '#' . $invoiceId . ' · ' . ($invoiceNo ?: $fileName));
             audit_action('fatura', $invoiceId, 'toplu_eklendi', null, [
                 'direction'=>$direction,
@@ -282,8 +288,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'posted_to_cari'=>0,
                 'import_batch'=>$batch,
             ], $invoiceNo ?: $fileName);
+            db()->commit();
             $saved++;
         } catch (Throwable $e) {
+            if (db()->inTransaction()) db()->rollBack();
+            if ($doc) delete_uploaded_file($doc['path']??null);
             unset($_FILES['document']);
             $failed++;
             if (count($errors) < 5) $errors[] = $fileName . ': ' . $e->getMessage();
@@ -342,6 +351,7 @@ page_header('Toplu Fatura Yükle', 'faturalar');
 </section>
 
 <script>
+window.BITKE_BULK_DISPATCHES = <?php echo json_encode(can_process_warehouse_dispatch() ? db()->query("SELECT w.id,w.dispatch_no,w.customer_name,w.dispatch_date,w.total,w.currency FROM warehouse_dispatches w LEFT JOIN sale_document_links l ON l.dispatch_id=w.id WHERE COALESCE(w.is_cancelled,0)=0 AND l.invoice_id IS NULL ORDER BY w.dispatch_date DESC,w.id DESC")->fetchAll() : [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.BITKE_BULK_CARILER = <?php echo json_encode($cariler, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 window.BITKE_COMPANY_TAX_NO = <?php echo json_encode($companyTaxNo, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 </script>

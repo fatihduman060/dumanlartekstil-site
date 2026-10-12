@@ -89,6 +89,7 @@ $id = depo_cikis_save(0);
 $row = depo_cikis_load($id);
 if (abs((float)$row['total'] - 990) > 0.001) throw new RuntimeException('Discount/VAT fixture total');
 $before = depo_cikis_balance_summary($row);
+depo_cikis_mark_processed($id);
 depo_cikis_post_to_cari($id);
 $after = depo_cikis_balance_summary(depo_cikis_load($id));
 if ($before !== $after) throw new RuntimeException('Posting must not change summary values');

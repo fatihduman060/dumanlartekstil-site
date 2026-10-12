@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/teklif-db.php';
+require_once __DIR__ . '/satis-belge-bag-lib.php';
 
 function depo_cikis_table_has_column(PDO $pdo, string $table, string $column): bool
 {
@@ -61,6 +62,8 @@ function depo_cikis_db_ensure(): void
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_warehouse_dispatch_date ON warehouse_dispatches(dispatch_date,id)');
     } catch (Throwable $e) {
     }
+
+    satis_bag_ensure();
 
     // Şema/index yükseltmeleri sayfa açılışını hiçbir koşulda kilitlememeli.
     // Canlı veride eski kolon/index yapısı varsa mevcut finansal kayıtları değiştirmeden
@@ -350,7 +353,7 @@ function depo_cikis_save(int $id): int
             teklif_save_product_suggestion($item['product_name'],$item['product_type'],(float)$item['unit_price'],$item['product_barcode']);
         }
 
-        if($existing && (int)($existing['posted_to_cari']??0)===1){
+        if($existing && (int)($existing['posted_to_cari']??0)===1 && !satis_bag_get('dispatch',$id)){
             $movementId=teklif_active_movement_id((int)($existing['cari_movement_id']??0));
             depo_cikis_sync_cari_movement([
                 'cari_id'=>$data[2],
@@ -389,7 +392,6 @@ function depo_cikis_mark_processed(int $id): void
     $row=depo_cikis_load($id);
     if(!$row) throw new RuntimeException('Fiş bulunamadı.');
     if((int)($row['is_cancelled']??0)===1) throw new RuntimeException('İptal edilmiş fiş çıkışı yapıldı olarak işaretlenemez.');
-    if((int)($row['posted_to_cari']??0)===1) return;
     if((int)($row['processed']??0)===1) return;
 
     $now=now();
@@ -416,9 +418,18 @@ function depo_cikis_post_to_cari(int $id): int
     $pdo=db();
     $pdo->beginTransaction();
     try{
+        satis_bag_lock();
+        $row=satis_bag_row('warehouse_dispatches',$id);
+        if(!empty($row['is_cancelled'])) throw new RuntimeException('İptal edilmiş fiş cariye işlenemez.');
+        $cariId=(int)$row['cari_id']; $total=(float)$row['total'];
+        if($cariId<=0 || $total<=0) throw new RuntimeException('Cari ve fiş toplamını kontrol edin.');
+        if(empty($row['processed']) && empty($row['posted_to_cari'])) throw new RuntimeException('Önce fişi Çıkış Yapıldı olarak işaretleyin.');
+        $shared=satis_bag_before_post('dispatch',$id);
         $mid=teklif_active_movement_id((int)($row['cari_movement_id']??0));
         $now=now();
-        if($mid){
+        if($shared){
+            $mid=$shared;
+        }elseif($mid){
             depo_cikis_sync_cari_movement($row,$mid);
         }else{
             $desc='Depo çıkış sipariş fişi no: '.trim((string)$row['dispatch_no']).' / Ürün satışı';
@@ -430,6 +441,7 @@ function depo_cikis_post_to_cari(int $id): int
         }
         $pdo->prepare('UPDATE warehouse_dispatches SET posted_to_cari=1,cari_movement_id=?,processed=1,processed_at=COALESCE(processed_at,?),processed_by=COALESCE(processed_by,?),updated_at=? WHERE id=?')
             ->execute([$mid,$now,current_user()['id']??null,$now,$id]);
+        if(!$shared) satis_bag_after_post('dispatch',$id,$mid);
         audit_action('depo_cikis',$id,'cariye_islendi',$row,['posted_to_cari'=>1,'cari_movement_id'=>$mid,'total'=>$total],trim((string)$row['dispatch_no']));
         $pdo->commit();
         log_action('Depo çıkış fişi cariye işlendi',trim((string)$row['dispatch_no']).' - '.money($total));

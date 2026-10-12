@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/stok-lib.php';
+require_once __DIR__ . '/depo-cikis-lib.php';
 require_login();
 stok_db_ensure();
 
@@ -51,6 +52,8 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoice_expense_types (
     updated_by INTEGER,
     updated_at TEXT
 )");
+
+depo_cikis_db_ensure();
 
 function fatura_yonleri(): array
 {
@@ -275,6 +278,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('faturalar.php');
         }
 
+        db()->beginTransaction();
+        try {
+        satis_bag_lock();
+        $oldRow = $id > 0 ? fatura_getir($id) : null;
+        if ($id > 0 && (!$oldRow || !empty($oldRow['is_cancelled']))) throw new RuntimeException('Fatura bulunamadı veya iptal edilmiş.');
         if ($id > 0 && $oldRow) {
             db()->prepare("UPDATE invoices SET
                 direction=?, cari_id=?, invoice_no=?, invoice_date=?, due_date=?, subtotal=?, vat_amount=?,
@@ -286,15 +294,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $totalAmount, $currency, $description, $doc['path'], $doc['name'], $doc['mime'],
                     $issuerName, $issuerSource, $issuerConfidence, $issuerParserVersion, now(), $id
                 ]);
-            delete_replaced_upload($oldDoc, $doc);
+
+            if (isset($_POST['related_dispatch_id'])) satis_bag_set($id,(int)$_POST['related_dispatch_id'],!empty($_POST['confirm_date_difference']),(string)($_POST['link_reason']??''));
             $saved = fatura_getir($id);
-            if ($saved && !empty($saved['cari_movement_id']) && fatura_hareket_acik_mi((int)$saved['cari_movement_id'])) {
+            if (!satis_bag_get('invoice',$id) && $saved && !empty($saved['cari_movement_id']) && fatura_hareket_acik_mi((int)$saved['cari_movement_id'])) {
                 fatura_hareket_guncelle((int)$saved['cari_movement_id'], $saved);
             }
             log_action('Fatura güncellendi', ($invoiceNo ?: '#' . $id) . ' ' . fatura_para($totalAmount, $currency));
             stok_fatura_senkronla($id, $direction, $invoiceDate, $stockLines, false);
             audit_action('fatura', $id, 'guncellendi', $oldRow, $saved, $invoiceNo ?: '#' . $id);
-            flash('success', 'Fatura güncellendi. Cariye işlenmişse bağlı hareket ve satış stokları da güncellendi.');
+            flash('success', satis_bag_get('invoice',$id) ? 'Fatura kaydedildi. Ortak cari hareketi korundu.' : 'Fatura güncellendi. Cariye işlenmişse bağlı hareket ve satış stokları da güncellendi.');
         } else {
             db()->prepare("INSERT INTO invoices (
                 direction, cari_id, invoice_no, invoice_date, due_date, subtotal, vat_amount, total_amount,
@@ -308,16 +317,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     current_user()['id'] ?? null, now(), now()
                 ]);
             $newId = (int)db()->lastInsertId();
+            if (!empty($_POST['related_dispatch_id'])) satis_bag_set($newId,(int)$_POST['related_dispatch_id'],!empty($_POST['confirm_date_difference']),'Fatura oluşturulurken bağlandı');
             $saved = fatura_getir($newId);
             stok_fatura_senkronla($newId, $direction, $invoiceDate, $stockLines, false);
             log_action('Fatura eklendi', ($invoiceNo ?: '#' . $newId) . ' ' . fatura_para($totalAmount, $currency));
             audit_action('fatura', $newId, 'eklendi', null, $saved, $invoiceNo ?: '#' . $newId);
             flash('success', 'Fatura arşive eklendi.');
         }
+        db()->commit();
+        if ($oldDoc) delete_replaced_upload($oldDoc,$doc);
+        } catch (Throwable $e) {
+            if (db()->inTransaction()) db()->rollBack();
+            if (($doc['path']??null) !== ($oldDoc['path']??null)) delete_uploaded_file($doc['path']??null);
+            flash('error',$e->getMessage());
+            redirect('faturalar.php'.($id>0?'?edit='.$id:''));
+        }
         redirect('faturalar.php');
     }
 
     if ($action === 'post_cari') {
+        db()->beginTransaction();
+        try {
+        satis_bag_lock();
         $id = (int)($_POST['id'] ?? 0);
         $invoice = fatura_getir($id);
         if (!$invoice || (int)($invoice['is_cancelled'] ?? 0) === 1) {
@@ -339,8 +360,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('faturalar.php?edit=' . $id);
         }
 
+        $shared = satis_bag_before_post('invoice',$id);
         $oldMovementId = (int)($invoice['cari_movement_id'] ?? 0);
-        if ($oldMovementId > 0 && fatura_hareket_acik_mi($oldMovementId)) {
+        if ($shared) {
+            $movementId=$shared;
+            $message='Cari zaten bağlı belge üzerinden işlendi. Aynı hareket korundu.';
+        } elseif ($oldMovementId > 0 && fatura_hareket_acik_mi($oldMovementId)) {
             fatura_hareket_guncelle($oldMovementId, $invoice);
             $movementId = $oldMovementId;
             $message = 'Mevcut cari hareketi faturaya göre güncellendi.';
@@ -352,13 +377,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         db()->prepare('UPDATE invoices SET cari_movement_id=?, posted_to_cari=1, posted_at=?, posted_by=?, updated_at=? WHERE id=?')
             ->execute([$movementId, now(), current_user()['id'] ?? null, now(), $id]);
 
+        if (!$shared) satis_bag_after_post('invoice',$id,$movementId);
         log_action('Fatura cariye işlendi', '#' . $id . ' → hareket #' . $movementId);
         audit_action('fatura', $id, 'cariye_islendi', $invoice, ['cari_movement_id'=>$movementId,'posted_to_cari'=>1], $invoice['invoice_no'] ?: '#' . $id);
+        db()->commit();
         flash('success', $message);
+        } catch (Throwable $e) {
+            if(db()->inTransaction()) db()->rollBack();
+            flash('error',$e->getMessage());
+        }
         redirect('faturalar.php');
     }
 
     if ($action === 'cancel') {
+        db()->beginTransaction();
+        try {
+        satis_bag_lock();
         $id = (int)($_POST['id'] ?? 0);
         $invoice = fatura_getir($id);
         if ($invoice && (int)($invoice['is_cancelled'] ?? 0) === 0) {
@@ -368,11 +402,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('error', 'Fatura iptal nedeni en az 6 karakter olmalıdır.');
                 redirect('faturalar.php');
             }
+            $link=satis_bag_get('invoice',$id);
+            if ($link) {
+                // Cancelling the invoice does not cancel the warehouse sale. Keep its movement.
+                db()->prepare('DELETE FROM sale_document_links WHERE invoice_id=?')->execute([$id]);
+                satis_bag_audit('bag_kaldirildi',$link,null,'Fatura iptali: '.$reason.'; depo cari hareketi korundu.');
+                db()->prepare('UPDATE invoices SET cari_movement_id=NULL,posted_to_cari=0 WHERE id=?')->execute([$id]);
+            }
             db()->prepare('UPDATE invoices SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')
                 ->execute([now(), current_user()['id'] ?? null, $reason, now(), $id]);
 
             $movementId = (int)($invoice['cari_movement_id'] ?? 0);
-            if ($movementId > 0 && fatura_hareket_acik_mi($movementId)) {
+            if (!$link && $movementId > 0 && fatura_hareket_acik_mi($movementId)) {
                 db()->prepare('UPDATE movements SET is_cancelled=1, cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?')
                     ->execute([now(), current_user()['id'] ?? null, 'Bağlı fatura iptal edildi', now(), $movementId]);
                 sync_movement_account_transaction($movementId);
@@ -381,7 +422,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             stok_fatura_senkronla($id, (string)$invoice['direction'], (string)$invoice['invoice_date'], [], true);
             log_action('Fatura iptal edildi', '#' . $id);
             audit_action('fatura', $id, 'iptal', $invoice, ['is_cancelled'=>1,'cancel_reason'=>$reason], $invoice['invoice_no'] ?: '#' . $id);
-            flash('success', 'Fatura ve varsa bağlı cari hareket iptal edildi.');
+            flash('success', $link ? 'Fatura iptal edildi; depo çıkışı ve ortak cari hareket korundu.' : 'Fatura ve varsa bağlı cari hareket iptal edildi.');
+        }
+        db()->commit();
+        } catch (Throwable $e) {
+            if(db()->inTransaction()) db()->rollBack();
+            flash('error',$e->getMessage());
         }
         redirect('faturalar.php');
     }
@@ -577,6 +623,20 @@ page_header('Faturalar', 'faturalar');
         <small>Cariye İşle düğmesi için cari seçilmiş olmalı.</small>
       </label>
 
+      <?php if (can_process_warehouse_dispatch()):
+        $currentLink=$edit?satis_bag_get('invoice',(int)$edit['id']):null;
+        $dispatchOptions=db()->query("SELECT w.* FROM warehouse_dispatches w LEFT JOIN sale_document_links l ON l.dispatch_id=w.id WHERE COALESCE(w.is_cancelled,0)=0 AND (l.invoice_id IS NULL OR l.invoice_id=".(int)($edit['id']??0).") ORDER BY w.dispatch_date DESC,w.id DESC")->fetchAll(); ?>
+      <label>İlgili depo çıkışı (giden satış faturası)
+        <select name="related_dispatch_id"><option value="0">Bağlantı yok</option>
+          <?php foreach($dispatchOptions as $d): ?><option value="<?php echo (int)$d['id']; ?>" <?php echo (int)($currentLink['dispatch_id']??0)===(int)$d['id']?'selected':''; ?>><?php echo e('#'.$d['dispatch_no'].' · '.$d['customer_name'].' · '.$d['dispatch_date'].' · '.money($d['total']).' '.$d['currency']); ?></option><?php endforeach; ?>
+        </select>
+        <small>Cari ve genel toplam aynı olmalıdır. İlk işlenen belgenin cari hareketi korunur; ikinci hareket açılmaz.</small>
+      </label>
+      <label><input type="checkbox" name="confirm_date_difference" value="1"> Belgelerin tarih farkını kontrol ettim; mevcut cari hareketinin tarihi korunsun.</label>
+      <?php if($currentLink): ?><label>Bağlantı kaldırma / değiştirme nedeni<input name="link_reason" minlength="6"><small>Aktif ortak hareket varsa önce cari hareketi nedeni ile iptal edin.</small></label><?php endif; ?>
+      <?php endif; ?>
+      <?php if($edit) satis_bag_display('invoice',(int)$edit['id']); ?>
+
       <label>Gönderen firma
         <input name="issuer_name" maxlength="180" value="<?php echo e($edit['issuer_name'] ?? ''); ?>" placeholder="PDF'den otomatik okunur; gerekirse düzelt">
         <small>Bu bilgi cariden ayrıdır. MUHTELİF FATURA GİRİŞİ carisi değişmeden kalır.</small>
@@ -656,7 +716,7 @@ page_header('Faturalar', 'faturalar');
           <?php if(!$rows): ?><tr><td colspan="9" class="empty">Bu dönemde <?php echo $directionFilter === 'gelen' ? 'gelen' : 'giden'; ?> fatura bulunamadı.</td></tr><?php endif; ?>
           <?php foreach($rows as $r): $cancelled=(int)($r['is_cancelled'] ?? 0)===1; $meta=fatura_yonleri()[$r['direction']] ?? fatura_yonleri()['gelen']; ?>
           <tr class="<?php echo $cancelled?'row-cancelled':''; ?>">
-            <td><strong><?php echo e(tr_date($r['invoice_date'])); ?></strong><small><?php echo e($r['invoice_no'] ?: 'Fatura #' . $r['id']); ?><?php echo $r['due_date'] ? ' · Vade: ' . e(tr_date($r['due_date'])) : ''; ?></small></td>
+            <td><strong><?php echo e(tr_date($r['invoice_date'])); ?></strong><small><?php echo e($r['invoice_no'] ?: 'Fatura #' . $r['id']); ?><?php echo $r['due_date'] ? ' · Vade: ' . e(tr_date($r['due_date'])) : ''; ?></small><?php satis_bag_display('invoice',(int)$r['id']); ?></td>
             <td><?php if ($cancelled || !can_write()): ?><?php echo $cancelled ? badge('İptal','neutral') : badge($meta['label'], $meta['tone']); ?><?php else: $targetDirection=$r['direction']==='giden'?'gelen':'giden'; ?><div class="fatura-yon-cell"><?php echo badge($meta['label'], $meta['tone']); ?><button type="button" data-fatura-yon-sec="<?php echo e($r['id']); ?>" data-current="<?php echo e($r['direction']); ?>" data-target="<?php echo e($targetDirection); ?>"><?php echo $targetDirection === 'giden' ? 'Giden yap' : 'Gelen yap'; ?></button></div><?php endif; ?></td>
             <td>
               <?php if ($r['cari_id']): ?><a href="cari-detay.php?id=<?php echo e($r['cari_id']); ?>"><?php echo e($r['cari_name']); ?></a><?php elseif (!$cancelled && can_write()): ?><button type="button" class="fatura-cari-sec-btn" data-fatura-cari-sec="<?php echo e($r['id']); ?>"><strong>Cari yok</strong><small>Seç veya otomatik oluştur</small></button><?php else: ?><span class="muted">Cari yok</span><?php endif; ?>
@@ -686,9 +746,9 @@ page_header('Faturalar', 'faturalar');
                 <a href="faturalar.php?period=<?php echo e($period); ?>&direction=<?php echo e($directionFilter); ?>&edit=<?php echo e($r['id']); ?>">Düzenle</a>
                 <?php if (!fatura_muhtelif_cari_mi($r['cari_name'] ?? '')): ?><form method="post">
                   <?php echo csrf_field(); ?><input type="hidden" name="action" value="post_cari"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>">
-                  <button><?php echo !empty($r['cari_movement_id']) && (int)($r['movement_cancelled'] ?? 0)===0 ? 'Cariyi güncelle' : 'Cariye işle'; ?></button>
+                  <button><?php echo !empty($r['cari_movement_id']) && (int)($r['movement_cancelled'] ?? 0)===0 ? (satis_bag_get('invoice',(int)$r['id']) ? 'Cari bağlantısını kontrol et' : 'Cariyi güncelle') : 'Cariye işle'; ?></button>
                 </form><?php endif; ?>
-                <form method="post" onsubmit="var r=window.prompt('Fatura iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('Fatura ve varsa bağlı cari hareket iptal edilsin mi?');">
+                <form method="post" onsubmit="var r=window.prompt('Fatura iptal nedeni (en az 6 karakter):','');if(!r||r.trim().length<6){window.alert('İptal nedeni en az 6 karakter olmalıdır.');return false;}this.querySelector('[name=cancel_reason]').value=r.trim();return confirm('<?php echo satis_bag_get('invoice',(int)$r['id']) ? 'Fatura iptal edilsin mi? Depo çıkışı ve ortak cari hareket korunacak.' : 'Fatura ve varsa bağlı cari hareket iptal edilsin mi?'; ?>');">
                   <?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><input type="hidden" name="cancel_reason" value="">
                   <button>İptal</button>
                 </form>

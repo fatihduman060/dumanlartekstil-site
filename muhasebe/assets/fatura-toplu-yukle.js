@@ -575,6 +575,15 @@
     return html;
   }
 
+  function dispatchFields(record){
+    var options=window.BITKE_BULK_DISPATCHES||[];
+    if(!options.length) return '';
+    return '<label>İlgili depo çıkışı<select data-field="related_dispatch_id"><option value="">Bağlantı yok</option>'
+      +options.map(function(d){return '<option value="'+esc(d.id)+'" '+(String(record.related_dispatch_id)===String(d.id)?'selected':'')+'>'+esc('#'+d.dispatch_no+' · '+d.customer_name+' · '+d.dispatch_date+' · '+d.total+' '+d.currency)+'</option>';}).join('')
+      +'</select><small>Yalnız giden satış: cari ve toplam aynı olmalıdır. Mevcut cari hareketi korunur.</small></label>'
+      +'<label>Tarih farkını kontrol ettim<select data-field="confirm_date_difference"><option value="0">Onaylamadım</option><option value="1" '+(String(record.confirm_date_difference)==='1'?'selected':'')+'>Onayladım; mevcut hareket tarihi korunsun</option></select></label>';
+  }
+
   function rowHtml(record){
     var directionNote=record.direction==='giden'?'Bizim kestiğimiz fatura':'Bize kesilen fatura';
     var issuerHint='Gelen faturada gönderen firma zorunludur.';
@@ -598,6 +607,7 @@
       +'<label class="bulk-issuer-field">Gönderen firma<input data-field="issuer_name" maxlength="180" value="'+esc(record.issuer_name)+'" placeholder="PDF’den otomatik okunur; gerekirse yaz" '+(record.direction==='giden'?'disabled':'')+'><small class="is-'+esc(issuerTone)+'">'+esc(issuerHint)+'</small></label>'
       +'<label>Fatura no<input data-field="invoice_no" value="'+esc(record.invoice_no)+'" placeholder="Fatura no"></label>'
       +'<label>Fatura tarihi<input type="date" data-field="invoice_date" value="'+esc(record.invoice_date)+'"></label>'
+      +dispatchFields(record)
       +'<label>Vade tarihi<input type="date" data-field="due_date" value="'+esc(record.due_date)+'"></label>'
       +'<label>Matrah<input data-field="subtotal" inputmode="decimal" value="'+esc(formatMoney(record.subtotal))+'" placeholder="0,00"></label>'
       +'<label>KDV<input data-field="vat_amount" inputmode="decimal" value="'+esc(formatMoney(record.vat_amount))+'" placeholder="0,00"></label>'
@@ -757,6 +767,8 @@
     var payload=records.map(function(record){
       return {
         client_version:4,
+        related_dispatch_id:record.related_dispatch_id||'',
+        confirm_date_difference:record.confirm_date_difference||'0',
         direction:record.direction||'gelen',
         cari_id:record.cari_id||'',
         invoice_no:record.invoice_no||'',
