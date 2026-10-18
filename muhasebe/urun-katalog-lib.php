@@ -116,3 +116,24 @@ function urun_base_price_update(int $id, string $raw, string $expected): void
         throw $e;
     }
 }
+
+function urun_deactivate(int $id): void
+{
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->exec('UPDATE offer_products SET id=id WHERE id=-1');
+        $s = $pdo->prepare('SELECT * FROM offer_products WHERE id=? AND is_active=1');
+        $s->execute([$id]);
+        $old = $s->fetch();
+        if (!$old) throw new RuntimeException('Ürün bulunamadı veya zaten pasif.');
+        $pdo->prepare('UPDATE offer_products SET is_active=0, updated_at=? WHERE id=?')->execute([now(), $id]);
+        $after = $old;
+        $after['is_active'] = 0;
+        urun_audit($id, 'pasif_yapildi', $old, $after);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
