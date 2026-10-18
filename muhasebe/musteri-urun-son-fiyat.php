@@ -88,6 +88,21 @@ function muf_product_id(array $maps, string $barcode, string $name, string $type
     return 0;
 }
 
+function muf_known_product_by_name(array $maps, string $name, string $type): int
+{
+    $article = teklif_article_from_text($name) ?: teklif_article_from_text($type);
+    if ($article !== '') {
+        $id = (int)($maps['article'][$article] ?? 0);
+        if ($id > 0) return $id;
+    }
+    $normName = muf_norm($name);
+    $normType = muf_norm($type);
+    if ($normName === '') return 0;
+    $id = (int)($maps['name_type'][$normName . '|' . $normType] ?? 0);
+    if ($id > 0) return $id;
+    return max(0, (int)($maps['name'][$normName] ?? 0));
+}
+
 try {
     $cariId = (int)($_GET['cari_id'] ?? 0);
     $currency = strtoupper(trim((string)($_GET['currency'] ?? 'TL')));
@@ -197,6 +212,10 @@ try {
                 $type = (string)$canonical['product_type'];
             }
         } else {
+            // Barkodu mevcut ürün kartıyla çelişen eski satırı isim benzerliğiyle yeniden
+            // aynı ürüne bağlama. Bu şüpheli fiyatı yok say ve güncel liste fiyatına düş.
+            if ($barcode !== '' && muf_known_product_by_name($productMaps, $name, $type) > 0) continue;
+
             $normName = muf_norm($name);
             $normType = muf_norm($type);
             $barcodeKey = $barcode !== '' ? $barcode : '';
