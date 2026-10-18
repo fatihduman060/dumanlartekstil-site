@@ -41,15 +41,23 @@
     // Do not reuse another variant's price when an explicit variant differs.
     return named.find(function(p){return !type||!norm(p.product_type);})||null;
   }
+  function customerMatch(row,product){
+    var productId=Number(product&&product.id||0);
+    if(productId>0){
+      return items.find(function(item){return Number(item.product_id||0)===productId;})||null;
+    }
+    // Serbest/ürün listesinde bulunmayan satırlarda eski davranışı koru.
+    return match(items,row);
+  }
   function apply(row){
     var price=row.querySelector('.price'),s=state(row);
     if(!price||s.manual||s.preserve)return;
-    var customer=loadedKey===context()?match(items,row):null;
     var product=match(products,row);
+    var customer=loadedKey===context()?customerMatch(row,product):null;
     var amount=customer?Number(customer.unit_price):null;
     var source='Bu müşteriye en son kullanılan fiyat';
     if(amount===null&&currency()==='TL'&&product&&product.list_unit_price!==null&&product.list_unit_price!==undefined){
-      amount=Number(product.list_unit_price);source='Liste fiyatı';
+      amount=Number(product.list_unit_price);source='Güncel liste fiyatı';
     }
     price.value=amount!==null&&Number.isFinite(amount)?textPrice(amount):'';
     price.title=price.value!==''?source+': '+price.value+' '+currency():'Bu ürün için fiyat tanımlanmamış.';
