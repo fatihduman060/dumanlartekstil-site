@@ -60,6 +60,17 @@ function urun_audit(int $id, string $action, $before, $after): void
             json_encode($after, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'Tanımlı Ürün Listesi', client_ip(), now()]);
 }
 
+// Teklif / Depo Çıkış kaydı yapılırken ürün kartı senkronu yardımcı bir işlemdir.
+// Eski bir belge satırı yeni katalog kimliğiyle çakışıyorsa finansal/ticari belgeyi
+// bloke etme; yalnız katalog senkronunu atla. Manuel ürün tanımında koruma devam eder.
+function urun_document_sync_context(): bool
+{
+    foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8) as $frame) {
+        if (($frame['function'] ?? '') === 'teklif_save_product_suggestion') return true;
+    }
+    return false;
+}
+
 function urun_define(string $name, string $type = '', string $barcode = ''): array
 {
     $name = trim($name); $type = trim($type); $barcode = trim($barcode);
@@ -82,6 +93,14 @@ function urun_define(string $name, string $type = '', string $barcode = ''): arr
         $barcode = teklif_normalize_barcode($barcode, $name, $type);
         foreach ($products as $p) {
             if (($barcode !== '' && $barcode === (string)$p['barcode']) || ($article !== '' && $article === urun_article($p)) || urun_norm($name) === urun_norm($p['name'])) {
+                if (urun_document_sync_context()) {
+                    if (function_exists('log_action')) {
+                        log_action('Tanımlı ürün eşleştirmesi atlandı', $name . ($barcode !== '' ? ' / ' . $barcode : ''));
+                    }
+                    if ($owns) $pdo->commit();
+                    // teklif_save_product_suggestion yalnız id alanını kullanır; 0 no-op'tur.
+                    return ['id'=>0, 'name'=>$name, 'barcode'=>$barcode, 'product_type'=>$type, 'is_active'=>1];
+                }
                 throw new RuntimeException('Ürün bilgileri birden fazla veya çelişen kayıtla eşleşiyor. Tanımlı Ürün Listesi’ni kontrol edin.');
             }
         }
