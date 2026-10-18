@@ -37,7 +37,10 @@ const listExpected=process.env.LIST_EXPECTED||'444';
    await page.selectOption(cari,'101');await expectPrice('275');
    await product('6000 modal');await expectPrice(listExpected); // Product selection requests an automatic price.
    await page.selectOption(cari,'');await expectPrice(listExpected);
-   await product('Bilinmeyen ürün');await expectPrice('');
+   const definition=page.waitForResponse(r=>r.url().includes('urun-tanimla.php'));
+   await product('Yeni '+file+' '+Date.now());await expectPrice('');
+   const defined=await (await definition).json();assert(defined.ok);assert.equal(defined.product.list_unit_price,null);
+   await product('60-00');await expectPrice(listExpected);
    await product('6000 modal');await expectPrice(listExpected);
    if(file==='teklif-ver.php'){
     await page.selectOption('[name="currency"]','USD');await expectPrice('');
@@ -93,8 +96,22 @@ const listExpected=process.env.LIST_EXPECTED||'444';
   await savedRow.locator('.product-name').fill('6000 modal');await savedRow.locator('.product-name').dispatchEvent('change');
   await page.waitForFunction(()=>document.querySelector('#wdRows tbody tr .price').value==='401');
   await page.goto(base+'urun-fiyat-listesi.php');
+  const codes=await page.locator('#priceRows tr td:first-child').allTextContents();
+  const numeric=codes.filter(x=>x.trim()).map(Number);
+  assert.deepEqual(numeric,[...numeric].sort((a,b)=>a-b));
+  assert(await page.locator('[name="new_price"]').evaluateAll(xs=>xs.every(x=>x.value==='')));
+  for(const width of [1280,390]){
+   await page.setViewportSize({width,height:844});
+   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+  }
   await page.locator('#priceSearch').fill('6000');
   assert.equal(await page.locator('#priceRows tr:visible').count(),1);
+  const updateRow=page.locator('#priceRows tr:visible');
+  await updateRow.locator('[name="new_price"]').fill('480,50');
+  await Promise.all([page.waitForURL('**/urun-fiyat-listesi.php'),updateRow.getByRole('button',{name:'Güncelle'}).click()]);
+  await page.locator('#priceSearch').fill('6000');
+  assert((await page.locator('#priceRows tr:visible').textContent()).includes('480,50'));
+  assert.equal(await page.locator('#priceRows tr:visible [name="new_price"]').inputValue(),'');
   if(process.env.PRICE_SCREENSHOT)await page.screenshot({path:process.env.PRICE_SCREENSHOT,fullPage:true});
   assert.deepEqual(errors,[]);
   console.log('Saved document preservation, async races, manual input while loading, price list UI passed');

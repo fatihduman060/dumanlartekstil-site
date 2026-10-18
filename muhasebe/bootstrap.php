@@ -557,6 +557,7 @@ function audit_short(?string $json): string
 function audit_entity_label(string $type): string
 {
     return [
+        'offer_product' => 'Tanımlı Ürün',
         'cari' => 'Cari',
         'hareket' => 'Hareket',
         'cek' => 'Çek',

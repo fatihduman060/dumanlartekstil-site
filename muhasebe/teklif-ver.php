@@ -175,7 +175,7 @@ page_header('Teklif Ver', 'teklif_ver');
     <header><div><h3><?php echo $edit ? 'Teklif düzenle' : 'Yeni teklif'; ?></h3><small><?php echo $edit ? 'Kayıt no #' . e($edit['id']) : 'Kaydedince alttaki listede görünür.'; ?></small></div><strong><?php echo $edit ? e($edit['offer_no']) : 'Yeni teklif'; ?></strong></header>
     <div class="offer-body">
       <?php if (can_write()): ?>
-      <p><a class="btn" href="urun-fiyat-listesi.php" target="_blank" rel="noopener">Ürün Fiyat Listesi</a></p>
+      <p><a class="btn" href="urun-fiyat-listesi.php" target="_blank" rel="noopener">Tanımlı Ürün Listesi</a></p>
       <form method="post" id="offerForm">
         <?php echo csrf_field(); ?>
         <input type="hidden" name="action" value="save">
@@ -418,5 +418,5 @@ page_header('Teklif Ver', 'teklif_ver');
   recalc();
 })();
 </script>
-<script src="assets/musteri-urun-son-fiyat.js?v=5"></script>
+<script src="assets/musteri-urun-son-fiyat.js?v=6"></script>
 <?php page_footer(); ?>

@@ -296,6 +296,7 @@ function depo_cikis_sync_cari_movement(array $row, int $movementId): void
 
 function depo_cikis_save(int $id): int
 {
+    teklif_db_ensure();
     depo_cikis_db_ensure();
     $existing=$id>0?depo_cikis_load($id):null;
     if($existing && (int)($existing['is_cancelled']??0)===1) throw new RuntimeException('İptal edilmiş depo çıkış fişi düzenlenemez.');

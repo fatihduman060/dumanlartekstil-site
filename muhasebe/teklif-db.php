@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/urun-fiyat-listesi-2026.php';
+require_once __DIR__ . '/urun-katalog-lib.php';
 
 function teklif_db_ensure(): void
 {
@@ -95,7 +96,7 @@ function teklif_db_ensure(): void
 function teklif_products_for_select(): array
 {
     teklif_db_ensure();
-    return db()->query("SELECT * FROM offer_products WHERE is_active=1 ORDER BY name ASC")->fetchAll();
+    return urun_sort(db()->query("SELECT * FROM offer_products WHERE is_active=1 ORDER BY id ASC")->fetchAll());
 }
 
 function teklif_decimal($value): float
@@ -347,17 +348,28 @@ function teklif_parse_items_from_post(): array
 
 function teklif_save_product_suggestion(string $name, string $type = '', float $price = 0, string $barcode = ''): void
 {
-    $name = trim($name);
-    $barcode = teklif_normalize_barcode($barcode, $name, $type);
-    if ($name === '') return;
-    try {
-        db()->prepare("INSERT INTO offer_products (barcode, name, product_type, default_unit_price, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)
-            ON CONFLICT(name) DO UPDATE SET barcode=CASE WHEN excluded.barcode!='' THEN excluded.barcode ELSE offer_products.barcode END, product_type=CASE WHEN excluded.product_type!='' THEN excluded.product_type ELSE offer_products.product_type END, default_unit_price=CASE WHEN excluded.default_unit_price>0 THEN excluded.default_unit_price ELSE offer_products.default_unit_price END, updated_at=excluded.updated_at")
-            ->execute([$barcode, $name, $type, $price, now(), now()]);
-    } catch (Throwable $e) {}
+    if (trim($name) === '' && trim($barcode) === '') return;
+    $product = urun_define($name, $type, $barcode);
+    // Retain legacy suggestion memory for other modules; never use it as base pricing.
+    if (is_finite($price) && $price > 0) db()->prepare('UPDATE offer_products SET default_unit_price=?,updated_at=? WHERE id=?')->execute([$price,now(),$product['id']]);
 }
 
 function teklif_save_from_post(int $id = 0): int
+{
+    teklif_db_ensure();
+    $pdo = db(); $owns = !$pdo->inTransaction();
+    if ($owns) $pdo->beginTransaction();
+    try {
+        $saved = teklif_save_from_post_impl($id);
+        if ($owns) $pdo->commit();
+        return $saved;
+    } catch (Throwable $e) {
+        if ($owns && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+function teklif_save_from_post_impl(int $id = 0): int
 {
     teklif_db_ensure();
     $items = teklif_parse_items_from_post();

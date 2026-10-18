@@ -47,7 +47,6 @@ if (($_SERVER['REQUEST_METHOD']??'')==='POST') {
             $id=(int)($_POST['id']??0);
             $s=$pdo->prepare('SELECT * FROM price_lists WHERE id=? AND deleted_at IS NULL');$s->execute([$id]);$old=$s->fetch();
             if(!$old) throw new RuntimeException('Liste bulunamadı.');
-            if($old['is_current']) $pdo->prepare('UPDATE offer_products SET list_unit_price=NULL,updated_at=?')->execute([now()]);
             $pdo->prepare('UPDATE price_lists SET is_current=0,deleted_at=? WHERE id=?')->execute([now(),$id]);
             // Tombstone and immutable item snapshots remain for audit; downloads are denied.
             fiyat_listeleri_audit($id,'silindi',$old,['deleted_at'=>now(),'current_prices_cleared'=>(bool)$old['is_current']]);
@@ -98,9 +97,9 @@ page_header('Fiyat Listeleri','fiyat_listeleri');
 <div class="pl-wrap">
 <section class="panel-card">
 <h2>Fiyat listesi arşivi</h2>
-<p>Güncel liste, müşterinin ürüne ait geçmiş fiyatı yoksa Teklif Ver ve Depo Çıkış’ta kullanılır. Fiyatlar TL, KDV hariç ve fişteki birimle aynı olmalıdır (ör. DZ / düzine).</p>
-<p>Yalnızca bir liste güncel olabilir. Yeni listede bulunmayan ürünün otomatik liste fiyatı boş kalır. Geçmiş müşteri fiyatları ve kaydedilmiş fişler değişmez.</p>
-<div class="pl-actions"><?php if(!is_murat_limited_user()): ?><a href="urun-fiyat-listesi.php">Ürün tanımları ve fiyatlar</a><?php endif; ?></div>
+<p>İlk satış ana fiyatları Tanımlı Ürün Listesi bölümünden yönetilir. Fiyatlar TL, KDV hariç ve fişteki birimle aynı olmalıdır (ör. DZ / düzine).</p>
+<p>Buradaki dosyalar arşivdir. Güncel işareti ve silme işlemi canlı ana fiyatları değiştirmez. Geçmiş müşteri fiyatları ve kaydedilmiş fişler değişmez.</p>
+<div class="pl-actions"><?php if(!is_murat_limited_user()): ?><a href="urun-fiyat-listesi.php">Tanımlı Ürün Listesi</a><?php endif; ?></div>
 </section>
 <?php if(can_write()): ?>
 <section class="panel-card">
@@ -124,8 +123,8 @@ page_header('Fiyat Listeleri','fiyat_listeleri');
 <tr><td><strong><?php echo e($r['title']); ?></strong><br><?php if(strtolower(pathinfo($r['file_path'],PATHINFO_EXTENSION))==='pdf'): ?><a href="fiyat-listeleri.php?view=<?php echo (int)$r['id']; ?>" target="_blank" rel="noopener">PDF’yi görüntüle</a><?php elseif((int)$r['item_count']>0): ?><a href="fiyat-listeleri.php?preview=<?php echo (int)$r['id']; ?>"><?php echo e($r['file_name']); ?> · Fiyatları görüntüle</a><?php else: ?><span><?php echo e($r['file_name']); ?></span><?php endif; ?></td>
 <td><?php echo $r['is_current']?'Güncel':'Arşiv'; ?></td><td><?php echo (int)$r['item_count']; ?></td><td><?php echo e($r['created_at']); ?></td>
 <td><div class="pl-actions"><a href="fiyat-listeleri.php?download=<?php echo (int)$r['id']; ?>">İndir</a><?php if(strtolower(pathinfo($r['file_path'],PATHINFO_EXTENSION))==='pdf' && (int)$r['item_count']>0): ?><a href="fiyat-listeleri.php?preview=<?php echo (int)$r['id']; ?>">Fiyatları görüntüle</a><?php endif; ?><?php if(can_write()): ?>
-<?php if(!$r['is_current'] && $r['item_count']): ?><form method="post" onsubmit="return confirm('Bu liste güncel yapılsın mı? Listede olmayan ürünlerin liste fiyatları boş kalır.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="current"><input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>"><button class="btn btn-secondary">Güncel yap</button></form><?php endif; ?>
-<form method="post" onsubmit="return confirm('Liste silinsin mi? Güncelse otomatik liste fiyatları kaldırılır. İşlem geçmişi korunur.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>"><button class="btn btn-secondary">Sil</button></form>
+<?php if(!$r['is_current'] && $r['item_count']): ?><form method="post" onsubmit="return confirm('Bu arşiv dosyası güncel işaretlensin mi? Ana fiyatlar değişmez.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="current"><input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>"><button class="btn btn-secondary">Güncel yap</button></form><?php endif; ?>
+<form method="post" onsubmit="return confirm('Liste arşivden kaldırılsın mı? Ana fiyatlar ve işlem geçmişi korunur.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo (int)$r['id']; ?>"><button class="btn btn-secondary">Sil</button></form>
 <?php endif; ?></div></td></tr>
 <?php endforeach; ?>
 <?php if(!$rows): ?><tr><td colspan="5">Henüz fiyat listesi yüklenmemiş.</td></tr><?php endif; ?>

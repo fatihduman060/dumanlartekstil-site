@@ -40,7 +40,7 @@ page_header('Depo Çıkış','depo_cikis');
  <section class="wd-card">
   <h3><?php echo $edit?'Fişi düzenle':'Yeni depo çıkış fişi'; ?></h3>
   <?php if($edit) satis_bag_display('dispatch',(int)$edit['id']); ?>
-  <div class="wd-actions"><a href="urun-fiyat-listesi.php" target="_blank" rel="noopener">Ürün Fiyat Listesi</a></div>
+  <div class="wd-actions"><a href="urun-fiyat-listesi.php" target="_blank" rel="noopener">Tanımlı Ürün Listesi</a></div>
   <form method="post" id="wdForm"><?php echo csrf_field(); ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id']??0); ?>">
    <div class="wd-grid">
     <label>Fiş başlığı<input value="SİPARİŞ FİŞİ" disabled></label><label>Fiş no<input name="dispatch_no" required value="<?php echo e($edit['dispatch_no']??depo_cikis_next_no()); ?>"></label><label>Tarih<input type="date" name="dispatch_date" required value="<?php echo e($edit['dispatch_date']??date('Y-m-d')); ?>"></label>
@@ -164,5 +164,5 @@ foreach(array_unique($shareIds) as $shareId) depo_cikis_share_form($shareId);
   calc();
 })();
 </script>
-<script src="assets/musteri-urun-son-fiyat.js?v=5"></script>
+<script src="assets/musteri-urun-son-fiyat.js?v=6"></script>
 <?php page_footer(); ?>

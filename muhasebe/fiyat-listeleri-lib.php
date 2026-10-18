@@ -125,7 +125,7 @@ function fiyat_listeleri_items(array $rows): array
     return array_values($items);
 }
 
-// Caller owns a transaction. Clearing absent products prevents stale archived prices.
+// Caller owns a transaction. Archive status never changes live product prices.
 function fiyat_listeleri_activate(int $id): void
 {
     $pdo=db();
@@ -139,8 +139,5 @@ function fiyat_listeleri_activate(int $id): void
     $previous=$pdo->query('SELECT id FROM price_lists WHERE is_current=1')->fetchColumn();
     $pdo->exec('UPDATE price_lists SET is_current=0 WHERE is_current=1');
     $pdo->prepare('UPDATE price_lists SET is_current=1 WHERE id=?')->execute([$id]);
-    $pdo->prepare('UPDATE offer_products SET list_unit_price=NULL,updated_at=?')->execute([now()]);
-    $set=$pdo->prepare('UPDATE offer_products SET list_unit_price=?,updated_at=? WHERE id=?');
-    foreach($items as $item) $set->execute([$item['unit_price'],now(),$item['product_id']]);
     fiyat_listeleri_audit($id,'guncellendi',['previous_current'=>$previous,'prices'=>$before],['current'=>$id,'items'=>$items]);
 }

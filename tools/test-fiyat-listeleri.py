@@ -41,45 +41,45 @@ def run(request, opener, url, con, product_id):
     result=upload('Artikel;Birim Fiyat\n6000;555,50',True)
     assert result[0]==302, result
     first=con.execute('SELECT id FROM price_lists').fetchone()[0]
-    assert price()==555.5
-    assert con.execute('SELECT COUNT(*) FROM offer_products WHERE list_unit_price IS NOT NULL').fetchone()[0]==1
+    assert price()==444
+    assert con.execute('SELECT id,list_unit_price FROM offer_products').fetchall()==before
     assert request('fiyat-listeleri.php?download='+str(first))[0]==200
     status,_,preview=fetch('fiyat-listeleri.php?preview='+str(first))
     assert status==200 and b'555,50' in preview and b'6000 ERKEK' in preview
     assert fetch('fiyat-listeleri.php?view='+str(first))[0]==404
     assert request('fiyat-listeleri.php?download='+str(first),102)[0]==302
-    assert post('delete',first,103)[0]==302 and price()==555.5
-    assert post('delete',first,csrf='bad')[0]==302 and price()==555.5
+    assert post('delete',first,103)[0]==302 and price()==444
+    assert post('delete',first,csrf='bad')[0]==302 and price()==444
     name=con.execute('SELECT name FROM offer_products WHERE id=?',(product_id,)).fetchone()[0]
-    edit={'id':product_id,'name':name,'product_type':'4 Mevsim / Yazlık','barcode':'8699234860003','list_unit_price':'999','csrf_token':'qatoken'}
-    assert request('urun-fiyat-listesi.php',101,edit)[0]==200 and price()==555.5
-    assert request('urun-fiyat-listesi.php',101,dict(edit,list_unit_price=''))[0]==302 and price()==555.5
+    edit={'action':'price','id':product_id,'new_price':'999','expected_price':'444','csrf_token':'qatoken'}
+    assert request('urun-fiyat-listesi.php',101,edit)[0]==302 and price()==999
+    assert request('urun-fiyat-listesi.php',101,dict(edit,new_price='444',expected_price='999'))[0]==302 and price()==444
     # XLSX numeric cells, leading zero safe string identifiers and published archive switching.
     buf=io.BytesIO()
     with zipfile.ZipFile(buf,'w') as z:
         z.writestr('xl/worksheets/sheet1.xml','''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Barkod</t></is></c><c r="B1" t="inlineStr"><is><t>Birim Fiyat</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>8699234860003</t></is></c><c r="B2"><v>666.75</v></c></row></sheetData></worksheet>''')
     assert upload(buf.getvalue(),False,filename='prices.xlsx')[0]==302
     second=con.execute('SELECT MAX(id) FROM price_lists').fetchone()[0]
-    assert price()==555.5
-    assert post('current',second)[0]==302 and price()==666.75
+    assert price()==444
+    assert post('current',second)[0]==302 and price()==444
     status,headers,body=fetch('fiyat-listeleri.php?preview='+str(second))
     assert status==200 and b'666,75' in body
     assert fetch('fiyat-listeleri.php?download='+str(second))[0]==200
     assert con.execute('SELECT COUNT(*) FROM price_lists WHERE is_current=1').fetchone()[0]==1
-    assert post('current',first)[0]==302 and price()==555.5
+    assert post('current',first)[0]==302 and price()==444
     # Failure to persist audit must roll back the switch.
     con.execute("CREATE TRIGGER qa_fail_audit BEFORE INSERT ON audit_logs WHEN NEW.entity_type='fiyat_listesi' BEGIN SELECT RAISE(ABORT,'test'); END")
     con.commit()
-    assert post('current',second)[0]==200 and price()==555.5
+    assert post('current',second)[0]==200 and price()==444
     con.execute('DROP TRIGGER qa_fail_audit');con.commit()
     history=json.loads(request('musteri-urun-son-fiyat.php?cari_id=102&currency=TL')[1])
     assert next(i['unit_price'] for i in history['items'] if i['name']==name)==280
-    env=dict(os.environ, LIST_EXPECTED='555,5')
+    env=dict(os.environ, LIST_EXPECTED='444')
     subprocess.run([os.environ.get('NODE_BINARY','node'),str(__import__('pathlib').Path(__file__).with_name('test-urun-fiyat.js')),url],check=True,env=env)
-    assert post('delete',second)[0]==302 and price()==555.5
-    assert post('delete',first)[0]==302 and price() is None
+    assert post('delete',second)[0]==302 and price()==444
+    assert post('delete',first)[0]==302 and price()==444
     assert request('fiyat-listeleri.php?download='+str(first))[0]==404
-    assert post('current',first)[0]==200 and price() is None
+    assert post('current',first)[0]==200 and price()==444
     assert count()==2 and con.execute('SELECT COUNT(*) FROM price_list_items').fetchone()[0]==2
     assert con.execute("SELECT COUNT(*) FROM audit_logs WHERE entity_type='fiyat_listesi'").fetchone()[0]>=7
     assert all(con.execute('SELECT * FROM '+t).fetchall()==rows for t,rows in financial.items())
@@ -92,13 +92,13 @@ def run(request, opener, url, con, product_id):
     assert upload(pdf,False,user=105,filename='list.pdf')[0]==302
     pdf_id=con.execute('SELECT MAX(id) FROM price_lists').fetchone()[0]
     assert request('fiyat-listeleri.php',106)[0]==200
-    assert post('current',pdf_id)[0]==200 and price() is None
+    assert post('current',pdf_id)[0]==200 and price()==444
     assert upload(pdf,True,user=106,filename='list.pdf',extra='Artikel;Birim Fiyat\n6000;777')[0]==302
     paired_id=con.execute('SELECT MAX(id) FROM price_lists').fetchone()[0]
-    assert price()==777
+    assert price()==444
     assert fetch('fiyat-listeleri.php?view='+str(paired_id))[0]==200
     assert fetch('fiyat-listeleri.php?preview='+str(paired_id))[0]==200
-    assert post('delete',paired_id,106)[0]==302 and price() is None
+    assert post('delete',paired_id,106)[0]==302 and price()==444
     assert upload('<?php echo 1;',filename='bad.php')[0]==200 and count()==5
     bad=io.BytesIO()
     with zipfile.ZipFile(bad,'w') as z:
