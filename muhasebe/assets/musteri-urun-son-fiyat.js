@@ -108,7 +108,7 @@
       var matches=products.filter(function(p){var label=norm(p.name);return words.every(function(w){return label.includes(w);});});
       if(matches.length===1)product=matches[0];
     }
-    if(product){name.value=product.name||'';barcode.value=product.barcode||'';type.value=product.product_type||'';}
+    if(product){name.value=product.name||'';barcode.value=product.barcode||'';}
     else if(source==='name'){barcode.value='';}
     else if(source==='barcode'){name.value=value;}
     return product;

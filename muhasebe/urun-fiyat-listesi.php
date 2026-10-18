@@ -17,7 +17,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         } elseif (($_POST['action'] ?? '') === 'delete') {
             urun_deactivate((int)($_POST['id'] ?? 0));
         } else {
-            urun_define(trim((string)($_POST['name'] ?? '')), trim((string)($_POST['product_type'] ?? '')), trim((string)($_POST['barcode'] ?? '')));
+            urun_define(trim((string)($_POST['name'] ?? '')), '', trim((string)($_POST['barcode'] ?? '')));
         }
         flash('success', ($_POST['action'] ?? '') === 'delete' ? 'Ürün pasif yapıldı; yeni Teklif ve Depo Çıkış satırlarında görünmeyecek.' : 'Tanımlı ürün kaydedildi. Ana fiyat değişikliği müşteri geçmiş fiyatlarını değiştirmez.');
         redirect('urun-fiyat-listesi.php');
@@ -47,7 +47,7 @@ page_header('Tanımlı Ürün Listesi', 'fiyat_listeleri');
 <div class="price-fields">
 <label>Ürün adı<input name="name" required value="<?php echo e($edit['name']); ?>" placeholder="Örn: 6000 Modal Çorap"></label>
 <label>Barkod<input name="barcode" value="<?php echo e($edit['barcode'] ?? ''); ?>"></label>
-<label>Ürün cinsi / açıklama<input name="product_type" value="<?php echo e($edit['product_type'] ?? ''); ?>"></label>
+<p class="muted">Ürün açıklamaları yalnızca Teklif veya Depo Çıkış satırında saklanır; ürün kartına aktarılmaz.</p>
 
 </div>
 <div class="price-actions"><button type="submit">Kaydet</button><?php if ($edit['id']): ?><a href="urun-fiyat-listesi.php">Vazgeç / Yeni ürün</a><?php endif; ?></div>
@@ -61,7 +61,7 @@ page_header('Tanımlı Ürün Listesi', 'fiyat_listeleri');
 <tr>
 <td><?php echo e(urun_article($product)); ?></td>
 <td><?php echo e($product['barcode'] ?? ''); ?></td>
-<td><strong><?php echo e($product['name']); ?></strong><br><small class="muted"><?php echo e($product['product_type'] ?? ''); ?></small></td>
+<td><strong><?php echo e($product['name']); ?></strong></td>
 <td><?php echo $product['list_unit_price'] === null ? '<span class="muted">Tanımlanmamış</span>' : e(teklif_money((float)$product['list_unit_price']).' TL'); ?></td>
 <td><?php if ($canEdit): ?><input form="<?php echo $formId; ?>" name="new_price" inputmode="decimal" required aria-label="<?php echo e($product['name'].' yeni fiyat'); ?>" placeholder="Yeni fiyat" style="min-width:110px"><?php else: ?>—<?php endif; ?></td>
 <td><?php if ($canEdit): ?><div class="price-actions"><form id="<?php echo $formId; ?>" method="post"><?php echo csrf_field(); ?><input type="hidden" name="action" value="price"><input type="hidden" name="id" value="<?php echo (int)$product['id']; ?>"><input type="hidden" name="expected_price" value="<?php echo e((string)$product['list_unit_price']); ?>"><button type="submit">Güncelle</button></form><form method="post" onsubmit="return confirm('Bu ürün pasif yapılsın mı? Eski teklif ve depo kayıtları korunur; yeni satırlarda görünmez.');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo (int)$product['id']; ?>"><button type="submit" aria-label="<?php echo e($product['name']); ?> ürününü pasif yap">×</button></form></div><?php else: ?>—<?php endif; ?></td>

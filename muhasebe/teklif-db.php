@@ -88,6 +88,9 @@ function teklif_db_ensure(): void
     // Explicit list price is separate from prices learned from customer documents.
     ensure_column($pdo, 'offer_products', 'list_unit_price', 'REAL');
     urun_fiyat_listesi_2026_import($pdo);
+    // Product descriptions belong to the saved offer/dispatch line only. Keep the
+    // reusable product catalog focused on identity and base pricing.
+    $pdo->exec("UPDATE offer_products SET product_type='' WHERE product_type IS NOT NULL AND TRIM(product_type)!=''");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offers_date ON offers(offer_date, id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offer_items_offer ON offer_items(offer_id, sort_order)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_offer_products_barcode ON offer_products(barcode)");
@@ -349,7 +352,7 @@ function teklif_parse_items_from_post(): array
 function teklif_save_product_suggestion(string $name, string $type = '', float $price = 0, string $barcode = ''): void
 {
     if (trim($name) === '' && trim($barcode) === '') return;
-    $product = urun_define($name, $type, $barcode);
+    $product = urun_define($name, '', $barcode);
     // Retain legacy suggestion memory for other modules; never use it as base pricing.
     if (is_finite($price) && $price > 0) db()->prepare('UPDATE offer_products SET default_unit_price=?,updated_at=? WHERE id=?')->execute([$price,now(),$product['id']]);
 }
