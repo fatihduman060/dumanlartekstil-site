@@ -31,7 +31,7 @@ function muf_unique_map_add(array &$map, string $key, int $id): void
 
 function muf_product_maps(array $products): array
 {
-    $maps = ['barcode'=>[], 'article'=>[], 'name_type'=>[], 'name'=>[]];
+    $maps = ['barcode'=>[], 'article'=>[], 'name_type'=>[], 'name'=>[], 'by_id'=>[]];
     foreach ($products as $product) {
         $id = (int)($product['id'] ?? 0);
         if ($id <= 0) continue;
@@ -43,6 +43,12 @@ function muf_product_maps(array $products): array
         $normName = muf_norm($name);
         $normType = muf_norm($type);
 
+        $maps['by_id'][$id] = [
+            'id'=>$id,
+            'barcode'=>$barcode,
+            'name'=>$name,
+            'product_type'=>$type,
+        ];
         muf_unique_map_add($maps['barcode'], $barcode, $id);
         muf_unique_map_add($maps['article'], $article, $id);
         muf_unique_map_add($maps['name_type'], $normName !== '' ? $normName . '|' . $normType : '', $id);
@@ -182,6 +188,14 @@ try {
         if ($productId > 0) {
             if (isset($seenProduct[$productId])) continue;
             $seenProduct[$productId] = true;
+            // Eski fişte barkod/ad hatalı veya eksik olsa bile tarayıcıya ürün kartındaki
+            // kanonik bilgiyi gönder. Böylece geçmiş fiyat yalnız aynı gerçek ürünü ezer.
+            $canonical = $productMaps['by_id'][$productId] ?? null;
+            if ($canonical) {
+                $barcode = (string)$canonical['barcode'];
+                $name = (string)$canonical['name'];
+                $type = (string)$canonical['product_type'];
+            }
         } else {
             $normName = muf_norm($name);
             $normType = muf_norm($type);
