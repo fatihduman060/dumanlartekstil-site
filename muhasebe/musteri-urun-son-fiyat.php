@@ -13,6 +13,75 @@ function muf_json(array $payload, int $status = 200): void
     exit;
 }
 
+function muf_norm(string $value): string
+{
+    $value = trim((string)(preg_replace('/\s+/u', ' ', $value) ?: $value));
+    return mb_strtolower($value, 'UTF-8');
+}
+
+function muf_unique_map_add(array &$map, string $key, int $id): void
+{
+    if ($key === '' || $id <= 0) return;
+    if (!array_key_exists($key, $map)) {
+        $map[$key] = $id;
+        return;
+    }
+    if ((int)$map[$key] !== $id) $map[$key] = 0;
+}
+
+function muf_product_maps(array $products): array
+{
+    $maps = ['barcode'=>[], 'article'=>[], 'name_type'=>[], 'name'=>[]];
+    foreach ($products as $product) {
+        $id = (int)($product['id'] ?? 0);
+        if ($id <= 0) continue;
+        $name = trim((string)($product['name'] ?? ''));
+        $type = trim((string)($product['product_type'] ?? ''));
+        $rawBarcode = trim((string)($product['barcode'] ?? ''));
+        $barcode = teklif_normalize_barcode($rawBarcode, $name, $type);
+        $article = teklif_article_from_text($rawBarcode) ?: teklif_article_from_text($name) ?: teklif_article_from_text($type);
+        $normName = muf_norm($name);
+        $normType = muf_norm($type);
+
+        muf_unique_map_add($maps['barcode'], $barcode, $id);
+        muf_unique_map_add($maps['article'], $article, $id);
+        muf_unique_map_add($maps['name_type'], $normName !== '' ? $normName . '|' . $normType : '', $id);
+        muf_unique_map_add($maps['name'], $normName, $id);
+    }
+    return $maps;
+}
+
+function muf_product_id(array $maps, string $barcode, string $name, string $type): int
+{
+    $rawBarcode = trim($barcode);
+    $name = trim($name);
+    $type = trim($type);
+
+    if ($rawBarcode !== '') {
+        $normalized = teklif_normalize_barcode($rawBarcode, $name, $type);
+        $id = (int)($maps['barcode'][$normalized] ?? 0);
+        // Barkod yazılmış bir geçmiş kaydını, barkod eşleşmiyorsa yalnız isim benziyor
+        // diye başka ürüne bağlama. Yanlış müşteri fiyatı liste fiyatının önüne geçmesin.
+        return $id > 0 ? $id : 0;
+    }
+
+    $article = teklif_article_from_text($name) ?: teklif_article_from_text($type);
+    if ($article !== '') {
+        $id = (int)($maps['article'][$article] ?? 0);
+        if ($id > 0) return $id;
+    }
+
+    $normName = muf_norm($name);
+    $normType = muf_norm($type);
+    if ($normName !== '') {
+        $id = (int)($maps['name_type'][$normName . '|' . $normType] ?? 0);
+        if ($id > 0) return $id;
+        $id = (int)($maps['name'][$normName] ?? 0);
+        if ($id > 0) return $id;
+    }
+    return 0;
+}
+
 try {
     $cariId = (int)($_GET['cari_id'] ?? 0);
     $currency = strtoupper(trim((string)($_GET['currency'] ?? 'TL')));
@@ -25,6 +94,7 @@ try {
     depo_cikis_db_ensure();
     hareket_satis_db_ensure();
     $pdo = db();
+    $productMaps = muf_product_maps(teklif_products_for_select());
 
     $movementCurrency = depo_cikis_table_has_column($pdo, 'movements', 'currency')
         ? "COALESCE(NULLIF(UPPER(TRIM(m.currency)),''),'TL')" : "'TL'";
@@ -93,8 +163,9 @@ try {
     $stmt->execute([$cariId, $currency, $cariId, $currency, $cariId, $currency]);
     $rows = $stmt->fetchAll() ?: [];
 
-    // Aynı ürün geçmişte birçok kez kullanılmış olabilir. Sorgu en yeniden eskiye
-    // sıralı geldiği için her barkod/ürün adına yalnızca ilk (son kullanılan) fiyatı bırak.
+    // Bilinen ürünlerde geçmiş fiyatı gerçek offer_products kimliğiyle tekilleştir.
+    // Kimliği çözülemeyen özel/serbest ürünlerde eski isim/barkod davranışını koru.
+    $seenProduct = [];
     $seenBarcode = [];
     $seenNameType = [];
     $seenName = [];
@@ -107,28 +178,35 @@ try {
         $price = (float)($row['unit_price'] ?? 0);
         if ($price <= 0 || ($barcode === '' && $name === '')) continue;
 
-        $normName = mb_strtolower(preg_replace('/\s+/u', ' ', $name) ?: $name, 'UTF-8');
-        $normType = mb_strtolower(preg_replace('/\s+/u', ' ', $type) ?: $type, 'UTF-8');
-        $barcodeKey = $barcode !== '' ? $barcode : '';
-        $nameTypeKey = $normName !== '' ? $normName . '|' . $normType : '';
-        $nameKey = $normName;
+        $productId = muf_product_id($productMaps, $barcode, $name, $type);
+        if ($productId > 0) {
+            if (isset($seenProduct[$productId])) continue;
+            $seenProduct[$productId] = true;
+        } else {
+            $normName = muf_norm($name);
+            $normType = muf_norm($type);
+            $barcodeKey = $barcode !== '' ? $barcode : '';
+            $nameTypeKey = $normName !== '' ? $normName . '|' . $normType : '';
+            $nameKey = $normName;
 
-        $isNew = false;
-        if ($barcodeKey !== '' && !isset($seenBarcode[$barcodeKey])) {
-            $seenBarcode[$barcodeKey] = true;
-            $isNew = true;
+            $isNew = false;
+            if ($barcodeKey !== '' && !isset($seenBarcode[$barcodeKey])) {
+                $seenBarcode[$barcodeKey] = true;
+                $isNew = true;
+            }
+            if ($nameTypeKey !== '' && !isset($seenNameType[$nameTypeKey])) {
+                $seenNameType[$nameTypeKey] = true;
+                $isNew = true;
+            }
+            if ($nameKey !== '' && !isset($seenName[$nameKey])) {
+                $seenName[$nameKey] = true;
+                $isNew = true;
+            }
+            if (!$isNew) continue;
         }
-        if ($nameTypeKey !== '' && !isset($seenNameType[$nameTypeKey])) {
-            $seenNameType[$nameTypeKey] = true;
-            $isNew = true;
-        }
-        if ($nameKey !== '' && !isset($seenName[$nameKey])) {
-            $seenName[$nameKey] = true;
-            $isNew = true;
-        }
-        if (!$isNew) continue;
 
         $items[] = [
+            'product_id' => $productId,
             'barcode' => $barcode,
             'name' => $name,
             'product_type' => $type,
