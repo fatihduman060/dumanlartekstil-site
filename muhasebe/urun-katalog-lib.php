@@ -61,8 +61,8 @@ function urun_audit(int $id, string $action, $before, $after): void
 }
 
 // Teklif / Depo Çıkış kaydı yapılırken ürün kartı senkronu yardımcı bir işlemdir.
-// Eski bir belge satırı yeni katalog kimliğiyle çakışıyorsa finansal/ticari belgeyi
-// bloke etme; yalnız katalog senkronunu atla. Manuel ürün tanımında koruma devam eder.
+// Eski bir belge satırı yeni katalog kimliğiyle çakışıyorsa veya katalogda pasifse
+// belgeyi bloke etme; yalnız katalog senkronunu atla. Manuel ürün tanımında koruma devam eder.
 function urun_document_sync_context(): bool
 {
     foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8) as $frame) {
@@ -84,7 +84,17 @@ function urun_define(string $name, string $type = '', string $barcode = ''): arr
         $products = $pdo->query('SELECT * FROM offer_products ORDER BY id')->fetchAll();
         $found = urun_match($products, $name, $type, $barcode);
         if ($found) {
-            if (!(int)$found['is_active']) throw new RuntimeException('Ürün pasif. Ürün kaydını kontrol edin.');
+            if (!(int)$found['is_active']) {
+                if (urun_document_sync_context()) {
+                    if (function_exists('log_action')) {
+                        log_action('Pasif tanımlı ürün senkronu atlandı', $name . ($barcode !== '' ? ' / ' . $barcode : ''));
+                    }
+                    if ($owns) $pdo->commit();
+                    // Belge satırı korunur; pasif ürün kartı yeniden etkinleştirilmez veya güncellenmez.
+                    return ['id'=>0, 'name'=>$name, 'barcode'=>$barcode, 'product_type'=>$type, 'is_active'=>0];
+                }
+                throw new RuntimeException('Ürün pasif. Ürün kaydını kontrol edin.');
+            }
             if ($owns) $pdo->commit();
             return $found;
         }
