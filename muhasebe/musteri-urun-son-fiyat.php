@@ -103,6 +103,49 @@ function muf_known_product_by_name(array $maps, string $name, string $type): int
     return max(0, (int)($maps['name'][$normName] ?? 0));
 }
 
+function muf_list_price_rows(PDO $pdo): array
+{
+    $hasLists = false;
+    try {
+        $s = $pdo->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='price_lists' LIMIT 1");
+        $hasLists = (bool)$s->fetchColumn();
+    } catch (Throwable $e) {}
+
+    if ($hasLists) {
+        try {
+            return $pdo->query("SELECT p.id AS product_id,
+                    COALESCE(NULLIF(TRIM(p.barcode),''),'') AS barcode,
+                    p.name,
+                    COALESCE(p.product_type,'') AS product_type,
+                    COALESCE(i.unit_price,p.list_unit_price) AS unit_price,
+                    COALESCE(l.id,0) AS list_id
+                FROM offer_products p
+                LEFT JOIN price_lists l ON l.is_current=1 AND l.deleted_at IS NULL
+                LEFT JOIN price_list_items i ON i.list_id=l.id AND i.product_id=p.id
+                WHERE p.is_active=1
+                  AND COALESCE(i.unit_price,p.list_unit_price,0)>0
+                ORDER BY p.id ASC")->fetchAll() ?: [];
+        } catch (Throwable $e) {
+            // Eski kurulumlarda fiyat listesi tabloları eksik/yarım ise ürün kartındaki
+            // liste fiyatına güvenli şekilde geri düş.
+        }
+    }
+
+    try {
+        return $pdo->query("SELECT id AS product_id,
+                COALESCE(NULLIF(TRIM(barcode),''),'') AS barcode,
+                name,
+                COALESCE(product_type,'') AS product_type,
+                list_unit_price AS unit_price,
+                0 AS list_id
+            FROM offer_products
+            WHERE is_active=1 AND COALESCE(list_unit_price,0)>0
+            ORDER BY id ASC")->fetchAll() ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
 try {
     $cariId = (int)($_GET['cari_id'] ?? 0);
     $currency = strtoupper(trim((string)($_GET['currency'] ?? 'TL')));
@@ -249,6 +292,31 @@ try {
             'document_date' => (string)$row['document_date'],
             'updated_at' => (string)$row['updated_at'],
         ];
+    }
+
+    // TL'de müşterinin aynı ürüne ait geçmiş fiyatı yoksa fiyatı sunucudan doğrudan
+    // güncel Fiyat Listeleri kaydından döndür. Böylece eski JS önbelleği veya ürün JSON'u
+    // eksik olsa bile ilk kez yazılan ürünün fiyat alanı boş kalmaz.
+    if ($currency === 'TL') {
+        foreach (muf_list_price_rows($pdo) as $listRow) {
+            $productId = (int)($listRow['product_id'] ?? 0);
+            $price = (float)($listRow['unit_price'] ?? 0);
+            if ($productId <= 0 || $price <= 0 || isset($seenProduct[$productId])) continue;
+            $canonical = $productMaps['by_id'][$productId] ?? null;
+            if (!$canonical) continue;
+            $seenProduct[$productId] = true;
+            $items[] = [
+                'product_id' => $productId,
+                'barcode' => (string)$canonical['barcode'],
+                'name' => (string)$canonical['name'],
+                'product_type' => (string)$canonical['product_type'],
+                'unit_price' => $price,
+                'source_type' => 'liste',
+                'source_id' => (int)($listRow['list_id'] ?? 0),
+                'document_date' => '',
+                'updated_at' => '',
+            ];
+        }
     }
 
     muf_json(['ok' => true, 'cari_id' => $cariId, 'items' => $items]);
