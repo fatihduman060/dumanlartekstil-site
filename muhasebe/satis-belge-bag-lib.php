@@ -55,7 +55,7 @@ function satis_bag_active(int $id): int
     $s->execute([$id]); return (int)($s->fetchColumn() ?: 0);
 }
 
-function satis_bag_validate(array $i, array $d, bool $dateConfirmed): void
+function satis_bag_validate(array $i, array $d, bool $dateConfirmed = false): void
 {
     if (!empty($i['is_cancelled']) || !empty($d['is_cancelled'])) throw new RuntimeException('İptal edilmiş belge bağlanamaz.');
     if ($i['direction'] !== 'giden') throw new RuntimeException('Depo çıkışı yalnız giden satış faturasıyla bağlanabilir.');
@@ -63,7 +63,8 @@ function satis_bag_validate(array $i, array $d, bool $dateConfirmed): void
     if ($i['currency'] !== $d['currency'] || round((float)$i['total_amount'],2) !== round((float)$d['total'],2) || (float)$i['total_amount'] <= 0) {
         throw new RuntimeException('Tutar / para birimi uyuşmazlığı: fatura ve depo çıkışı toplamlarını kontrol edin. Finansal veri değiştirilmedi.');
     }
-    if ($i['invoice_date'] !== $d['dispatch_date'] && !$dateConfirmed) throw new RuntimeException('Tarih uyuşmazlığı: fatura '.$i['invoice_date'].', depo çıkışı '.$d['dispatch_date'].'. Tarih farkını kontrol edip onaylayın.');
+    // Depo çıkış tarihi operasyon tarihidir ve fatura tarihinden farklı olabilir.
+    // Ortak cari hareketinin finansal tarihi her zaman faturanın invoice_date alanıdır.
 }
 
 function satis_bag_movement(array $i, array $d): int
@@ -105,6 +106,31 @@ function satis_bag_audit(string $action, $old, $new, string $reason): void
             $old===null?null:json_encode($old,JSON_UNESCAPED_UNICODE),$new===null?null:json_encode($new,JSON_UNESCAPED_UNICODE),$reason,client_ip(),now()]);
 }
 
+// Depo fişi daha önce cariye işlense bile bağlantı kurulduğunda finansal tarih
+// fatura tarihine taşınır. Depo fişinin dispatch_date alanı değişmez.
+function satis_bag_align_invoice_date(array $i, array $d, int $mid): void
+{
+    $mid = satis_bag_active($mid);
+    if ($mid <= 0) return;
+    $invoiceDate = trim((string)($i['invoice_date'] ?? ''));
+    if ($invoiceDate === '') return;
+    $movement = satis_bag_row('movements', $mid);
+    $oldDate = trim((string)($movement['movement_date'] ?? ''));
+    if ($oldDate === $invoiceDate) return;
+
+    db()->prepare('UPDATE movements SET movement_date=?,updated_at=? WHERE id=?')
+        ->execute([$invoiceDate, now(), $mid]);
+    if (function_exists('sync_movement_account_transaction')) sync_movement_account_transaction($mid);
+
+    $before = [
+        'invoice_id'=>(int)$i['id'], 'dispatch_id'=>(int)$d['id'], 'cari_movement_id'=>$mid,
+        'movement_date'=>$oldDate, 'invoice_date'=>$invoiceDate, 'dispatch_date'=>(string)($d['dispatch_date'] ?? '')
+    ];
+    $after = $before;
+    $after['movement_date'] = $invoiceDate;
+    satis_bag_audit('hareket_tarihi_faturaya_esitlendi',$before,$after,'Cari hareket tarihi fatura tarihi esas alınarak güncellendi.');
+}
+
 function satis_bag_set(int $invoiceId, int $dispatchId, bool $dateConfirmed, string $reason): void
 {
     if (!db()->inTransaction()) throw new RuntimeException('Belge bağlantısı işlem içinde kaydedilmelidir.');
@@ -129,6 +155,7 @@ function satis_bag_set(int $invoiceId, int $dispatchId, bool $dateConfirmed, str
         satis_bag_validate($i,$d,$dateConfirmed);
         if (satis_bag_get('dispatch',$dispatchId)) throw new RuntimeException('Bu depo çıkışı başka bir faturaya bağlı.');
         $mid = satis_bag_movement($i,$d);
+        if ($mid) satis_bag_align_invoice_date($i,$d,$mid);
         $source = $mid ? (satis_bag_active((int)$d['cari_movement_id']) ? 'dispatch' : 'invoice') : '';
         db()->prepare('INSERT INTO sale_document_links(invoice_id,dispatch_id,movement_source,created_by,created_at) VALUES(?,?,?,?,?)')
             ->execute([$invoiceId,$dispatchId,$source,current_user()['id']??null,now()]);
@@ -155,6 +182,10 @@ function satis_bag_after_post(string $side, int $id, int $mid): void
     $link = satis_bag_get($side,$id);
     if (!$link) return;
     $before = $link;
+    $i = satis_bag_row('invoices',(int)$link['invoice_id']);
+    $d = satis_bag_row('warehouse_dispatches',(int)$link['dispatch_id']);
+    // Özellikle depo çıkışı önce işlendiğinde oluşturulan hareketi fatura tarihine çek.
+    satis_bag_align_invoice_date($i,$d,$mid);
     db()->prepare('UPDATE sale_document_links SET movement_source=? WHERE invoice_id=?')->execute([$side,$link['invoice_id']]);
     satis_bag_share($link,$mid);
     satis_bag_audit('ortak_cari_hareketi',$before,array_merge($link,['movement_source'=>$side,'cari_movement_id'=>$mid]),'İki belge aynı aktif cari hareketine bağlandı.');
@@ -171,6 +202,6 @@ function satis_bag_display(string $side, int $id): void
     echo '<div class="calc-note"><a href="'.e($url).'">'.e($label).'</a><br>';
     $mid = satis_bag_active((int)$invoice['cari_movement_id']);
     echo $mid ? e(($link['movement_source']==='dispatch'?'Depo çıkışı':'Fatura').' üzerinden cariye işlendi · Hareket #'.$mid) : 'Aktif cari hareketi yok.';
-    if ($invoice['invoice_date']!==$dispatch['dispatch_date']) echo '<br>'.e('Tarih farkı: fatura '.$invoice['invoice_date'].' / depo '.$dispatch['dispatch_date'].'. Mevcut hareket tarihi korundu.');
+    if ($invoice['invoice_date']!==$dispatch['dispatch_date']) echo '<br>'.e('Tarih farkı: fatura '.$invoice['invoice_date'].' / depo '.$dispatch['dispatch_date'].'. Cari hareket tarihinde fatura tarihi esas alınır.');
     echo '</div>';
 }
