@@ -6,10 +6,98 @@ require_login();
 
 header('Content-Type: application/json; charset=utf-8');
 magaza_odeme_dagilim_tablosunu_hazirla();
-$processedDueCount = magaza_odeme_dagilim_vadesi_gelenleri_isle();
+
+/**
+ * Barkodlu Satış kullanılan günlerde mağazanın kart satış tutarı POS fişlerinden gelir.
+ * Eski/manüel günlük kart tutarının yeni POS satışlarının üstüne eklenmesini engeller.
+ * Kart veresiye tahsilatları bu toplama dahil değildir; ayrı alanda tutulur.
+ */
+function magaza_odeme_dagilim_pos_kart_bilgisi(string $saleDate): ?array
+{
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || $saleDate < '2026-09-04') return null;
+    $pdo = db();
+    $exists = (bool)$pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='pos_sales' LIMIT 1")->fetchColumn();
+    if (!$exists) return null;
+
+    $columns = [];
+    foreach ($pdo->query('PRAGMA table_info(pos_sales)')->fetchAll() ?: [] as $column) {
+        $columns[(string)($column['name'] ?? '')] = true;
+    }
+    if (empty($columns['sale_date']) || empty($columns['payment_method']) || empty($columns['grand_total'])) return null;
+
+    $countStmt = $pdo->prepare('SELECT COUNT(*) FROM pos_sales WHERE sale_date=?');
+    $countStmt->execute([$saleDate]);
+    $receiptCount = (int)($countStmt->fetchColumn() ?: 0);
+    if ($receiptCount < 1) return null;
+
+    $cardExpr = !empty($columns['card_amount'])
+        ? "CASE WHEN COALESCE(card_amount,0)>0 THEN card_amount WHEN payment_method='card' THEN grand_total ELSE 0 END"
+        : "CASE WHEN payment_method='card' THEN grand_total ELSE 0 END";
+    $cancelFilter = !empty($columns['is_cancelled']) ? ' AND COALESCE(is_cancelled,0)=0' : '';
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM({$cardExpr}),0) FROM pos_sales WHERE sale_date=?{$cancelFilter}");
+    $stmt->execute([$saleDate]);
+
+    return [
+        'amount' => round((float)($stmt->fetchColumn() ?: 0), 2),
+        'receipt_count' => $receiptCount,
+    ];
+}
+
+function magaza_odeme_dagilim_pos_kart_gun_senkronla(string $saleDate): ?float
+{
+    $pos = magaza_odeme_dagilim_pos_kart_bilgisi($saleDate);
+    if ($pos === null) return null;
+
+    $stmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE sale_date=? LIMIT 1');
+    $stmt->execute([$saleDate]);
+    $old = $stmt->fetch();
+    if (!$old) return (float)$pos['amount'];
+
+    $card = round((float)$pos['amount'], 2);
+    $oldCard = round((float)($old['card_amount'] ?? 0), 2);
+    if (abs($oldCard - $card) < 0.005) return $card;
+
+    $dailyTotal = magaza_odeme_dagilim_gunluk_toplam(
+        (float)($old['cash_amount'] ?? 0),
+        $card,
+        (float)($old['credit_amount'] ?? 0)
+    );
+    $userId = current_user()['id'] ?? null;
+    db()->prepare('UPDATE store_daily_payment_breakdown SET card_amount=?,daily_total=?,updated_by=?,updated_at=? WHERE id=?')
+        ->execute([$card,$dailyTotal,$userId,now(),(int)$old['id']]);
+
+    // Vadesi gelmiş / daha önce oluşturulmuş banka hareketi varsa doğru kart tutarına çek.
+    magaza_odeme_dagilim_hareketlerini_senkronla((int)$old['id']);
+
+    $newStmt = db()->prepare('SELECT * FROM store_daily_payment_breakdown WHERE id=?');
+    $newStmt->execute([(int)$old['id']]);
+    $new = $newStmt->fetch() ?: [];
+    if (function_exists('audit_action')) {
+        audit_action('magaza_odeme_dagilimi', (int)$old['id'], 'pos_kart_senkronlandi', $old, $new,
+            $saleDate . ' · kart satış POS toplamına eşitlendi');
+    }
+    return $card;
+}
+
+function magaza_odeme_dagilim_pos_kart_period_senkronla(string $period): void
+{
+    $period = magaza_odeme_dagilim_period($period);
+    $start = $period . '-01';
+    $end = date('Y-m-t', strtotime($start));
+    $exists = (bool)db()->query("SELECT name FROM sqlite_master WHERE type='table' AND name='pos_sales' LIMIT 1")->fetchColumn();
+    if (!$exists) return;
+
+    $stmt = db()->prepare('SELECT DISTINCT sale_date FROM pos_sales WHERE sale_date BETWEEN ? AND ? ORDER BY sale_date ASC');
+    $stmt->execute([$start,$end]);
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        magaza_odeme_dagilim_pos_kart_gun_senkronla((string)($row['sale_date'] ?? ''));
+    }
+}
 
 function magaza_odeme_dagilim_payload(string $period): array
 {
+    // Ekran açıldığında eski/manüel kart birikimini de otomatik onar.
+    magaza_odeme_dagilim_pos_kart_period_senkronla($period);
     magaza_veresiye_auto_only_sync_period($period);
     $items = [];
     foreach (magaza_odeme_dagilim_satirlari($period) as $row) {
@@ -144,6 +232,11 @@ try {
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate) || strtotime($saleDate) === false) throw new RuntimeException('Satış tarihini kontrol etmelisin.');
             foreach ([$cash,$card,$submittedManualCredit,$cashChangeLeft] as $amount) if ($amount < 0) throw new RuntimeException('Tutarlar negatif olamaz.');
+
+            // O güne ait Barkodlu Satış fişi varsa kart satışını kullanıcı girdisi değil POS belirler.
+            $posCard = magaza_odeme_dagilim_pos_kart_bilgisi($saleDate);
+            if ($posCard !== null) $card = (float)$posCard['amount'];
+
             if ($saleDate >= magaza_veresiye_auto_only_cutoff() && $submittedManualCredit > 0) {
                 throw new RuntimeException('Manuel veresiye girişi kapatıldı. Veresiye satışını Personel Veresiye veya Barkodlu Satış bölümünden kaydetmelisin.');
             }
@@ -204,6 +297,9 @@ try {
     }
 
     $period = magaza_odeme_dagilim_period((string)($_REQUEST['period'] ?? ''));
+    // Önce kart satışını POS gerçek toplamına eşitle, sonra vadesi gelen hareketleri işle.
+    magaza_odeme_dagilim_pos_kart_period_senkronla($period);
+    $processedDueCount = magaza_odeme_dagilim_vadesi_gelenleri_isle();
     $payload = magaza_odeme_dagilim_payload($period);
     $payload['ok'] = true;
     $payload['processed_due_count'] = $processedDueCount;
