@@ -50,6 +50,8 @@ $direction = $movementType === 'odeme' ? 'verilecek' : 'alinacak';
 $categoryName = $instrument === 'senet' ? 'Senet' : 'Çek';
 $defaultDrawer = 'Dumanlar Konfeksiyon Beyaz Eşya Ticaret Sanayi A.Ş.';
 $pdo = db();
+$uploadedPaths = [];
+$committed = false;
 
 try {
     $pdo->beginTransaction();
@@ -59,8 +61,8 @@ try {
     $catStmt->execute([$categoryName]);
     $categoryId = (int)($catStmt->fetchColumn() ?: 0);
 
-    $movementStmt = $pdo->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, currency, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, check_id, created_by, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?)');
-    $checkStmt = $pdo->prepare('INSERT INTO checks (cari_id, movement_id, direction, status, amount, issue_date, due_date, bank_name, branch_name, check_no, drawer, description, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)');
+    $movementStmt = $pdo->prepare('INSERT INTO movements (cari_id, category_id, account_id, movement_type, amount, currency, movement_date, due_date, payment_method, description, document_type, document_path, document_name, document_mime, check_id, created_by, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)');
+    $checkStmt = $pdo->prepare('INSERT INTO checks (cari_id, movement_id, direction, status, amount, issue_date, due_date, bank_name, branch_name, check_no, drawer, description, document_path, document_name, document_mime, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $linkStmt = $pdo->prepare('UPDATE movements SET check_id=?, updated_at=? WHERE id=?');
 
     $created = 0;
@@ -78,7 +80,14 @@ try {
             $person = $defaultDrawer;
         }
 
-        $hasAnyValue = $person !== '' || $bank !== '' || $checkNo !== '' || $amount > 0 || $city !== '' || $due !== '';
+        $uploadField = 'item_document_' . $i;
+        $expectsUpload = !empty($_POST['item_has_document_' . $i]);
+        $hasUpload = isset($_FILES[$uploadField]) && ($_FILES[$uploadField]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+        if ($expectsUpload && !$hasUpload) {
+            throw new RuntimeException(($i + 1) . '. satırın belgesi sunucuya ulaşmadı. Dosya sayısı veya toplam yükleme sınırı aşılmış olabilir; daha az satırla tekrar deneyin.');
+        }
+
+        $hasAnyValue = $hasUpload || $person !== '' || $bank !== '' || $checkNo !== '' || $amount > 0 || $city !== '' || $due !== '';
         if (!$hasAnyValue) continue;
 
         if ($person === '' || $amount <= 0 || $city === '' || $due === '') {
@@ -87,6 +96,13 @@ try {
         if ($instrument === 'cek' && ($bank === '' || $checkNo === '')) {
             throw new RuntimeException(($i + 1) . '. satırda banka bilgisi ve çek numarası zorunludur.');
         }
+
+        try {
+            $doc = handle_upload($uploadField);
+        } catch (Throwable $e) {
+            throw new RuntimeException(($i + 1) . '. satır: ' . $e->getMessage());
+        }
+        if (!empty($doc['path'])) $uploadedPaths[] = $doc['path'];
 
         $lineParts = [$label, 'Kişi: ' . $person];
         if ($instrument === 'cek') {
@@ -101,10 +117,10 @@ try {
         $bankName = $instrument === 'senet' ? 'Senet' : $bank;
         $storedCheckNo = $instrument === 'senet' ? null : $checkNo;
 
-        $movementStmt->execute([$cariId, $categoryId ?: null, $movementType, $amount, 'TL', $movementDate, $due, $method, $lineDesc, $docType, $userId, $now, $now]);
+        $movementStmt->execute([$cariId, $categoryId ?: null, $movementType, $amount, 'TL', $movementDate, $due, $method, $lineDesc, $docType, $doc['path'], $doc['name'], $doc['mime'], $userId, $now, $now]);
         $movementId = (int)$pdo->lastInsertId();
 
-        $checkStmt->execute([$cariId, $movementId, $direction, 'bekliyor', $amount, $movementDate, $due, $bankName, $city, $storedCheckNo, $person, $lineDesc, $userId, $now, $now]);
+        $checkStmt->execute([$cariId, $movementId, $direction, 'bekliyor', $amount, $movementDate, $due, $bankName, $city, $storedCheckNo, $person, $lineDesc, $doc['path'], $doc['name'], $doc['mime'], $userId, $now, $now]);
         $checkId = (int)$pdo->lastInsertId();
         $linkStmt->execute([$checkId, $now, $movementId]);
 
@@ -117,12 +133,16 @@ try {
 
     if ($created < 1) throw new RuntimeException('Kaydedilecek dolu satır bulunamadı.');
     $pdo->commit();
+    $committed = true;
 
     log_action('Toplu ' . strtolower($label) . ' girişi', $created . ' adet · ' . money($total));
     audit_action('hareket', null, 'toplu_eklendi', null, ['instrument'=>$instrument,'count'=>$created,'total'=>$total,'movement_ids'=>$ids,'cari_id'=>$cariId], $label);
     flash('success', $created . ' adet ' . strtolower($label) . ' tek seferde kaydedildi. Toplam: ' . money($total));
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
+    if (!$committed) {
+        foreach ($uploadedPaths as $path) delete_uploaded_file($path);
+    }
     flash('error', $e->getMessage());
 }
 

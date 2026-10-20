@@ -1,0 +1,24 @@
+const { chromium } = require('playwright');
+const fs = require('fs');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN || undefined});
+ const page=await browser.newPage();
+ await page.route('http://test.local/**',route=>route.fulfill({contentType:'text/html',body:`<html><head></head><body><form><input name="action" value="save"><select name="movement_type"><option value="tahsilat">Tahsilat</option></select><select name="category_id"><option value="1">Çek</option></select><label><select name="document_type"><option value="cek_gorseli">Çek görseli</option></select></label><select name="cari_id"><option value="1">Cari</option></select><input name="csrf_token" value="test"></form></body></html>`}));
+ await page.goto('http://test.local/hareketler.php');
+ await page.addScriptTag({content:fs.readFileSync(require('path').join(__dirname, '../muhasebe/assets/cariden-cikar-kompakt.js'),'utf8')});
+ await page.locator('.toplu-evrak-btn').click();
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZW0AAAAASUVORK5CYII=','base64');
+ for (const i of [0,2]) await page.locator(`[name=item_document_${i}]`).setInputFiles({name:`check${i}.png`,mimeType:'image/png',buffer:png});
+ await page.locator('[data-count]').fill('4');
+ let names=await page.locator('[data-bulk-form]').evaluate(form=>[...new FormData(form)].filter(([k,v])=>k.startsWith('item_document_')&&v.size).map(([k,v])=>[k,v.name]));
+ if(JSON.stringify(names)!==JSON.stringify([['item_document_0','check0.png'],['item_document_2','check2.png']]))throw Error(JSON.stringify(names));
+ if(await page.locator('.toplu-evrak-upload img:visible').count()!==2)throw Error('preview');
+ await page.locator('[data-close]').click();await page.locator('.toplu-evrak-btn').click();
+ if(await page.locator('[name=item_document_2]').evaluate(el=>el.files[0].name)!=='check2.png')throw Error('reopen lost file');
+ await page.locator('.toplu-evrak-upload').nth(0).locator('button').click();
+ if(await page.locator('[name=item_has_document_0]').inputValue()!=='')throw Error('clear');
+ await page.setViewportSize({width:390,height:844});
+ if(await page.locator('.toplu-evrak-upload').first().evaluate(el=>el.getBoundingClientRect().right)>390)throw Error('mobile overflow');
+ console.log('PASS: multipart per-row files, retained on count change/reopen, previews, clear, mobile render');
+ await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});

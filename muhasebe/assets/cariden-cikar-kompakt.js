@@ -150,6 +150,7 @@
     '.toplu-evrak-field{display:flex;flex-direction:column;gap:4px}.toplu-evrak-field label{font-size:10px;font-weight:850;color:#66706a;display:none}',
     '.toplu-evrak-field input{width:100%;min-width:0;height:42px;border:1px solid #dfe4df;border-radius:9px;padding:9px 10px;font-size:14px;background:#fff}',
     '.toplu-evrak-field input:invalid:not(:placeholder-shown){border-color:#c84f45;background:#fff7f6}',
+    '.toplu-evrak-upload{grid-column:2/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:12px}.toplu-evrak-upload input[type=file]{max-width:100%}.toplu-evrak-upload img{max-width:160px;max-height:90px;object-fit:contain}.toplu-evrak-upload small{color:#66706a}',
     '.toplu-evrak-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px;padding-top:16px;border-top:1px solid #eceee9}',
     '.toplu-evrak-summary{margin-top:12px;padding:10px 12px;border-radius:10px;background:#f4f7f3;color:#415148;font-size:13px;font-weight:750}',
     '.toplu-evrak-flow-note{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#fff8e7;color:#745000;font-size:12px;font-weight:800}',
@@ -165,7 +166,7 @@
 
   var backdrop = document.createElement('div');
   backdrop.className = 'toplu-evrak-backdrop';
-  backdrop.innerHTML = '<section class="toplu-evrak-panel" role="dialog" aria-modal="true"><div class="toplu-evrak-head"><div><h3 data-title>Toplu senet girişi</h3><p data-subtitle>Her evrakı ayrı satırda açıkça kontrol ederek kaydet.</p></div><label class="toplu-evrak-count">Adet <input type="number" min="1" max="24" value="3" data-count></label></div><div class="toplu-evrak-body"><form method="post" action="hareket-toplu-cek-senet.php" data-bulk-form><div data-hidden></div><div class="toplu-evrak-flow-note" data-flow-note></div><datalist id="topluEvrakBankalari"></datalist><div class="toplu-evrak-table"><div class="toplu-evrak-columns" data-columns></div><div data-rows></div></div><div class="toplu-evrak-summary" data-summary></div><div class="toplu-evrak-actions"><button class="btn btn-secondary" type="button" data-close>Vazgeç</button><button class="btn btn-primary" type="submit">Hepsini kaydet</button></div></form></div></section>';
+  backdrop.innerHTML = '<section class="toplu-evrak-panel" role="dialog" aria-modal="true"><div class="toplu-evrak-head"><div><h3 data-title>Toplu senet girişi</h3><p data-subtitle>Her evrakı ayrı satırda açıkça kontrol ederek kaydet.</p></div><label class="toplu-evrak-count">Adet <input type="number" min="1" max="24" value="3" data-count></label></div><div class="toplu-evrak-body"><form method="post" enctype="multipart/form-data" action="hareket-toplu-cek-senet.php" data-bulk-form><div data-hidden></div><div class="toplu-evrak-flow-note" data-flow-note></div><datalist id="topluEvrakBankalari"></datalist><div class="toplu-evrak-table"><div class="toplu-evrak-columns" data-columns></div><div data-rows></div></div><div class="toplu-evrak-summary" data-summary></div><div class="toplu-evrak-actions"><button class="btn btn-secondary" type="button" data-close>Vazgeç</button><button class="btn btn-primary" type="submit">Hepsini kaydet</button></div></form></div></section>';
   document.body.appendChild(backdrop);
 
   var anchor = documentSelect.closest('label') || documentSelect;
@@ -248,10 +249,51 @@
       : '<span>No</span><span>Kişi / keşideci adı</span><span>Tutar</span><span>İl</span><span>Vade tarihi</span>';
   }
 
+  function createUpload(index) {
+    var box = document.createElement('div');
+    box.className = 'toplu-evrak-upload';
+    box.innerHTML = '<label>Çek görüntüsü (isteğe bağlı) <input type="file" name="item_document_' + index + '" accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.pdf"></label><input type="hidden" name="item_has_document_' + index + '" value=""><small>JPG, PNG, WEBP, HEIC/HEIF veya PDF · En fazla 10 MB</small><img hidden alt="Seçilen çek görüntüsü"><a hidden target="_blank" rel="noopener">Önizle / aç</a><button type="button" hidden>Seçimi kaldır</button>';
+    var input = box.querySelector('[type=file]');
+    var expected = box.querySelector('[type=hidden]');
+    var preview = box.querySelector('img');
+    var link = box.querySelector('a');
+    var clear = box.querySelector('button');
+    function refresh() {
+      if (box.previewUrl) URL.revokeObjectURL(box.previewUrl);
+      box.previewUrl = null;
+      preview.hidden = link.hidden = clear.hidden = true;
+      preview.removeAttribute('src');
+      link.removeAttribute('href');
+      expected.value = '';
+      input.setCustomValidity('');
+      var file = input.files[0];
+      if (!file) return;
+      clear.hidden = false;
+      if (file.size > 10485760 || !/\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(file.name)) {
+        input.setCustomValidity('En fazla 10 MB boyutunda JPG, PNG, WEBP, HEIC/HEIF veya PDF seçmelisin.');
+        input.reportValidity();
+        return;
+      }
+      expected.value = '1';
+      if (!/^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(file.type)) return;
+      box.previewUrl = URL.createObjectURL(file);
+      link.href = box.previewUrl;
+      link.hidden = false;
+      if (/^image\/(jpeg|png|webp)$/.test(file.type)) {
+        preview.src = box.previewUrl;
+        preview.hidden = false;
+      }
+    }
+    input.addEventListener('change', refresh);
+    clear.addEventListener('click', function () { input.value = ''; refresh(); });
+    return box;
+  }
+
   function renderRows() {
     var old = [];
     rows.querySelectorAll('.toplu-evrak-row').forEach(function (row) {
       old.push({
+        upload:row.querySelector('.toplu-evrak-upload'),
         person:(row.querySelector('[name="item_person[]"]') || {}).value || '',
         bank:(row.querySelector('[name="item_bank[]"]') || {}).value || '',
         checkNo:(row.querySelector('[name="item_check_no[]"]') || {}).value || '',
@@ -265,6 +307,9 @@
     var isCheck = selectedInstrument() === 'cek';
     var isPayment = typeSelect.value === 'odeme';
     countInput.value = count;
+    old.slice(count).forEach(function (saved) {
+      if (saved.upload && saved.upload.previewUrl) URL.revokeObjectURL(saved.upload.previewUrl);
+    });
     rows.innerHTML = '';
     for (var i = 0; i < count; i++) {
       var saved = old[i] || {};
@@ -286,6 +331,12 @@
       row.querySelector('[name="item_amount[]"]').value = saved.amount || '';
       row.querySelector('[name="item_city[]"]').value = saved.city || '';
       row.querySelector('[name="item_due_date[]"]').value = saved.due || '';
+      if (isCheck) {
+        var upload = saved.upload || createUpload(i);
+        row.appendChild(upload);
+      } else if (saved.upload && saved.upload.previewUrl) {
+        URL.revokeObjectURL(saved.upload.previewUrl);
+      }
       rows.appendChild(row);
     }
     rows.querySelectorAll('input').forEach(function (input) { input.addEventListener('input', updateSummary); });
