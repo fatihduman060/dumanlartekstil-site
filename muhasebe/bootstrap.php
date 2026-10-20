@@ -1002,6 +1002,51 @@ function movement_cash_direction(string $type): ?string
     if (in_array($type, ['odeme','gider'], true)) return 'out';
     return null;
 }
+
+/**
+ * Link a real cari payment to an open due reminder when it was paid early.
+ * The payment already changes the cari balance, so this only closes the
+ * reminder and points it at the existing payment; it must never create a
+ * second settlement movement.
+ */
+function auto_close_due_reminder_for_payment(int $paymentMovementId): void
+{
+    $pdo = db();
+    $paymentStmt = $pdo->prepare("SELECT * FROM movements
+        WHERE id=? AND COALESCE(is_cancelled,0)=0
+          AND movement_type IN ('tahsilat','odeme')
+          AND COALESCE(check_id,0)=0
+          AND COALESCE(is_check_adjustment,0)=0");
+    $paymentStmt->execute([$paymentMovementId]);
+    $payment = $paymentStmt->fetch();
+    if (!$payment || (int)($payment['cari_id'] ?? 0) <= 0 || (float)$payment['amount'] <= 0) return;
+
+    // These columns are normally created by the dashboard endpoint. Ensure
+    // them here too because payments can be entered before that page is opened.
+    ensure_column($pdo, 'movements', 'reminder_status', "TEXT NOT NULL DEFAULT 'bekliyor'");
+    ensure_column($pdo, 'movements', 'reminder_completed_at', 'TEXT');
+    ensure_column($pdo, 'movements', 'reminder_completed_by', 'INTEGER');
+    ensure_column($pdo, 'movements', 'reminder_settlement_movement_id', 'INTEGER');
+
+    $sourceType = (string)$payment['movement_type'] === 'tahsilat' ? 'alacak' : 'verecek';
+    $stmt = $pdo->prepare("SELECT id FROM movements
+        WHERE cari_id=? AND movement_type=? AND COALESCE(is_cancelled,0)=0
+          AND COALESCE(is_check_adjustment,0)=0
+          AND due_date IS NOT NULL AND due_date!=''
+          AND COALESCE(reminder_status,'bekliyor')!='tamamlandi'
+          AND ABS(amount-?)<0.005
+        ORDER BY CASE WHEN due_date >= ? THEN 0 ELSE 1 END, due_date ASC, id ASC
+        LIMIT 1");
+    $stmt->execute([(int)$payment['cari_id'], $sourceType, (float)$payment['amount'], (string)$payment['movement_date']]);
+    $sourceId = (int)($stmt->fetchColumn() ?: 0);
+    if ($sourceId <= 0) return;
+
+    $pdo->prepare("UPDATE movements SET reminder_status='tamamlandi', reminder_completed_at=?,
+            reminder_completed_by=?, reminder_settlement_movement_id=?, updated_at=?
+        WHERE id=? AND COALESCE(reminder_status,'bekliyor')!='tamamlandi'")
+        ->execute([now(), current_user()['id'] ?? null, $paymentMovementId, now(), $sourceId]);
+}
+
 function sync_movement_account_transaction(int $movementId): void
 {
     $returnStmt = db()->prepare('SELECT movement_type FROM movements WHERE id=?');
@@ -1012,6 +1057,7 @@ function sync_movement_account_transaction(int $movementId): void
     $stmt->execute([$movementId]);
     $m = $stmt->fetch();
     if (!$m || (int)($m['is_cancelled'] ?? 0) === 1) return;
+    auto_close_due_reminder_for_payment($movementId);
     $direction = movement_cash_direction($m['movement_type']);
     if (!$direction || empty($m['account_id'])) return;
     $accountAmount = (float)$m['amount'];
