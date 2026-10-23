@@ -636,7 +636,7 @@ page_header('Kasa / Banka', 'hesaplar');
           <?php $currentBank = trim((string)($edit['bank_name'] ?? '')); if ($currentBank !== '' && !in_array($currentBank, $bankList, true)): ?><option value="<?php echo e($currentBank); ?>" selected><?php echo e($currentBank); ?></option><?php endif; ?>
           <?php foreach($bankList as $bankName): ?><option value="<?php echo e($bankName); ?>" <?php echo $currentBank===$bankName?'selected':''; ?>><?php echo e($bankName); ?></option><?php endforeach; ?>
         </select><small>Banka hesabı için listeden seç; kasa hesabında boş bırakabilirsin.</small></label>
-        <label>Açılış bakiyesi<input name="opening_balance" type="text" inputmode="decimal" value="<?php echo e($edit['opening_balance'] ?? '0'); ?>"></label>
+        <label>Açılış bakiyesi<input data-money-input name="opening_balance" type="text" inputmode="decimal" value="<?php echo e($edit['opening_balance'] ?? '0'); ?>"></label>
       </div>
       <label>IBAN<input name="iban" value="<?php echo e($edit['iban'] ?? ''); ?>" placeholder="TR__ ____ ____ ____ ____ ____ __"></label>
       <label>Not<textarea name="notes" rows="2"><?php echo e($edit['notes'] ?? ''); ?></textarea></label>
@@ -679,7 +679,7 @@ page_header('Kasa / Banka', 'hesaplar');
     <?php echo csrf_field(); ?><input type="hidden" name="action" value="owner_salary_payment">
     <div class="two-col">
       <label>Çıkış yapılacak hesap<select name="account_id" required><option value="">Hesap seç</option><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?> — <?php echo e($a['bank_name'] ?: account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select></label>
-      <label>Maaş tutarı<input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label>
+      <label>Maaş tutarı<input data-money-input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label>
     </div>
     <div class="two-col">
       <label>Ödeme tarihi<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label>
@@ -719,7 +719,7 @@ page_header('Kasa / Banka', 'hesaplar');
       <label>Para girilecek hesap<select name="account_id" required><option value="">Hesap seç</option><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?> — <?php echo e($a['bank_name'] ?: account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select></label>
       <label>Giriş kaynağı<select name="source_kind" required><option value="ortak_sermaye">Ortak / sermaye girişi</option><option value="dis_borc">Dışarıdan alınan borç</option><option value="kasa_tamamlama">Kasa eksiği tamamlama</option><option value="banka_tamamlama">Banka eksiği tamamlama</option><option value="diger">Diğer dış kaynak</option></select></label>
     </div>
-    <div class="two-col"><label>Tutar<input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label><label>Giriş tarihi<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label></div>
+    <div class="two-col"><label>Tutar<input data-money-input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label><label>Giriş tarihi<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label></div>
     <label>Açıklama<textarea name="description" rows="2" placeholder="Örn. Ortak Fatih Duman tarafından kasa eksiği tamamlandı / borç alınan kişi ve geri ödeme bilgisi" required></textarea><small>Paranın nereden geldiğini ve neden eklendiğini açıkça yaz.</small></label>
     <button class="btn btn-primary" type="submit">Parayı hesaba ekle</button>
   </form>
@@ -750,7 +750,7 @@ page_header('Kasa / Banka', 'hesaplar');
     <form method="post" class="stack-form">
       <?php echo csrf_field(); ?><input type="hidden" name="action" value="manual_transaction"><input type="hidden" name="request_token" value="<?php echo e(bin2hex(random_bytes(16))); ?>">
       <label>Hesap<select name="account_id" required><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?> — <?php echo e($a['bank_name'] ?: account_type_label($a['account_type'])); ?></option><?php endforeach; ?></select></label>
-      <div class="two-col"><label>Yön<select name="direction"><option value="in">Giriş</option><option value="out">Çıkış</option></select></label><label>Tutar<input name="amount" type="text" inputmode="decimal" required></label></div>
+      <div class="two-col"><label>Yön<select name="direction"><option value="in">Giriş</option><option value="out">Çıkış</option></select></label><label>Tutar<input data-money-input name="amount" type="text" inputmode="decimal" required></label></div>
       <label>Tarih<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label>
       <label>Açıklama<textarea name="description" rows="2" placeholder="Kasa düzeltme, banka masrafı..."></textarea></label>
       <button class="btn btn-primary" type="submit">Hareket ekle</button>
@@ -761,7 +761,7 @@ page_header('Kasa / Banka', 'hesaplar');
     <form method="post" class="stack-form">
       <?php echo csrf_field(); ?><input type="hidden" name="action" value="transfer"><input type="hidden" name="request_token" value="<?php echo e(bin2hex(random_bytes(16))); ?>">
       <div class="two-col"><label>Çıkış hesabı<select name="from_account_id" required><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?><?php echo $a['bank_name'] ? ' — '.e($a['bank_name']) : ''; ?></option><?php endforeach; ?></select></label><label>Giriş hesabı<select name="to_account_id" required><?php foreach(accounts_for_select(true) as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?><?php echo $a['bank_name'] ? ' — '.e($a['bank_name']) : ''; ?></option><?php endforeach; ?></select></label></div>
-      <div class="two-col"><label>Tutar<input name="amount" type="text" inputmode="decimal" required></label><label>Tarih<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label></div>
+      <div class="two-col"><label>Tutar<input data-money-input name="amount" type="text" inputmode="decimal" required></label><label>Tarih<input type="date" name="transaction_date" value="<?php echo e(date('Y-m-d')); ?>" required></label></div>
       <label>Açıklama<input name="description" value="Hesaplar arası virman"></label>
       <button class="btn btn-secondary" type="submit">Virman yap</button>
     </form>

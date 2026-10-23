@@ -572,7 +572,7 @@ page_header('Faturalar', 'faturalar');
   </form>
   <div id="kdvDevirPanel" class="kdv-devir-panel">
     <div class="kdv-devir-copy"><strong>Önceki dönemden devreden KDV</strong><small>Önceki dönemden devreden tutarı bu dönem için kaydet.</small></div>
-    <form class="kdv-devir-form" data-kdv-devir-form><input type="hidden" name="period" value="<?php echo e($period); ?>"><label>Tutar<input type="text" inputmode="decimal" name="amount" placeholder="0,00"></label><label>Not<input type="text" name="note" placeholder="Örn: Önceki ay beyannamesinden devir"></label><button type="submit" class="btn btn-secondary">KDV devrini kaydet</button></form>
+    <form class="kdv-devir-form" data-kdv-devir-form><input type="hidden" name="period" value="<?php echo e($period); ?>"><label>Tutar<input data-money-input type="text" inputmode="decimal" name="amount" placeholder="0,00"></label><label>Not<input type="text" name="note" placeholder="Örn: Önceki ay beyannamesinden devir"></label><button type="submit" class="btn btn-secondary">KDV devrini kaydet</button></form>
     <p class="kdv-devir-status" data-kdv-devir-status>Bilgiler hazırlanıyor…</p>
   </div>
   <div class="stats-grid four section-stats">
@@ -643,12 +643,12 @@ page_header('Faturalar', 'faturalar');
       </label>
 
       <div class="two-col">
-        <label>Matrah<input type="text" inputmode="decimal" name="subtotal" data-invoice-subtotal value="<?php echo e($edit['subtotal'] ?? ''); ?>" placeholder="0,00"></label>
-        <label>KDV<input type="text" inputmode="decimal" name="vat_amount" data-invoice-vat value="<?php echo e($edit['vat_amount'] ?? ''); ?>" placeholder="0,00"></label>
+        <label>Matrah<input data-money-input type="text" inputmode="decimal" name="subtotal" data-invoice-subtotal value="<?php echo e($edit['subtotal'] ?? ''); ?>" placeholder="0,00"></label>
+        <label>KDV<input data-money-input type="text" inputmode="decimal" name="vat_amount" data-invoice-vat value="<?php echo e($edit['vat_amount'] ?? ''); ?>" placeholder="0,00"></label>
       </div>
 
       <div class="two-col">
-        <label>Genel toplam<input type="text" inputmode="decimal" name="total_amount" data-invoice-total required value="<?php echo e($edit['total_amount'] ?? ''); ?>" placeholder="0,00"></label>
+        <label>Genel toplam<input data-money-input type="text" inputmode="decimal" name="total_amount" data-invoice-total required value="<?php echo e($edit['total_amount'] ?? ''); ?>" placeholder="0,00"></label>
         <label>Para birimi
           <select name="currency">
             <?php foreach(fatura_para_birimleri() as $key=>$label): ?>
@@ -789,10 +789,7 @@ page_header('Faturalar', 'faturalar');
 <script>
 (function(){
   function numberValue(value){
-    var text=String(value||'').trim().replace(/\s/g,'');
-    if(text.indexOf(',')!==-1) text=text.replace(/\./g,'').replace(',','.');
-    var n=parseFloat(text);
-    return Number.isFinite(n)?n:0;
+    return window.BitkeMoney.parse(value);
   }
   function format(value){
     return Number(value||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});

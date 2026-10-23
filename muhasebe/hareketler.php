@@ -434,7 +434,7 @@ page_header('Hareketler', 'hareketler');
         <label>Kategori<select name="category_id"><option value="">Kategori yok</option><?php foreach($movementFormCategories as $cat): ?><option value="<?php echo e($cat['id']); ?>" <?php echo ((string)($edit['category_id'] ?? '')===(string)$cat['id'])?'selected':''; ?>><?php echo e($cat['name']); ?></option><?php endforeach; ?></select></label>
       </div>
       <div class="two-col">
-        <label>Tutar<input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>"></label>
+        <label>Tutar<input data-money-input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>"></label>
         <label>Para birimi<select name="currency"><?php $currentCurrency = hareket_currency_value($edit['currency'] ?? 'TL'); foreach(hareket_currency_options() as $cur=>$label): ?><option value="<?php echo e($cur); ?>" <?php echo $currentCurrency===$cur?'selected':''; ?>><?php echo e($label); ?></option><?php endforeach; ?></select><small>Cari tutarı seçilen para biriminde kalır. Kasa/banka girişi veya çıkışı girilen kurla TL’ye çevrilir.</small></label>
       </div>
       <label data-fx-rate-wrap>Kur (1 <span data-fx-currency>USD</span> = kaç TL?)<input name="exchange_rate" type="text" inputmode="decimal" value="<?php echo e($edit['exchange_rate'] ?? ''); ?>" placeholder="Örn. 42,50"><small data-fx-preview aria-live="polite"></small></label>
@@ -504,5 +504,5 @@ page_header('Hareketler', 'hareketler');
     </div>
   </article>
 </section>
-<script src="assets/hareket-doviz-kur.js?v=1"></script>
+<script src="assets/hareket-doviz-kur.js?v=2"></script>
 <?php page_footer(); ?>

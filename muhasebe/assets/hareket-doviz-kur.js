@@ -16,7 +16,7 @@
     rate.disabled = !foreign;
     rate.required = foreign && !!account.value && ['tahsilat','gelir','odeme','gider'].includes(type.value);
     wrap.querySelector('[data-fx-currency]').textContent = currency.value;
-    var value = number(amount.value) * number(rate.value);
+    var value = (window.BitkeMoney ? window.BitkeMoney.parse(amount.value) : number(amount.value)) * number(rate.value);
     wrap.querySelector('[data-fx-preview]').textContent = number(rate.value) > 0 && Number.isFinite(value) && value > 0
       ? 'TL karşılığı: ' + new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(value) + ' TL'
       : 'İşlemde kullanacağınız kuru girin.';

@@ -222,9 +222,7 @@
   function updateSummary() {
     var total = 0;
     rows.querySelectorAll('[name="item_amount[]"]').forEach(function (input) {
-      var text = String(input.value || '').trim().replace(/\s/g, '');
-      if (text.indexOf(',') !== -1) text = text.replace(/\./g, '').replace(',', '.');
-      var value = parseFloat(text);
+      var value = window.BitkeMoney.parse(input.value);
       if (Number.isFinite(value)) total += value;
     });
     summary.textContent = countInput.value + ' adet ' + (selectedInstrument() === 'senet' ? 'senet' : 'çek') + ' · Girilen toplam: ' + total.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' TL';
@@ -320,7 +318,7 @@
         '<span class="toplu-evrak-field"><label>Kişi / keşideci adı</label><input name="item_person[]" placeholder="Ad soyad veya firma adı" required></span>' +
         (isCheck ? '<span class="toplu-evrak-field"><label>Banka</label><input name="item_bank[]" list="topluEvrakBankalari" placeholder="Banka seç veya yaz" required></span>' : '') +
         (isCheck ? '<span class="toplu-evrak-field"><label>Çek numarası</label><input name="item_check_no[]" inputmode="numeric" autocomplete="off" placeholder="Çek no" required></span>' : '') +
-        '<span class="toplu-evrak-field"><label>Tutar</label><input name="item_amount[]" inputmode="decimal" placeholder="0,00 TL" required></span>' +
+        '<span class="toplu-evrak-field"><label>Tutar</label><input data-money-input name="item_amount[]" inputmode="decimal" placeholder="0,00 TL" required></span>' +
         '<span class="toplu-evrak-field"><label>İl</label><input name="item_city[]" placeholder="Örn. İstanbul" required></span>' +
         '<span class="toplu-evrak-field"><label>Vade tarihi</label><input name="item_due_date[]" type="date" required></span>';
       row.querySelector('[name="item_person[]"]').value = personValue;

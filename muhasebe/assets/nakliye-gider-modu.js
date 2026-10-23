@@ -90,7 +90,7 @@
         +'<div class="card-head"><h3>Nakliye gideri ekle</h3><span>Seçilen hesaptan para çıkışı yapılır; cari borç/alacak oluşmaz.</span></div>'
         +'<form class="nakliye-gider-form" data-nakliye-gider-form enctype="multipart/form-data">'
         +'<div class="nakliye-gider-grid">'
-        +'<label>Tutar<input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label>'
+        +'<label>Tutar<input data-money-input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label>'
         +'<label>İşlem tarihi<input name="movement_date" type="date" required value="'+new Date().toISOString().slice(0,10)+'"></label>'
         +'<label>Ödenecek hesap<select name="account_id" required>'+accountOptions+'</select><small>Bu tutar seçilen kasa veya banka hesabından düşer.</small></label>'
         +'<label>Ödeme yöntemi<input name="payment_method" placeholder="Nakit, EFT, kart..."></label>'

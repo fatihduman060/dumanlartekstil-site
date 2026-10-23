@@ -240,7 +240,7 @@ page_header('Vergi Ödemeleri', 'vergi_odemeleri');
     <div class="three-col vergi-three-col">
       <label>Belge / tahakkuk no<input name="document_no" placeholder="Belgede yazan numara"></label>
       <label>Vade tarihi<input name="due_date" type="date"></label>
-      <label>Ödenecek tutar<input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label>
+      <label>Ödenecek tutar<input data-money-input name="amount" type="text" inputmode="decimal" placeholder="0,00" required></label>
     </div>
     <label>Açıklama<textarea name="description" rows="2" placeholder="İstersen ek not yaz"></textarea></label>
     <div class="form-actions"><button class="btn btn-primary" type="submit">Vergi kaydını ekle</button></div>

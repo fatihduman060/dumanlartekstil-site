@@ -113,7 +113,7 @@ page_header('Tahsilat Makbuzu', 'tahsilat_makbuzu');
           <label><span>Telefon</span><input id="customerPhone" name="customer_phone" value="<?php echo tahsilat_field($edit, 'customer_phone'); ?>"></label>
           <label><span>Vergi dairesi</span><input id="customerTaxOffice" name="customer_tax_office" value="<?php echo tahsilat_field($edit, 'customer_tax_office'); ?>"></label>
           <label><span>Vergi no / T.C.</span><input id="customerTaxNo" name="customer_tax_no" value="<?php echo tahsilat_field($edit, 'customer_tax_no'); ?>"></label>
-          <label class="wide"><span>Tutar</span><input id="amount" name="amount" inputmode="decimal" value="<?php echo isset($edit['amount']) ? e((string)$edit['amount']) : ''; ?>" placeholder="25.000,00" required></label>
+          <label class="wide"><span>Tutar</span><input data-money-input id="amount" name="amount" inputmode="decimal" value="<?php echo isset($edit['amount']) ? e((string)$edit['amount']) : ''; ?>" placeholder="25.000,00" required></label>
           <label class="wide"><span>Tutar yazıyla</span><input name="amount_text" value="<?php echo tahsilat_field($edit, 'amount_text'); ?>" placeholder="Boş bırakırsan sistem otomatik doldurur"></label>
           <label class="full"><span>Adres</span><textarea id="customerAddress" name="customer_address" rows="2"><?php echo e($edit['customer_address'] ?? ''); ?></textarea></label>
           <div class="full cari-note" id="cariNote"></div>

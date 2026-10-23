@@ -329,7 +329,7 @@ body.store-sales-user .main>.alert{display:block!important}
     <?php else: ?>
       <div class="card-head"><div><h3><?php echo e($selected['full_name']); ?></h3><span>Kişi bazında veresiye ve ödeme geçmişi</span></div><strong class="<?php echo (float)$selected['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$selected['balance'])); ?> kalan</strong></div>
       <form method="post" class="pv-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>"><input type="hidden" name="entry_type" value="payment">
-        <div class="two-col"><label>İşlem<input value="Ödeme / tahsilat" readonly></label><label>Tutar<input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
+        <div class="two-col"><label>İşlem<input value="Ödeme / tahsilat" readonly></label><label>Tutar<input data-money-input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
         <label id="pv-payment-method">Tahsilat şekli<select name="payment_method" required><option value="">Nakit veya kart seç</option><option value="cash">Nakit</option><option value="card">Kart / POS</option></select><small>Veresiye satışları yalnızca Barkodlu Satış ekranından oluşur.</small></label>
         <div class="two-col"><label>Tarih<input type="date" name="entry_date" value="<?php echo e(date('Y-m-d')); ?>" required></label><label>Açıklama<input name="description" placeholder="Ödeme açıklaması"></label></div>
         <button class="btn btn-primary" type="submit">Tahsilatı kaydet</button>

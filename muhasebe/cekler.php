@@ -403,7 +403,7 @@ page_header('Çekler', 'cekler');
         <?php echo csrf_field(); ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id'] ?? 0); ?>">
         <div class="check-form-grid">
           <label><span>Yön</span><select name="direction" required><?php foreach(check_directions() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo (($edit['direction'] ?? $direction)===$key)?'selected':''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select></label>
-          <label><span>Tutar</span><input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>" placeholder="100000"></label>
+          <label><span>Tutar</span><input data-money-input name="amount" type="text" inputmode="decimal" required value="<?php echo e($edit['amount'] ?? ''); ?>" placeholder="100000"></label>
           <label><span>Vade</span><input name="due_date" type="date" required value="<?php echo e($edit['due_date'] ?? date('Y-m-d')); ?>"></label>
           <label><span>Çek tarihi</span><input name="issue_date" type="date" value="<?php echo e($edit['issue_date'] ?? ''); ?>"></label>
           <label class="wide"><span>Cari</span><select name="cari_id" required><option value="">Cari seç</option><?php foreach($cariler as $c): $selected=(string)($edit['cari_id'] ?? ($_GET['cari_id'] ?? ''))===(string)$c['id']; ?><option value="<?php echo e($c['id']); ?>" <?php echo $selected?'selected':''; ?>><?php echo e($c['name']); ?></option><?php endforeach; ?></select></label>

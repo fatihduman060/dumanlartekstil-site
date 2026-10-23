@@ -261,7 +261,7 @@ page_header($cari['name'], 'cariler');
     <?php echo csrf_field(); ?>
     <input type="hidden" name="action" value="quick_movement">
     <select name="movement_type" required><?php foreach (movement_entry_types() as $key=>$meta): ?><option value="<?php echo e($key); ?>" <?php echo $key===($isResmiBirimOdemeleriCari?'gider':'tahsilat') ? 'selected' : ''; ?>><?php echo e($meta['label']); ?></option><?php endforeach; ?></select>
-    <input name="amount" type="text" inputmode="decimal" placeholder="Tutar" required>
+    <input data-money-input name="amount" type="text" inputmode="decimal" placeholder="Tutar" required>
     <input name="movement_date" type="date" value="<?php echo e(date('Y-m-d')); ?>" required>
     <input name="due_date" type="date" title="Vade tarihi">
     <select name="account_id"><option value="">Kasa/banka yok</option><?php foreach($accounts as $a): ?><option value="<?php echo e($a['id']); ?>"><?php echo e($a['name']); ?></option><?php endforeach; ?></select>
@@ -285,7 +285,7 @@ page_header($cari['name'], 'cariler');
   <form method="post" enctype="multipart/form-data" class="filterbar multi">
     <?php echo csrf_field(); ?>
     <input type="hidden" name="action" value="add_private_receivable">
-    <input name="amount" type="text" inputmode="decimal" placeholder="Özel alacak tutarı" required>
+    <input data-money-input name="amount" type="text" inputmode="decimal" placeholder="Özel alacak tutarı" required>
     <input name="receivable_date" type="date" value="<?php echo e(date('Y-m-d')); ?>" required>
     <select name="status"><?php foreach(private_receivable_statuses() as $key=>$meta): ?><option value="<?php echo e($key); ?>"><?php echo e($meta['label']); ?></option><?php endforeach; ?></select>
     <select name="private_document_type"><option value="">Belge türü</option><?php foreach(document_types() as $key=>$label): ?><option value="<?php echo e($key); ?>"><?php echo e($label); ?></option><?php endforeach; ?></select>
