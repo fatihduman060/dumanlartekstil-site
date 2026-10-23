@@ -53,6 +53,11 @@
       pendingRows.push(row);
     });
 
+    // Türkçe alfabetik sıra; müşterinin kendi fiş sırası korunur.
+    order.sort(function(a,b){
+      return groups[a].name.localeCompare(groups[b].name,'tr-TR',{sensitivity:'base',numeric:true});
+    });
+
     table.dataset.cariGrouped='1';
     tbody.innerHTML='';
 
