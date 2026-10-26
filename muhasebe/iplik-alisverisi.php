@@ -5,6 +5,7 @@ require_once __DIR__.'/iplik-lib.php';
 iplik_db_ensure();
 $cari=(int)($_GET['cari_id']??0);
 $newMode=!empty($_GET['new']);
+$openMode=!empty($_GET['open']);
 $cariler=cariler_for_select(); $company=null;
 foreach($cariler as $c) if((int)$c['id']===$cari) $company=$c;
 $error=''; $edit=null;
@@ -56,7 +57,7 @@ page_header('İplik Alışverişi','iplik_alisverisi');
 <?php foreach(['in_kg'=>'Toplam Aldığımız Kg','out_kg'=>'Toplam Verdiğimiz Kg','net_kg'=>'Net Kg Bakiyesi','in_tl'=>'Toplam Aldığımız TL','out_tl'=>'Toplam Verdiğimiz TL','net_tl'=>'Net TL Bakiyesi'] as $key=>$label): ?><div><?php echo e($label); ?><strong><?php echo e(strpos($key,'net_')===0?iplik_net(($summary['in_'.substr($key,4)]??0)-($summary['out_'.substr($key,4)]??0),$key==='net_kg'?'kg':'TL'):iplik_number($summary[$key]??0,substr($key,-2)==='kg'?3:2)); ?></strong></div><?php endforeach; ?>
 </div><p><strong>Genel kg neti yalnız hareket toplamıdır.</strong> Farklı iplikler birbirine mahsup edilmez; ürün bazında bakiye için aşağıdaki tabloyu kullanın.</p></section>
 <?php if(can_write()): ?>
-<section class="panel-card yarn-entry-panel <?php echo $edit===null?'is-collapsed':''; ?>" id="yarn-form-panel"><div class="card-head"><h3><?php echo !empty($edit['id'])?'Hareket düzenle':'Yeni hareket'; ?></h3><button type="button" class="btn btn-primary" data-yarn-add>+ Hareket Ekle</button></div>
+<section class="panel-card yarn-entry-panel <?php echo ($edit===null && !$openMode)?'is-collapsed':''; ?>" id="yarn-form-panel"><div class="card-head"><h3><?php echo !empty($edit['id'])?'Hareket düzenle':'Yeni hareket'; ?></h3><button type="button" class="btn btn-primary" data-yarn-add>+ Hareket Ekle</button></div>
 <form method="post" id="yarn-form" action="iplik-alisverisi.php?cari_id=<?php echo $cari; ?>">
 <?php echo csrf_field(); ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id']??0); ?>"><input type="hidden" name="version" value="<?php echo e($edit['version']??0); ?>"><input type="hidden" name="cari_id" value="<?php echo $cari; ?>">
 <div class="yarn-grid"><label>Firma<input value="<?php echo e($company['name']); ?>" readonly></label>
@@ -82,7 +83,7 @@ page_header('İplik Alışverişi','iplik_alisverisi');
 <script>
 document.addEventListener('DOMContentLoaded',function(){
  document.querySelectorAll('[data-yarn-add]').forEach(function(button){button.addEventListener('click',function(){var panel=document.getElementById('yarn-form-panel');if(!panel){window.location.href='iplik-alisverisi.php?new=1#new-yarn';return;}var target=document.getElementById('yarn-form');panel.classList.remove('is-collapsed');target.scrollIntoView({behavior:'smooth',block:'start'});var first=target.querySelector('input:not([type=hidden]),select,textarea');if(first)setTimeout(function(){first.focus();},250);});});
- var newForm=document.getElementById('new-yarn-form');if(newForm)newForm.addEventListener('submit',function(event){event.preventDefault();var input=document.getElementById('new-cari-search'),value=input.value.trim(),option=Array.prototype.find.call(document.querySelectorAll('#new-cari-options option'),function(o){return o.value===value;});if(!option){input.setCustomValidity('Listeden geçerli bir cari seçin.');input.reportValidity();return;}window.location.href='iplik-alisverisi.php?cari_id='+option.getAttribute('data-cari-id')+'#yarn-form';});
+ var newForm=document.getElementById('new-yarn-form');if(newForm)newForm.addEventListener('submit',function(event){event.preventDefault();var input=document.getElementById('new-cari-search'),value=input.value.trim(),option=Array.prototype.find.call(document.querySelectorAll('#new-cari-options option'),function(o){return o.value===value;});if(!option){input.setCustomValidity('Listeden geçerli bir cari seçin.');input.reportValidity();return;}window.location.href='iplik-alisverisi.php?cari_id='+option.getAttribute('data-cari-id')+'&open=1#yarn-form';});
  var f=document.getElementById('yarn-form'); if(!f||!window.BitkeMoney)return;
  var kg=f.elements.kg,price=f.elements.unit_price,total=f.elements.total;
  function calculate(){total.readOnly=price.value.trim()!=='';total.required=!total.readOnly;if(total.readOnly){total.value=(Math.round((BitkeMoney.parse(kg.value)*BitkeMoney.parse(price.value)+Number.EPSILON)*100)/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});}}
