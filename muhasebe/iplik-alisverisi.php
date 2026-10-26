@@ -43,9 +43,9 @@ page_header('İplik Alışverişi','iplik_alisverisi');
 .yarn{display:grid;gap:16px;min-width:0}.yarn .panel-card{padding:18px;min-width:0}.yarn-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.yarn label{display:grid;gap:6px}.yarn input,.yarn select,.yarn textarea{width:100%;min-width:0;min-height:44px}.yarn .table-wrap{overflow-x:auto}.yarn table{min-width:650px}.yarn .ledger{min-width:1700px}.yarn .cancelled{opacity:.65}.yarn-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.yarn small{display:block}.yarn summary{cursor:pointer;padding:10px}.yarn .cards strong{display:block;font-size:20px;margin-top:8px}@media(max-width:800px){.yarn-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.yarn-grid{grid-template-columns:1fr}}
 </style>
 <div class="yarn">
-<section class="panel-card"><h2>İplik Alışverişi</h2><p>Operasyonel iplik takibidir. Normal cari muhasebe bakiyelerini otomatik etkilemez.</p>
+<section class="panel-card"><div class="card-head"><h2>İplik Alışverişi</h2><a class="btn btn-primary" href="<?php echo $company ? '#yarn-form' : '#firma-secimi'; ?>">+ Hareket Ekle</a></div><p>Operasyonel iplik takibidir. Normal cari muhasebe bakiyelerini otomatik etkilemez.</p>
 <?php if($error): ?><p class="alert alert-error" role="alert"><?php echo e($error); ?></p><?php endif; ?>
-<form method="get" class="yarn-grid">
+<form method="get" class="yarn-grid" id="firma-secimi">
 <label>Firma<select name="cari_id" required><option value="">Firma seçin</option><?php foreach($cariler as $c): ?><option value="<?php echo e($c['id']); ?>" <?php echo (int)$c['id']===$cari?'selected':''; ?>><?php echo e($c['name']); ?></option><?php endforeach; ?></select></label>
 <?php foreach(['from'=>'Başlangıç tarihi','to'=>'Bitiş tarihi','color'=>'Renk (tam eşleşme)','lot'=>'Lot (tam eşleşme)'] as $key=>$label): ?><label><?php echo e($label); ?><input type="<?php echo in_array($key,['from','to'],true)?'date':'text'; ?>" name="<?php echo e($key); ?>" value="<?php echo e($filters[$key]); ?>"></label><?php endforeach; ?>
 <div class="yarn-actions"><button class="btn btn-primary">Göster</button><a class="btn btn-secondary" href="iplik-alisverisi.php?cari_id=<?php echo $cari; ?>">Filtreleri temizle</a></div></form></section>
