@@ -4,6 +4,7 @@ require_login();
 require_once __DIR__.'/iplik-lib.php';
 iplik_db_ensure();
 $cari=(int)($_GET['cari_id']??0);
+$newMode=!empty($_GET['new']);
 $cariler=cariler_for_select(); $company=null;
 foreach($cariler as $c) if((int)$c['id']===$cari) $company=$c;
 $error=''; $edit=null;
@@ -50,7 +51,7 @@ page_header('İplik Alışverişi','iplik_alisverisi');
 <label>Firma<select name="cari_id" required><option value="">Firma seçin</option><?php foreach($cariler as $c): ?><option value="<?php echo e($c['id']); ?>" <?php echo (int)$c['id']===$cari?'selected':''; ?>><?php echo e($c['name']); ?></option><?php endforeach; ?></select></label>
 <?php foreach(['from'=>'Başlangıç tarihi','to'=>'Bitiş tarihi','color'=>'Renk (tam eşleşme)','lot'=>'Lot (tam eşleşme)'] as $key=>$label): ?><label><?php echo e($label); ?><input type="<?php echo in_array($key,['from','to'],true)?'date':'text'; ?>" name="<?php echo e($key); ?>" value="<?php echo e($filters[$key]); ?>"></label><?php endforeach; ?>
 <div class="yarn-actions"><button class="btn btn-primary">Göster</button><a class="btn btn-secondary" href="iplik-alisverisi.php?cari_id=<?php echo $cari; ?>">Filtreleri temizle</a></div></form></section>
-<?php if(!$company): ?><section class="panel-card">Hareketleri, özetleri ve iplik bakiyelerini görmek için bir firma seçin.</section><?php else: ?>
+<?php if(!$company && $newMode): ?><section class="panel-card" id="new-yarn"><h3>Yeni işlem</h3><p>Önce cari firmayı yazıp seçin, ardından iplik hareketi alanları açılacak.</p><form id="new-yarn-form" class="yarn-grid"><label>Cari / Firma<input id="new-cari-search" list="new-cari-options" placeholder="Firma adını yazın..." autocomplete="off" required><datalist id="new-cari-options"><?php foreach($cariler as $c): ?><option value="<?php echo e($c['name']); ?>" data-cari-id="<?php echo (int)$c['id']; ?>"></option><?php endforeach; ?></datalist></label><div class="yarn-actions"><button class="btn btn-primary" type="submit">Devam Et</button><a class="btn btn-secondary" href="iplik-alisverisi.php">Vazgeç</a></div></form></section><?php elseif(!$company): ?><section class="panel-card">Hareketleri görmek için firma seçin veya üstteki <strong>+ Hareket Ekle</strong> düğmesine basın.</section><?php else: ?>
 <section class="panel-card"><h3><?php echo e($company['name']); ?> — Firma özeti</h3><p>Özetler seçili tarih, renk ve lot filtrelerine göre hesaplanır. İptal kayıtları dahil değildir.</p><div class="yarn-grid cards">
 <?php foreach(['in_kg'=>'Toplam Aldığımız Kg','out_kg'=>'Toplam Verdiğimiz Kg','net_kg'=>'Net Kg Bakiyesi','in_tl'=>'Toplam Aldığımız TL','out_tl'=>'Toplam Verdiğimiz TL','net_tl'=>'Net TL Bakiyesi'] as $key=>$label): ?><div><?php echo e($label); ?><strong><?php echo e(strpos($key,'net_')===0?iplik_net(($summary['in_'.substr($key,4)]??0)-($summary['out_'.substr($key,4)]??0),$key==='net_kg'?'kg':'TL'):iplik_number($summary[$key]??0,substr($key,-2)==='kg'?3:2)); ?></strong></div><?php endforeach; ?>
 </div><p><strong>Genel kg neti yalnız hareket toplamıdır.</strong> Farklı iplikler birbirine mahsup edilmez; ürün bazında bakiye için aşağıdaki tabloyu kullanın.</p></section>
@@ -80,7 +81,8 @@ page_header('İplik Alışverişi','iplik_alisverisi');
 <?php endif; ?></div>
 <script>
 document.addEventListener('DOMContentLoaded',function(){
- document.querySelectorAll('[data-yarn-add]').forEach(function(button){button.addEventListener('click',function(){var panel=document.getElementById('yarn-form-panel'),target=document.getElementById('yarn-form')||document.getElementById('firma-secimi');if(panel)panel.classList.remove('is-collapsed');if(target){target.scrollIntoView({behavior:'smooth',block:'start'});var first=target.querySelector('input:not([type=hidden]),select,textarea');if(first)setTimeout(function(){first.focus();},250);}});});
+ document.querySelectorAll('[data-yarn-add]').forEach(function(button){button.addEventListener('click',function(){var panel=document.getElementById('yarn-form-panel');if(!panel){window.location.href='iplik-alisverisi.php?new=1#new-yarn';return;}var target=document.getElementById('yarn-form');panel.classList.remove('is-collapsed');target.scrollIntoView({behavior:'smooth',block:'start'});var first=target.querySelector('input:not([type=hidden]),select,textarea');if(first)setTimeout(function(){first.focus();},250);});});
+ var newForm=document.getElementById('new-yarn-form');if(newForm)newForm.addEventListener('submit',function(event){event.preventDefault();var input=document.getElementById('new-cari-search'),value=input.value.trim(),option=Array.prototype.find.call(document.querySelectorAll('#new-cari-options option'),function(o){return o.value===value;});if(!option){input.setCustomValidity('Listeden geçerli bir cari seçin.');input.reportValidity();return;}window.location.href='iplik-alisverisi.php?cari_id='+option.getAttribute('data-cari-id')+'#yarn-form';});
  var f=document.getElementById('yarn-form'); if(!f||!window.BitkeMoney)return;
  var kg=f.elements.kg,price=f.elements.unit_price,total=f.elements.total;
  function calculate(){total.readOnly=price.value.trim()!=='';total.required=!total.readOnly;if(total.readOnly){total.value=(Math.round((BitkeMoney.parse(kg.value)*BitkeMoney.parse(price.value)+Number.EPSILON)*100)/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});}}
