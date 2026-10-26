@@ -43,7 +43,7 @@ page_header('İplik Alışverişi','iplik_alisverisi');
 .yarn{display:grid;gap:16px;min-width:0}.yarn .panel-card{padding:18px;min-width:0}.yarn-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.yarn label{display:grid;gap:6px}.yarn input,.yarn select,.yarn textarea{width:100%;min-width:0;min-height:44px}.yarn .table-wrap{overflow-x:auto}.yarn table{min-width:650px}.yarn .ledger{min-width:1700px}.yarn .cancelled{opacity:.65}.yarn-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.yarn small{display:block}.yarn summary{cursor:pointer;padding:10px}.yarn .cards strong{display:block;font-size:20px;margin-top:8px}@media(max-width:800px){.yarn-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.yarn-grid{grid-template-columns:1fr}}
 </style>
 <div class="yarn">
-<section class="panel-card"><div class="card-head"><h2>İplik Alışverişi</h2><a class="btn btn-primary" href="<?php echo $company ? '#yarn-form' : '#firma-secimi'; ?>">+ Hareket Ekle</a></div><p>Operasyonel iplik takibidir. Normal cari muhasebe bakiyelerini otomatik etkilemez.</p>
+<section class="panel-card"><div class="card-head"><h2>İplik Alışverişi</h2><button type="button" class="btn btn-primary" data-yarn-add>+ Hareket Ekle</button></div><p>Operasyonel iplik takibidir. Normal cari muhasebe bakiyelerini otomatik etkilemez.</p>
 <?php if($error): ?><p class="alert alert-error" role="alert"><?php echo e($error); ?></p><?php endif; ?>
 <form method="get" class="yarn-grid" id="firma-secimi">
 <label>Firma<select name="cari_id" required><option value="">Firma seçin</option><?php foreach($cariler as $c): ?><option value="<?php echo e($c['id']); ?>" <?php echo (int)$c['id']===$cari?'selected':''; ?>><?php echo e($c['name']); ?></option><?php endforeach; ?></select></label>
@@ -54,7 +54,7 @@ page_header('İplik Alışverişi','iplik_alisverisi');
 <?php foreach(['in_kg'=>'Toplam Aldığımız Kg','out_kg'=>'Toplam Verdiğimiz Kg','net_kg'=>'Net Kg Bakiyesi','in_tl'=>'Toplam Aldığımız TL','out_tl'=>'Toplam Verdiğimiz TL','net_tl'=>'Net TL Bakiyesi'] as $key=>$label): ?><div><?php echo e($label); ?><strong><?php echo e(strpos($key,'net_')===0?iplik_net(($summary['in_'.substr($key,4)]??0)-($summary['out_'.substr($key,4)]??0),$key==='net_kg'?'kg':'TL'):iplik_number($summary[$key]??0,substr($key,-2)==='kg'?3:2)); ?></strong></div><?php endforeach; ?>
 </div><p><strong>Genel kg neti yalnız hareket toplamıdır.</strong> Farklı iplikler birbirine mahsup edilmez; ürün bazında bakiye için aşağıdaki tabloyu kullanın.</p></section>
 <?php if(can_write()): ?>
-<section class="panel-card" id="yarn-form-panel"><div class="card-head"><h3><?php echo !empty($edit['id'])?'Hareket düzenle':'Yeni hareket'; ?></h3><a class="btn btn-primary" href="#yarn-form">+ Hareket Ekle</a></div>
+<section class="panel-card" id="yarn-form-panel"><div class="card-head"><h3><?php echo !empty($edit['id'])?'Hareket düzenle':'Yeni hareket'; ?></h3><button type="button" class="btn btn-primary" data-yarn-add>+ Hareket Ekle</button></div>
 <form method="post" id="yarn-form" action="iplik-alisverisi.php?cari_id=<?php echo $cari; ?>">
 <?php echo csrf_field(); ?><input type="hidden" name="action" value="save"><input type="hidden" name="id" value="<?php echo e($edit['id']??0); ?>"><input type="hidden" name="version" value="<?php echo e($edit['version']??0); ?>"><input type="hidden" name="cari_id" value="<?php echo $cari; ?>">
 <div class="yarn-grid"><label>Firma<input value="<?php echo e($company['name']); ?>" readonly></label>
@@ -79,6 +79,7 @@ page_header('İplik Alışverişi','iplik_alisverisi');
 <?php endif; ?></div>
 <script>
 document.addEventListener('DOMContentLoaded',function(){
+ document.querySelectorAll('[data-yarn-add]').forEach(function(button){button.addEventListener('click',function(){var target=document.getElementById('yarn-form')||document.getElementById('firma-secimi');if(target){target.scrollIntoView({behavior:'smooth',block:'start'});var first=target.querySelector('input:not([type=hidden]),select,textarea');if(first)setTimeout(function(){first.focus();},250);}});});
  var f=document.getElementById('yarn-form'); if(!f||!window.BitkeMoney)return;
  var kg=f.elements.kg,price=f.elements.unit_price,total=f.elements.total;
  function calculate(){total.readOnly=price.value.trim()!=='';total.required=!total.readOnly;if(total.readOnly){total.value=(Math.round((BitkeMoney.parse(kg.value)*BitkeMoney.parse(price.value)+Number.EPSILON)*100)/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});}}
