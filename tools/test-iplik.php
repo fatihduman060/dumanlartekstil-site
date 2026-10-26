@@ -2,6 +2,7 @@
 if (PHP_SAPI !== "cli") { http_response_code(404); exit; }
 $pdo=new PDO('sqlite::memory:'); $pdo->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION); $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE,PDO::FETCH_ASSOC);
 function db(){global $pdo;return $pdo;}
+function ensure_column(PDO $pdo, string $table, string $column, string $definition): void { $found=false; foreach($pdo->query('PRAGMA table_info('.$table.')') as $row) if($row['name']===$column){$found=true;break;} if(!$found) $pdo->exec('ALTER TABLE '.$table.' ADD COLUMN '.$column.' '.$definition); }
 function require_write(){global $readonly;if($readonly)throw new RuntimeException('readonly');}
 function current_user(){return ['id'=>1];}
 function now(){return date('Y-m-d H:i:s');}

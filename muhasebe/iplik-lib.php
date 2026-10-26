@@ -12,6 +12,7 @@ function iplik_db_ensure(): void
         is_cancelled INTEGER NOT NULL DEFAULT 0, cancelled_by INTEGER, cancelled_at TEXT, cancel_reason TEXT
     )");
     db()->exec('CREATE INDEX IF NOT EXISTS idx_yarn_cari_date ON yarn_movements(cari_id,is_cancelled,movement_date)');
+    ensure_column(db(), 'yarn_movements', 'recipient_name', "TEXT NOT NULL DEFAULT ''");
 }
 function iplik_date(string $v): bool
 {
@@ -38,7 +39,7 @@ function iplik_save(array $input, int $cari): int
     if (!$s->fetch()) throw new InvalidArgumentException('Geçerli bir firma seçin.');
     $id = (int)($input['id'] ?? 0);
     $data = [];
-    foreach (['movement_date','direction','yarn_name','yarn_number','color','lot','document_no','description'] as $key) {
+    foreach (['movement_date','direction','yarn_name','yarn_number','color','lot','recipient_name','document_no','description'] as $key) {
         $data[$key] = trim((string)($input[$key] ?? ''));
         if (strlen($data[$key]) > ($key==='description'?4000:250)) throw new InvalidArgumentException('Alan uzunluğu sınırı aşıldı.');
     }
