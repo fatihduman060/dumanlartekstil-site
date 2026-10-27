@@ -1,6 +1,6 @@
 # Bitke / Dumanlar Web Sitesi
 
-Bu repo `www.bitke.com.tr` üzerinde yayınlanan kurumsal web sitesi kodlarını içerir.
+Bu repo `www.dumanlartekstil.com.tr` üzerinde yayınlanan kurumsal web sitesi kodlarını içerir.
 
 ## Ana yapı
 
@@ -14,6 +14,12 @@ Bu repo `www.bitke.com.tr` üzerinde yayınlanan kurumsal web sitesi kodlarını
 ## Yayın / Deploy
 
 `main` branch'e yapılan push sonrası `.github/workflows/deploy.yml` çalışır ve web sitesi dosyalarını hostingteki `/bitke.com.tr/` dizinine gönderir.
+
+Hostingte `/public_html`, mevcut `/bitke.com.tr` dizinine sembolik bağlantıdır. Bu nedenle ana alan adı değişse de FTP yayın hedefi `/bitke.com.tr/` olarak korunur; dizinleri taşımayın veya ikinci bir muhasebe veritabanı oluşturmayın.
+
+Eski Dumanlar ana sayfa yönlendirmesi tarayıcılarda önbelleğe alınmış olabileceğinden Bitke ana sayfası `/index.html` adresine yönlenir; diğer sayfalarda yol ve sorgu korunur. HTML canonical adresleri `https://www.dumanlartekstil.com.tr/` alan adını kullanır.
+
+Aktif muhasebe adresi `https://bitke.com.tr/muhasebe/` olarak korunur. Bu yol genel alan adı yönlendirmesinden muaftır; mevcut oturumlar ve haftalık yedekleme görevinin dosya yolları değişmez.
 
 Muhasebe canlı verileri deploy paketine dahil edilmez. `muhasebe/storage/`, SQLite veritabanı, yüklenen belgeler ve yedek dosyaları repoya eklenmemelidir.
 

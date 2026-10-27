@@ -3,6 +3,23 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  # Canonical public website; retain existing Bitke accounting sessions.
+  RewriteCond %{HTTP_HOST} ^(?:www\.)?bitke\.com\.tr(?::[0-9]+)?$ [NC]
+  RewriteRule ^muhasebe(?:/|$) - [L]
+
+  # Old Dumanlar root redirects may be cached in returning browsers.
+  # Send legacy Bitke home visits to an uncached Dumanlar page URL.
+  RewriteCond %{HTTP_HOST} ^(?:www\.)?bitke\.com\.tr(?::[0-9]+)?$ [NC]
+  RewriteRule ^$ https://www.dumanlartekstil.com.tr/index.html [R=301,L]
+
+  # Keep certificate validation reachable on each original host.
+  RewriteCond %{HTTP_HOST} ^(?:(?:www\.)?(?:bitke\.com\.tr|dumanlartekstil\.com\.tr))(?::[0-9]+)?$ [NC]
+  RewriteCond %{REQUEST_URI} !^/\.well-known/(?:acme-challenge|pki-validation)/ [NC]
+  RewriteCond %{HTTP_HOST} !^www\.dumanlartekstil\.com\.tr$ [NC,OR]
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^ https://www.dumanlartekstil.com.tr%{REQUEST_URI} [R=301,L,NE]
+
   RewriteRule ^assets/img/hero-production-v11\.webp$ assets/img/hero-production-v11.png [L,R=302]
   RewriteRule ^assets/img/footer-background-clean\.png$ assets/img/footer-premium-desktop.png [L,R=302]
   RewriteRule ^assets/img/factory-section-smooth\.png$ assets/img/bitkekurumsal/fabrikad%C4%B1%C5%9F.png [L,R=302,B]
