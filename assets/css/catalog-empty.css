@@ -1,0 +1,15 @@
+/* Empty state for product collections awaiting photography. */
+.gallery-empty {
+  min-height: 340px;
+  padding: 48px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: linear-gradient(135deg, #fff, #f7f4ed);
+}
+.gallery-empty svg { color: #aa7e30; margin-bottom: 24px; flex-shrink: 0; }
+.gallery-empty h3 { margin: 0 0 14px; color: #071523; font-size: clamp(24px, 3vw, 32px); line-height: 1.2; }
+.gallery-empty p { max-width: 420px; margin: 0; color: #566477; font-size: 16px; line-height: 1.75; }
+@media (max-width: 720px) { .gallery-empty { min-height: 280px; padding: 36px 22px; } }
