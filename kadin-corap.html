@@ -26,7 +26,7 @@
   <link rel="apple-touch-icon" href="assets/img/og-image.png" />
   <link rel="manifest" href="site.webmanifest" />
   <link rel="stylesheet" href="assets/css/style.css" />
-  <link rel="stylesheet" href="assets/css/catalog-empty.css" />
+  <link rel="stylesheet" href="assets/css/women-catalog.css" />
 </head>
 <body>
   <a class="skip-link" href="#main">İçeriğe geç</a>
@@ -47,7 +47,7 @@
     <a class="header-cta" href="https://wa.me/903567158283" target="_blank" rel="noopener" aria-label="Dumanlar A.Ş. WhatsApp iletişim hattı">Bize Ulaşın</a>
     <button class="menu-toggle" type="button" aria-label="Menüyü aç" aria-expanded="false" aria-controls="main-nav">☰</button>
   </header>
-  <main id="main" class="catalog-main gallery-page">
+  <main id="main" class="catalog-main folder-page">
     <section class="catalog-hero catalog-hero--gallery" aria-labelledby="gallery-title">
       <div class="catalog-hero__shade"></div>
       <div class="catalog-hero__content">
@@ -57,39 +57,34 @@
         <span class="catalog-kicker">KADIN ÇORAP</span>
         <h1 id="gallery-title">Kadın Çorap Galerisi</h1>
         <p>Günlük kullanıma ve sezonluk koleksiyonlara uygun kadın çorap modelleri.</p>
-        <div class="catalog-hero__chips"><span>Desenli</span><span>Düz</span><span>Sezonluk Renkler</span></div>
+        <div class="catalog-hero__chips"><span>Şardonlu Grup</span><span>Bitke Koleksiyon</span></div>
       </div>
     </section>
 
-    <section class="gallery-section" aria-labelledby="collection-title">
-      <div class="gallery-layout">
-        <div class="gallery-copy">
-          <span class="catalog-section-label">ÜRÜN GALERİSİ</span>
-          <h2 id="collection-title">Kadın çorap koleksiyonu</h2>
-          <p>Desen, renk ve ambalaj seçenekleriyle satış kanalınıza uygun koleksiyonları keşfedin.</p>
-          <div class="gallery-actions">
-            <a class="btn btn-dark" href="urunler.html#kadin-corap">Ürünlere Dön</a>
-            <a class="btn btn-outline-dark" href="iletisim.html">Koleksiyon Bilgisi Al</a>
-          </div>
-        </div>
+    <section class="folder-section" aria-labelledby="collection-title">
+      <div class="catalog-section-head">
+        <span class="catalog-section-label">ÜRÜN GRUPLARI</span>
+        <h2 id="collection-title">Kadın çorap ürün grupları</h2>
+        <p>Ürün grubunu seçerek koleksiyon görsellerini inceleyebilirsiniz.</p>
+      </div>
 
-        <div class="catalog-gallery" data-gallery>
-          <div class="gallery-window">
-            <div class="gallery-empty" aria-labelledby="gallery-empty-title">
-              <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <rect x="8" y="12" width="48" height="40" rx="8"/>
-                <circle cx="23" cy="26" r="5"/>
-                <path d="m12 46 13-12 10 9 8-7 9 10"/>
-              </svg>
-              <h3 id="gallery-empty-title">Koleksiyonumuz hazırlanıyor</h3>
-              <p>Kadın çorap ürün fotoğrafları yakında burada yer alacak.</p>
-            </div>
-            <!-- Ürün fotoğrafları assets/img/products/kadin/ altında tutulur.
-                 Fotoğraflar eklendiğinde mevcut .gallery-slide, .gallery-dots,
-                 .gallery-thumbs ve .photo-grid bileşenleri kullanılır. -->
-            <div class="gallery-track" hidden></div>
+      <div class="folder-grid folder-grid--women">
+        <a class="folder-card folder-card--women" href="kadin-sardonlu-corap.html" aria-label="Şardonlu Grup ürün galerisini aç">
+          <div class="folder-card__image">
+            <img src="assets/img/products/kadin/sardonlu/4060-bitke-bayan-kivrik-bot-corabi.png" alt="4060 Bitke Bayan Kıvrık Bot Çorabı, şardonlu kadın çorap koleksiyonu" width="1536" height="1024" loading="lazy" decoding="async" />
+            <span class="folder-card__badge">Şardonlu</span>
           </div>
-        </div>
+          <div class="folder-card__body">
+            <span class="folder-card__count">01 Fotoğraf</span>
+            <h3>Şardonlu Grup</h3>
+            <p>4060 Bitke Bayan Kıvrık Bot Çorabı ürün görselini inceleyin.</p>
+            <div class="folder-card__features"><span>İçi Şardonlu</span><span>Kışlık</span><span>Yumuşak Doku</span></div>
+            <strong>Galeriyi Aç <span aria-hidden="true">→</span></strong>
+          </div>
+        </a>
+      </div>
+      <div class="gallery-actions women-catalog-back">
+        <a class="btn btn-dark" href="urunler.html#kadin-corap">Ürünlere Dön</a>
       </div>
     </section>
   </main>

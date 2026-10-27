@@ -1,0 +1,10 @@
+/* Women's collection cards and full, uncropped product artwork. */
+.folder-grid--women { grid-template-columns: minmax(0, 760px); justify-content: center; }
+.folder-card--women .folder-card__image { height: auto; aspect-ratio: 3 / 2; }
+.folder-card--women .folder-card__image img { object-fit: contain; }
+.folder-card--women .folder-card__image::after { display: none; }
+.gallery-page--women .gallery-slide img { height: auto; min-height: 0; object-fit: contain; display: block; }
+.gallery-page--women .gallery-slide a { display: block; }
+.gallery-page--women .gallery-slide figcaption { padding: 18px 22px; color: #071523; font-weight: 700; background: #fff; line-height: 1.5; }
+.gallery-page--women .gallery-copy p + p { margin-top: 16px; }
+.women-catalog-back { max-width: 280px; margin: 32px auto 0; }
