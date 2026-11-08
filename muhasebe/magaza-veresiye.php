@@ -109,6 +109,48 @@ function pv_person($id)
     return $stmt->fetch() ?: null;
 }
 
+function pv_balance_cents(int $personId): int
+{
+    $stmt = db()->prepare("SELECT COALESCE(SUM(CASE
+        WHEN COALESCE(is_cancelled,0)=0 AND entry_type='debt' THEN amount
+        WHEN COALESCE(is_cancelled,0)=0 AND entry_type='payment' THEN -amount
+        ELSE 0 END),0)
+        FROM store_credit_entries WHERE person_id=?");
+    $stmt->execute([$personId]);
+    return (int)round(((float)$stmt->fetchColumn()) * 100);
+}
+
+function pv_guarded_payment_insert(int $personId, float $amount, string $date, string $paymentMethod, string $sourceToken, string $description): int
+{
+    $amount = round($amount, 2);
+    $userId = current_user()['id'] ?? null;
+    $now = now();
+    $sql = "INSERT INTO store_credit_entries
+        (person_id,entry_type,amount,entry_date,payment_method,daily_breakdown_id,source_token,description,is_cancelled,created_by,created_at,updated_at)
+        SELECT ?,'payment',?,?,?,NULL,?,?,0,?,?,?
+        WHERE CAST(ROUND(? * 100, 0) AS INTEGER) <= (
+            SELECT CAST(ROUND(COALESCE(SUM(CASE
+                WHEN COALESCE(is_cancelled,0)=0 AND entry_type='debt' THEN amount
+                WHEN COALESCE(is_cancelled,0)=0 AND entry_type='payment' THEN -amount
+                ELSE 0 END),0) * 100, 0) AS INTEGER)
+            FROM store_credit_entries WHERE person_id=?
+        )
+        AND (
+            SELECT CAST(ROUND(COALESCE(SUM(CASE
+                WHEN COALESCE(is_cancelled,0)=0 AND entry_type='debt' THEN amount
+                WHEN COALESCE(is_cancelled,0)=0 AND entry_type='payment' THEN -amount
+                ELSE 0 END),0) * 100, 0) AS INTEGER)
+            FROM store_credit_entries WHERE person_id=?
+        ) > 0";
+    $stmt = db()->prepare($sql);
+    $stmt->execute([$personId,$amount,$date,$paymentMethod,$sourceToken,$description,$userId,$now,$now,$amount,$personId,$personId]);
+    if ($stmt->rowCount() < 1) {
+        $balanceCents = max(0, pv_balance_cents($personId));
+        throw new RuntimeException('Kalan borç ' . number_format($balanceCents / 100, 2, ',', '.') . ' TL. Daha fazla ödeme yapılamaz.');
+    }
+    return (int)db()->lastInsertId();
+}
+
 function pv_pos_sales_credit_entry_supported(): bool
 {
     static $supported = null;
@@ -311,7 +353,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             flash('error', 'Manuel veresiye satışı kapalıdır. Veresiye satış yalnızca Barkodlu Satış ekranından oluşturulabilir.');
             redirect('magaza-veresiye.php' . ($personId ? '?person=' . $personId : ''));
         }
-        $amount = max(0, decimal_from_input($_POST['amount'] ?? 0));
+        $amount = round(max(0, decimal_from_input($_POST['amount'] ?? 0)), 2);
         $paymentMethod = trim((string)($_POST['payment_method'] ?? ''));
         $date = trim((string)($_POST['entry_date'] ?? date('Y-m-d')));
         $description = trim((string)($_POST['description'] ?? ''));
@@ -336,16 +378,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             flash('error', 'Personel, tarih ve tutarı kontrol edin.');
             redirect('magaza-veresiye.php' . ($personId ? '?person='.$personId : ''));
         }
-        if ($type === 'payment' && $amount > (float)$person['balance'] + 0.004) {
-            flash('error', 'Tahsilat, personelin kalan borcundan fazla olamaz.');
+        $balanceCents = (int)round(((float)$person['balance']) * 100);
+        $amountCents = (int)round($amount * 100);
+        if ($balanceCents <= 0) {
+            flash('error', 'Bu personelin açık borcu bulunmuyor. Tahsilat yapılamaz.');
+            redirect('magaza-veresiye.php?person=' . $personId);
+        }
+        if ($amountCents > $balanceCents) {
+            flash('error', 'Kalan borç ' . number_format($balanceCents / 100, 2, ',', '.') . ' TL. Daha fazla ödeme yapılamaz.');
             redirect('magaza-veresiye.php?person=' . $personId);
         }
         db()->beginTransaction();
         try {
             $entryDescription = $description ?: 'Personelden ' . ($paymentMethod === 'cash' ? 'nakit' : 'kart') . ' tahsilat';
-            db()->prepare('INSERT INTO store_credit_entries (person_id,entry_type,amount,entry_date,payment_method,daily_breakdown_id,source_token,description,created_by,created_at,updated_at) VALUES (?,?,?,?,?,NULL,?,?,?,?,?)')
-                ->execute([$personId, $type, $amount, $date, $paymentMethod ?: null, $sourceToken, $entryDescription, current_user()['id'] ?? null, now(), now()]);
-            $entryId = (int)db()->lastInsertId();
+            $entryId = pv_guarded_payment_insert($personId, $amount, $date, $paymentMethod, $sourceToken, $entryDescription);
             $dailyBreakdownId = pv_daily_sync($date, $type, $paymentMethod, $amount);
             db()->prepare('UPDATE store_credit_entries SET daily_breakdown_id=?,updated_at=? WHERE id=?')
                 ->execute([$dailyBreakdownId, now(), $entryId]);
@@ -359,7 +405,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 flash('success', 'Bu tahsilat zaten kaydedilmişti; ikinci kayıt oluşturulmadı.');
                 redirect('magaza-veresiye.php?person=' . (int)$duplicateEntry['person_id']);
             }
-            throw $e;
+            flash('error', $e->getMessage());
+            redirect('magaza-veresiye.php?person=' . $personId);
         }
         audit_action('magaza_personel_veresiye_hareketi', $entryId, 'eklendi', null, ['person_id'=>$personId,'type'=>$type,'amount'=>$amount,'payment_method'=>$paymentMethod,'date'=>$date,'description'=>$description], $person['full_name']);
         flash('success', 'Tahsilat kaydedildi.');
@@ -504,7 +551,7 @@ body.store-sales-user .main>.alert{display:block!important}
       <form class="pv-search" method="get"><input name="q" value="<?php echo e($q); ?>" placeholder="Ad veya soyad yaz"><button class="btn btn-secondary">Ara</button></form>
       <div class="pv-person-list">
         <?php if(!$people): ?><p class="empty"><?php echo $q!==''?'Aramaya uygun personel bulunamadı.':'Henüz personel eklenmedi.'; ?></p><?php endif; ?>
-        <?php foreach($people as $person): $personOverdue=(float)($overdueByPerson[(int)$person['id']]??0); ?><a class="pv-person" href="magaza-veresiye.php?person=<?php echo e($person['id']); ?>"><span class="pv-person-meta"><strong><?php echo e($person['full_name']); ?></strong><small><?php echo e($person['notes'] ?: 'Personel veresiye kartı'); ?></small><?php if($personOverdue>0.004): ?><small class="pv-overdue-note">Gecikmiş: <?php echo e(money($personOverdue)); ?></small><?php endif; ?></span><strong class="<?php echo (float)$person['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$person['balance'])); ?></strong></a><?php endforeach; ?>
+        <?php foreach($people as $person): $personOverdue=(float)($overdueByPerson[(int)$person['id']]??0); $personBalance=(float)$person['balance']; ?><a class="pv-person" href="magaza-veresiye.php?person=<?php echo e($person['id']); ?>"><span class="pv-person-meta"><strong><?php echo e($person['full_name']); ?></strong><small><?php echo e($person['notes'] ?: 'Personel veresiye kartı'); ?></small><?php if($personOverdue>0.004): ?><small class="pv-overdue-note">Gecikmiş: <?php echo e(money($personOverdue)); ?></small><?php endif; ?><?php if($personBalance < -0.004): ?><small class="pv-overdue-note">Fazla tahsilat: <?php echo e(money(abs($personBalance))); ?> · Kontrol gerekli</small><?php endif; ?></span><strong class="<?php echo $personBalance>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money($personBalance)); ?></strong></a><?php endforeach; ?>
       </div>
     </article>
     <article class="panel-card" style="margin-top:16px">
@@ -520,7 +567,7 @@ body.store-sales-user .main>.alert{display:block!important}
     <?php if(!$selected): ?>
       <div class="card-head"><h3>Veresiye hareketleri</h3></div><p class="empty">İsim aramasından bir personel seç veya yeni personel ekle.</p>
     <?php else: ?>
-      <div class="card-head"><div><h3><?php echo e($selected['full_name']); ?></h3><span>Kişi bazında veresiye, fiş ve ödeme geçmişi</span></div><div><strong class="<?php echo (float)$selected['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$selected['balance'])); ?> kalan</strong><?php if($selectedOverdue>0.004): ?><small class="pv-overdue-note">Gecikmiş: <?php echo e(money($selectedOverdue)); ?></small><?php endif; ?></div></div>
+      <div class="card-head"><div><h3><?php echo e($selected['full_name']); ?></h3><span>Kişi bazında veresiye, fiş ve ödeme geçmişi</span></div><div><strong class="<?php echo (float)$selected['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$selected['balance'])); ?> kalan</strong><?php if($selectedOverdue>0.004): ?><small class="pv-overdue-note">Gecikmiş: <?php echo e(money($selectedOverdue)); ?></small><?php endif; ?><?php if((float)$selected['balance'] < -0.004): ?><small class="pv-overdue-note">Fazla tahsilat <?php echo e(money(abs((float)$selected['balance']))); ?> · Yeni tahsilat kapalı</small><?php endif; ?></div></div>
       <div class="pv-open-debts">
         <p class="pv-open-note">Veresiye fişinin gecikme tarihi, alışveriş tarihini takip eden ayın 6'sıdır. Tahsilatlar en eski açık fişten başlayarak düşülür.</p>
         <?php if(!$selectedOpenDebts): ?><p class="empty">Bu personelin açık veresiye fişi bulunmuyor.</p><?php endif; ?>
@@ -553,11 +600,11 @@ body.store-sales-user .main>.alert{display:block!important}
           </article>
         <?php endforeach; ?>
       </div>
-      <form method="post" class="pv-form" data-pv-entry-form><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>"><input type="hidden" name="entry_type" value="payment"><input type="hidden" name="source_token" value="<?php echo e($entrySourceToken); ?>">
+      <form method="post" class="pv-form" data-pv-entry-form<?php echo (float)$selected['balance']<=0.004?' data-pv-payment-disabled="1"':''; ?>><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>"><input type="hidden" name="entry_type" value="payment"><input type="hidden" name="source_token" value="<?php echo e($entrySourceToken); ?>">
         <div class="two-col"><label>İşlem<input value="Ödeme / tahsilat" readonly></label><label>Tutar<input data-money-input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
         <label id="pv-payment-method">Tahsilat şekli<select name="payment_method" required><option value="">Nakit veya kart seç</option><option value="cash">Nakit</option><option value="card">Kart / POS</option></select><small>Veresiye satışları yalnızca Barkodlu Satış ekranından oluşur.</small></label>
         <div class="two-col"><label>Tarih<input type="date" name="entry_date" value="<?php echo e(date('Y-m-d')); ?>" required></label><label>Açıklama<input name="description" placeholder="Ödeme açıklaması"></label></div>
-        <button class="btn btn-primary" type="submit" data-pv-submit>Tahsilatı kaydet</button>
+        <button class="btn btn-primary" type="submit" data-pv-submit <?php echo (float)$selected['balance']<=0.004?'disabled':''; ?>><?php echo (float)$selected['balance']<=0.004?'Açık borç yok':'Tahsilatı kaydet'; ?></button>
       </form>
       <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th class="right">Borç</th><th class="right">Ödeme</th><th></th></tr></thead><tbody>
         <?php if(!$entries): ?><tr><td colspan="6" class="empty">Bu personelin henüz hareketi yok.</td></tr><?php endif; ?>
