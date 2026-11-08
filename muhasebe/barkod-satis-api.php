@@ -257,10 +257,12 @@ try {
 
         $person = pos_credit_person_with_balance($personId);
         if (!$person) throw new RuntimeException('Seçilen kişi bulunamadı.');
-        $balance = round(max(0, (float)($person['balance'] ?? 0)), 2);
-        if ($balance <= 0.004) throw new RuntimeException('Seçilen kişinin açık veresiye borcu bulunmuyor.');
-        if ($amount > $balance + 0.004) {
-            throw new RuntimeException('Tahsilat tutarı kalan borçtan fazla olamaz. Kalan borç: ' . number_format($balance, 2, ',', '.') . ' TL');
+        $balanceCents = (int)round(((float)($person['balance'] ?? 0)) * 100);
+        $amountCents = (int)round($amount * 100);
+        $balance = max(0, $balanceCents) / 100;
+        if ($balanceCents <= 0) throw new RuntimeException('Seçilen kişinin açık veresiye borcu bulunmuyor. Tahsilat yapılamaz.');
+        if ($amountCents > $balanceCents) {
+            throw new RuntimeException('Kalan borç ' . number_format($balance, 2, ',', '.') . ' TL. Daha fazla ödeme yapılamaz.');
         }
 
         $pdo = db();
@@ -281,10 +283,30 @@ try {
         $description = 'Barkodlu Satış ekranından ' . ($paymentMethod === 'cash' ? 'nakit' : 'kart') . ' veresiye tahsilatı';
         $pdo->beginTransaction();
         try {
-            $pdo->prepare("INSERT INTO store_credit_entries
+            $guardedInsert = $pdo->prepare("INSERT INTO store_credit_entries
                 (person_id,entry_type,amount,entry_date,payment_method,daily_breakdown_id,source_token,description,is_cancelled,created_by,created_at,updated_at)
-                VALUES (?,'payment',?,?,?,NULL,?,?,0,?,?,?)")
-                ->execute([$personId,$amount,$entryDate,$paymentMethod,$sourceToken,$description,$userId,now(),now()]);
+                SELECT ?,'payment',?,?,?,NULL,?,?,0,?,?,?
+                WHERE CAST(ROUND(? * 100, 0) AS INTEGER) <= (
+                    SELECT CAST(ROUND(COALESCE(SUM(CASE
+                        WHEN COALESCE(is_cancelled,0)=0 AND entry_type='debt' THEN amount
+                        WHEN COALESCE(is_cancelled,0)=0 AND entry_type='payment' THEN -amount
+                        ELSE 0 END),0) * 100, 0) AS INTEGER)
+                    FROM store_credit_entries WHERE person_id=?
+                )
+                AND (
+                    SELECT CAST(ROUND(COALESCE(SUM(CASE
+                        WHEN COALESCE(is_cancelled,0)=0 AND entry_type='debt' THEN amount
+                        WHEN COALESCE(is_cancelled,0)=0 AND entry_type='payment' THEN -amount
+                        ELSE 0 END),0) * 100, 0) AS INTEGER)
+                    FROM store_credit_entries WHERE person_id=?
+                ) > 0");
+            $guardedInsert->execute([$personId,$amount,$entryDate,$paymentMethod,$sourceToken,$description,$userId,now(),now(),$amount,$personId,$personId]);
+            if ($guardedInsert->rowCount() < 1) {
+                $freshPerson = pos_credit_person_with_balance($personId);
+                $freshCents = (int)round(((float)($freshPerson['balance'] ?? 0)) * 100);
+                $freshBalance = max(0, $freshCents) / 100;
+                throw new RuntimeException('Kalan borç ' . number_format($freshBalance, 2, ',', '.') . ' TL. Daha fazla ödeme yapılamaz.');
+            }
             $entryId = (int)$pdo->lastInsertId();
 
             $sync = magaza_veresiye_auto_only_sync_date($entryDate, $userId);
