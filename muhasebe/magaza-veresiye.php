@@ -9,6 +9,15 @@ function pv_normalize_name($name)
     return mb_strtolower($name, 'UTF-8');
 }
 
+function pv_entry_token(): string
+{
+    try {
+        return 'pv-' . bin2hex(random_bytes(16));
+    } catch (Throwable $e) {
+        return 'pv-' . sha1(uniqid('', true) . microtime(true));
+    }
+}
+
 function pv_db_ensure()
 {
     $pdo = db();
@@ -41,14 +50,17 @@ function pv_db_ensure()
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
     $columns = $pdo->query('PRAGMA table_info(store_credit_entries)')->fetchAll() ?: [];
-    $hasPaymentMethod = $hasDailyBreakdown = false;
+    $hasPaymentMethod = $hasDailyBreakdown = $hasSourceToken = false;
     foreach ($columns as $column) {
         if (($column['name'] ?? '') === 'payment_method') $hasPaymentMethod = true;
         if (($column['name'] ?? '') === 'daily_breakdown_id') $hasDailyBreakdown = true;
+        if (($column['name'] ?? '') === 'source_token') $hasSourceToken = true;
     }
     if (!$hasPaymentMethod) $pdo->exec('ALTER TABLE store_credit_entries ADD COLUMN payment_method TEXT');
     if (!$hasDailyBreakdown) $pdo->exec('ALTER TABLE store_credit_entries ADD COLUMN daily_breakdown_id INTEGER');
+    if (!$hasSourceToken) $pdo->exec('ALTER TABLE store_credit_entries ADD COLUMN source_token TEXT');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_store_credit_person_date ON store_credit_entries(person_id,entry_date)');
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_store_credit_source_token ON store_credit_entries(source_token) WHERE source_token IS NOT NULL AND TRIM(source_token)<>''");
 }
 
 function pv_daily_sync($date, $type, $paymentMethod, $delta)
@@ -171,6 +183,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $paymentMethod = trim((string)($_POST['payment_method'] ?? ''));
         $date = trim((string)($_POST['entry_date'] ?? date('Y-m-d')));
         $description = trim((string)($_POST['description'] ?? ''));
+        $sourceToken = preg_replace('/[^A-Za-z0-9_.:-]/', '', trim((string)($_POST['source_token'] ?? ''))) ?? '';
+        if ($sourceToken === '' || strlen($sourceToken) < 20 || strlen($sourceToken) > 100) {
+            flash('error', 'Tahsilat güvenlik anahtarı geçersiz. Sayfayı yenileyip tekrar deneyin.');
+            redirect('magaza-veresiye.php' . ($personId ? '?person=' . $personId : ''));
+        }
+        $duplicateStmt = db()->prepare('SELECT id,person_id FROM store_credit_entries WHERE source_token=? LIMIT 1');
+        $duplicateStmt->execute([$sourceToken]);
+        $duplicateEntry = $duplicateStmt->fetch() ?: null;
+        if ($duplicateEntry) {
+            flash('success', 'Bu tahsilat zaten kaydedilmişti; ikinci kayıt oluşturulmadı.');
+            redirect('magaza-veresiye.php?person=' . (int)$duplicateEntry['person_id']);
+        }
         if (!in_array($paymentMethod, ['cash','card'], true)) {
             flash('error', 'Tahsilat için Nakit veya Kart seçmelisiniz.');
             redirect('magaza-veresiye.php?person=' . $personId);
@@ -186,13 +210,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         }
         db()->beginTransaction();
         try {
-            $dailyBreakdownId = pv_daily_sync($date, $type, $paymentMethod, $amount);
-            db()->prepare('INSERT INTO store_credit_entries (person_id,entry_type,amount,entry_date,payment_method,daily_breakdown_id,description,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-                ->execute([$personId, $type, $amount, $date, $paymentMethod ?: null, $dailyBreakdownId, $description ?: ($type === 'debt' ? 'Mağaza veresiye alışverişi' : 'Personelden ' . ($paymentMethod === 'cash' ? 'nakit' : 'kart') . ' tahsilat'), current_user()['id'] ?? null, now(), now()]);
+            $entryDescription = $description ?: 'Personelden ' . ($paymentMethod === 'cash' ? 'nakit' : 'kart') . ' tahsilat';
+            db()->prepare('INSERT INTO store_credit_entries (person_id,entry_type,amount,entry_date,payment_method,daily_breakdown_id,source_token,description,created_by,created_at,updated_at) VALUES (?,?,?,?,?,NULL,?,?,?,?,?)')
+                ->execute([$personId, $type, $amount, $date, $paymentMethod ?: null, $sourceToken, $entryDescription, current_user()['id'] ?? null, now(), now()]);
             $entryId = (int)db()->lastInsertId();
+            $dailyBreakdownId = pv_daily_sync($date, $type, $paymentMethod, $amount);
+            db()->prepare('UPDATE store_credit_entries SET daily_breakdown_id=?,updated_at=? WHERE id=?')
+                ->execute([$dailyBreakdownId, now(), $entryId]);
             db()->commit();
         } catch (Throwable $e) {
             if (db()->inTransaction()) db()->rollBack();
+            $duplicateStmt = db()->prepare('SELECT id,person_id FROM store_credit_entries WHERE source_token=? LIMIT 1');
+            $duplicateStmt->execute([$sourceToken]);
+            $duplicateEntry = $duplicateStmt->fetch() ?: null;
+            if ($duplicateEntry) {
+                flash('success', 'Bu tahsilat zaten kaydedilmişti; ikinci kayıt oluşturulmadı.');
+                redirect('magaza-veresiye.php?person=' . (int)$duplicateEntry['person_id']);
+            }
             throw $e;
         }
         audit_action('magaza_personel_veresiye_hareketi', $entryId, 'eklendi', null, ['person_id'=>$personId,'type'=>$type,'amount'=>$amount,'payment_method'=>$paymentMethod,'date'=>$date,'description'=>$description], $person['full_name']);
@@ -252,6 +286,7 @@ if ($q !== '') {
 $selectedId = (int)($_GET['person'] ?? 0);
 if ($selectedId <= 0 && $q !== '' && count($people) === 1) $selectedId = (int)$people[0]['id'];
 $selected = $selectedId ? pv_person($selectedId) : null;
+$entrySourceToken = $selected ? pv_entry_token() : '';
 $entries = [];
 if ($selected) {
     $stmt = db()->prepare('SELECT e.*,u.display_name AS user_name FROM store_credit_entries e LEFT JOIN users u ON u.id=e.created_by WHERE e.person_id=? ORDER BY e.entry_date DESC,e.id DESC');
@@ -328,11 +363,11 @@ body.store-sales-user .main>.alert{display:block!important}
       <div class="card-head"><h3>Veresiye hareketleri</h3></div><p class="empty">İsim aramasından bir personel seç veya yeni personel ekle.</p>
     <?php else: ?>
       <div class="card-head"><div><h3><?php echo e($selected['full_name']); ?></h3><span>Kişi bazında veresiye ve ödeme geçmişi</span></div><strong class="<?php echo (float)$selected['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$selected['balance'])); ?> kalan</strong></div>
-      <form method="post" class="pv-form"><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>"><input type="hidden" name="entry_type" value="payment">
+      <form method="post" class="pv-form" data-pv-entry-form><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>"><input type="hidden" name="entry_type" value="payment"><input type="hidden" name="source_token" value="<?php echo e($entrySourceToken); ?>">
         <div class="two-col"><label>İşlem<input value="Ödeme / tahsilat" readonly></label><label>Tutar<input data-money-input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
         <label id="pv-payment-method">Tahsilat şekli<select name="payment_method" required><option value="">Nakit veya kart seç</option><option value="cash">Nakit</option><option value="card">Kart / POS</option></select><small>Veresiye satışları yalnızca Barkodlu Satış ekranından oluşur.</small></label>
         <div class="two-col"><label>Tarih<input type="date" name="entry_date" value="<?php echo e(date('Y-m-d')); ?>" required></label><label>Açıklama<input name="description" placeholder="Ödeme açıklaması"></label></div>
-        <button class="btn btn-primary" type="submit">Tahsilatı kaydet</button>
+        <button class="btn btn-primary" type="submit" data-pv-submit>Tahsilatı kaydet</button>
       </form>
       <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th class="right">Borç</th><th class="right">Ödeme</th><th></th></tr></thead><tbody>
         <?php if(!$entries): ?><tr><td colspan="6" class="empty">Bu personelin henüz hareketi yok.</td></tr><?php endif; ?>
@@ -370,4 +405,16 @@ body.store-sales-user .main>.alert{display:block!important}
   <?php endforeach; ?>
 </section>
 
+<script>
+(function(){
+  document.querySelectorAll('[data-pv-entry-form]').forEach(function(form){
+    form.addEventListener('submit', function(){
+      var button = form.querySelector('[data-pv-submit]');
+      if (!button || button.disabled) return;
+      button.disabled = true;
+      button.textContent = 'Kaydediliyor…';
+    });
+  });
+})();
+</script>
 <?php page_footer(); ?>
