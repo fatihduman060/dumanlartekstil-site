@@ -333,16 +333,32 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             flash('error', 'Personelin adı ve soyadı zorunludur.');
             redirect('magaza-veresiye.php');
         }
+
+        $searchName = pv_normalize_name($name);
+        $existingStmt = db()->prepare('SELECT id,full_name,is_active FROM store_credit_people WHERE search_name=? LIMIT 1');
+        $existingStmt->execute([$searchName]);
+        $existing = $existingStmt->fetch() ?: null;
+        if ($existing) {
+            flash('error', 'Bu kişi zaten kayıtlı: ' . (string)$existing['full_name'] . '. İkinci personel kartı açılmadı.');
+            redirect('magaza-veresiye.php?person=' . (int)$existing['id'] . '&focus=person');
+        }
+
         try {
             db()->prepare('INSERT INTO store_credit_people (full_name,search_name,notes,is_active,created_by,created_at,updated_at) VALUES (?,?,?,1,?,?,?)')
-                ->execute([$name, pv_normalize_name($name), $notes ?: null, current_user()['id'] ?? null, now(), now()]);
+                ->execute([$name, $searchName, $notes ?: null, current_user()['id'] ?? null, now(), now()]);
             $id = (int)db()->lastInsertId();
             audit_action('magaza_personel_veresiye', $id, 'personel_eklendi', null, ['full_name'=>$name,'notes'=>$notes], $name);
             flash('success', 'Personel eklendi: ' . $name);
-            redirect('magaza-veresiye.php?person=' . $id);
+            redirect('magaza-veresiye.php?person=' . $id . '&focus=person');
         } catch (Throwable $e) {
-            flash('error', 'Bu isimle bir personel daha önce eklenmiş olabilir.');
-            redirect('magaza-veresiye.php');
+            $existingStmt = db()->prepare('SELECT id,full_name FROM store_credit_people WHERE search_name=? LIMIT 1');
+            $existingStmt->execute([$searchName]);
+            $existing = $existingStmt->fetch() ?: null;
+            if ($existing) {
+                flash('error', 'Bu kişi zaten kayıtlı: ' . (string)$existing['full_name'] . '. İkinci personel kartı açılmadı.');
+                redirect('magaza-veresiye.php?person=' . (int)$existing['id'] . '&focus=person');
+            }
+            throw $e;
         }
     }
 
