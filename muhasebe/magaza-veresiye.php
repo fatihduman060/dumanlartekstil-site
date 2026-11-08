@@ -145,6 +145,138 @@ function pv_pos_sale_entry_map(array $entryIds): array
     return $map;
 }
 
+function pv_due_date(string $entryDate): string
+{
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $entryDate);
+    if (!$date || $date->format('Y-m-d') !== $entryDate) return '';
+    return $date->modify('first day of next month')->setDate(
+        (int)$date->modify('first day of next month')->format('Y'),
+        (int)$date->modify('first day of next month')->format('m'),
+        6
+    )->format('Y-m-d');
+}
+
+function pv_credit_schedules(array $personIds, bool $withSaleDetails = false): array
+{
+    $personIds = array_values(array_unique(array_filter(array_map('intval', $personIds), static function ($id) { return $id > 0; })));
+    if (!$personIds) return [];
+
+    $placeholders = implode(',', array_fill(0, count($personIds), '?'));
+    $stmt = db()->prepare("SELECT id,person_id,entry_type,amount,entry_date,payment_method,description
+        FROM store_credit_entries
+        WHERE person_id IN (" . $placeholders . ")
+          AND COALESCE(is_cancelled,0)=0
+          AND entry_type IN ('debt','payment')
+        ORDER BY person_id ASC,entry_date ASC,id ASC");
+    $stmt->execute($personIds);
+
+    $schedules = [];
+    $pointers = [];
+    foreach ($stmt->fetchAll() ?: [] as $entry) {
+        $personId = (int)$entry['person_id'];
+        if (!isset($schedules[$personId])) {
+            $schedules[$personId] = [];
+            $pointers[$personId] = 0;
+        }
+
+        $amount = round(max(0, (float)$entry['amount']), 2);
+        if (($entry['entry_type'] ?? '') === 'debt') {
+            $schedules[$personId][] = [
+                'entry_id'=>(int)$entry['id'],
+                'entry_date'=>(string)$entry['entry_date'],
+                'description'=>(string)($entry['description'] ?? ''),
+                'amount'=>$amount,
+                'paid'=>0.0,
+                'remaining'=>$amount,
+                'sale_id'=>0,
+                'receipt_no'=>'',
+                'items'=>[],
+            ];
+            continue;
+        }
+
+        $paymentLeft = $amount;
+        while ($paymentLeft > 0.004 && $pointers[$personId] < count($schedules[$personId])) {
+            $index = $pointers[$personId];
+            $remaining = (float)$schedules[$personId][$index]['remaining'];
+            if ($remaining <= 0.004) {
+                $pointers[$personId]++;
+                continue;
+            }
+            $applied = min($remaining, $paymentLeft);
+            $schedules[$personId][$index]['paid'] = round((float)$schedules[$personId][$index]['paid'] + $applied, 2);
+            $schedules[$personId][$index]['remaining'] = round(max(0, $remaining - $applied), 2);
+            $paymentLeft = round(max(0, $paymentLeft - $applied), 2);
+            if ((float)$schedules[$personId][$index]['remaining'] <= 0.004) $pointers[$personId]++;
+        }
+    }
+
+    $today = date('Y-m-d');
+    $debtEntryIds = [];
+    foreach ($schedules as $personId => &$rows) {
+        foreach ($rows as &$row) {
+            $row['due_date'] = pv_due_date((string)$row['entry_date']);
+            $row['is_overdue'] = (float)$row['remaining'] > 0.004
+                && $row['due_date'] !== ''
+                && $today >= $row['due_date'];
+            if ($withSaleDetails) $debtEntryIds[] = (int)$row['entry_id'];
+        }
+        unset($row);
+    }
+    unset($rows);
+
+    if (!$withSaleDetails || !$debtEntryIds || !pv_pos_sales_credit_entry_supported()) return $schedules;
+
+    $debtEntryIds = array_values(array_unique($debtEntryIds));
+    $salePlaceholders = implode(',', array_fill(0, count($debtEntryIds), '?'));
+    $saleStmt = db()->prepare("SELECT id,credit_entry_id,receipt_no,sale_date,sale_time,grand_total
+        FROM pos_sales
+        WHERE credit_entry_id IN (" . $salePlaceholders . ")
+          AND COALESCE(is_cancelled,0)=0");
+    $saleStmt->execute($debtEntryIds);
+    $salesByEntry = [];
+    $saleIds = [];
+    foreach ($saleStmt->fetchAll() ?: [] as $sale) {
+        $salesByEntry[(int)$sale['credit_entry_id']] = $sale;
+        $saleIds[] = (int)$sale['id'];
+    }
+
+    $itemsBySale = [];
+    if ($saleIds) {
+        $itemPlaceholders = implode(',', array_fill(0, count($saleIds), '?'));
+        $itemStmt = db()->prepare("SELECT sale_id,product_name,barcode,quantity,unit_price,line_total
+            FROM pos_sale_items
+            WHERE sale_id IN (" . $itemPlaceholders . ")
+            ORDER BY id ASC");
+        $itemStmt->execute($saleIds);
+        foreach ($itemStmt->fetchAll() ?: [] as $item) {
+            $itemsBySale[(int)$item['sale_id']][] = $item;
+        }
+    }
+
+    foreach ($schedules as &$rows) {
+        foreach ($rows as &$row) {
+            $sale = $salesByEntry[(int)$row['entry_id']] ?? null;
+            if (!$sale) continue;
+            $row['sale_id'] = (int)$sale['id'];
+            $row['receipt_no'] = (string)($sale['receipt_no'] ?? '');
+            $row['sale_date'] = (string)($sale['sale_date'] ?? $row['entry_date']);
+            $row['sale_time'] = (string)($sale['sale_time'] ?? '');
+            $row['items'] = $itemsBySale[(int)$sale['id']] ?? [];
+            if (!empty($row['sale_date'])) {
+                $row['due_date'] = pv_due_date((string)$row['sale_date']);
+                $row['is_overdue'] = (float)$row['remaining'] > 0.004
+                    && $row['due_date'] !== ''
+                    && $today >= $row['due_date'];
+            }
+        }
+        unset($row);
+    }
+    unset($rows);
+
+    return $schedules;
+}
+
 pv_db_ensure();
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
@@ -287,6 +419,32 @@ $selectedId = (int)($_GET['person'] ?? 0);
 if ($selectedId <= 0 && $q !== '' && count($people) === 1) $selectedId = (int)$people[0]['id'];
 $selected = $selectedId ? pv_person($selectedId) : null;
 $entrySourceToken = $selected ? pv_entry_token() : '';
+
+$peopleIds = array_map(static function ($person) { return (int)$person['id']; }, $people);
+$peopleSchedules = pv_credit_schedules($peopleIds, false);
+$overdueByPerson = [];
+foreach ($peopleSchedules as $personId => $scheduleRows) {
+    $overdue = 0.0;
+    foreach ($scheduleRows as $scheduleRow) {
+        if (!empty($scheduleRow['is_overdue'])) $overdue += (float)$scheduleRow['remaining'];
+    }
+    $overdueByPerson[(int)$personId] = round($overdue, 2);
+}
+
+$selectedSchedule = [];
+$selectedOpenDebts = [];
+$selectedOverdue = 0.0;
+if ($selected) {
+    $selectedSchedules = pv_credit_schedules([$selectedId], true);
+    $selectedSchedule = $selectedSchedules[$selectedId] ?? [];
+    foreach ($selectedSchedule as $scheduleRow) {
+        if ((float)$scheduleRow['remaining'] <= 0.004) continue;
+        $selectedOpenDebts[] = $scheduleRow;
+        if (!empty($scheduleRow['is_overdue'])) $selectedOverdue += (float)$scheduleRow['remaining'];
+    }
+    $selectedOverdue = round($selectedOverdue, 2);
+}
+
 $entries = [];
 if ($selected) {
     $stmt = db()->prepare('SELECT e.*,u.display_name AS user_name FROM store_credit_entries e LEFT JOIN users u ON u.id=e.created_by WHERE e.person_id=? ORDER BY e.entry_date DESC,e.id DESC');
@@ -332,7 +490,7 @@ body.store-sales-user .main>.pv-summary{display:grid!important}
 body.store-sales-user .main>.pv-grid{display:grid!important}
 body.store-sales-user .main>.pv-daily{display:grid!important}
 body.store-sales-user .main>.alert{display:block!important}
-.pv-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}.pv-head h2{margin:0}.pv-head p{margin:5px 0 0;color:#67736b}.pv-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}.pv-summary article{padding:15px;border:1px solid #dbe5de;border-radius:15px;background:#fff}.pv-summary span{font-size:12px;font-weight:850;color:#68756d}.pv-summary strong{display:block;margin-top:6px;font-size:24px}.pv-grid{display:grid;grid-template-columns:minmax(290px,.72fr) minmax(460px,1.28fr);gap:16px}.pv-form{display:grid;gap:10px;padding:16px}.pv-form label{display:grid;gap:5px;font-size:12px;font-weight:850}.pv-form input,.pv-form select,.pv-form textarea{width:100%;min-height:42px;border:1px solid #d8e1da;border-radius:11px;padding:8px 10px;box-sizing:border-box}.pv-search{display:grid;grid-template-columns:1fr auto;gap:8px;padding:14px}.pv-person-list{display:grid;gap:8px;padding:0 14px 14px}.pv-person{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #e0e7e2;border-radius:12px;text-decoration:none;color:inherit}.pv-person:hover{background:#f4faf6}.pv-person strong,.pv-person span{display:block}.pv-person small{color:#6a766e}.pv-debt{color:#a33f35}.pv-paid{color:#176536}.pv-cancelled{opacity:.55;background:#faf8f4}.pv-daily{display:grid;gap:12px;margin-top:16px}.pv-daily-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}.pv-daily-head h3{margin:0}.pv-daily-head p{margin:4px 0 0;color:#6a766e}.pv-day{border:1px solid #dce5df;border-radius:14px;background:#fff;overflow:hidden}.pv-day-head{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:12px 14px;background:#f5f9f6}.pv-day-head strong{font-size:14px}.pv-day-head span{font-size:11px;font-weight:850}.pv-day-net{color:#704c26}.pv-day-items{display:grid}.pv-day-item{display:grid;grid-template-columns:minmax(150px,1fr) 120px minmax(180px,1.4fr) 110px;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid #edf1ee}.pv-day-item small{display:block;color:#78837c;margin-top:2px}.pv-day-item .right{text-align:right;font-weight:900}.pv-type-debt{color:#a33f35}.pv-type-payment{color:#176536}@media(max-width:760px){body.store-sales-user .main>.pv-grid,.pv-grid,.pv-summary{grid-template-columns:1fr}.pv-head{align-items:flex-start;flex-direction:column}.pv-search{grid-template-columns:1fr}.pv-search .btn{width:100%}.pv-day-head{grid-template-columns:1fr 1fr}.pv-day-item{grid-template-columns:1fr auto}.pv-day-item .pv-day-desc{grid-column:1/-1}.pv-day-item .right{grid-column:2;grid-row:1}.pv-daily-head{align-items:flex-start;flex-direction:column}}
+.pv-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}.pv-head h2{margin:0}.pv-head p{margin:5px 0 0;color:#67736b}.pv-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}.pv-summary article{padding:15px;border:1px solid #dbe5de;border-radius:15px;background:#fff}.pv-summary span{font-size:12px;font-weight:850;color:#68756d}.pv-summary strong{display:block;margin-top:6px;font-size:24px}.pv-grid{display:grid;grid-template-columns:minmax(290px,.72fr) minmax(460px,1.28fr);gap:16px}.pv-form{display:grid;gap:10px;padding:16px}.pv-form label{display:grid;gap:5px;font-size:12px;font-weight:850}.pv-form input,.pv-form select,.pv-form textarea{width:100%;min-height:42px;border:1px solid #d8e1da;border-radius:11px;padding:8px 10px;box-sizing:border-box}.pv-search{display:grid;grid-template-columns:1fr auto;gap:8px;padding:14px}.pv-person-list{display:grid;gap:8px;padding:0 14px 14px}.pv-person{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #e0e7e2;border-radius:12px;text-decoration:none;color:inherit}.pv-person:hover{background:#f4faf6}.pv-person strong,.pv-person span{display:block}.pv-person small{color:#6a766e}.pv-person-meta{display:grid;gap:4px}.pv-overdue-note{color:#a33f35!important;font-weight:900}.pv-debt{color:#a33f35}.pv-paid{color:#176536}.pv-cancelled{opacity:.55;background:#faf8f4}.pv-open-debts{display:grid;gap:10px;padding:0 16px 16px}.pv-open-note{margin:0;padding:10px 12px;border:1px solid #ead7b0;border-radius:11px;background:#fffaf0;color:#765b2e;font-size:11px;line-height:1.45}.pv-receipt-card{display:grid;gap:10px;padding:13px;border:1px solid #dfe7e1;border-radius:14px;background:#fbfdfb}.pv-receipt-card.is-overdue{border-color:#e4b3ad;background:#fff8f7}.pv-receipt-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.pv-receipt-head>div{display:grid;gap:3px}.pv-receipt-head strong{font-size:14px}.pv-receipt-head small{color:#718078;font-size:10px}.pv-status{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;background:#edf5ef;color:#24623b;font-size:9px;font-weight:900;white-space:nowrap}.pv-status.is-overdue{background:#fde5e2;color:#9a3028}.pv-receipt-items{display:grid;gap:6px}.pv-receipt-item{display:grid;grid-template-columns:1fr auto;gap:10px;padding:7px 9px;border-radius:9px;background:#f3f7f4;font-size:10px}.pv-receipt-item span{min-width:0}.pv-receipt-item small{display:block;color:#78837c;margin-top:2px}.pv-receipt-totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.pv-receipt-totals span{display:grid;gap:3px;padding:8px;border-radius:9px;background:#f5f3ee;font-size:9px;color:#6d665c}.pv-receipt-totals strong{font-size:11px;color:#26362c}.pv-receipt-actions{display:flex;justify-content:flex-end}.pv-receipt-actions .btn{min-height:34px;padding:7px 11px}.pv-daily{display:grid;gap:12px;margin-top:16px}.pv-daily-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}.pv-daily-head h3{margin:0}.pv-daily-head p{margin:4px 0 0;color:#6a766e}.pv-day{border:1px solid #dce5df;border-radius:14px;background:#fff;overflow:hidden}.pv-day-head{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:12px 14px;background:#f5f9f6}.pv-day-head strong{font-size:14px}.pv-day-head span{font-size:11px;font-weight:850}.pv-day-net{color:#704c26}.pv-day-items{display:grid}.pv-day-item{display:grid;grid-template-columns:minmax(150px,1fr) 120px minmax(180px,1.4fr) 110px;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid #edf1ee}.pv-day-item small{display:block;color:#78837c;margin-top:2px}.pv-day-item .right{text-align:right;font-weight:900}.pv-type-debt{color:#a33f35}.pv-type-payment{color:#176536}@media(max-width:760px){body.store-sales-user .main>.pv-grid,.pv-grid,.pv-summary{grid-template-columns:1fr}.pv-head{align-items:flex-start;flex-direction:column}.pv-search{grid-template-columns:1fr}.pv-search .btn{width:100%}.pv-receipt-head{display:grid}.pv-receipt-totals{grid-template-columns:1fr 1fr}.pv-receipt-actions .btn{width:100%}.pv-day-head{grid-template-columns:1fr 1fr}.pv-day-item{grid-template-columns:1fr auto}.pv-day-item .pv-day-desc{grid-column:1/-1}.pv-day-item .right{grid-column:2;grid-row:1}.pv-daily-head{align-items:flex-start;flex-direction:column}}
 </style>
 <section class="pv-head"><div><h2>Personel Veresiye</h2><p>Fabrika çalışanlarının mağazadan veresiye alışverişlerini ve ödemelerini kişi bazında takip et.</p></div><a class="btn btn-secondary" href="magaza.php">Mağazaya dön</a></section>
 <section class="pv-summary">
@@ -346,7 +504,7 @@ body.store-sales-user .main>.alert{display:block!important}
       <form class="pv-search" method="get"><input name="q" value="<?php echo e($q); ?>" placeholder="Ad veya soyad yaz"><button class="btn btn-secondary">Ara</button></form>
       <div class="pv-person-list">
         <?php if(!$people): ?><p class="empty"><?php echo $q!==''?'Aramaya uygun personel bulunamadı.':'Henüz personel eklenmedi.'; ?></p><?php endif; ?>
-        <?php foreach($people as $person): ?><a class="pv-person" href="magaza-veresiye.php?person=<?php echo e($person['id']); ?>"><span><strong><?php echo e($person['full_name']); ?></strong><small><?php echo e($person['notes'] ?: 'Personel veresiye kartı'); ?></small></span><strong class="<?php echo (float)$person['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$person['balance'])); ?></strong></a><?php endforeach; ?>
+        <?php foreach($people as $person): $personOverdue=(float)($overdueByPerson[(int)$person['id']]??0); ?><a class="pv-person" href="magaza-veresiye.php?person=<?php echo e($person['id']); ?>"><span class="pv-person-meta"><strong><?php echo e($person['full_name']); ?></strong><small><?php echo e($person['notes'] ?: 'Personel veresiye kartı'); ?></small><?php if($personOverdue>0.004): ?><small class="pv-overdue-note">Gecikmiş: <?php echo e(money($personOverdue)); ?></small><?php endif; ?></span><strong class="<?php echo (float)$person['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$person['balance'])); ?></strong></a><?php endforeach; ?>
       </div>
     </article>
     <article class="panel-card" style="margin-top:16px">
@@ -362,7 +520,39 @@ body.store-sales-user .main>.alert{display:block!important}
     <?php if(!$selected): ?>
       <div class="card-head"><h3>Veresiye hareketleri</h3></div><p class="empty">İsim aramasından bir personel seç veya yeni personel ekle.</p>
     <?php else: ?>
-      <div class="card-head"><div><h3><?php echo e($selected['full_name']); ?></h3><span>Kişi bazında veresiye ve ödeme geçmişi</span></div><strong class="<?php echo (float)$selected['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$selected['balance'])); ?> kalan</strong></div>
+      <div class="card-head"><div><h3><?php echo e($selected['full_name']); ?></h3><span>Kişi bazında veresiye, fiş ve ödeme geçmişi</span></div><div><strong class="<?php echo (float)$selected['balance']>0?'pv-debt':'pv-paid'; ?>"><?php echo e(money((float)$selected['balance'])); ?> kalan</strong><?php if($selectedOverdue>0.004): ?><small class="pv-overdue-note">Gecikmiş: <?php echo e(money($selectedOverdue)); ?></small><?php endif; ?></div></div>
+      <div class="pv-open-debts">
+        <p class="pv-open-note">Veresiye fişinin gecikme tarihi, alışveriş tarihini takip eden ayın 6'sıdır. Tahsilatlar en eski açık fişten başlayarak düşülür.</p>
+        <?php if(!$selectedOpenDebts): ?><p class="empty">Bu personelin açık veresiye fişi bulunmuyor.</p><?php endif; ?>
+        <?php foreach($selectedOpenDebts as $debt): ?>
+          <article class="pv-receipt-card <?php echo !empty($debt['is_overdue'])?'is-overdue':''; ?>">
+            <div class="pv-receipt-head">
+              <div>
+                <strong><?php echo e($debt['receipt_no'] ?: 'Eski veresiye kaydı'); ?></strong>
+                <small>Alışveriş: <?php echo e(tr_date((string)($debt['sale_date'] ?? $debt['entry_date']))); ?><?php if(!empty($debt['sale_time'])): ?> · <?php echo e(substr((string)$debt['sale_time'],0,5)); ?><?php endif; ?></small>
+                <small>Vade / gecikme başlangıcı: <?php echo e($debt['due_date'] ? tr_date($debt['due_date']) : '-'); ?></small>
+              </div>
+              <span class="pv-status <?php echo !empty($debt['is_overdue'])?'is-overdue':''; ?>"><?php echo !empty($debt['is_overdue'])?'Gecikmiş':'Vade bekliyor'; ?></span>
+            </div>
+            <div class="pv-receipt-items">
+              <?php if(!empty($debt['items'])): ?>
+                <?php foreach($debt['items'] as $item): ?>
+                  <div class="pv-receipt-item"><span><strong><?php echo e($item['product_name']); ?></strong><small><?php echo e(number_format((float)$item['quantity'], ((float)$item['quantity'] == floor((float)$item['quantity'])) ? 0 : 2, ',', '.')); ?> × <?php echo e(money((float)$item['unit_price'])); ?><?php if(!empty($item['barcode'])): ?> · <?php echo e($item['barcode']); ?><?php endif; ?></small></span><strong><?php echo e(money((float)$item['line_total'])); ?></strong></div>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <div class="pv-receipt-item"><span><strong><?php echo e($debt['description'] ?: 'Ürün ayrıntısı bulunmuyor'); ?></strong><small>Bu kayıt eski sistemden gelmiş olabilir.</small></span></div>
+              <?php endif; ?>
+            </div>
+            <div class="pv-receipt-totals">
+              <span>Fiş toplamı<strong><?php echo e(money((float)$debt['amount'])); ?></strong></span>
+              <span>Bu fişe düşen ödeme<strong><?php echo e(money((float)$debt['paid'])); ?></strong></span>
+              <span>Kalan<strong class="<?php echo !empty($debt['is_overdue'])?'pv-debt':''; ?>"><?php echo e(money((float)$debt['remaining'])); ?></strong></span>
+              <span>Durum<strong><?php echo !empty($debt['is_overdue'])?'Gecikmiş':'Açık'; ?></strong></span>
+            </div>
+            <?php if((int)$debt['sale_id']>0): ?><div class="pv-receipt-actions"><a class="btn btn-secondary" href="barkod-fis.php?id=<?php echo e((int)$debt['sale_id']); ?>" target="_blank" rel="noopener">Fişi Aç · Ne Aldığını Gör</a></div><?php endif; ?>
+          </article>
+        <?php endforeach; ?>
+      </div>
       <form method="post" class="pv-form" data-pv-entry-form><?php echo csrf_field(); ?><input type="hidden" name="action" value="add_entry"><input type="hidden" name="person_id" value="<?php echo e($selected['id']); ?>"><input type="hidden" name="entry_type" value="payment"><input type="hidden" name="source_token" value="<?php echo e($entrySourceToken); ?>">
         <div class="two-col"><label>İşlem<input value="Ödeme / tahsilat" readonly></label><label>Tutar<input data-money-input name="amount" inputmode="decimal" required placeholder="0,00"></label></div>
         <label id="pv-payment-method">Tahsilat şekli<select name="payment_method" required><option value="">Nakit veya kart seç</option><option value="cash">Nakit</option><option value="card">Kart / POS</option></select><small>Veresiye satışları yalnızca Barkodlu Satış ekranından oluşur.</small></label>
