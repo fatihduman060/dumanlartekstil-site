@@ -53,7 +53,6 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <div class="pos-search-results" data-pos-results hidden></div>
     <div class="pos-cart-head"><h3>Satış Ürünleri</h3><button type="button" class="pos-link danger" data-pos-clear>Sepeti temizle</button></div>
     <div class="pos-cart-columns" aria-hidden="true"><span>Ürün</span><span>Miktar</span><span>Birim</span><span>Fiyat</span><span>İskonto</span><span>Vergi</span><span>Tutar</span><span></span></div>
-    <p class="muted" data-pos-cart-protection hidden role="status">🔒 Sepet koruması açık · Yenileme veya çıkış için onay gerekir. Yenilerseniz sepetiniz geri yüklenir.</p>
     <div class="pos-cart" data-pos-cart><div class="pos-empty">Henüz ürün okutulmadı.</div></div>
   </section>
   <div class="pos-checkout-slot">
