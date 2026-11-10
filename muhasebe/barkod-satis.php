@@ -53,6 +53,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
     <div class="pos-search-results" data-pos-results hidden></div>
     <div class="pos-cart-head"><h3>Satış Ürünleri</h3><button type="button" class="pos-link danger" data-pos-clear>Sepeti temizle</button></div>
     <div class="pos-cart-columns" aria-hidden="true"><span>Ürün</span><span>Miktar</span><span>Birim</span><span>Fiyat</span><span>İskonto</span><span>Vergi</span><span>Tutar</span><span></span></div>
+    <p class="muted" data-pos-cart-protection hidden role="status">🔒 Sepet koruması açık · Yenileme veya çıkış için onay gerekir. Yenilerseniz sepetiniz geri yüklenir.</p>
     <div class="pos-cart" data-pos-cart><div class="pos-empty">Henüz ürün okutulmadı.</div></div>
   </section>
   <div class="pos-checkout-slot">
@@ -160,7 +161,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/barkod-kamera.js?v=2"></script>
 <script src="assets/barkod-read-json.js?v=1"></script>
 <script src="assets/barkod-canli-sepet.js?v=3"></script>
-<script src="assets/barkod-satis.js?v=35"></script>
+<script src="assets/barkod-satis.js?v=36"></script>
 <script src="assets/barkod-canli-arama.js?v=9"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=2"></script>

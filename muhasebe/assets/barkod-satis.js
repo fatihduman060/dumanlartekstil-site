@@ -65,6 +65,21 @@
   function esc(s){return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c];});}
   function productName(p){var name=String((p&&p.name)||'').trim(),variant=String((p&&p.variant_name)||'').trim();return variant?name+' - '+variant:name;}
   var cartStorageKey='dumanlar-pos-cart-v1';
+  var cartExitGuardActive=false,cartProtection=root.querySelector('[data-pos-cart-protection]');
+  function guardCartExit(event){
+    persistCart();
+    event.preventDefault();
+    event.returnValue='';
+  }
+  function updateCartProtection(){
+    var active=cart.length>0;
+    if(active&&!cartExitGuardActive)window.addEventListener('beforeunload',guardCartExit);
+    else if(!active&&cartExitGuardActive)window.removeEventListener('beforeunload',guardCartExit);
+    cartExitGuardActive=active;
+    if(cartProtection)cartProtection.hidden=!active;
+  }
+  // Mobile browsers may suspend a page without firing beforeunload.
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')persistCart();});
   function persistedItem(item){
     if(!item)return null;
     var id=Number(item.id),quantity=Number(item.quantity),price=Number(item.sale_price);
@@ -91,6 +106,7 @@
         discount_amount:Number(discount.value||0),
         note:noteInput?String(noteInput.value||''):'',
         source_token:saleRequestToken||'',
+        last_added_product_id:lastAddedProductId,
         saved_at:Date.now()
       }));
     }catch(ignore){}
@@ -102,6 +118,8 @@
       var data=JSON.parse(raw),items=Array.isArray(data.items)?data.items.map(persistedItem).filter(Boolean):[];
       if(!items.length){sessionStorage.removeItem(cartStorageKey);return;}
       cart=items;
+      var savedLastId=Number(data.last_added_product_id);
+      lastAddedProductId=items.some(function(item){return Number(item.id)===savedLastId;})?savedLastId:Number(items[items.length-1].id);
       if(discount)discount.value=String(Math.max(0,Number(data.discount_amount||0)));
       if(noteInput)noteInput.value=String(data.note||'').slice(0,160);
       saleRequestToken=/^[a-zA-Z0-9-]{20,100}$/.test(String(data.source_token||''))?String(data.source_token):'';
@@ -121,7 +139,7 @@
     root.dispatchEvent(new CustomEvent('pos:cart-changed',{detail:{items:cart.map(function(x){return {product_id:x.id,quantity:x.quantity};}),discount_amount:Number(discount.value||0)}}));
     if(!cart.length)cartBox.innerHTML='<div class="pos-empty">Henüz ürün okutulmadı.</div>';
     else cartBox.innerHTML=cart.map(function(x,i){var latest=Number(x.id)===Number(lastAddedProductId);return '<div class="pos-cart-row'+(latest?' pos-cart-row-latest':'')+'"'+(latest?' data-pos-last-added="true"':'')+'><div class="pos-cart-product"><strong>'+esc(productName(x))+'</strong><small>'+esc(x.barcode)+'</small></div><div class="pos-qty"><button type="button" data-minus="'+i+'">−</button><input type="number" min="0.01" step="1" value="'+x.quantity+'" data-qty="'+i+'"><button type="button" data-plus="'+i+'">+</button></div><span class="pos-unit">Adet</span><span class="pos-unit-price">'+money(x.sale_price)+'</span><span class="pos-line-discount">—</span><span class="pos-line-tax">%'+Number(x.vat_rate||0)+'</span><strong class="pos-line-total">'+money(x.quantity*Number(x.sale_price))+'</strong><button type="button" class="pos-remove" data-remove="'+i+'">×</button></div>';}).join('');
-    root.querySelector('[data-pos-total]').textContent=money(total());root.querySelector('[data-pos-count]').textContent=cart.reduce(function(s,x){return s+Number(x.quantity);},0)+' ürün';persistCart();
+    root.querySelector('[data-pos-total]').textContent=money(total());root.querySelector('[data-pos-count]').textContent=cart.reduce(function(s,x){return s+Number(x.quantity);},0)+' ürün';persistCart();updateCartProtection();
   }
   function revealLastAdded(){setTimeout(function(){var row=cartBox.querySelector('[data-pos-last-added]');if(row)row.scrollIntoView({behavior:'smooth',block:'center'});},80);}
   function add(p){invalidateSaleRequest();var old=cart.find(function(x){return Number(x.id)===Number(p.id);});if(old){old.quantity+=1;old.single_decrement_used=false;}else{p.quantity=1;p.single_decrement_used=false;cart.push(p);}lastAddedProductId=Number(p.id);render();scan.value='';lastLookup='';scan.focus({preventScroll:true});status.textContent=productName(p)+' sepete eklendi.';revealLastAdded();}
