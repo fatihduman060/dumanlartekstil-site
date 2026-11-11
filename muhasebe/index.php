@@ -64,6 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/muhasebe.css?v=50" />
   <link rel="stylesheet" href="assets/mobil-panel.css?v=<?php echo (int)(@filemtime(__DIR__ . '/assets/mobil-panel.css') ?: 1); ?>" />
+  <style>
+    .login-form .password-field { position: relative; }
+    .login-form .password-field input { width: 100%; box-sizing: border-box; padding-right: 78px; }
+    .login-form .password-field .password-toggle { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); width: auto; min-height: 38px; margin: 0; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #24533a; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .login-form .password-field .password-toggle[hidden] { display: none; }
+    .login-form .password-field .password-toggle:focus-visible { outline: 2px solid #24533a; outline-offset: 1px; }
+  </style>
 </head>
 <body class="login-page">
   <main class="login-shell">
@@ -81,7 +88,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label for="username">Kullanıcı adı</label>
         <input id="username" name="username" type="text" autocomplete="username" required autofocus />
         <label for="password">Şifre</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <div class="password-field">
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+          <button type="button" class="password-toggle" aria-label="Şifreyi göster" aria-pressed="false" aria-controls="password" hidden>Göster</button>
+        </div>
         <label class="remember-device" for="remember_device">
           <input id="remember_device" name="remember_device" type="checkbox" value="1" />
           <span><strong>Bu cihazda oturumu hatırla</strong><small>PWA’da güvenli oturum 30 gün etkin kalır. Çıkış düğmesi oturumu hemen kapatır.</small></span>
@@ -93,6 +103,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </main>
   <script>
   (function () {
+    var password = document.getElementById('password');
+    var toggle = document.querySelector('.password-toggle');
+    if (password && toggle) {
+      toggle.hidden = false;
+      toggle.addEventListener('click', function () {
+        var visible = password.type === 'password';
+        password.type = visible ? 'text' : 'password';
+        toggle.textContent = visible ? 'Gizle' : 'Göster';
+        toggle.setAttribute('aria-label', visible ? 'Şifreyi gizle' : 'Şifreyi göster');
+        toggle.setAttribute('aria-pressed', visible ? 'true' : 'false');
+      });
+    }
     var standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
     if (window.navigator.standalone === true) standalone = true;
     document.documentElement.classList.toggle('pwa-standalone', standalone);
