@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/fatura-numara-lib.php';
 require_login();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -28,6 +29,9 @@ try {
 
         db()->beginTransaction();
         try {
+            if ($direction === 'giden' && ($duplicateId = giden_fatura_numara_kayit_id($no, $invoiceId)) > 0) {
+                throw new RuntimeException('Bu giden fatura numarası daha önce kullanılmış (Fatura #' . $duplicateId . ').');
+            }
             db()->prepare('UPDATE invoices SET direction=?, updated_at=? WHERE id=?')
                 ->execute([$direction, now(), $invoiceId]);
 

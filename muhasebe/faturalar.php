@@ -2,6 +2,8 @@
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/stok-lib.php';
 require_once __DIR__ . '/depo-cikis-lib.php';
+require_once __DIR__ . '/fatura-numara-lib.php';
+require_once __DIR__ . '/fatura-red-lib.php';
 require_login();
 stok_db_ensure();
 
@@ -32,6 +34,8 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoices (
     cancelled_at TEXT,
     cancelled_by INTEGER,
     cancel_reason TEXT,
+    rejected_at TEXT,
+    rejected_by INTEGER,
     created_by INTEGER,
     created_at TEXT,
     updated_at TEXT
@@ -40,6 +44,8 @@ ensure_column(db(), 'invoices', 'issuer_name', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_source', 'TEXT');
 ensure_column(db(), 'invoices', 'issuer_confidence', 'INTEGER NOT NULL DEFAULT 0');
 ensure_column(db(), 'invoices', 'issuer_parser_version', 'TEXT');
+ensure_column(db(), 'invoices', 'rejected_at', 'TEXT');
+ensure_column(db(), 'invoices', 'rejected_by', 'INTEGER');
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(invoice_date)");
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_cari ON invoices(cari_id)");
 db()->exec("CREATE INDEX IF NOT EXISTS idx_invoices_movement ON invoices(cari_movement_id)");
@@ -232,10 +238,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $oldRow = $id > 0 ? fatura_getir($id) : null;
 
         // Aynı faturanın ikinci kez kaydedilip cariye iki defa işlenmesini engelle.
-        $duplicateSql = "SELECT id,invoice_no,cari_id,issuer_name FROM invoices
-            WHERE id<>? AND direction=? AND COALESCE(is_cancelled,0)=0 AND substr(invoice_date,1,4)=?";
-        $duplicateParams = [$id, $direction, substr($invoiceDate, 0, 4)];
-        if ($direction === 'gelen') {
+        if ($direction === 'giden') {
+            $duplicateId = giden_fatura_numara_kayit_id($invoiceNo, $id);
+            if ($duplicateId > 0) {
+                flash('error', 'Bu giden fatura numarası daha önce kullanılmış (Fatura #' . $duplicateId . '). Red veya iptal edilen numara yeniden kullanılamaz.');
+                redirect('faturalar.php' . ($id > 0 ? '?edit=' . $id : ''));
+            }
+        } else {
+            $duplicateSql = "SELECT id,invoice_no,cari_id,issuer_name FROM invoices
+                WHERE id<>? AND direction=? AND COALESCE(is_cancelled,0)=0 AND substr(invoice_date,1,4)=?";
+            $duplicateParams = [$id, $direction, substr($invoiceDate, 0, 4)];
             if ($cariId) {
                 $duplicateSql .= " AND cari_id=?";
                 $duplicateParams[] = $cariId;
@@ -245,14 +257,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $duplicateSql .= " AND 1=0";
             }
-        }
-        $dupStmt = db()->prepare($duplicateSql);
-        $dupStmt->execute($duplicateParams);
-        foreach ($dupStmt->fetchAll() ?: [] as $dupRow) {
-            $dupKey = preg_replace('/[^A-Z0-9]/', '', strtoupper((string)($dupRow['invoice_no'] ?? '')));
-            if ($dupKey !== '' && $dupKey === $invoiceNoKey) {
-                flash('error', 'Aynı fatura numarası aktif kayıtlarda zaten var (Fatura #' . (int)$dupRow['id'] . '). İkinci kayıt oluşturulmadı.');
-                redirect('faturalar.php' . ($id > 0 ? '?edit=' . $id : ''));
+            $dupStmt = db()->prepare($duplicateSql);
+            $dupStmt->execute($duplicateParams);
+            foreach ($dupStmt->fetchAll() ?: [] as $dupRow) {
+                $dupKey = preg_replace('/[^A-Z0-9]/', '', strtoupper((string)($dupRow['invoice_no'] ?? '')));
+                if ($dupKey !== '' && $dupKey === $invoiceNoKey) {
+                    flash('error', 'Aynı fatura numarası aktif kayıtlarda zaten var (Fatura #' . (int)$dupRow['id'] . '). İkinci kayıt oluşturulmadı.');
+                    redirect('faturalar.php' . ($id > 0 ? '?edit=' . $id : ''));
+                }
             }
         }
 
@@ -283,6 +295,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         satis_bag_lock();
         $oldRow = $id > 0 ? fatura_getir($id) : null;
         if ($id > 0 && (!$oldRow || !empty($oldRow['is_cancelled']))) throw new RuntimeException('Fatura bulunamadı veya iptal edilmiş.');
+        if ($direction === 'giden' && ($duplicateId = giden_fatura_numara_kayit_id($invoiceNo, $id)) > 0) {
+            throw new RuntimeException('Bu giden fatura numarası daha önce kullanılmış (Fatura #' . $duplicateId . ').');
+        }
         if ($id > 0 && $oldRow) {
             db()->prepare("UPDATE invoices SET
                 direction=?, cari_id=?, invoice_no=?, invoice_date=?, due_date=?, subtotal=?, vat_amount=?,
@@ -430,6 +445,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error',$e->getMessage());
         }
         redirect('faturalar.php');
+    }
+
+    if ($action === 'reject') {
+        try {
+            $id = (int)($_POST['id'] ?? 0);
+            $invoice = fatura_red_uygula($id);
+            flash('success', 'Fatura RED olarak işaretlendi. Yalnız bu faturanın cari alacağı kapatıldı; eski bakiye korundu. Faturanın dönem KDV ve stok etkisi kaldırıldı, numarası saklandı. Manuel KDV devri varsa ayrıca kontrol edin.');
+            redirect('faturalar.php?' . http_build_query([
+                'period'=>substr((string)$invoice['invoice_date'], 0, 7),
+                'direction'=>'giden',
+                'q'=>(string)$invoice['invoice_no'],
+                'include_cancelled'=>1,
+            ]));
+        } catch (Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect('faturalar.php');
+        }
     }
 }
 
@@ -703,7 +735,7 @@ page_header('Faturalar', 'faturalar');
         <?php foreach($invoiceTypeLabels as $key=>$label): ?><option value="<?php echo e($key); ?>"><?php echo e($label); ?></option><?php endforeach; ?>
         <option value="satis">Satış faturası</option><option value="belirsiz">Türü belirlenmemiş</option>
       </select>
-      <label class="check tiny"><input type="checkbox" name="include_cancelled" value="1" <?php echo $includeCancelled?'checked':''; ?>> İptalleri göster</label>
+      <label class="check tiny"><input type="checkbox" name="include_cancelled" value="1" <?php echo $includeCancelled?'checked':''; ?>> İptal ve RED kayıtlarını göster</label>
       <button class="btn btn-secondary" type="submit">Filtrele</button>
     </form>
     <div class="fatura-tur-auto-status is-loading" data-fatura-tur-auto-status><strong>Otomatik fatura bilgisi</strong><span>Fatura türü ve gönderen firma bilgileri hazırlanıyor…</span></div>
@@ -714,10 +746,10 @@ page_header('Faturalar', 'faturalar');
         <thead><tr><th>Tarih / No</th><th>Yön</th><th>Cari</th><th data-fatura-tur-head>Fatura türü</th><th>Matrah / KDV</th><th class="right">Toplam</th><th>Dosya</th><th>Cari durumu</th><th></th></tr></thead>
         <tbody>
           <?php if(!$rows): ?><tr><td colspan="9" class="empty">Bu dönemde <?php echo $directionFilter === 'gelen' ? 'gelen' : 'giden'; ?> fatura bulunamadı.</td></tr><?php endif; ?>
-          <?php foreach($rows as $r): $cancelled=(int)($r['is_cancelled'] ?? 0)===1; $meta=fatura_yonleri()[$r['direction']] ?? fatura_yonleri()['gelen']; ?>
+          <?php foreach($rows as $r): $cancelled=(int)($r['is_cancelled'] ?? 0)===1; $rejected=$cancelled && !empty($r['rejected_at']); $meta=fatura_yonleri()[$r['direction']] ?? fatura_yonleri()['gelen']; ?>
           <tr class="<?php echo $cancelled?'row-cancelled':''; ?>">
             <td><strong><?php echo e(tr_date($r['invoice_date'])); ?></strong><small><?php echo e($r['invoice_no'] ?: 'Fatura #' . $r['id']); ?><?php echo $r['due_date'] ? ' · Vade: ' . e(tr_date($r['due_date'])) : ''; ?></small><?php satis_bag_display('invoice',(int)$r['id']); ?></td>
-            <td><?php if ($cancelled || !can_write()): ?><?php echo $cancelled ? badge('İptal','neutral') : badge($meta['label'], $meta['tone']); ?><?php else: $targetDirection=$r['direction']==='giden'?'gelen':'giden'; ?><div class="fatura-yon-cell"><?php echo badge($meta['label'], $meta['tone']); ?><button type="button" data-fatura-yon-sec="<?php echo e($r['id']); ?>" data-current="<?php echo e($r['direction']); ?>" data-target="<?php echo e($targetDirection); ?>"><?php echo $targetDirection === 'giden' ? 'Giden yap' : 'Gelen yap'; ?></button></div><?php endif; ?></td>
+            <td><?php if ($cancelled || !can_write()): ?><?php echo $cancelled ? badge($rejected ? 'RED geldi' : 'İptal','neutral') : badge($meta['label'], $meta['tone']); ?><?php else: $targetDirection=$r['direction']==='giden'?'gelen':'giden'; ?><div class="fatura-yon-cell"><?php echo badge($meta['label'], $meta['tone']); ?><button type="button" data-fatura-yon-sec="<?php echo e($r['id']); ?>" data-current="<?php echo e($r['direction']); ?>" data-target="<?php echo e($targetDirection); ?>"><?php echo $targetDirection === 'giden' ? 'Giden yap' : 'Gelen yap'; ?></button></div><?php endif; ?></td>
             <td>
               <?php if ($r['cari_id']): ?><a href="cari-detay.php?id=<?php echo e($r['cari_id']); ?>"><?php echo e($r['cari_name']); ?></a><?php elseif (!$cancelled && can_write()): ?><button type="button" class="fatura-cari-sec-btn" data-fatura-cari-sec="<?php echo e($r['id']); ?>"><strong>Cari yok</strong><small>Seç veya otomatik oluştur</small></button><?php else: ?><span class="muted">Cari yok</span><?php endif; ?>
               <?php if ($r['direction'] === 'gelen' && trim((string)($r['issuer_name'] ?? '')) !== ''): ?>
@@ -732,7 +764,7 @@ page_header('Faturalar', 'faturalar');
             <td><?php if($r['document_path']): ?><a href="fatura-indir.php?id=<?php echo e($r['id']); ?>" target="_blank"><?php echo e($r['document_name'] ?: 'Faturayı aç'); ?></a><?php else: ?>-<?php endif; ?></td>
             <td>
               <?php if($cancelled): ?>
-                <?php echo badge('İptal','neutral'); ?>
+                <?php echo badge($rejected ? 'RED · cariden ve KDV’den çıkarıldı' : 'İptal','neutral'); ?>
               <?php elseif(fatura_muhtelif_cari_mi($r['cari_name'] ?? '')): ?>
                 <?php echo badge('Cari bakiyesi yok','neutral'); ?><small>Muhtelif kayıt</small>
               <?php elseif(!empty($r['cari_movement_id']) && (int)($r['movement_cancelled'] ?? 0)===0): ?>
@@ -752,6 +784,10 @@ page_header('Faturalar', 'faturalar');
                   <?php echo csrf_field(); ?><input type="hidden" name="action" value="cancel"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><input type="hidden" name="cancel_reason" value="">
                   <button>İptal</button>
                 </form>
+                <?php if ($r['direction'] === 'giden'): ?><form method="post" onsubmit="return confirm('VEGA’da bu faturanın geçerli RED yanıtını doğruladın mı? Bitke panelinde yalnız bu faturanın cari alacağı ve dönem KDV etkisi çıkarılır; eski bakiye ve fatura numarası korunur. Resmî e-Fatura veya beyan durumu değiştirilmez.');">
+                  <?php echo csrf_field(); ?><input type="hidden" name="action" value="reject"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>">
+                  <button type="submit">RED geldi</button>
+                </form><?php endif; ?>
               <?php endif; ?>
             </td>
           </tr>
