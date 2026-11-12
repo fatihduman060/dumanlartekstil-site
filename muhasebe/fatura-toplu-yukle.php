@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/depo-cikis-lib.php';
+require_once __DIR__ . '/fatura-numara-lib.php';
 require_login();
 
 db()->exec("CREATE TABLE IF NOT EXISTS invoices (
@@ -26,6 +27,8 @@ db()->exec("CREATE TABLE IF NOT EXISTS invoices (
     cancelled_at TEXT,
     cancelled_by INTEGER,
     cancel_reason TEXT,
+    rejected_at TEXT,
+    rejected_by INTEGER,
     created_by INTEGER,
     created_at TEXT,
     updated_at TEXT
@@ -242,6 +245,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             if ($invoiceNo !== '') {
+                if ($direction === 'giden' && giden_fatura_numara_kayit_id($invoiceNo) > 0) {
+                    $duplicates++;
+                    continue;
+                }
                 $stmt = db()->prepare("SELECT id FROM invoices
                     WHERE COALESCE(is_cancelled,0)=0 AND direction=? AND invoice_no=? AND invoice_date=?
                       AND ABS(total_amount - ?) < 0.01
@@ -259,6 +266,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             db()->beginTransaction();
             satis_bag_lock();
+            if ($direction === 'giden' && giden_fatura_numara_kayit_id($invoiceNo) > 0) {
+                throw new RuntimeException('Bu giden fatura numarası daha önce kullanılmış; red veya iptal edilen numara yeniden yüklenemez.');
+            }
             db()->prepare("INSERT INTO invoices (
                 direction, cari_id, invoice_no, invoice_date, due_date, subtotal, vat_amount, total_amount,
                 currency, description, document_path, document_name, document_mime, file_hash, import_batch,

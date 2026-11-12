@@ -2,6 +2,7 @@
 
 // Tek seferlik özel alacak temizliği; alınan/verilen çekler ve bağlı hareketler korunur.
 require_once __DIR__ . '/ozel-alacak-sifirla-v1.php';
+require_once __DIR__ . '/fatura-numara-lib.php';
 
 function fatura_no_dosya_adindan(?string $fileName): string
 {
@@ -66,7 +67,7 @@ function fatura_no_onar_mevcut_kayitlar(): void
     $tableExists = (int)db()->query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='invoices'")->fetchColumn() > 0;
     if (!$tableExists) return;
 
-    $rows = db()->query("SELECT id, invoice_no, document_name FROM invoices
+    $rows = db()->query("SELECT id, direction, invoice_no, document_name FROM invoices
         WHERE COALESCE(is_cancelled,0)=0
           AND COALESCE(document_name,'')!=''
           AND (
@@ -84,6 +85,7 @@ function fatura_no_onar_mevcut_kayitlar(): void
         if ($current !== '' && !fatura_no_vergi_no_gibi($current)) continue;
         $fromFile = fatura_no_dosya_adindan((string)($row['document_name'] ?? ''));
         if ($fromFile === '') continue;
+        if ($row['direction'] === 'giden' && giden_fatura_numara_kayit_id($fromFile, (int)$row['id']) > 0) continue;
         $stmt->execute([$fromFile, now(), (int)$row['id']]);
     }
 }

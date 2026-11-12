@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/fatura-numara-lib.php';
 require_login();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -70,6 +71,20 @@ try {
 
         db()->beginTransaction();
         try {
+            if ($direction === 'giden') {
+                $batchNumbers = [];
+                foreach ($rows as $row) {
+                    $key = giden_fatura_numara_anahtari((string)($row['invoice_no'] ?? ''));
+                    if ($key === '') continue;
+                    if (isset($batchNumbers[$key])) {
+                        throw new RuntimeException('Toplu yüklemede aynı giden fatura numarası birden fazla kayıt için kullanılmış.');
+                    }
+                    $batchNumbers[$key] = true;
+                    if (($duplicateId = giden_fatura_numara_kayit_id($key, (int)$row['id'])) > 0) {
+                        throw new RuntimeException('Bu giden fatura numarası daha önce kullanılmış (Fatura #' . $duplicateId . ').');
+                    }
+                }
+            }
             db()->prepare('UPDATE invoices SET direction=?, updated_at=? WHERE import_batch=? AND COALESCE(is_cancelled,0)=0')
                 ->execute([$direction, now(), $batch]);
 
