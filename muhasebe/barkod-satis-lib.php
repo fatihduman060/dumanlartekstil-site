@@ -212,6 +212,7 @@ function pos_db_ensure(): void
         cari_movement_id INTEGER,
         credit_entry_id INTEGER,
         source_token TEXT,
+        sale_type TEXT NOT NULL DEFAULT 'sale',
         is_cancelled INTEGER NOT NULL DEFAULT 0,
         cancelled_at TEXT,
         cancelled_by INTEGER,
@@ -231,6 +232,7 @@ function pos_db_ensure(): void
     ensure_column($pdo, 'pos_sales', 'cancelled_at', 'TEXT');
     ensure_column($pdo, 'pos_sales', 'cancelled_by', 'INTEGER');
     ensure_column($pdo, 'pos_sales', 'cancel_reason', 'TEXT');
+    ensure_column($pdo, 'pos_sales', 'sale_type', "TEXT NOT NULL DEFAULT 'sale'");
     $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_sales_source_token ON pos_sales(source_token) WHERE source_token IS NOT NULL AND TRIM(source_token)<>''");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_date ON pos_sales(sale_date, id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sales_credit_person ON pos_sales(credit_person_id)");
@@ -246,10 +248,12 @@ function pos_db_ensure(): void
         unit_price REAL NOT NULL DEFAULT 0,
         vat_rate REAL NOT NULL DEFAULT 0,
         line_total REAL NOT NULL DEFAULT 0,
+        exchange_role TEXT,
         FOREIGN KEY(sale_id) REFERENCES pos_sales(id) ON DELETE CASCADE,
         FOREIGN KEY(product_id) REFERENCES pos_products(id) ON DELETE RESTRICT
     )");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_sale_items_sale ON pos_sale_items(sale_id)");
+    ensure_column($pdo, 'pos_sale_items', 'exchange_role', 'TEXT');
 
     // ÖNEMLİ: offer_products artık pos_products içine aktarılmaz.
     // Barkodlu Satış kendi ürün havuzunu kullanır.
