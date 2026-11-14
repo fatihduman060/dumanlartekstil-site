@@ -76,6 +76,8 @@
   var cartExitGuardActive=false,cartProtection=root.querySelector('[data-pos-cart-protection]');
   function guardCartExit(event){
     markCartExitAttempt();
+    status.textContent='Sepeti kapatmadınız. Satışı tamamlayın veya sepeti temizleyin.';
+    speakStatus('Sepeti kapatmadınız.');
     event.preventDefault();
     event.returnValue='';
   }
