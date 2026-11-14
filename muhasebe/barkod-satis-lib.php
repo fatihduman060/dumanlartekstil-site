@@ -521,7 +521,7 @@ function pos_sales_on_date(string $date): array
     return $sales;
 }
 
-/** Restricted history: sale date for cancelled receipts, event date for cart removals. */
+/** Restricted history: sale date for receipts, event date for cart removals. */
 function pos_history_audit(string $action, string $date): array
 {
     if (!pos_can_delete_sales()) throw new RuntimeException('Bu kayıtları yalnızca Fatih kullanıcısı görebilir.');
@@ -549,6 +549,25 @@ function pos_history_audit(string $action, string $date): array
             $sale['card_amount'] = $paymentAmounts['card'];
             $sale['credit_amount'] = $paymentAmounts['credit'];
         }
+        unset($sale);
+        return $sales;
+    }
+    if ($action === 'discounted_sales') {
+        $stmt = db()->prepare("SELECT s.*, u.display_name AS user_name
+            FROM pos_sales s LEFT JOIN users u ON u.id=s.created_by
+            WHERE s.is_cancelled=0 AND s.sale_date=? AND s.discount_amount>0.004
+                AND COALESCE(s.sale_type,'sale')='sale'
+            ORDER BY s.sale_time DESC,s.id DESC");
+        $stmt->execute([$date]);
+        $sales = $stmt->fetchAll() ?: [];
+        if (!$sales) return [];
+        $items = db()->prepare("SELECT i.* FROM pos_sale_items i JOIN pos_sales s ON s.id=i.sale_id
+            WHERE s.is_cancelled=0 AND s.sale_date=? AND s.discount_amount>0.004
+                AND COALESCE(s.sale_type,'sale')='sale' ORDER BY i.id ASC");
+        $items->execute([$date]);
+        $bySale = [];
+        foreach ($items->fetchAll() ?: [] as $item) $bySale[(int)$item['sale_id']][] = $item;
+        foreach ($sales as &$sale) $sale['items'] = $bySale[(int)$sale['id']] ?? [];
         unset($sale);
         return $sales;
     }
