@@ -1,11 +1,8 @@
 (function(){
   var root=document.querySelector('[data-pos-root]');if(!root)return;
-  var terminalKey='dumanlar-pos-terminal-v1',terminal='',snapshot=null,timer=null,busy=false,dirty=false;
-  try{terminal=sessionStorage.getItem(terminalKey)||'';}catch(ignore){}
-  if(!/^[a-f0-9-]{20,64}$/i.test(terminal)){
-    terminal=crypto.randomUUID();
-    try{sessionStorage.setItem(terminalKey,terminal);}catch(ignore){}
-  }
+  // A fresh page is a fresh till session; the previous cart must remain available
+  // for abandonment reporting instead of being overwritten by an empty page.
+  var terminal=crypto.randomUUID(),snapshot=null,timer=null,busy=false,dirty=false;
   root.dataset.posTerminalId=terminal;
   function schedule(){dirty=true;clearTimeout(timer);timer=setTimeout(send,250);}
   function send(){
