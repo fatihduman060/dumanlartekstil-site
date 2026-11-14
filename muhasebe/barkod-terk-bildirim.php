@@ -31,11 +31,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $email = pos_abandoned_alert_recipient();
         if ($email === '') {
             flash('error', 'Önce bildirim adresini kaydedin.');
-        } elseif (pos_abandoned_send_mail($email, 'Bitke terk edilen sepet bildirimi testi',
-            "Bu bir test mesajıdır. Terk edilen sepet bildirimi bu adrese gönderilecektir.\n")) {
-            flash('success', 'Test mesajı posta sunucusuna iletildi. Gelen kutusunu ve spam klasörünü kontrol edin.');
         } else {
-            flash('error', 'Posta sunucusu test mesajını kabul etmedi. Hosting mail ayarlarını kontrol edin.');
+            try {
+                if (pos_abandoned_send_mail($email, 'Bitke terk edilen sepet bildirimi testi',
+                    "Bu bir test mesajıdır. Terk edilen sepet bildirimi bu adrese gönderilecektir.\n")) {
+                    flash('success', 'Test mesajı posta sunucusuna iletildi. Gelen kutusunu ve spam klasörünü kontrol edin.');
+                } else {
+                    flash('error', 'Posta sunucusu test mesajını kabul etmedi. Hosting mail ayarlarını kontrol edin.');
+                }
+            } catch (Throwable $e) {
+                error_log('Bitke terk edilen sepet test mail hatası: ' . $e->getMessage());
+                flash('error', 'Test maili gönderilemedi: ' . $e->getMessage());
+            }
         }
     }
     redirect('barkod-terk-bildirim.php');
