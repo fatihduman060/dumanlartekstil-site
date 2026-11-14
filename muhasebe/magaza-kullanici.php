@@ -203,6 +203,8 @@ if (is_logged_in() && is_store_sales_user()) {
 
     $allowedStoreScripts = [
         'barkod-satis.php',
+        'barkod-degisim.php',
+        'barkod-degisim-api.php',
         'barkod-urunler.php',
         'barkod-satis-api.php',
         'barkod-satis-arama.php',
@@ -231,6 +233,8 @@ if (is_logged_in() && is_store_sales_user()) {
 if (is_logged_in() && is_warehouse_user()) {
     $allowedWarehouseScripts = [
         'barkod-satis.php',
+        'barkod-degisim.php',
+        'barkod-degisim-api.php',
         'barkod-urunler.php',
         'barkod-satis-api.php',
         'barkod-satis-arama.php',
