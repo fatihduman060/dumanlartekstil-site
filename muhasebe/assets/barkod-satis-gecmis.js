@@ -188,10 +188,11 @@
       var closeAttempt=cart.reason==='close_attempt';
       return '<details class="pos-audit-record" data-abandoned-id="'+esc(cart.id||'')+'"><summary><strong>Terk edilen sepet · Kasa '+esc(cart.terminal||'-')+'</strong> · '+money(cart.grand_total)+'<small>'+esc(cart.user_name||'Kullanıcı kaydı yok')+' · '+(closeAttempt?'İlk kapatma denemesi: ':'Son bağlantı: '+esc(cart.last_seen_at||'-')+' · Arşiv: ')+esc(cart.abandoned_at||'-')+'</small></summary>'
         +'<p><strong>Durum:</strong> '+(closeAttempt?'Sepet kapatılmaya çalışıldı. Sonradan yeniden açılsa da ilk denemenin kaydı korunur.':'Kasa 5 dakika boyunca yeniden bağlanmadığı için sepet kalıcı arşive alındı.')+'</p>'
+        +(cart.email_status?'<p><strong>Mail:</strong> '+(cart.email_status==='sent'?'Gönderildi':'Gönderim bekliyor')+'</p>':'')
         +'<ul>'+(details||'<li>Ürün ayrıntısı bulunamadı.</li>')+'</ul>'
         +'<p>Ara toplam: '+money(cart.subtotal)+' · İndirim: '+money(cart.discount_amount)+' · Toplam: '+money(cart.grand_total)+'</p></details>';
     }).join('');
-    section.innerHTML=viewTabs()+'<label class="pos-history-date">Kapatma / arşiv tarihi <input type="date" data-history-date value="'+esc(selectedDate)+'"></label>'
+    section.innerHTML=viewTabs()+'<p class="pos-history-message"><a href="barkod-terk-bildirim.php">Mail bildirim ayarları</a></p><label class="pos-history-date">Kapatma / arşiv tarihi <input type="date" data-history-date value="'+esc(selectedDate)+'"></label>'
       +'<div class="pos-history-message" role="status">'+(loading?'Kayıtlar yükleniyor…':loadError?esc(loadError)+' <button type="button" data-history-retry>Tekrar dene</button>':sales.length+' kayıt')+'</div>'
       +(!loading&&!loadError?(rows||'<p class="pos-history-message">Seçilen gün için terk edilmiş sepet yok.</p>'):'');
   }
