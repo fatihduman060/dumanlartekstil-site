@@ -67,7 +67,7 @@
   var legacyCartStorageKey='dumanlar-pos-cart-v1';
   var cartStorageKey='dumanlar-pos-cart-v2-u'+String(root.dataset.posUserId||'0');
   var durableCartStoragePrefix='dumanlar-pos-saved-cart-v1-u'+String(root.dataset.posUserId||'0')+'-';
-  var cartId=newCartId(),lastCartSavedAt=0,durableCartSaved=false;
+  var cartId=newCartId(),lastCartSavedAt=0,durableCartSaved=false,firstExitAttemptAt='';
   function newCartId(){
     if(window.crypto&&typeof window.crypto.randomUUID==='function')return window.crypto.randomUUID();
     return 'pos-'+Date.now()+'-'+Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2);
@@ -75,9 +75,25 @@
   function validCartId(value){return /^[a-zA-Z0-9-]{20,100}$/.test(String(value||''));}
   var cartExitGuardActive=false,cartProtection=root.querySelector('[data-pos-cart-protection]');
   function guardCartExit(event){
-    persistCart(false);
+    markCartExitAttempt();
     event.preventDefault();
     event.returnValue='';
+  }
+  function postAbandonedCart(preferBeacon){
+    if(!cart.length||!firstExitAttemptAt||!root.dataset.posTerminalId)return;
+    var body=new FormData();body.set('action','mark_abandoned_cart');body.set('csrf_token',csrf);
+    body.set('terminal_id',root.dataset.posTerminalId);body.set('cart_id',cartId);
+    body.set('first_exit_attempt_at',firstExitAttemptAt);
+    body.set('items_json',JSON.stringify(cart.map(function(item){return {product_id:item.id,quantity:item.quantity};})));
+    body.set('discount_amount',discount.value||0);
+    if(preferBeacon&&navigator.sendBeacon){try{if(navigator.sendBeacon(api,body))return;}catch(ignore){}}
+    fetch(api,{method:'POST',body:body,credentials:'same-origin',cache:'no-store',keepalive:!!preferBeacon}).catch(function(){});
+  }
+  function markCartExitAttempt(){
+    if(!cart.length)return;
+    if(!firstExitAttemptAt)firstExitAttemptAt=new Date().toISOString();
+    persistCart(false,true);
+    postAbandonedCart(true);
   }
   function updateCartProtection(){
     var active=cart.length>0;
@@ -88,6 +104,8 @@
   }
   // Mobile browsers may suspend a page without firing beforeunload.
   document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')persistCart(false);});
+  window.addEventListener('pagehide',markCartExitAttempt);
+  window.addEventListener('online',function(){if(firstExitAttemptAt)postAbandonedCart(false);});
   function persistedItem(item){
     if(!item)return null;
     var id=Number(item.id),quantity=Number(item.quantity),price=Number(item.sale_price);
@@ -125,6 +143,7 @@
     cartId=validCartId(data.cart_id)?String(data.cart_id):newCartId();
     lastCartSavedAt=Number.isFinite(Number(data.saved_at))?Number(data.saved_at):0;
     durableCartSaved=!!data.durable_saved;
+    firstExitAttemptAt=Number.isFinite(Date.parse(data.first_exit_attempt_at||''))?String(data.first_exit_attempt_at):'';
     var savedLastId=Number(data.last_added_product_id);
     lastAddedProductId=items.some(function(item){return Number(item.id)===savedLastId;})?savedLastId:Number(items[items.length-1].id);
     if(discount)discount.value=String(Math.max(0,Number(data.discount_amount||0)));
@@ -132,12 +151,12 @@
     saleRequestToken=validCartId(data.source_token)?String(data.source_token):cartId;
     return true;
   }
-  function persistCart(updateLatest){
+  function persistCart(updateLatest,writeMetadata){
     var shared=updateLatest!==false;
     if(!cart.length){
       try{sessionStorage.removeItem(cartStorageKey);}catch(ignore){}
       if(shared){try{localStorage.removeItem(durableCartStoragePrefix+cartId);}catch(ignore2){}}
-      durableCartSaved=false;
+      durableCartSaved=false;firstExitAttemptAt='';
       return;
     }
     if(shared)lastCartSavedAt=Math.max(Date.now(),lastCartSavedAt+1);
@@ -147,11 +166,12 @@
       discount_amount:Number(discount.value||0),
       note:noteInput?String(noteInput.value||''):'',
       source_token:saleRequestToken||cartId,
+      first_exit_attempt_at:firstExitAttemptAt,
       last_added_product_id:lastAddedProductId,
       saved_at:lastCartSavedAt,
       durable_saved:durableCartSaved
     };
-    if(shared){
+    if(shared||writeMetadata===true){
       try{snapshot.durable_saved=true;localStorage.setItem(durableCartStoragePrefix+cartId,JSON.stringify(snapshot));durableCartSaved=true;}
       catch(ignore3){durableCartSaved=false;}
     }
@@ -172,20 +192,24 @@
     if(applyStoredCart(sessionCart)||applyStoredCart(legacyCart)){
       if(legacyCart){try{sessionStorage.removeItem(legacyCartStorageKey);}catch(ignore2){}}
       if(!ownDurable||Number(ownDurable.saved_at||0)<lastCartSavedAt)persistCart();
-      status.textContent='Önceki sepet geri yüklendi.';
+      status.textContent='Önceki sepet geri yüklendi.'+exitAttemptNotice();
       return;
     }
-    if(applyStoredCart(latestSavedCart()))status.textContent='Son yarım sepet geri yüklendi.';
+    if(applyStoredCart(latestSavedCart()))status.textContent='Son yarım sepet geri yüklendi.'+exitAttemptNotice();
   }
+  function exitAttemptNotice(){return firstExitAttemptAt?' İlk kapatma denemesi: '+new Date(firstExitAttemptAt).toLocaleString('tr-TR')+'.':'';}
   function clearRestoredCart(){
     cart=[];lastAddedProductId=null;saleRequestToken='';discount.value=0;if(noteInput)noteInput.value='';
-    render(false);cartId=newCartId();lastCartSavedAt=0;durableCartSaved=false;
+    render(false);cartId=newCartId();lastCartSavedAt=0;durableCartSaved=false;firstExitAttemptAt='';
     status.textContent='Bu sepet başka sekmede kapatıldı.';
   }
   window.addEventListener('storage',function(event){
     if(event.key!==durableCartStoragePrefix+cartId||!cart.length)return;
     if(event.newValue===null){clearRestoredCart();return;}
     var updated;try{updated=JSON.parse(event.newValue);}catch(ignore3){return;}
+    if(updated&&updated.cart_id===cartId&&!firstExitAttemptAt&&Number.isFinite(Date.parse(updated.first_exit_attempt_at||''))){
+      firstExitAttemptAt=String(updated.first_exit_attempt_at);persistCart(false);
+    }
     if(updated&&updated.cart_id===cartId&&Number(updated.saved_at||0)>lastCartSavedAt&&applyStoredCart(updated)){
       render(false);
     }
@@ -199,7 +223,7 @@
   }
   function total(){var raw=cart.reduce(function(s,x){return s+x.quantity*Number(x.sale_price);},0);return Math.max(0,raw-Number(discount.value||0));}
   function render(updateLatest){
-    root.dispatchEvent(new CustomEvent('pos:cart-changed',{detail:{items:cart.map(function(x){return {product_id:x.id,quantity:x.quantity};}),discount_amount:Number(discount.value||0)}}));
+    root.dispatchEvent(new CustomEvent('pos:cart-changed',{detail:{cart_id:cartId,items:cart.map(function(x){return {product_id:x.id,quantity:x.quantity};}),discount_amount:Number(discount.value||0)}}));
     if(!cart.length)cartBox.innerHTML='<div class="pos-empty">Henüz ürün okutulmadı.</div>';
     else cartBox.innerHTML=cart.map(function(x,i){var latest=Number(x.id)===Number(lastAddedProductId);return '<div class="pos-cart-row'+(latest?' pos-cart-row-latest':'')+'"'+(latest?' data-pos-last-added="true"':'')+'><div class="pos-cart-product"><strong>'+esc(productName(x))+'</strong><small>'+esc(x.barcode)+'</small></div><div class="pos-qty"><button type="button" data-minus="'+i+'">−</button><input type="number" min="0.01" step="1" value="'+x.quantity+'" data-qty="'+i+'"><button type="button" data-plus="'+i+'">+</button></div><span class="pos-unit">Adet</span><span class="pos-unit-price">'+money(x.sale_price)+'</span><span class="pos-line-discount">—</span><span class="pos-line-tax">%'+Number(x.vat_rate||0)+'</span><strong class="pos-line-total">'+money(x.quantity*Number(x.sale_price))+'</strong><button type="button" class="pos-remove" data-remove="'+i+'">×</button></div>';}).join('');
     root.querySelector('[data-pos-total]').textContent=money(total());root.querySelector('[data-pos-count]').textContent=cart.reduce(function(s,x){return s+Number(x.quantity);},0)+' ürün';persistCart(updateLatest);updateCartProtection();
@@ -414,5 +438,5 @@ productManager.querySelectorAll('[data-product-bulk-save]').forEach(function(btn
     });});
   }
   function updateClock(){var d=new Date(),el=root.querySelector('[data-pos-clock]');if(el)el.textContent=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});}
-  updateClock();setInterval(updateClock,1000);setExtraBarcodes('');bindProductRows();restorePersistedCart();render(false);setTimeout(function(){scan.focus();},250);
+  updateClock();setInterval(updateClock,1000);setExtraBarcodes('');bindProductRows();restorePersistedCart();render(false);if(firstExitAttemptAt)postAbandonedCart(false);setTimeout(function(){scan.focus();},250);
 })();
