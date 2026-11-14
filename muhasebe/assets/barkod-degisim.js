@@ -19,7 +19,7 @@
   function esc(value){return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[ch];});}
   function name(product){return String(product.name||'')+(product.variant_name?' - '+product.variant_name:'');}
   function sum(role){return Math.round(lists[role].reduce(function(total,row){return total+Number(row.sale_price)*row.quantity;},0)*100)/100;}
-  function token(){if(sourceToken)return sourceToken;sourceToken=window.crypto&&crypto.randomUUID?crypto.randomUUID():'exchange-'+Date.now()+'-'+Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2);save();return sourceToken;}
+  function token(){if(sourceToken)return sourceToken;sourceToken=window.crypto&&typeof window.crypto.randomUUID==='function'?window.crypto.randomUUID():'exchange-'+Date.now()+'-'+Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2);save();return sourceToken;}
   function save(){try{sessionStorage.setItem(key,JSON.stringify({lists:lists,step:step,sourceToken:sourceToken}));}catch(ignore){}}
   function restore(){try{var data=JSON.parse(sessionStorage.getItem(key)||'null');if(!data||!data.lists)return;['returned','issued'].forEach(function(role){lists[role]=(Array.isArray(data.lists[role])?data.lists[role]:[]).filter(function(row){return Number.isInteger(Number(row.id))&&Number.isInteger(Number(row.quantity))&&row.quantity>0&&Number(row.sale_price)>0;}).map(function(row){return {id:Number(row.id),name:String(row.name||''),variant_name:String(row.variant_name||''),barcode:String(row.barcode||''),sale_price:Number(row.sale_price),quantity:Number(row.quantity)};});});step=data.step==='issued'&&lists.returned.length?'issued':'returned';sourceToken=/^[a-zA-Z0-9-]{20,100}$/.test(data.sourceToken||'')?data.sourceToken:'';}catch(ignore){sessionStorage.removeItem(key);}}
   function invalidate(){sourceToken='';root.querySelectorAll('input[name="exchange_payment"]').forEach(function(input){input.checked=false;});save();}
@@ -41,7 +41,7 @@
     root.querySelector('[data-exchange-difference]').textContent=money(difference);
     root.querySelector('.exchange-difference').dataset.shortfall=difference<0?'true':'false';
     payment.hidden=difference<=0;
-    complete.disabled=busy||!lists.returned.length||!lists.issued.length||difference<0||(difference>0&&!root.querySelector('input[name="exchange_payment"]:checked'));
+    complete.disabled=busy||!lists.returned.length||!lists.issued.length||difference<0;
     if(difference<0&&lists.issued.length)status.textContent='Yeni ürünlere en az '+money(-difference)+' tutarında ürün ekleyin. Para iadesi yapılmaz.';
     else if(status.textContent.indexOf('Para iadesi yapılmaz.')!==-1)status.textContent='';
     save();
@@ -145,7 +145,13 @@
     if(complete.disabled||busy)return;
     var difference=Math.round((sum('issued')-sum('returned'))*100)/100;
     var selected=root.querySelector('input[name="exchange_payment"]:checked');
-    if(difference<0||difference>0&&!selected)return;
+    if(difference<0)return;
+    if(difference>0&&!selected){
+      status.textContent='Alınacak fark için Nakit veya Kart seçin.';
+      var firstPayment=root.querySelector('input[name="exchange_payment"]');
+      if(firstPayment)firstPayment.focus();
+      return;
+    }
     busy=true;render();complete.textContent='Değişim kaydediliyor…';status.textContent='';
     var receipt=window.open('about:blank','_blank','width=430,height=760');
     var body=new FormData();body.set('action','complete_exchange');body.set('csrf_token',root.dataset.csrf);body.set('source_token',token());body.set('payment_method',difference===0?'none':selected.value);
