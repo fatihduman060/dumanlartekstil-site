@@ -581,12 +581,17 @@ function pos_live_ensure(): void
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         terminal_id TEXT NOT NULL,
+        cart_id TEXT,
         snapshot TEXT NOT NULL,
         last_seen_at INTEGER NOT NULL,
         abandoned_at TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT 'stale',
         UNIQUE(user_id,terminal_id,last_seen_at),
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT
     )");
+    ensure_column($pdo, 'pos_abandoned_carts', 'cart_id', 'TEXT');
+    ensure_column($pdo, 'pos_abandoned_carts', 'reason', "TEXT NOT NULL DEFAULT 'stale'");
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_abandoned_cart_id ON pos_abandoned_carts(user_id,cart_id) WHERE cart_id IS NOT NULL AND cart_id<>''");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_abandoned_carts_date ON pos_abandoned_carts(abandoned_at,id)");
 }
 
@@ -597,7 +602,7 @@ function pos_archive_stale_live_carts(int $staleSeconds = 300, ?int $excludeUser
     $cutoff = time() - max(60, $staleSeconds);
     $stmt = $pdo->prepare("SELECT user_id,terminal_id,snapshot,updated_at FROM pos_live_carts WHERE updated_at<? ORDER BY updated_at ASC");
     $stmt->execute([$cutoff]);
-    $insert = $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,snapshot,last_seen_at,abandoned_at) VALUES(?,?,?,?,?)");
+    $insert = $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,cart_id,snapshot,last_seen_at,abandoned_at,reason) VALUES(?,?,?,?,?,?,'stale')");
     $delete = $pdo->prepare("DELETE FROM pos_live_carts WHERE user_id=? AND terminal_id=? AND updated_at=?");
     foreach ($stmt->fetchAll() ?: [] as $row) {
         if ($excludeUserId !== null && $excludeTerminalId !== null
@@ -612,6 +617,7 @@ function pos_archive_stale_live_carts(int $staleSeconds = 300, ?int $excludeUser
             $insert->execute([
                 (int)$row['user_id'],
                 (string)$row['terminal_id'],
+                (string)($snapshot['cart_id'] ?? '') ?: null,
                 (string)$row['snapshot'],
                 (int)$row['updated_at'],
                 date('Y-m-d H:i:s', (int)$row['updated_at'] + max(60, $staleSeconds)),
@@ -643,6 +649,7 @@ function pos_abandoned_carts(string $date): array
         $snapshot['terminal'] = substr((string)$row['terminal_id'], 0, 8);
         $snapshot['last_seen_at'] = date('d.m.Y H:i:s', (int)$row['last_seen_at']);
         $snapshot['abandoned_at'] = (string)$row['abandoned_at'];
+        $snapshot['reason'] = (string)($row['reason'] ?? 'stale');
         $rows[] = $snapshot;
     }
     return $rows;
@@ -661,10 +668,8 @@ function pos_live_clear_terminal(string $terminal, ?int $userId = null): void
     }
 }
 
-function pos_live_save(array $input): void
+function pos_cart_snapshot(array $input): array
 {
-    $terminal = (string)($input['terminal_id'] ?? '');
-    if (!preg_match('/^[a-f0-9-]{20,64}$/D', $terminal)) throw new InvalidArgumentException('Geçersiz kasa kimliği.');
     $raw = json_decode((string)($input['items_json'] ?? ''), true);
     if (!is_array($raw) || count($raw) > 500) throw new InvalidArgumentException('Geçersiz sepet.');
     $items = []; $subtotal = 0;
@@ -681,8 +686,44 @@ function pos_live_save(array $input): void
             'barcode'=>$product['barcode'],'quantity'=>$quantity,'unit_price'=>(float)$product['sale_price'],'line_total'=>$line];
     }
     $discount = min($subtotal, max(0, (float)($input['discount_amount'] ?? 0)));
+    $cartId = trim((string)($input['cart_id'] ?? ''));
+    if ($cartId !== '' && !preg_match('/^[a-zA-Z0-9-]{20,100}$/D', $cartId)) throw new InvalidArgumentException('Geçersiz sepet kimliği.');
     $snapshot = ['items'=>$items,'subtotal'=>$subtotal,'discount_amount'=>$discount,'grand_total'=>round($subtotal-$discount,2),
-        'state'=>!$items && ($input['state'] ?? '') === 'completed' ? 'completed' : 'open'];
+        'state'=>!$items && ($input['state'] ?? '') === 'completed' ? 'completed' : 'open','cart_id'=>$cartId];
+    return $snapshot;
+}
+
+function pos_cart_mark_abandoned(array $input): void
+{
+    $terminal = (string)($input['terminal_id'] ?? '');
+    if (!preg_match('/^[a-f0-9-]{20,64}$/D', $terminal)) throw new InvalidArgumentException('Geçersiz kasa kimliği.');
+    $snapshot = pos_cart_snapshot($input);
+    if (!$snapshot['items'] || $snapshot['cart_id'] === '') throw new InvalidArgumentException('Terk edilen sepet bilgisi eksik.');
+    $attempted = strtotime((string)($input['first_exit_attempt_at'] ?? ''));
+    $now = time();
+    if ($attempted === false || $attempted < $now - 90 * 86400 || $attempted > $now + 300) $attempted = $now;
+    $pdo = db();
+    pos_live_ensure();
+    $userId = (int)(current_user()['id'] ?? 0);
+    $encoded = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,cart_id,snapshot,last_seen_at,abandoned_at,reason)
+        VALUES(?,?,?,?,?,?,'close_attempt')")
+        ->execute([$userId,$terminal,$snapshot['cart_id'],$encoded,$attempted,date('Y-m-d H:i:s',$attempted)]);
+    // Eski bağlantı kaydı bu sepeti önce arşivlediyse ilk kapatma denemesine çevir.
+    $pdo->prepare("UPDATE pos_abandoned_carts SET snapshot=?,abandoned_at=?,reason='close_attempt'
+        WHERE user_id=? AND cart_id=? AND reason='stale'")
+        ->execute([$encoded,date('Y-m-d H:i:s',$attempted),$userId,$snapshot['cart_id']]);
+    // Çevrimdışı kalan ilk sekme daha geç haber verirse daha erken deneme saatini koru.
+    $pdo->prepare("UPDATE pos_abandoned_carts SET snapshot=?,abandoned_at=?
+        WHERE user_id=? AND cart_id=? AND reason='close_attempt' AND abandoned_at>?")
+        ->execute([$encoded,date('Y-m-d H:i:s',$attempted),$userId,$snapshot['cart_id'],date('Y-m-d H:i:s',$attempted)]);
+}
+
+function pos_live_save(array $input): void
+{
+    $terminal = (string)($input['terminal_id'] ?? '');
+    if (!preg_match('/^[a-f0-9-]{20,64}$/D', $terminal)) throw new InvalidArgumentException('Geçersiz kasa kimliği.');
+    $snapshot = pos_cart_snapshot($input);
     pos_live_ensure();
     $userId = (int)current_user()['id'];
     pos_archive_stale_live_carts(300, $userId, $terminal);

@@ -74,6 +74,11 @@ try {
         pos_json(['ok'=>true]);
     }
 
+    if ($action === 'mark_abandoned_cart') {
+        pos_cart_mark_abandoned($_POST);
+        pos_json(['ok'=>true]);
+    }
+
     if ($action === 'save_product') {
         $id = (int)($_POST['id'] ?? 0);
         $barcode = preg_replace('/\s+/', '', trim((string)($_POST['barcode'] ?? '')));

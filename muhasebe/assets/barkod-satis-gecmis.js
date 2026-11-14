@@ -178,19 +178,20 @@
       +(!loading&&!loadError?(rows||'<p class="pos-history-message">Seçilen gün için kayıt yok.</p>'):'');
   }
   function renderLive(){
-    section.innerHTML=viewTabs()+'<p class="pos-history-message" role="status">'+(loading?'Yükleniyor…':loadError?esc(loadError):'Her 3 saniyede güncellenir. 30 saniyede bağlantı kesilmiş görünür; 5 dakika geri gelmeyen açık sepet Terk Edilen Sepetler arşivine alınır.')+'</p>'
+    section.innerHTML=viewTabs()+'<p class="pos-history-message" role="status">'+(loading?'Yükleniyor…':loadError?esc(loadError):'Her 3 saniyede güncellenir. Kapatılmaya çalışılan sepet hemen Terk Edilen Sepetler listesine alınır; bağlantısı 5 dakika kesilen diğer sepetler de arşivlenir.')+'</p>'
       +(!loading&&!loadError?sales.map(function(cart){return '<article class="pos-audit-record"><strong>'+esc(cart.user_name)+' · Kasa '+esc(cart.terminal)+'</strong><small>'+esc(cart.updated_at)+' · '+(cart.stale?'Bağlantı kesildi — son alınan sepet':cart.state==='completed'?'Satış tamamlandı':cart.items.length?'Aktif sepet':'Sepet boş')+'</small><ul>'+cart.items.map(function(item){return '<li>'+esc(item.name)+' · '+esc(item.quantity)+' × '+money(item.unit_price)+' = '+money(item.line_total)+'</li>';}).join('')+'</ul><p>İndirim: '+money(cart.discount_amount)+' · Toplam: '+money(cart.grand_total)+'</p></article>';}).join('')||'<p class="pos-history-message">Henüz bağlanan kasa yok.</p>':'');
   }
   function renderAbandoned(){
     var rows=sales.map(function(cart){
       var items=Array.isArray(cart.items)?cart.items:[];
       var details=items.map(function(item){return '<li><strong>'+esc(item.name||'Ürün')+'</strong> · '+esc(item.quantity)+' × '+money(item.unit_price)+' = '+money(item.line_total)+'</li>';}).join('');
-      return '<details class="pos-audit-record"><summary><strong>Terk edilen sepet · Kasa '+esc(cart.terminal||'-')+'</strong> · '+money(cart.grand_total)+'<small>'+esc(cart.user_name||'Kullanıcı kaydı yok')+' · Son bağlantı: '+esc(cart.last_seen_at||'-')+' · Arşiv: '+esc(cart.abandoned_at||'-')+'</small></summary>'
-        +'<p><strong>Durum:</strong> Kasa 5 dakika boyunca yeniden bağlanmadığı için sepet kalıcı arşive alındı.</p>'
+      var closeAttempt=cart.reason==='close_attempt';
+      return '<details class="pos-audit-record" data-abandoned-id="'+esc(cart.id||'')+'"><summary><strong>Terk edilen sepet · Kasa '+esc(cart.terminal||'-')+'</strong> · '+money(cart.grand_total)+'<small>'+esc(cart.user_name||'Kullanıcı kaydı yok')+' · '+(closeAttempt?'İlk kapatma denemesi: ':'Son bağlantı: '+esc(cart.last_seen_at||'-')+' · Arşiv: ')+esc(cart.abandoned_at||'-')+'</small></summary>'
+        +'<p><strong>Durum:</strong> '+(closeAttempt?'Sepet kapatılmaya çalışıldı. Sonradan yeniden açılsa da ilk denemenin kaydı korunur.':'Kasa 5 dakika boyunca yeniden bağlanmadığı için sepet kalıcı arşive alındı.')+'</p>'
         +'<ul>'+(details||'<li>Ürün ayrıntısı bulunamadı.</li>')+'</ul>'
         +'<p>Ara toplam: '+money(cart.subtotal)+' · İndirim: '+money(cart.discount_amount)+' · Toplam: '+money(cart.grand_total)+'</p></details>';
     }).join('');
-    section.innerHTML=viewTabs()+'<label class="pos-history-date">Arşiv tarihi <input type="date" data-history-date value="'+esc(selectedDate)+'"></label>'
+    section.innerHTML=viewTabs()+'<label class="pos-history-date">Kapatma / arşiv tarihi <input type="date" data-history-date value="'+esc(selectedDate)+'"></label>'
       +'<div class="pos-history-message" role="status">'+(loading?'Kayıtlar yükleniyor…':loadError?esc(loadError)+' <button type="button" data-history-retry>Tekrar dene</button>':sales.length+' kayıt')+'</div>'
       +(!loading&&!loadError?(rows||'<p class="pos-history-message">Seçilen gün için terk edilmiş sepet yok.</p>'):'');
   }
@@ -326,6 +327,20 @@
       });
   }
 
+  function refreshAbandoned(){
+    if(view!=='abandoned_carts'||loading||document.hidden)return;
+    var date=selectedDate,id=requestId;
+    fetch(api+'?action=abandoned_carts&date='+encodeURIComponent(date)+'&_='+Date.now(),{credentials:'same-origin',cache:'no-store'})
+      .then(function(r){if(!r.ok)throw new Error();return r.json();})
+      .then(function(data){
+        if(view!=='abandoned_carts'||date!==selectedDate||id!==requestId||!data||!data.ok||!Array.isArray(data.sales))return;
+        if(JSON.stringify(data.sales)===JSON.stringify(sales))return;
+        var opened=Array.from(section.querySelectorAll('details[data-abandoned-id][open]')).map(function(node){return node.dataset.abandonedId;});
+        sales=data.sales;render();
+        section.querySelectorAll('details[data-abandoned-id]').forEach(function(node){if(opened.indexOf(node.dataset.abandonedId)!==-1)node.open=true;});
+      }).catch(function(){});
+  }
+
   section.addEventListener('change',function(event){
     if(!event.target.matches('[data-history-date]')) return;
     if(!event.target.value) {event.target.value=selectedDate;return;}
@@ -410,5 +425,5 @@
 
   load();
   loadCashLeft();
-  setInterval(function(){if(view==='live_carts'&&!loading&&!document.hidden)load();},3000);
+  setInterval(function(){if(view==='live_carts'&&!loading&&!document.hidden)load();else refreshAbandoned();},3000);
 })();

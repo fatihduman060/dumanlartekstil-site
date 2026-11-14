@@ -13,6 +13,7 @@
     dirty=false;busy=true;
     var body=new FormData();body.set('action','sync_live_cart');body.set('csrf_token',root.dataset.csrf);
     body.set('terminal_id',terminal);body.set('items_json',JSON.stringify(snapshot.items));
+    body.set('cart_id',snapshot.cart_id||'');
     body.set('discount_amount',String(snapshot.discount_amount));body.set('state',snapshot.state||'open');
     fetch(root.dataset.api,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
       .then(function(r){if(!r.ok)throw new Error();return r.json();})
