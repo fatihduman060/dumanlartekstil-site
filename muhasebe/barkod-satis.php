@@ -31,7 +31,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 @media(min-width:1280px){.pos-checkout-slot,.pos-checkout-slot.is-locked{position:static!important;align-self:stretch;min-width:0}.pos-checkout-slot>.pos-checkout{position:sticky!important;top:18px!important;z-index:5;align-self:start!important;width:100%}}
 @media(max-width:1279px){.pos-checkout-slot,.pos-checkout-slot.is-locked{position:static!important;grid-row:2}.pos-checkout-slot>.pos-checkout{position:static!important;top:auto!important}}
 </style>
-<div class="pos-shell" data-pos-root data-history-audit="<?php echo $canDeleteSales ? '1' : '0'; ?>" data-today="<?php echo e(date('Y-m-d')); ?>" data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
+<div class="pos-shell" data-pos-root data-pos-user-id="<?php echo (int)(current_user()['id'] ?? 0); ?>" data-history-audit="<?php echo $canDeleteSales ? '1' : '0'; ?>" data-today="<?php echo e(date('Y-m-d')); ?>" data-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <div class="pos-price-check" data-price-check hidden role="dialog" aria-modal="true" aria-labelledby="posPriceCheckTitle">
     <div class="pos-price-check-card">
       <div class="pos-price-check-head"><div><span class="pos-kicker">HIZLI SORGULAMA</span><h3 id="posPriceCheckTitle">Fiyat Bak</h3></div><button type="button" data-price-check-close aria-label="Kapat">×</button></div>
@@ -43,7 +43,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
   </div>
   <section class="pos-main panel-card">
     <div class="pos-title-row">
-      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><a class="btn btn-secondary pos-new-sale" href="barkod-satis.php" target="_blank" rel="noopener" aria-label="Yeni satışı yeni sekmede aç">+ Yeni Satış</a><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button><a class="btn btn-secondary" href="barkod-degisim.php">⇄ Değişim</a><a class="btn btn-secondary pos-product-entry-button" href="barkod-urunler.php">+ Yeni Ürün Ekle</a><a class="btn btn-secondary pos-product-stock-button" href="barkod-urunler.php#stokta-urunler">Stoktaki Ürünler</a></div><p>Barkodu okut veya ürün adından herhangi bir kelimeyi yaz. Son ürünü artırmak için örneğin +3 yazman yeterli.</p></div>
+      <div><span class="pos-kicker">MAĞAZA KASASI</span><div class="pos-heading-line"><h2>Yeni Satış</h2><a class="btn btn-secondary pos-new-sale" href="barkod-satis.php?new=1" target="_blank" rel="noopener" aria-label="Yeni satışı yeni sekmede aç">+ Yeni Satış</a><button type="button" class="btn btn-secondary pos-price-check-open" data-price-check-open>₺ Fiyat Bak</button><a class="btn btn-secondary" href="barkod-degisim.php">⇄ Değişim</a><a class="btn btn-secondary pos-product-entry-button" href="barkod-urunler.php">+ Yeni Ürün Ekle</a><a class="btn btn-secondary pos-product-stock-button" href="barkod-urunler.php#stokta-urunler">Stoktaki Ürünler</a></div><p>Barkodu okut veya ürün adından herhangi bir kelimeyi yaz. Son ürünü artırmak için örneğin +3 yazman yeterli.</p></div>
       <div class="pos-clock"><strong data-pos-clock>--:--</strong><span><?php echo e(tr_date(date('Y-m-d'))); ?></span></div>
     </div>
     <div class="pos-scan-row">
@@ -160,7 +160,7 @@ page_header('Barkodlu Satış', 'barkod_satis');
 <script src="assets/barkod-kamera.js?v=2"></script>
 <script src="assets/barkod-read-json.js?v=1"></script>
 <script src="assets/barkod-canli-sepet.js?v=3"></script>
-<script src="assets/barkod-satis.js?v=36"></script>
+<script src="assets/barkod-satis.js?v=37"></script>
 <script src="assets/barkod-canli-arama.js?v=9"></script>
 <script src="assets/barkod-veresiye-yeni-kisi.js?v=1"></script>
 <script src="assets/barkod-cuma-hizli-satis.js?v=2"></script>
