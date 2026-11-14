@@ -45,7 +45,7 @@ try {
             $product = pos_product_by_barcode((string)($_GET['barcode'] ?? ''));
             pos_json(['ok'=>true, 'product'=>$product]);
         }
-        if ($action === 'cancelled_sales' || $action === 'removed_cart_items') {
+        if ($action === 'cancelled_sales' || $action === 'removed_cart_items' || $action === 'discounted_sales') {
             if (!pos_can_delete_sales()) pos_json(['ok'=>false, 'error'=>'Bu kayıtları yalnızca Fatih kullanıcısı görebilir.'], 403);
             $date = is_string($_GET['date'] ?? null) ? $_GET['date'] : '';
             pos_json(['ok'=>true, 'sales'=>pos_history_audit($action, $date)]);
