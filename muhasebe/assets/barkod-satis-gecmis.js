@@ -163,7 +163,7 @@
     var cancelled=view==='cancelled_sales';
     var rows=sales.map(function(record){
       var items=Array.isArray(record.items)?record.items:[];
-      var exchangeRemoved=!cancelled&&record.event_source==='exchange_remove';
+      var exchangeRemoved=!cancelled&&String(record.event_source||'').indexOf('exchange_')===0;
       var title=cancelled?(record.receipt_no||'POS #'+record.id):(exchangeRemoved?'Değişimden silinen ürün':(record.action==='sepet_temizlendi'?'Sepet temizlendi':'Ürün sepetten çıkarıldı'));
       var exchangeRole=record.exchange_role==='returned'?'İade edilen ürünler':(record.exchange_role==='issued'?'Yeni alınan ürünler':'');
       var meta=cancelled?'Satış: '+dateTr(record.sale_date)+' '+(record.sale_time||'')+' · İptal: '+(record.cancelled_at||'Kayıt yok')+' · '+(record.cancelled_by||'Kullanıcı kaydı yok'):(record.created_at||'')+' · '+(record.username||'Kullanıcı kaydı yok')+(exchangeRole?' · '+exchangeRole:'');
