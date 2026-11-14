@@ -610,9 +610,14 @@ function pos_abandoned_alert_recipient(): string
 function pos_abandoned_send_mail(string $recipient, string $subject, string $body): bool
 {
     if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) return false;
+    if (!function_exists('mail')) throw new RuntimeException('Sunucuda PHP mail fonksiyonu kapalı.');
     $sender = 'muhasebe@dumanlartekstil.com.tr';
     $headers = "From: Bitke Muhasebe <{$sender}>\r\nContent-Type: text/plain; charset=UTF-8\r\nMIME-Version: 1.0";
-    return @mail($recipient, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers, '-f' . $sender);
+    try {
+        return @mail($recipient, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers, '-f' . $sender);
+    } catch (Throwable $e) {
+        throw new RuntimeException('Posta sunucusu çağrısı başarısız: ' . $e->getMessage(), 0, $e);
+    }
 }
 
 function pos_process_abandoned_alerts(int $limit = 3): void
