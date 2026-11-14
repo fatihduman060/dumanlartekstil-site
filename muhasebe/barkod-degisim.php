@@ -7,7 +7,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 $recent = pos_exchange_recent();
 page_header('Ürün Değişimi', 'barkod_satis');
 ?>
-<link rel="stylesheet" href="assets/barkod-degisim.css?v=1">
+<link rel="stylesheet" href="assets/barkod-degisim.css?v=2">
 <div class="exchange" data-exchange-root data-api="barkod-degisim-api.php" data-product-api="barkod-satis-api.php" data-csrf="<?php echo e(csrf_token()); ?>">
   <header class="exchange-heading">
     <div><span class="exchange-kicker">MAĞAZA KASASI</span><h2>Ürün Değişimi</h2><p>Önce müşterinin getirdiği ürünleri, ardından vereceğiniz yeni ürünleri okutun. Tutarlar güncel satış fiyatlarıyla hesaplanır.</p></div>
@@ -41,6 +41,21 @@ page_header('Ürün Değişimi', 'barkod_satis');
     <button type="button" class="exchange-complete" data-exchange-complete disabled>Değişimi Tamamla ve Fiş Yazdır</button>
   </section>
 
+  <div class="exchange-remove-modal" data-exchange-removal-modal hidden role="dialog" aria-modal="true" aria-labelledby="exchangeRemovalTitle">
+    <div class="exchange-remove-dialog">
+      <h3 id="exchangeRemovalTitle">Ürünü değişim sepetinden sil</h3>
+      <p data-exchange-removal-product></p>
+      <label>Silme nedeni / Açıklama
+        <textarea data-exchange-removal-reason maxlength="250" placeholder="Örn. Yanlış ürün okutuldu"></textarea>
+      </label>
+      <p class="exchange-remove-status" data-exchange-removal-status role="alert"></p>
+      <div class="exchange-remove-actions">
+        <button type="button" data-exchange-removal-cancel>Vazgeç</button>
+        <button type="button" class="danger" data-exchange-removal-confirm>Ürünü Sil</button>
+      </div>
+    </div>
+  </div>
+
   <section class="exchange-history" aria-labelledby="exchangeHistoryTitle">
     <h3 id="exchangeHistoryTitle">Son değişimler</h3>
     <?php if (!$recent): ?><p>Henüz değişim kaydı yok.</p><?php endif; ?>
@@ -49,5 +64,5 @@ page_header('Ürün Değişimi', 'barkod_satis');
     <?php endforeach; ?>
   </section>
 </div>
-<script src="assets/barkod-degisim.js?v=1"></script>
+<script src="assets/barkod-degisim.js?v=2"></script>
 <?php page_footer(); ?>
