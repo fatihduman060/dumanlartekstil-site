@@ -64,5 +64,5 @@ page_header('Ürün Değişimi', 'barkod_satis');
     <?php endforeach; ?>
   </section>
 </div>
-<script src="assets/barkod-degisim.js?v=2"></script>
+<script src="assets/barkod-degisim.js?v=3"></script>
 <?php page_footer(); ?>
