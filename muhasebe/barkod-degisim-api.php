@@ -17,9 +17,11 @@ try {
         $productId = (int)($_POST['product_id'] ?? 0);
         $quantity = (int)($_POST['quantity'] ?? 0);
         $role = trim((string)($_POST['exchange_role'] ?? ''));
+        $eventSource = trim((string)($_POST['event_source'] ?? 'exchange_remove'));
         $reason = preg_replace('/^[\s\x{FEFF}]+|[\s\x{FEFF}]+$/u', '', (string)($_POST['removal_reason'] ?? '')) ?? '';
         if ($productId <= 0 || $quantity <= 0 || $quantity > 9999) throw new RuntimeException('Silinecek ürün bilgisi geçersiz.');
         if (!in_array($role, ['returned','issued'], true)) throw new RuntimeException('Değişim bölümü geçersiz.');
+        if (!in_array($eventSource, ['exchange_remove','exchange_single_decrement','exchange_quantity_decrease'], true)) throw new RuntimeException('Değişim silme işlemi geçersiz.');
         if (preg_match_all('/./us', $reason) < 6) throw new RuntimeException('Silme nedeni en az 6 karakter olmalıdır.');
 
         pos_db_ensure();
@@ -33,7 +35,7 @@ try {
         $lineTotal = round($unitPrice * $quantity, 2);
         audit_action('pos_cart', 0, 'urun_cikarildi', null, [
             'event'=>'item_removed',
-            'event_source'=>'exchange_remove',
+            'event_source'=>$eventSource,
             'exchange_role'=>$role,
             'removal_reason'=>$reason,
             'items'=>[[
