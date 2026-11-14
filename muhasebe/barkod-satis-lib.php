@@ -610,13 +610,58 @@ function pos_abandoned_alert_recipient(): string
 function pos_abandoned_send_mail(string $recipient, string $subject, string $body): bool
 {
     if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) return false;
-    if (!function_exists('mail')) throw new RuntimeException('Sunucuda PHP mail fonksiyonu kapalı.');
     $sender = 'muhasebe@dumanlartekstil.com.tr';
     $headers = "From: Bitke Muhasebe <{$sender}>\r\nContent-Type: text/plain; charset=UTF-8\r\nMIME-Version: 1.0";
+    if (function_exists('mail')) {
+        try {
+            if (@mail($recipient, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers, '-f' . $sender)) return true;
+        } catch (Throwable $e) {
+            error_log('Bitke PHP mail çağrısı başarısız: ' . $e->getMessage());
+        }
+    }
+
+    // Bazı hosting paketleri web PHP'sinde mail() işlevini kapatır; yerel posta sunucusunu kullan.
+    $error = '';
+    $socket = @stream_socket_client('tcp://127.0.0.1:25', $errno, $error, 5);
+    if ($socket === false) throw new RuntimeException('Yerel posta sunucusuna bağlanılamadı: ' . $error);
+    stream_set_timeout($socket, 5);
+    $expect = static function (array $allowed) use ($socket): void {
+        for ($i = 0; $i < 20; $i++) {
+            $line = fgets($socket, 2048);
+            if ($line === false) throw new RuntimeException('Yerel posta sunucusu yanıt vermedi.');
+            if (preg_match('/^(\d{3}) /', $line, $match)) {
+                if (!in_array((int)$match[1], $allowed, true)) {
+                    throw new RuntimeException('Yerel posta sunucusu işlemi reddetti (SMTP ' . $match[1] . ').');
+                }
+                return;
+            }
+        }
+        throw new RuntimeException('Yerel posta sunucusunun yanıtı tamamlanmadı.');
+    };
+    $write = static function (string $data) use ($socket): void {
+        while ($data !== '') {
+            $written = fwrite($socket, $data);
+            if ($written === false || $written === 0) throw new RuntimeException('Yerel posta sunucusuna veri gönderilemedi.');
+            $data = substr($data, $written);
+        }
+    };
     try {
-        return @mail($recipient, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers, '-f' . $sender);
-    } catch (Throwable $e) {
-        throw new RuntimeException('Posta sunucusu çağrısı başarısız: ' . $e->getMessage(), 0, $e);
+        $expect([220]);
+        $write("EHLO bitke.com.tr\r\n"); $expect([250]);
+        $write("MAIL FROM:<{$sender}>\r\n"); $expect([250]);
+        $write("RCPT TO:<{$recipient}>\r\n"); $expect([250, 251]);
+        $write("DATA\r\n"); $expect([354]);
+        $message = 'Date: ' . date(DATE_RFC2822) . "\r\n"
+            . "From: Bitke Muhasebe <{$sender}>\r\nTo: <{$recipient}>\r\n"
+            . 'Subject: =?UTF-8?B?' . base64_encode($subject) . "?=\r\n"
+            . "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+            . "Content-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($body), 76, "\r\n") . ".\r\n";
+        $write($message); $expect([250]);
+        $write("QUIT\r\n");
+        return true;
+    } finally {
+        fclose($socket);
     }
 }
 
