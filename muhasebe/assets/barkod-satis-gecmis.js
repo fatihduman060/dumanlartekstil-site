@@ -163,8 +163,10 @@
     var cancelled=view==='cancelled_sales';
     var rows=sales.map(function(record){
       var items=Array.isArray(record.items)?record.items:[];
-      var title=cancelled?(record.receipt_no||'POS #'+record.id):(record.action==='sepet_temizlendi'?'Sepet temizlendi':'Ürün sepetten çıkarıldı');
-      var meta=cancelled?'Satış: '+dateTr(record.sale_date)+' '+(record.sale_time||'')+' · İptal: '+(record.cancelled_at||'Kayıt yok')+' · '+(record.cancelled_by||'Kullanıcı kaydı yok'):(record.created_at||'')+' · '+(record.username||'Kullanıcı kaydı yok');
+      var exchangeRemoved=!cancelled&&record.event_source==='exchange_remove';
+      var title=cancelled?(record.receipt_no||'POS #'+record.id):(exchangeRemoved?'Değişimden silinen ürün':(record.action==='sepet_temizlendi'?'Sepet temizlendi':'Ürün sepetten çıkarıldı'));
+      var exchangeRole=record.exchange_role==='returned'?'İade edilen ürünler':(record.exchange_role==='issued'?'Yeni alınan ürünler':'');
+      var meta=cancelled?'Satış: '+dateTr(record.sale_date)+' '+(record.sale_time||'')+' · İptal: '+(record.cancelled_at||'Kayıt yok')+' · '+(record.cancelled_by||'Kullanıcı kaydı yok'):(record.created_at||'')+' · '+(record.username||'Kullanıcı kaydı yok')+(exchangeRole?' · '+exchangeRole:'');
       var details=items.map(function(item){return '<li><strong>'+esc(item.product_name||item.name||'Ürün')+'</strong> · '+esc(item.quantity)+' × '+money(item.unit_price)+' = '+money(item.line_total)+'</li>';}).join('');
       return '<details class="pos-audit-record"><summary><strong>'+esc(title)+'</strong> · '+money(cancelled?record.grand_total:record.items_total)+'<small>'+esc(meta)+'</small></summary>'
         +(cancelled?'<p><strong>İptal nedeni / Açıklama:</strong> '+esc(record.cancel_reason||'Eski kayıtta açıklama bulunmuyor.')+'</p>':'<p><strong>Silme nedeni / Açıklama:</strong> '+esc(record.removal_reason||'Açıklama kaydı yok.')+'</p>')
