@@ -561,6 +561,8 @@ function pos_history_audit(string $action, string $date): array
     foreach ($events as &$event) {
         $data = json_decode((string)$event['new_value'], true);
         $event['removal_reason'] = (string)($data['removal_reason'] ?? '');
+        $event['event_source'] = (string)($data['event_source'] ?? '');
+        $event['exchange_role'] = (string)($data['exchange_role'] ?? '');
         $event['items'] = is_array($data['items'] ?? null) ? $data['items'] : [];
         $event['items_total'] = array_sum(array_map(static function ($item) { return (float)($item['line_total'] ?? 0); }, $event['items']));
         unset($event['new_value']);
