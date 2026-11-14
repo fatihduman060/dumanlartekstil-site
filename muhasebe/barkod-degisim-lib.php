@@ -63,13 +63,16 @@ function pos_exchange_save(array $returned, array $issued, string $paymentMethod
     if (!preg_match('/^[a-zA-Z0-9-]{20,100}$/', $sourceToken)) throw new RuntimeException('İşlem kimliği geçersiz. Sayfayı yenileyin.');
     $pdo = db();
     $userId = (int)(current_user()['id'] ?? 0) ?: null;
+    $transactionStarted = false;
     $pdo->exec('BEGIN IMMEDIATE');
+    $transactionStarted = true;
     try {
         $existing = $pdo->prepare("SELECT id,receipt_no,is_cancelled FROM pos_sales WHERE source_token=? AND created_by=? AND sale_type='exchange' LIMIT 1");
         $existing->execute([$sourceToken,$userId]);
         if ($prior = $existing->fetch()) {
             if ((int)$prior['is_cancelled'] === 1) throw new RuntimeException('Bu değişim daha önce kaydedilip iptal edilmiş. Yeni bir değişim başlatın.');
-            $pdo->commit();
+            $pdo->exec('COMMIT');
+            $transactionStarted = false;
             return ['id'=>(int)$prior['id'],'receipt_no'=>(string)$prior['receipt_no'],'duplicate_prevented'=>true];
         }
 
@@ -123,10 +126,13 @@ function pos_exchange_save(array $returned, array $issued, string $paymentMethod
             'returned_items'=>array_map(static fn($row) => ['product_id'=>(int)$row['product']['id'],'quantity'=>$row['quantity']], $returnRows),
             'issued_items'=>array_map(static fn($row) => ['product_id'=>(int)$row['product']['id'],'quantity'=>$row['quantity']], $issueRows),
         ], $receiptNo);
-        $pdo->commit();
+        $pdo->exec('COMMIT');
+        $transactionStarted = false;
         return ['id'=>$id,'receipt_no'=>$receiptNo,'returned_total'=>$returnTotal,'issued_total'=>$issueTotal,'difference'=>$difference];
     } catch (Throwable $error) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($transactionStarted) {
+            try { $pdo->exec('ROLLBACK'); } catch (Throwable $rollbackError) {}
+        }
         throw $error;
     }
 }
