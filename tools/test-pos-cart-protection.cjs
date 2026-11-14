@@ -1,75 +1,75 @@
-// Isolated browser state only: no live API or accounting database is opened.
+// Isolated browser simulation: no live API or accounting database is opened.
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const path=require('path');
 const main=fs.readFileSync(path.join(__dirname,'../muhasebe/assets/barkod-satis.js'),'utf8');
-const sync=fs.readFileSync(path.join(__dirname,'../muhasebe/assets/barkod-canli-sepet.js'),'utf8');
-const key='dumanlar-pos-cart-v1';
-function boot(storage=new Map()){
- const timers=new Map(),posted=[],nodes=new Map();let timerId=0;
- function element(){
-  const events={};return {value:'',hidden:true,dataset:{},textContent:'',innerHTML:'',events,
-   addEventListener(type,fn){(events[type]??=[]).push(fn);},
-   dispatchEvent(event){for(const fn of events[event.type]||[])fn.call(this,event);return true;},
-   querySelector(){return null;},querySelectorAll(){return [];},focus(){},select(){},setAttribute(){},
-   classList:{add(){},remove(){},toggle(){}},elements:new Proxy({}, {get(o,k){return o[k]??=(element());}})};
- }
- const root=element();root.dataset={api:'/mock-pos-api',csrf:'mock-only'};
- root.querySelector=selector=>{
-  if(selector==='input[name="pos_payment"]:checked')return {value:'cash'};
-  if(!nodes.has(selector))nodes.set(selector,element());return nodes.get(selector);
- };
- const winEvents=new Map();
- const window={crypto:{randomUUID:require('crypto').randomUUID},sessionStorage:null,open(){return null;},
-  addEventListener(type,fn){if(!winEvents.has(type))winEvents.set(type,new Set());winEvents.get(type).add(fn);},
-  removeEventListener(type,fn){winEvents.get(type)?.delete(fn);}};
- const sessionStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
- window.sessionStorage=sessionStorage;
- const document=element();document.visibilityState='visible';document.querySelector=s=>s==='[data-pos-root]'?root:null;
- const context={window,document,crypto:window.crypto,sessionStorage,Intl,Date,FormData,
-  CustomEvent:function(type,options){this.type=type;this.detail=options?.detail;},
-  setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),setInterval(){},
-  fetch(url,options){const body=Object.fromEntries(options.body);posted.push(body);return Promise.resolve({ok:true,json:()=>Promise.resolve({ok:true,message:'mock sale',receipt_url:'mock?id=1'})});}};
- vm.runInNewContext(sync,context);vm.runInNewContext(main,context);
- return {storage,root,nodes,posted,window,document,
-  guards:()=>winEvents.get('beforeunload')?.size||0,
-  leave(){const event={prevented:false,preventDefault(){this.prevented=true;}};for(const fn of winEvents.get('beforeunload')||[])fn(event);return event;},
-  add(id,price=10){root.dispatchEvent({type:'pos:add-product',detail:{id,name:'Test '+id,barcode:String(id),sale_price:price,quantity:1}});},
-  flush(){const tasks=Array.from(timers.values());timers.clear();tasks.forEach(fn=>fn());}};
+const live=fs.readFileSync(path.join(__dirname,'../muhasebe/assets/barkod-canli-sepet.js'),'utf8');
+
+function boot(storage){
+  const timers=new Map(),requests=[],nodes=new Map(),windowEvents=new Map();let nextTimer=0;
+  function element(){
+    const events={};
+    return {value:'',hidden:true,dataset:{},textContent:'',innerHTML:'',events,
+      addEventListener(type,fn){(events[type]??=[]).push(fn);},
+      dispatchEvent(event){for(const fn of events[event.type]||[])fn.call(this,event);return true;},
+      querySelector(){return null;},querySelectorAll(){return [];},focus(){},select(){},setAttribute(){},
+      classList:{add(){},remove(){},toggle(){}},elements:new Proxy({}, {get(o,k){return o[k]??=element();}})};
+  }
+  const root=element();root.dataset={api:'/mock-pos-api',csrf:'mock-only'};
+  root.querySelector=selector=>{
+    if(selector==='input[name="pos_payment"]:checked')return {value:'cash'};
+    if(!nodes.has(selector))nodes.set(selector,element());return nodes.get(selector);
+  };
+  const window={crypto:{randomUUID:require('crypto').randomUUID},open(){return null;},
+    addEventListener(type,fn){if(!windowEvents.has(type))windowEvents.set(type,new Set());windowEvents.get(type).add(fn);},
+    removeEventListener(type,fn){windowEvents.get(type)?.delete(fn);}};
+  const sessionStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
+  const localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k),get length(){return storage.size;},key:i=>Array.from(storage.keys())[i]};
+  const document=element();document.querySelector=s=>s==='[data-pos-root]'?root:null;
+  const context={window,document,sessionStorage,localStorage,crypto:window.crypto,navigator:{
+    sendBeacon(url,body){requests.push(Object.fromEntries(body));return true;}
+  },Intl,Date,FormData,
+    CustomEvent:function(type,options){this.type=type;this.detail=options?.detail;},
+    setTimeout(fn){const id=++nextTimer;timers.set(id,fn);return id;},
+    clearTimeout(id){timers.delete(id);},setInterval(){},
+    fetch(url,options){requests.push(Object.fromEntries(options.body));return Promise.resolve({ok:true,json:()=>Promise.resolve({ok:true,message:'mock',receipt_url:'mock?id=1'})});}
+  };
+  vm.runInNewContext(live,context);vm.runInNewContext(main,context);
+  return {root,nodes,requests,storage,
+    flush(){const tasks=Array.from(timers.values());timers.clear();tasks.forEach(fn=>fn());},
+    add(){root.dispatchEvent({type:'pos:add-product',detail:{id:7,name:'Çorap',barcode:'7',sale_price:20,quantity:1}});},
+    leave(){const event={prevented:false,preventDefault(){this.prevented=true;}};for(const fn of windowEvents.get('beforeunload')||[])fn(event);return event;},
+    pagehide(){for(const fn of windowEvents.get('pagehide')||[])fn();}
+  };
 }
+
 (async()=>{
- const app=boot();assert.equal(app.guards(),0);
- app.add(1,10);app.add(2,20);app.add(1,10);
- const discount=app.nodes.get('[data-pos-discount]');discount.value='5';discount.dispatchEvent({type:'input'});
- const note=app.nodes.get('[data-pos-note]');note.value='Bekleyen müşteri';note.dispatchEvent({type:'input'});
- assert.equal(app.guards(),1);assert.equal(app.nodes.get('[data-pos-cart-protection]').hidden,false);
- const warning=app.leave();assert.equal(warning.prevented,true);assert.equal(warning.returnValue,'');
- assert.equal(app.nodes.get('[data-pos-total]').textContent,'35,00 TL');
- // Prepare a request with a fake successful API. The token must survive a reload
- // while a real response could still be uncertain.
- app.nodes.get('[data-pos-payment-confirm]').onclick();
- const token=JSON.parse(app.storage.get(key)).source_token;assert.ok(token.length>=20);
- const restored=boot(new Map(app.storage));assert.equal(restored.guards(),1);
- assert.equal(restored.nodes.get('[data-pos-total]').textContent,'35,00 TL');
- assert.equal(restored.nodes.get('[data-pos-note]').value,'Bekleyen müşteri');
- assert.equal(restored.root.dataset.posTerminalId,app.root.dataset.posTerminalId);
- assert.equal(JSON.parse(restored.storage.get(key)).source_token,token);
- restored.flush();await new Promise(setImmediate);
- const resume=restored.posted.find(x=>x.action==='sync_live_cart');
- assert.equal(resume.terminal_id,app.root.dataset.posTerminalId);
- assert.equal(JSON.parse(resume.items_json).length,2);assert.equal(resume.state,'open');
- const scan=restored.nodes.get('[data-pos-scan]');scan.value='+3';scan.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){}});
- const saved=JSON.parse(restored.storage.get(key));assert.equal(saved.items.find(x=>x.id===1).quantity,5);
- assert.equal(saved.last_added_product_id,1);
- // Failed/cancelled navigation does not drop the cart; backgrounding saves it.
- restored.leave();restored.document.visibilityState='hidden';restored.document.dispatchEvent({type:'visibilitychange'});
- assert.equal(JSON.parse(restored.storage.get(key)).items.length,2);
- restored.nodes.get('[data-pos-payment-confirm]').onclick();await new Promise(setImmediate);
- assert.equal(restored.guards(),0);assert.equal(restored.storage.has(key),false);
- assert.equal(restored.nodes.get('[data-pos-cart-protection]').hidden,true);
- assert.equal(restored.leave().prevented,false);assert.equal(boot().guards(),0);
- // Older stored carts do not have last_added_product_id: retain compatibility.
- const legacy=new Map([[key,JSON.stringify({items:[{id:8,quantity:1,sale_price:10}]})]]);
- const migrated=boot(legacy);const input=migrated.nodes.get('[data-pos-scan]');input.value='+3';input.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){}});
- assert.equal(JSON.parse(legacy.get(key)).items[0].quantity,4);
- console.log('PASS: nonempty-cart exit guard, reload restoration, terminal identity, open live snapshot, discount/note/token/last product, +3, background save, successful-sale unlock, empty and legacy carts.');
-})().catch(e=>{console.error(e);process.exitCode=1;});
+  const storage=new Map([
+    ['dumanlar-pos-terminal-v1','11111111-1111-4111-8111-111111111111'],
+    ['dumanlar-pos-cart-v2-u0',JSON.stringify({cart_id:'22222222-2222-4222-8222-222222222222',items:[{id:7,quantity:2,sale_price:20}]})],
+    ['dumanlar-pos-saved-cart-v1-u0-22222222-2222-4222-8222-222222222222',JSON.stringify({cart_id:'22222222-2222-4222-8222-222222222222',items:[{id:7,quantity:2,sale_price:20}]})]
+  ]);
+  const first=boot(storage);first.flush();await new Promise(setImmediate);
+  assert.equal(first.nodes.get('[data-pos-total]').textContent,'0,00 TL');
+  assert.equal(first.requests.length,0,'opening an empty till must not overwrite the previous live cart');
+  first.add();first.flush();await new Promise(setImmediate);
+  const snapshot=first.requests.find(x=>x.action==='sync_live_cart'&&JSON.parse(x.items_json).length===1);
+  assert.ok(snapshot,'active cart stays visible to the live till monitor');
+  assert.notEqual(snapshot.terminal_id,storage.get('dumanlar-pos-terminal-v1'));
+  const warning=first.leave();assert.equal(warning.prevented,true);
+  const abandoned=first.requests.find(x=>x.action==='mark_abandoned_cart');
+  assert.ok(abandoned,'closing a nonempty cart still queues the abandoned-cart email');
+  assert.equal(abandoned.cart_id,snapshot.cart_id);
+  first.pagehide();
+  const second=boot(storage);second.flush();await new Promise(setImmediate);
+  assert.equal(second.nodes.get('[data-pos-total]').textContent,'0,00 TL');
+  assert.equal(second.requests.length,0,'reopening must not clear the previous live snapshot');
+  assert.notEqual(second.root.dataset.posTerminalId,first.root.dataset.posTerminalId);
+  assert.equal(second.leave().prevented,false);
+  const completed=boot(new Map());completed.add();
+  completed.nodes.get('[data-pos-complete]').onclick();
+  completed.nodes.get('[data-pos-payment-confirm]').onclick();
+  await new Promise(setImmediate);
+  assert.equal(completed.leave().prevented,false);
+  assert.equal(completed.requests.filter(x=>x.action==='mark_abandoned_cart').length,0);
+  console.log('PASS: no cart restoration; new till session; live snapshot and abandonment notification retained; completed sale stays clear.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
