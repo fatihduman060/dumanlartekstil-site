@@ -652,8 +652,10 @@ function pos_abandoned_send_mail(string $recipient, string $subject, string $bod
         $write("RCPT TO:<{$recipient}>\r\n"); $expect([250, 251]);
         $write("DATA\r\n"); $expect([354]);
         $message = 'Date: ' . date(DATE_RFC2822) . "\r\n"
-            . "From: Bitke Muhasebe <{$sender}>\r\nTo: <{$recipient}>\r\n"
+            . "From: {$sender}\r\nTo: {$recipient}\r\n"
             . 'Subject: =?UTF-8?B?' . base64_encode($subject) . "?=\r\n"
+            . 'Message-ID: <' . bin2hex(random_bytes(16)) . '@dumanlartekstil.com.tr>' . "\r\n"
+            . "X-Sender: {$sender}\r\n"
             . "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n"
             . "Content-Transfer-Encoding: base64\r\n\r\n"
             . chunk_split(base64_encode($body), 76, "\r\n") . ".\r\n";
