@@ -586,13 +586,84 @@ function pos_live_ensure(): void
         last_seen_at INTEGER NOT NULL,
         abandoned_at TEXT NOT NULL,
         reason TEXT NOT NULL DEFAULT 'stale',
+        email_pending INTEGER NOT NULL DEFAULT 0,
+        email_claimed_at INTEGER,
+        email_sent_at TEXT,
         UNIQUE(user_id,terminal_id,last_seen_at),
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT
     )");
     ensure_column($pdo, 'pos_abandoned_carts', 'cart_id', 'TEXT');
     ensure_column($pdo, 'pos_abandoned_carts', 'reason', "TEXT NOT NULL DEFAULT 'stale'");
+    ensure_column($pdo, 'pos_abandoned_carts', 'email_pending', 'INTEGER NOT NULL DEFAULT 0');
+    ensure_column($pdo, 'pos_abandoned_carts', 'email_claimed_at', 'INTEGER');
+    ensure_column($pdo, 'pos_abandoned_carts', 'email_sent_at', 'TEXT');
     $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_abandoned_cart_id ON pos_abandoned_carts(user_id,cart_id) WHERE cart_id IS NOT NULL AND cart_id<>''");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_pos_abandoned_carts_date ON pos_abandoned_carts(abandoned_at,id)");
+}
+
+function pos_abandoned_alert_recipient(): string
+{
+    $email = trim((string)setting_get('pos_abandoned_alert_email', ''));
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+}
+
+function pos_abandoned_send_mail(string $recipient, string $subject, string $body): bool
+{
+    if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) return false;
+    $sender = 'muhasebe@dumanlartekstil.com.tr';
+    $headers = "From: Bitke Muhasebe <{$sender}>\r\nContent-Type: text/plain; charset=UTF-8\r\nMIME-Version: 1.0";
+    return @mail($recipient, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers, '-f' . $sender);
+}
+
+function pos_process_abandoned_alerts(int $limit = 3): void
+{
+    $recipient = pos_abandoned_alert_recipient();
+    if ($recipient === '') return;
+    $pdo = db();
+    $retryBefore = time() - 300;
+    $stmt = $pdo->prepare("SELECT a.id,a.terminal_id,a.snapshot,a.abandoned_at,a.reason,u.display_name,u.username
+        FROM pos_abandoned_carts a JOIN users u ON u.id=a.user_id
+        WHERE a.email_pending=1 AND a.email_sent_at IS NULL
+          AND (a.email_claimed_at IS NULL OR a.email_claimed_at<?)
+        ORDER BY a.id ASC LIMIT ?");
+    $stmt->bindValue(1, $retryBefore, PDO::PARAM_INT);
+    $stmt->bindValue(2, max(1, min($limit, 10)), PDO::PARAM_INT);
+    $stmt->execute();
+    $claim = $pdo->prepare("UPDATE pos_abandoned_carts SET email_claimed_at=? WHERE id=? AND email_pending=1
+        AND email_sent_at IS NULL AND (email_claimed_at IS NULL OR email_claimed_at<?)");
+    $sent = $pdo->prepare("UPDATE pos_abandoned_carts SET email_sent_at=? WHERE id=? AND email_sent_at IS NULL");
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $claimedAt = time();
+        $claim->execute([$claimedAt,(int)$row['id'],$claimedAt-300]);
+        if ($claim->rowCount() !== 1) continue;
+        $snapshot = json_decode((string)$row['snapshot'], true);
+        $items = is_array($snapshot['items'] ?? null) ? $snapshot['items'] : [];
+        $lines = [];
+        foreach ($items as $item) {
+            $lines[] = '- ' . trim((string)($item['name'] ?? 'Ürün')) . ' | '
+                . (float)($item['quantity'] ?? 0) . ' adet | '
+                . number_format((float)($item['line_total'] ?? 0), 2, ',', '.') . ' TL';
+        }
+        $subject = 'Terk edilen sepet #' . (int)$row['id'];
+        $body = "Bitke Muhasebe - Terk Edilen Sepet\n\n"
+            . 'İlk kayıt: ' . (string)$row['abandoned_at'] . "\n"
+            . 'Mağaza kullanıcısı: ' . ((string)$row['display_name'] ?: (string)$row['username']) . "\n"
+            . 'Kasa: ' . substr((string)$row['terminal_id'], 0, 8) . "\n"
+            . 'Neden: ' . ($row['reason'] === 'close_attempt' ? 'Sayfadan çıkma denemesi' : 'Bağlantı 5 dakika kesildi') . "\n"
+            . 'Toplam: ' . number_format((float)($snapshot['grand_total'] ?? 0), 2, ',', '.') . " TL\n\n"
+            . "Ürünler:\n" . implode("\n", $lines) . "\n\n"
+            . "Kaydı görmek için Bitke Muhasebe > Barkodlu Satış > Terk Edilen Sepetler bölümünü açın.\n"
+            . "https://bitke.com.tr/muhasebe/barkod-satis.php\n";
+        try {
+            if (pos_abandoned_send_mail($recipient, $subject, $body)) {
+                $sent->execute([date('Y-m-d H:i:s'),(int)$row['id']]);
+            } else {
+                error_log('Bitke terk edilen sepet maili gönderilemedi: #' . (int)$row['id']);
+            }
+        } catch (Throwable $e) {
+            error_log('Bitke terk edilen sepet mail hatası: #' . (int)$row['id'] . ' ' . $e->getMessage());
+        }
+    }
 }
 
 function pos_archive_stale_live_carts(int $staleSeconds = 300, ?int $excludeUserId = null, ?string $excludeTerminalId = null): void
@@ -602,7 +673,8 @@ function pos_archive_stale_live_carts(int $staleSeconds = 300, ?int $excludeUser
     $cutoff = time() - max(60, $staleSeconds);
     $stmt = $pdo->prepare("SELECT user_id,terminal_id,snapshot,updated_at FROM pos_live_carts WHERE updated_at<? ORDER BY updated_at ASC");
     $stmt->execute([$cutoff]);
-    $insert = $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,cart_id,snapshot,last_seen_at,abandoned_at,reason) VALUES(?,?,?,?,?,?,'stale')");
+    $mailPending = pos_abandoned_alert_recipient() !== '' ? 1 : 0;
+    $insert = $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,cart_id,snapshot,last_seen_at,abandoned_at,reason,email_pending) VALUES(?,?,?,?,?,?,'stale',?)");
     $delete = $pdo->prepare("DELETE FROM pos_live_carts WHERE user_id=? AND terminal_id=? AND updated_at=?");
     foreach ($stmt->fetchAll() ?: [] as $row) {
         if ($excludeUserId !== null && $excludeTerminalId !== null
@@ -621,11 +693,14 @@ function pos_archive_stale_live_carts(int $staleSeconds = 300, ?int $excludeUser
                 (string)$row['snapshot'],
                 (int)$row['updated_at'],
                 date('Y-m-d H:i:s', (int)$row['updated_at'] + max(60, $staleSeconds)),
+                $mailPending,
             ]);
         }
         // updated_at eşleşmesi, aynı kasa bu sırada yeniden bağlandıysa yeni kaydın silinmesini engeller.
         $delete->execute([(int)$row['user_id'], (string)$row['terminal_id'], (int)$row['updated_at']]);
     }
+    try { pos_process_abandoned_alerts(); }
+    catch (Throwable $e) { error_log('Bitke terk edilen sepet mail kuyruğu: ' . $e->getMessage()); }
 }
 
 function pos_abandoned_carts(string $date): array
@@ -650,6 +725,9 @@ function pos_abandoned_carts(string $date): array
         $snapshot['last_seen_at'] = date('d.m.Y H:i:s', (int)$row['last_seen_at']);
         $snapshot['abandoned_at'] = (string)$row['abandoned_at'];
         $snapshot['reason'] = (string)($row['reason'] ?? 'stale');
+        if ((int)($row['email_pending'] ?? 0) === 1) {
+            $snapshot['email_status'] = !empty($row['email_sent_at']) ? 'sent' : 'pending';
+        }
         $rows[] = $snapshot;
     }
     return $rows;
@@ -706,9 +784,10 @@ function pos_cart_mark_abandoned(array $input): void
     pos_live_ensure();
     $userId = (int)(current_user()['id'] ?? 0);
     $encoded = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,cart_id,snapshot,last_seen_at,abandoned_at,reason)
-        VALUES(?,?,?,?,?,?,'close_attempt')")
-        ->execute([$userId,$terminal,$snapshot['cart_id'],$encoded,$attempted,date('Y-m-d H:i:s',$attempted)]);
+    $mailPending = pos_abandoned_alert_recipient() !== '' ? 1 : 0;
+    $pdo->prepare("INSERT OR IGNORE INTO pos_abandoned_carts(user_id,terminal_id,cart_id,snapshot,last_seen_at,abandoned_at,reason,email_pending)
+        VALUES(?,?,?,?,?,?,'close_attempt',?)")
+        ->execute([$userId,$terminal,$snapshot['cart_id'],$encoded,$attempted,date('Y-m-d H:i:s',$attempted),$mailPending]);
     // Eski bağlantı kaydı bu sepeti önce arşivlediyse ilk kapatma denemesine çevir.
     $pdo->prepare("UPDATE pos_abandoned_carts SET snapshot=?,abandoned_at=?,reason='close_attempt'
         WHERE user_id=? AND cart_id=? AND reason='stale'")
@@ -717,6 +796,8 @@ function pos_cart_mark_abandoned(array $input): void
     $pdo->prepare("UPDATE pos_abandoned_carts SET snapshot=?,abandoned_at=?
         WHERE user_id=? AND cart_id=? AND reason='close_attempt' AND abandoned_at>?")
         ->execute([$encoded,date('Y-m-d H:i:s',$attempted),$userId,$snapshot['cart_id'],date('Y-m-d H:i:s',$attempted)]);
+    try { pos_process_abandoned_alerts(); }
+    catch (Throwable $e) { error_log('Bitke terk edilen sepet mail kuyruğu: ' . $e->getMessage()); }
 }
 
 function pos_live_save(array $input): void
