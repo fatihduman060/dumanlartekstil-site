@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_login();
-require_private_finance_modules();
+require_check_offer_modules();
 
 $pdo = db();
 ensure_column($pdo, 'checks', 'endorsed_to_cari_id', 'INTEGER');

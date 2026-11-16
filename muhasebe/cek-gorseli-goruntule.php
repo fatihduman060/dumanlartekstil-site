@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/layout.php';
 require_login();
-require_private_finance_modules();
+require_check_offer_modules();
 
 $id = (int)($_GET['id'] ?? 0);
 $stmt = db()->prepare('SELECT document_path, document_name, document_mime FROM checks WHERE id=? AND COALESCE(is_cancelled,0)=0');

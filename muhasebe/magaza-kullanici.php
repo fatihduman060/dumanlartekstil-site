@@ -33,6 +33,13 @@ function is_fatih_user(?array $user = null): bool
         || in_array($displayKey, ['fatih', 'fatihduman'], true);
 }
 
+function is_accounting_user(?array $user = null): bool
+{
+    $user = $user ?: current_user();
+    return $user && magaza_kullanici_anahtari($user['username'] ?? '') === 'muhasebe'
+        && (string)($user['role'] ?? '') === 'editor';
+}
+
 function is_salary_only_user(?array $user = null): bool
 {
     $user = $user ?: current_user();
@@ -126,12 +133,12 @@ function is_warehouse_dispatch_operator(?array $user = null): bool
 
 function can_access_warehouse_dispatch(): bool
 {
-    return is_admin() || is_fatih_user() || is_mustafa_duman_user() || is_warehouse_dispatch_operator();
+    return is_admin() || is_fatih_user() || is_mustafa_duman_user() || is_accounting_user() || is_warehouse_dispatch_operator();
 }
 
 function can_process_warehouse_dispatch(): bool
 {
-    return is_admin() || is_fatih_user() || is_mustafa_duman_user();
+    return is_admin() || is_fatih_user() || is_mustafa_duman_user() || is_accounting_user();
 }
 
 function can_manage_store_sales(): bool
