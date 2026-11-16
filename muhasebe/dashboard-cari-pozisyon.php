@@ -11,6 +11,27 @@ if (!in_array($type, ['alacak','verecek'], true)) $type = 'alacak';
 try {
     $aggregate = dashboard_cari_aggregate();
     $rows = [];
+    $invoiceDates = [];
+    $dispatchDates = [];
+    if ($type === 'alacak') {
+        $tables = db()->query("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('invoices','warehouse_dispatches')")->fetchAll(PDO::FETCH_COLUMN);
+        if (in_array('invoices', $tables, true)) {
+            $stmt = db()->query("SELECT cari_id, UPPER(COALESCE(NULLIF(TRIM(currency),''),'TL')) AS currency, MAX(invoice_date) AS latest_date
+                FROM invoices WHERE direction='giden' AND COALESCE(is_cancelled,0)=0 AND cari_id IS NOT NULL
+                GROUP BY cari_id, UPPER(COALESCE(NULLIF(TRIM(currency),''),'TL'))");
+            foreach ($stmt->fetchAll() as $dateRow) {
+                $invoiceDates[(int)$dateRow['cari_id'] . '|' . (string)$dateRow['currency']] = (string)$dateRow['latest_date'];
+            }
+        }
+        if (in_array('warehouse_dispatches', $tables, true)) {
+            $stmt = db()->query("SELECT cari_id, UPPER(COALESCE(NULLIF(TRIM(currency),''),'TL')) AS currency, MAX(dispatch_date) AS latest_date
+                FROM warehouse_dispatches WHERE COALESCE(processed,0)=1 AND COALESCE(is_cancelled,0)=0 AND cari_id IS NOT NULL
+                GROUP BY cari_id, UPPER(COALESCE(NULLIF(TRIM(currency),''),'TL'))");
+            foreach ($stmt->fetchAll() as $dateRow) {
+                $dispatchDates[(int)$dateRow['cari_id'] . '|' . (string)$dateRow['currency']] = (string)$dateRow['latest_date'];
+            }
+        }
+    }
 
     foreach ($aggregate['positions'] as $row) {
         $currency = strtoupper(trim((string)($row['currency'] ?? 'TL')));
@@ -30,6 +51,13 @@ try {
 
         $baseName = (string)$row['name'];
         $mergedCount = count($row['cari_ids'] ?? []);
+        $invoiceDate = '';
+        $dispatchDate = '';
+        foreach ($row['cari_ids'] ?? [$row['id']] as $cariId) {
+            $key = (int)$cariId . '|' . $currency;
+            $invoiceDate = max($invoiceDate, $invoiceDates[$key] ?? '');
+            $dispatchDate = max($dispatchDate, $dispatchDates[$key] ?? '');
+        }
         $rows[] = [
             'id' => (int)$row['id'],
             'name' => $baseName . ' · ' . $currency,
@@ -37,6 +65,8 @@ try {
             'city' => trim((string)($row['city'] ?? '')),
             'currency' => $currency,
             'amount' => round($amount, 2),
+            'source_date' => $type === 'alacak' ? ($invoiceDate !== '' ? $invoiceDate : $dispatchDate) : '',
+            'source_date_label' => $type === 'alacak' ? ($invoiceDate !== '' ? 'Son giden fatura' : ($dispatchDate !== '' ? 'Son depo çıkışı' : '')) : '',
             'net_alacak' => round($netAlacak, 2),
             'net_verecek' => round($netVerecek, 2),
             'cari_ids' => array_values(array_map('intval', $row['cari_ids'] ?? [])),
