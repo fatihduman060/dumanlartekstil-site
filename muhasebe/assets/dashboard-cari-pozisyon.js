@@ -20,7 +20,7 @@
     var p=panel(), b=document.getElementById('cariPozisyonIcerik');
     p.querySelector('h3').textContent=type==='alacak'?'Kimden net ne kadar alacağımız var?':'Kime net ne kadar borcumuz var?';
     if(!rows.length){b.innerHTML='<p class="muted">Açık kayıt yok.</p>';}else{
-      b.innerHTML=rows.map(function(r){return '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px;border:1px solid #eee;border-radius:12px;margin:7px 0;background:#fff"><a target="_blank" rel="noopener noreferrer" href="cari-detay.php?id='+Number(r.id||0)+'"><strong>'+esc(r.name)+'</strong><small style="display:block">'+esc(r.city||'-')+'</small></a><strong>'+fmt(r.amount,r.currency)+'</strong></div>';}).join('');
+      b.innerHTML=rows.map(function(r){var dateText=r.source_date?esc(r.source_date_label||'Tarih')+': '+esc(trDate(r.source_date)):'';return '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px;border:1px solid #eee;border-radius:12px;margin:7px 0;background:#fff"><a target="_blank" rel="noopener noreferrer" href="cari-detay.php?id='+Number(r.id||0)+'"><strong>'+esc(r.name)+'</strong><small style="display:block">'+esc(r.city||'-')+'</small></a><div style="text-align:right"><strong>'+fmt(r.amount,r.currency)+'</strong>'+(dateText?'<small style="display:block;color:#66736b;margin-top:3px">'+dateText+'</small>':'')+'</div></div>';}).join('');
     }
     p.style.display='block';p.scrollIntoView({behavior:'smooth',block:'nearest'});
   }
