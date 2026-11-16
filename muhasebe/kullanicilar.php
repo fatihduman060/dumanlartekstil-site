@@ -159,12 +159,12 @@ page_header('Kullanıcılar', 'kullanicilar');
             ['Dashboard görüntüleme', true, true, true],
             ['Cari listesi görme', true, true, true],
             ['Hareketleri görme', true, true, true],
-            ['Çekleri görme', true, true, true],
+            ['Çekleri görme', false, false, true],
             ['Raporlar & ekstreler', true, true, true],
             ['Cari ekleme / düzenleme', false, true, true],
             ['Hareket ekleme / düzenleme', false, true, true],
-            ['Çek ekleme / düzenleme', false, true, true],
-            ['Çek hızlı durum güncelleme', false, true, true],
+            ['Çek ekleme / düzenleme', false, false, true],
+            ['Çek hızlı durum güncelleme', false, false, true],
             ['Kategori yönetimi', false, true, true],
             ['Belge yükleme', false, true, true],
             ['CSV / Excel çıktısı', true, true, true],
@@ -187,6 +187,6 @@ page_header('Kullanıcılar', 'kullanicilar');
       </tbody>
     </table>
   </div>
-  <p class="muted" style="margin:12px 0 0;font-size:13px">💡 Yetki seviyeleri kümülatiftir: Yönetici, Düzenleyici'nin; Düzenleyici ise Görüntüleyici'nin tüm yetkilerini içerir.</p>
+  <p class="muted" style="margin:12px 0 0;font-size:13px">MUHASEBE kullanıcı adlı Düzenleyici hesaba Çekler, Faturalar, Depo Çıkış ve Teklif Ver için ayrıca erişim tanımlıdır. Diğer Düzenleyici hesaplar bu özel erişimi almaz.</p>
 </section>
 <?php page_footer(); ?>
