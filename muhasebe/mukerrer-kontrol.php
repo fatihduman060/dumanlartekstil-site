@@ -481,7 +481,7 @@ function mk_cancel_duplicate_movement(int $keepId, int $cancelId, string $reason
     }
 }
 
-function mk_merge_cari(int $keepId, int $removeId): void
+function mk_merge_cari(int $keepId, int $removeId, bool $manualMatch = false): void
 {
     if ($keepId <= 0 || $removeId <= 0 || $keepId === $removeId) {
         throw new RuntimeException('Cari seçimi geçersiz.');
@@ -503,7 +503,13 @@ function mk_merge_cari(int $keepId, int $removeId): void
     $removeTax = mk_digits((string)($remove['tax_no'] ?? ''));
     $sameTax = $keepTax !== '' && $keepTax === $removeTax;
     if (!$sameName && !$sameTax) {
-        throw new RuntimeException('Bu iki cari aynı ünvan veya aynı vergi numarasıyla eşleşmiyor.');
+        $keepWords = explode(' ', mk_norm((string)$keep['name']));
+        $removeWords = explode(' ', mk_norm((string)$remove['name']));
+        $sameCompanyPrefix = count($keepWords) >= 4 && count($removeWords) >= 4
+            && array_slice($keepWords, 0, 4) === array_slice($removeWords, 0, 4);
+        if (!$manualMatch || !$sameCompanyPrefix || strlen($keepTax) !== 10 || $removeTax !== '') {
+            throw new RuntimeException('Farklı ünvanlı cariler yalnızca ortak firma adıyla, boş eski vergi numarasıyla ve onaylı seçimle birleştirilebilir.');
+        }
     }
 
     $pdo = db();
@@ -549,6 +555,7 @@ function mk_merge_cari(int $keepId, int $removeId): void
         audit_action('cari', $removeId, 'mukerrer_birlestirildi', $remove, [
             'kept_cari_id'=>$keepId,
             'updated_tables'=>$updated,
+            'manual_match'=>$manualMatch,
         ], (string)$remove['name']);
         log_action('Mükerrer cari birleştirildi', '#' . $removeId . ' → #' . $keepId . ' / ' . (string)$keep['name']);
         $pdo->commit();
@@ -641,7 +648,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         } elseif ($action === 'merge_cari') {
             $keepId = (int)($_POST['keep_id'] ?? 0);
             $removeId = (int)($_POST['remove_id'] ?? 0);
-            mk_merge_cari($keepId, $removeId);
+            mk_merge_cari($keepId, $removeId, ($_POST['manual_match'] ?? '') === '1');
             flash('success', 'Mükerrer cari kartı birleştirildi. Ana kayıt #' . $keepId . '.');
         } else {
             throw new RuntimeException('Geçersiz işlem.');
@@ -653,6 +660,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 }
 
 list($nameGroups, $taxGroups) = mk_cari_duplicate_groups();
+$manualCariRows = db()->query('SELECT id, name, tax_no FROM cariler ORDER BY name ASC')->fetchAll();
 $movementPairs = mk_movement_pairs();
 $accountSourceDuplicates = mk_account_source_duplicates();
 $checkDuplicates = mk_check_duplicates();
@@ -802,6 +810,24 @@ page_header('Mükerrer Kontrolü', 'raporlar');
           </article>
         <?php endforeach; ?>
       </div>
+      <form method="post" class="mk-merge" onsubmit="return confirm('Seçilen eski cari kartı kaldırılacak; tüm bağlantıları ana cariye taşınacak. Ünvan ve vergi numarasını faturayla doğruladınız mı?');">
+        <?php echo csrf_field(); ?>
+        <input type="hidden" name="action" value="merge_cari">
+        <input type="hidden" name="manual_match" value="1">
+        <label>Farklı ünvanlı kartlarda ana kayıt
+          <select name="keep_id" required>
+            <option value="">Ana cariyi seç</option>
+            <?php foreach ($manualCariRows as $row): ?><option value="<?php echo e($row['id']); ?>">#<?php echo e($row['id']); ?> · <?php echo e($row['name']); ?> · VKN: <?php echo e($row['tax_no'] ?: '-'); ?></option><?php endforeach; ?>
+          </select>
+        </label>
+        <label>Kaldırılacak eski kayıt
+          <select name="remove_id" required>
+            <option value="">Eski cariyi seç</option>
+            <?php foreach ($manualCariRows as $row): ?><option value="<?php echo e($row['id']); ?>">#<?php echo e($row['id']); ?> · <?php echo e($row['name']); ?> · VKN: <?php echo e($row['tax_no'] ?: '-'); ?></option><?php endforeach; ?>
+          </select>
+        </label>
+        <button class="btn btn-secondary" type="submit">Doğrulanmış carileri birleştir</button>
+      </form>
     </div>
   </section>
 
