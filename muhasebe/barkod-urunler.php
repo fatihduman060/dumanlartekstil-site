@@ -48,7 +48,7 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
   #stokta-urunler .pos-stock-search-box{display:grid;grid-template-columns:minmax(0,1fr) 74px;gap:8px;max-width:none;width:100%}
   #stokta-urunler .pos-product-manager-toolbar label{max-width:none;width:100%}
   #stokta-urunler .pos-product-manager-toolbar input{width:100%;min-width:0;min-height:50px;font-size:16px}
-  #stokta-urunler .pos-stock-search-box .btn{width:74px;min-height:50px;padding:8px}
+  #stokta-urunler .pos-stock-search-box [data-product-search-button]{width:74px;min-height:50px;padding:8px}
   #stokta-urunler .pos-product-manager-toolbar>[data-product-bulk-save]{width:100%;min-height:46px}
   #stokta-urunler .pos-product-table-wrap{overflow:visible;border:0;background:transparent}
   #stokta-urunler .pos-product-table{display:block;min-width:0;width:100%}
