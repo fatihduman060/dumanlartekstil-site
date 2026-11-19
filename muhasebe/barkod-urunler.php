@@ -120,11 +120,11 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
   </section>
 
   <section class="panel-card pos-products-panel" id="stokta-urunler">
-    <div class="card-head"><div><h3>Stoktaki Ürünler</h3><p class="muted"><?php echo e(count($products)); ?> aktif Barkodlu Satış ürünü. Ürün adına veya barkoda göre ara; fiyat, stok ve barkod bilgilerini düzenle.</p></div></div>
+    <div class="card-head"><div><h3>Stoktaki Ürünler</h3><p class="muted">İlk <?php echo e(count($products)); ?> ürün listeleniyor. Arama tüm aktif ürünleri tarar; fiyat, stok ve barkod bilgilerini düzenleyebilirsin.</p></div></div>
     <div class="pos-product-manager" data-product-manager>
       <div class="pos-product-manager-toolbar">
         <div class="pos-stock-search-box">
-          <label><span>Ürünlerde ara</span><input type="search" autocomplete="off" enterkeyhint="search" placeholder="Ürün adı, barkod veya beden" data-product-list-search /></label>
+          <label><span>Ürünlerde ara</span><input type="search" autocomplete="off" enterkeyhint="search" placeholder="Ürün adı, barkod veya beden" data-stock-search-input data-barcode-input /></label>
           <button type="button" class="btn btn-secondary" data-product-search-button>Ara</button>
         </div>
         <button type="button" class="btn btn-primary" data-product-bulk-save>Tüm Değişiklikleri Kaydet</button>
@@ -134,7 +134,7 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
       <div class="pos-product-table-wrap">
         <table class="pos-product-table">
           <thead><tr><th>Ürün</th><th>Barkod</th><th>Satış fiyatı</th><th>Stok adedi</th><th>İşlem</th></tr></thead>
-          <tbody>
+          <tbody data-stock-results>
           <?php foreach ($products as $p):
               $variant = trim((string)($p['variant_name'] ?? ''));
               $barcodes = $p['barcodes'] ?? [$p['barcode']];
@@ -155,15 +155,17 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
     </div>
   </section>
 </div>
-<script src="assets/barkod-urun-yonetimi.js?v=1"></script>
+<script src="assets/barkod-urun-yonetimi.js?v=2"></script>
 <script>
 (function(){
   var section=document.getElementById('stokta-urunler');
-  var search=document.querySelector('[data-product-list-search]');
+  var search=section&&section.querySelector('[data-stock-search-input]');
   var button=document.querySelector('[data-product-search-button]');
   var info=document.querySelector('[data-product-search-info]');
   var empty=document.querySelector('[data-product-search-empty]');
+  var tbody=section&&section.querySelector('[data-stock-results]');
   if(!section||!search)return;
+  var timer=0,revision=0;
 
   function normalize(value){
     return String(value||'')
@@ -190,16 +192,48 @@ page_header('Yeni Ürün Girişi', 'barkod_satis');
     if(empty)empty.hidden=visible!==0;
   }
 
-  search.addEventListener('input',runSearch);
-  search.addEventListener('search',runSearch);
+  function addProduct(product){
+    if(!product||!product.id||tbody.querySelector('[data-bulk-product="'+Number(product.id)+'"]'))return;
+    var row=document.createElement('tr');
+    row.dataset.bulkProduct=product.id;
+    row.dataset.productSearch=[product.name,product.variant_name].concat(product.barcodes||[product.barcode]).join(' ');
+    var name=document.createElement('td');name.dataset.label='Ürün';
+    var strong=document.createElement('strong');strong.textContent=product.name+(product.variant_name?' - '+product.variant_name:'');name.appendChild(strong);
+    var barcode=document.createElement('td');barcode.dataset.label='Barkod';
+    var code=document.createElement('span');code.textContent=product.barcode;barcode.appendChild(code);
+    if(Number(product.barcode_count)>1){var count=document.createElement('small');count.textContent=product.barcode_count+' barkod';barcode.appendChild(count);}
+    var price=document.createElement('td');price.dataset.label='Satış fiyatı';
+    var priceInput=document.createElement('input');priceInput.type='number';priceInput.min='0.01';priceInput.step='0.01';priceInput.defaultValue=Number(product.sale_price).toFixed(2);priceInput.dataset.bulkPrice='';price.appendChild(priceInput);
+    var stock=document.createElement('td');stock.dataset.label='Stok adedi';
+    var stockInput=document.createElement('input');stockInput.type='number';stockInput.step='1';stockInput.defaultValue=Number(product.stock_quantity).toFixed(0);stockInput.dataset.bulkStock='';stock.appendChild(stockInput);
+    var action=document.createElement('td');action.dataset.label='İşlem';
+    var edit=document.createElement('button');edit.type='button';edit.className='btn btn-secondary';edit.textContent='Düzenle';edit.setAttribute('data-product-edit',JSON.stringify(product));action.appendChild(edit);
+    row.append(name,barcode,price,stock,action);tbody.appendChild(row);
+  }
+
+  function searchAll(){
+    clearTimeout(timer);
+    var query=search.value.trim(),current=++revision;
+    runSearch();
+    if(!query)return;
+    if(info)info.textContent='Tüm ürünlerde aranıyor…';
+    fetch('barkod-satis-api.php?action=products&q='+encodeURIComponent(query),{credentials:'same-origin',cache:'no-store'})
+      .then(function(response){if(!response.ok)throw new Error('Arama yapılamadı.');return response.json();})
+      .then(function(data){if(current!==revision)return;if(!data.ok)throw new Error(data.error||'Arama yapılamadı.');(data.products||[]).forEach(addProduct);runSearch();})
+      .catch(function(error){if(current!==revision)return;if(info)info.textContent=error.message+' Tekrar deneyin.';});
+  }
+
+  search.addEventListener('input',function(){clearTimeout(timer);revision++;runSearch();if(search.value.trim())timer=setTimeout(searchAll,220);});
+  search.addEventListener('search',searchAll);
+  search.addEventListener('change',searchAll);
   search.addEventListener('keydown',function(event){
     if(event.key==='Enter'){
       event.preventDefault();
-      runSearch();
+      searchAll();
       search.blur();
     }
   });
-  if(button)button.addEventListener('click',function(){runSearch();search.focus();});
+  if(button)button.addEventListener('click',function(){searchAll();search.focus();});
   runSearch();
 
   if(location.hash==='#stokta-urunler'){

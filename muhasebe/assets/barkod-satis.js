@@ -1,7 +1,7 @@
 (function(){
   var root=document.querySelector('[data-pos-root]');if(!root)return;
   var api=root.dataset.api,csrf=root.dataset.csrf,cart=[],scan=root.querySelector('[data-pos-scan]'),cartBox=root.querySelector('[data-pos-cart]'),results=root.querySelector('[data-pos-results]'),discount=root.querySelector('[data-pos-discount]'),status=root.querySelector('[data-pos-status]'),noteInput=root.querySelector('[data-pos-note]');
-  var lookupBusy=false,lastLookup='',lastAddedProductId=null,quantityShortcutTimer=null,lookupRevision=0;
+  var lastLookup='',lastAddedProductId=null,quantityShortcutTimer=null,lookupRevision=0;
   var lastNotFoundAnnouncement=0,saleRequestToken='';
   function speakStatus(text){
     if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined')return;
@@ -132,15 +132,16 @@
   }
   root.addEventListener('pos:add-product',function(event){if(event.detail)add(event.detail);});
   function showResults(items){results.hidden=false;if(!items.length){results.innerHTML='<div class="pos-result-empty">Ürün bulunamadı. Aşağıdan yeni ürün tanımlayabilirsiniz.</div>';root.dispatchEvent(new CustomEvent('pos:product-not-found'));return;}results.innerHTML=items.map(function(p){return '<button type="button" data-result-id="'+p.id+'"><span><strong>'+esc(productName(p))+'</strong><small>'+esc(p.matched_barcode||p.barcode)+' · Stok: '+Number(p.stock_quantity)+'</small></span><strong>'+money(p.sale_price)+'</strong></button>';}).join('');results._items=items;}
-  function lookup(){var q=scan.value.trim();if(/^\+/.test(q)){var shortcut=q.match(/^\+(\d+)$/);if(shortcut)addToLastProduct(Number(shortcut[1]));return;}if(!q||lookupBusy||q===lastLookup)return;var revision=++lookupRevision;lookupBusy=true;lastLookup=q;status.textContent='Barkod aranıyor…';window.posReadJson(api+'?action=barcode&barcode='+encodeURIComponent(q)+'&_='+Date.now()).then(function(d){if(revision!==lookupRevision||scan.value.trim()!==q)return null;if(d.product){add(d.product);results.hidden=true;return null;}return window.posReadJson(api+'?action=products&q='+encodeURIComponent(q)+'&_='+Date.now()).then(function(x){if(revision!==lookupRevision||scan.value.trim()!==q)return;showResults(x.products||[]);status.textContent='';});}).catch(function(error){if(revision!==lookupRevision||scan.value.trim()!==q)return;status.textContent=error.message||'Ürün aranamadı.';lastLookup='';}).finally(function(){lookupBusy=false;});}
+  function lookup(){var q=scan.value.trim();if(/^\+/.test(q)){var shortcut=q.match(/^\+(\d+)$/);if(shortcut)addToLastProduct(Number(shortcut[1]));return;}if(!q||q===lastLookup)return;var revision=++lookupRevision;lastLookup=q;status.textContent='Barkod aranıyor…';window.posReadJson(api+'?action=barcode&barcode='+encodeURIComponent(q)+'&_='+Date.now()).then(function(d){if(revision!==lookupRevision||scan.value.trim()!==q)return null;if(d.product){add(d.product);results.hidden=true;return null;}return window.posReadJson(api+'?action=products&q='+encodeURIComponent(q)+'&_='+Date.now()).then(function(x){if(revision!==lookupRevision||scan.value.trim()!==q)return;showResults(x.products||[]);status.textContent='';});}).catch(function(error){if(revision!==lookupRevision||scan.value.trim()!==q)return;status.textContent=error.message||'Ürün aranamadı.';lastLookup='';});}
   scan.addEventListener('input',function(){
     lookupRevision++;
+    lastLookup='';
     if(quantityShortcutTimer)clearTimeout(quantityShortcutTimer);
     var shortcut=scan.value.trim().match(/^\+(\d+)$/);if(!shortcut)return;
     quantityShortcutTimer=setTimeout(function(){var current=scan.value.trim().match(/^\+(\d+)$/);if(current)addToLastProduct(Number(current[1]));},350);
   });
-  scan.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var shortcut=scan.value.trim().match(/^\+(\d+)$/);if(shortcut){if(quantityShortcutTimer)clearTimeout(quantityShortcutTimer);addToLastProduct(Number(shortcut[1]));return;}lastLookup='';lookup();}});
-  scan.addEventListener('change',function(){if(scan.value.trim()){lastLookup='';lookup();}});
+  scan.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var shortcut=scan.value.trim().match(/^\+(\d+)$/);if(shortcut){if(quantityShortcutTimer)clearTimeout(quantityShortcutTimer);addToLastProduct(Number(shortcut[1]));return;}lookup();}});
+  scan.addEventListener('change',function(){if(scan.value.trim())lookup();});
   root.querySelector('[data-pos-search]').onclick=function(){lastLookup='';lookup();};
   results.addEventListener('click',function(e){var b=e.target.closest('[data-result-id]');if(!b)return;var p=(results._items||[]).find(function(x){return Number(x.id)===Number(b.dataset.resultId);});if(p){add(p);results.hidden=true;}});
   function cartEventPayload(eventType,items,reason,eventSource){
