@@ -134,13 +134,16 @@
     button.addEventListener('click',function(){
       var updates=[];
       root.querySelectorAll('[data-bulk-product]').forEach(function(row){
+        var price=row.querySelector('[data-bulk-price]');
+        var stock=row.querySelector('[data-bulk-stock]');
+        if(price.value===price.defaultValue&&stock.value===stock.defaultValue)return;
         updates.push({
           id:Number(row.getAttribute('data-bulk-product')||0),
-          sale_price:row.querySelector('[data-bulk-price]').value,
-          stock_quantity:row.querySelector('[data-bulk-stock]').value
+          sale_price:price.value,
+          stock_quantity:stock.value
         });
       });
-      if(!updates.length){setStatus('Güncellenecek ürün yok.',true);return;}
+      if(!updates.length){setStatus('Değiştirilen ürün yok.');return;}
       root.querySelectorAll('[data-product-bulk-save]').forEach(function(b){b.disabled=true;b.textContent='Kaydediliyor…';});
       var body=new FormData();
       body.set('action','bulk_update_products');
@@ -148,7 +151,7 @@
       body.set('updates_json',JSON.stringify(updates));
       fetch(api,{method:'POST',body:body,credentials:'same-origin',cache:'no-store'})
         .then(function(r){return r.json();})
-        .then(function(data){if(!data||!data.ok)throw new Error((data&&data.error)||'Ürünler güncellenemedi.');setStatus(data.message||'Ürünler güncellendi.');})
+        .then(function(data){if(!data||!data.ok)throw new Error((data&&data.error)||'Ürünler güncellenemedi.');updates.forEach(function(update){var row=root.querySelector('[data-bulk-product="'+update.id+'"]');if(!row)return;row.querySelector('[data-bulk-price]').defaultValue=update.sale_price;row.querySelector('[data-bulk-stock]').defaultValue=update.stock_quantity;});setStatus(data.message||'Ürünler güncellendi.');})
         .catch(function(error){setStatus(error.message||'Ürünler güncellenemedi.',true);})
         .finally(function(){root.querySelectorAll('[data-product-bulk-save]').forEach(function(b){b.disabled=false;b.textContent='Tüm Değişiklikleri Kaydet';});});
     });
