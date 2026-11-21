@@ -209,7 +209,7 @@ page_header('Teklif Ver', 'teklif_ver');
         <datalist id="productOptions">
           <?php foreach ($productRows as $p): ?><option value="<?php echo e($p['name']); ?>"></option><?php endforeach; ?>
         </datalist>
-        <div style="height:16px"></div>
+        <p class="mini-help">Ürün adından hatırladığın kelimeleri yaz; benzer kayıtlı ürünleri açılan listeden seçebilirsin. Örn: MOFİY ERKEK 3 LÜ ÇORAP.</p>
         <div class="offer-table-wrap">
           <table class="offer-table" id="offerRows">
             <thead><tr><th style="width:14%">Barkod</th><th style="width:26%">Ürün adı</th><th style="width:24%">Ürün cinsi / açıklama</th><th style="width:10%">Miktar</th><th style="width:12%">Birim fiyat</th><th style="width:10%">Tutar</th><th style="width:4%"></th></tr></thead>
@@ -419,4 +419,5 @@ page_header('Teklif Ver', 'teklif_ver');
 })();
 </script>
 <script src="assets/musteri-urun-son-fiyat.js?v=6"></script>
+<script src="assets/belge-urun-oneri.js?v=1"></script>
 <?php page_footer(); ?>
