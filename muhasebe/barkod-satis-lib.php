@@ -511,13 +511,28 @@ function pos_sales_on_date(string $date): array
         ORDER BY s.sale_time DESC,s.id DESC");
     $stmt->execute([$date]);
     $sales = $stmt->fetchAll() ?: [];
+    $creditSaleIds = [];
     foreach ($sales as &$sale) {
         $paymentAmounts = pos_sale_payment_amounts($sale);
         $sale['cash_amount'] = $paymentAmounts['cash'];
         $sale['card_amount'] = $paymentAmounts['card'];
         $sale['credit_amount'] = $paymentAmounts['credit'];
+        if ($paymentAmounts['credit'] > 0.004) $creditSaleIds[] = (int)$sale['id'];
     }
     unset($sale);
+    if ($creditSaleIds) {
+        $itemsBySale = [];
+        foreach (array_chunk($creditSaleIds, 500) as $ids) {
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $itemsStmt = db()->prepare("SELECT sale_id,barcode,product_name,quantity,unit_price,line_total FROM pos_sale_items WHERE sale_id IN ($placeholders) ORDER BY id ASC");
+            $itemsStmt->execute($ids);
+            foreach ($itemsStmt->fetchAll() ?: [] as $item) $itemsBySale[(int)$item['sale_id']][] = $item;
+        }
+        foreach ($sales as &$sale) {
+            if ((float)$sale['credit_amount'] > 0.004) $sale['items'] = $itemsBySale[(int)$sale['id']] ?? [];
+        }
+        unset($sale);
+    }
     return $sales;
 }
 
