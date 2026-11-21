@@ -32,6 +32,7 @@
   style.textContent+='[data-cash-left-date-wrap][hidden]{display:none!important}';
   style.textContent+='.pos-history-total{display:grid;gap:4px;padding:9px 11px;border:1px solid #e1d6c8;border-radius:14px;background:#fff;color:#16482e;font-size:13px}.pos-history-total small{font-size:10px;color:#7d6f61}';
   style.textContent+='.pos-audit-record{margin:10px 14px;padding:12px;border:1px solid #e1d6c8;border-radius:12px;overflow-wrap:anywhere}.pos-audit-record summary{cursor:pointer}.pos-audit-record small{display:block;margin-top:6px;color:#7d6f61}.pos-audit-record li{margin:8px 0}.pos-audit-record p{line-height:1.6}';
+  style.textContent+='.pos-history-list.pos-credit-list{grid-template-columns:1fr}.pos-history-item.pos-credit-sale{display:block}.pos-credit-sale .pos-history-row{display:flex}.pos-credit-sale .pos-history-actions{padding:0 12px 10px}.pos-credit-sale-items{margin:0 12px 12px;padding:10px 12px;border:1px solid #e8ddcf;border-radius:12px;background:#fffaf1}.pos-credit-sale-items>strong{display:block;margin-bottom:7px;color:#16482e;font-size:12px}.pos-credit-sale-items ul{list-style:none;margin:0;padding:0}.pos-credit-sale-items li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid #eee4d6;font-size:12px}.pos-credit-sale-items li:first-child{border-top:0}.pos-credit-sale-items li span{min-width:0;overflow-wrap:anywhere}.pos-credit-sale-items li small{display:block;color:#7d6f61}.pos-credit-sale-items li b{text-align:right;white-space:nowrap}.pos-credit-sale-items p{margin:8px 0 0;padding-top:8px;border-top:1px solid #e8ddcf;font-size:11px;font-weight:850}@media(max-width:680px){.pos-credit-sale-items li{display:grid;gap:3px}.pos-credit-sale-items li b{text-align:left;white-space:normal}}';
   document.head.appendChild(style);
 
   var cashGrid=document.createElement('div');
@@ -217,7 +218,6 @@
     if(view==='abandoned_carts'){renderAbandoned();return;}
     if(view==='cancelled_sales'||view==='removed_cart_items'){renderAudit();return;}
     if(view==='discounted_sales'){renderDiscountedSales();return;}
-    if(view==='recent') ensureActive();
     var s=summary();
     var tabs=''
       +tabHtml('cash','💵','Nakit',s.cash)
@@ -231,6 +231,14 @@
       var hidden=view==='past'||matchesActive?'0':'1';
       var receipt=esc(sale.receipt_no||('POS #'+sale.id));
       var customer=esc(sale.customer_name||sale.credit_person_name||'Perakende Müşteri');
+      var creditSale=amounts.credit>0.004;
+      var creditItems='';
+      if(creditSale){
+        var items=Array.isArray(sale.items)?sale.items:[];
+        creditItems='<div class="pos-credit-sale-items"><strong>'+customer+' kişisine verilen ürünler</strong><ul>'
+          +(items.length?items.map(function(item){return '<li><span>'+esc(item.product_name||'Ürün')+'<small>Barkod: '+esc(item.barcode||'-')+'</small></span><b>'+esc(item.quantity)+' × '+money(item.unit_price)+' = '+money(item.line_total)+'</b></li>';}).join(''):'<li>Bu fişin ürün ayrıntısı bulunamadı.</li>')
+          +'</ul><p>'+(Number(sale.discount_amount||0)>0.004?'Fiş iskontosu: '+money(sale.discount_amount)+' · ':'')+'Veresiye tutarı: '+money(amounts.credit)+'</p></div>';
+      }
       var actions='';
       if(view==='recent'&&canManage&&(sale.payment_method==='cash'||sale.payment_method==='card')){
         var target=sale.payment_method==='cash'?'card':'cash';
@@ -239,9 +247,10 @@
       if(view==='recent'&&canManage){
         actions+='<button type="button" class="danger" data-history-delete="'+esc(sale.id)+'" data-receipt="'+receipt+'">İptal</button>';
       }
-      return '<div class="pos-history-item" data-history-payment="'+esc(sale.payment_method)+'" data-pos-history-hidden="'+hidden+'">'
+      return '<div class="pos-history-item'+(creditSale?' pos-credit-sale':'')+'" data-history-payment="'+esc(sale.payment_method)+'" data-pos-history-hidden="'+hidden+'">'
         +'<a href="barkod-fis.php?id='+encodeURIComponent(sale.id)+'" target="_blank" class="pos-history-row"><span><strong>'+receipt+'</strong><small>'+dateTr(sale.sale_date)+' '+esc(String(sale.sale_time||'').slice(0,5))+' · '+customer+'</small><small class="pos-history-method">'+esc(paymentDetail(sale))+'</small></span><strong>'+money(sale.grand_total)+'</strong></a>'
         +(actions?'<div class="pos-history-actions">'+actions+'</div>':'')
+        +creditItems
         +'</div>';
     }).join('');
 
@@ -254,7 +263,7 @@
       +'</button>'
       +'<div class="pos-history-content" data-history-content '+(expanded?'':'hidden')+'>'
       +(loading?'<p class="pos-history-message" role="status">Satışlar yükleniyor…</p>':loadError?'<p class="pos-history-message" role="alert">'+esc(loadError)+' <button type="button" data-history-retry>Tekrar dene</button></p>':'<div class="pos-history-summary">'+tabs+'</div>')
-      +'<div class="pos-history-list">'+(loading||loadError?'':rows||'<p class="pos-history-message">'+(view==='past'?'Seçilen gün için satış yok.':'Henüz barkodlu satış yok.')+'</p>')+'</div>'
+      +'<div class="pos-history-list'+(view==='recent'&&active==='credit'?' pos-credit-list':'')+'">'+(loading||loadError?'':(view==='recent'&&active==='credit'&&!s.credit.count?'<p class="pos-history-message">Bugün veresiye satış yok.</p>':'')+(rows||'<p class="pos-history-message">'+(view==='past'?'Seçilen gün için satış yok.':'Henüz barkodlu satış yok.')+'</p>'))+'</div>'
       +'</div>';
   }
 
@@ -335,6 +344,7 @@
           ?data.credit_collections
           :{cash:0,card:0,total:0,count:0,entries:[]};
         loading=false;
+        if(view==='recent') ensureActive();
         render();
       })
       .catch(function(error){
