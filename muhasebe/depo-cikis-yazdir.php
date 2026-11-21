@@ -37,6 +37,7 @@ $vatAmount = (float)($row['vat_amount'] ?? 0);
 $grandTotal = (float)($row['total'] ?? ($subtotal - $discountAmount + $vatAmount));
 $balanceSummary = depo_cikis_balance_summary($row);
 $rows = $row['items'] ?? [];
+$densePrint = count($rows) >= 13;
 $hasProductType = false;
 foreach ($rows as $r) {
     if (trim((string)($r['product_type'] ?? '')) !== '') {
@@ -72,12 +73,34 @@ $editUrl = 'depo-cikis.php?edit='.(int)$row['id'];
 .balance-note{font-size:2.3mm;line-height:1.3;margin:1.5mm 0 0;color:#465268}
 @media print{
   html,body{height:auto!important;overflow:visible!important}
-  .page{display:block;height:auto!important;min-height:297mm;overflow:visible!important}
-  .content{padding-bottom:7mm!important}
-  .bottom{position:relative;break-inside:avoid;page-break-inside:avoid}
+  .page{display:block;height:auto!important;min-height:296mm;overflow:visible!important}
+  .content{padding-bottom:3mm!important}
+  .items .empty-row{display:none}
+  .balance-summary{margin-top:2mm;padding:1mm 2.5mm}
+  .balance-row{padding:.7mm 0}
+  .balance-note{margin-top:.8mm}
+  .note{margin-top:2.5mm}
+  .bottom{position:relative;height:29mm!important;background:linear-gradient(to bottom,var(--navy) 0,var(--navy) 23mm,#efc36d 23mm,#f9e4aa 26mm,#efc36d 29mm)!important;break-inside:avoid;page-break-inside:avoid}
+  .bottom:after{height:6mm!important;font-size:2.8mm!important}
+  .features{height:23mm!important;padding:2.5mm 9mm!important}
+  .feature{height:17mm}
+  .thanks{padding:2.5mm}
   table.items{overflow:visible}
   .items thead{display:table-header-group}
   .items tr,.note{break-inside:avoid;page-break-inside:avoid}
+  .page.dense-print .header{height:42mm!important}
+  .page.dense-print .logo{width:100mm!important;height:26mm!important;margin-bottom:2mm!important}
+  .page.dense-print .contact{height:8mm!important}
+  .page.dense-print .content{padding-top:5mm!important}
+  .page.dense-print .doc-head{margin-bottom:3mm}
+  .page.dense-print .date-row{min-height:8mm!important}
+  .page.dense-print .customer-name{font-size:5mm!important}
+  .page.dense-print .items{font-size:2.4mm}
+  .page.dense-print .items td{height:3.3mm!important;padding:.3mm .8mm;line-height:1.08}
+  .page.dense-print .items th{padding:1mm .7mm!important}
+  .page.dense-print .total-line td{height:4mm!important}
+  .page.dense-print .balance-row{font-size:2.6mm}
+  .page.dense-print .note{font-size:2.8mm}
 }
 </style>
 </head>
@@ -87,11 +110,11 @@ $editUrl = 'depo-cikis.php?edit='.(int)$row['id'];
   <button type="button" onclick="window.print()">Yazdır / PDF al</button>
   <?php if (!$isShared): ?><?php depo_cikis_share_button((int)$row['id']); ?><a href="<?php echo e($editUrl); ?>">Düzenlemeye dön</a><a href="depo-cikis.php">Depo çıkış listesi</a><?php endif; ?>
 </div>
-<main class="page">
+<main class="page<?php echo $densePrint ? ' dense-print' : ''; ?>">
 <section class="header"><img class="logo" src="<?php echo e($logoSrc); ?>" alt="Dumanlar"><div class="brand-line"><?php echo e($title); ?></div></section>
 <section class="contact"><div><span class="ico">T</span>0 (356) 715 82 83</div><div><span class="ico">M</span>dumanlartekstil@yahoo.com</div><div class="web-cell"><span class="ico">W</span>www.dumanlartekstil.com.tr</div><div><span class="ico wa" aria-label="WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16.02 3.2A12.73 12.73 0 0 0 5.2 22.65L3.8 28.8l6.29-1.66A12.74 12.74 0 1 0 16.02 3.2Zm0 23.12c-2.05 0-4.06-.6-5.78-1.74l-.41-.27-3.74.99 1-3.64-.27-.42a10.35 10.35 0 1 1 9.2 5.08Zm5.96-7.74c-.33-.16-1.93-.95-2.23-1.06-.3-.11-.52-.16-.74.16-.22.33-.85 1.06-1.04 1.28-.19.22-.38.25-.7.08-.33-.16-1.38-.51-2.63-1.62-.97-.86-1.62-1.92-1.81-2.25-.19-.33-.02-.5.14-.66.15-.15.33-.38.49-.57.16-.19.22-.33.33-.55.11-.22.05-.41-.03-.57-.08-.16-.74-1.78-1.01-2.44-.27-.64-.54-.55-.74-.56h-.63c-.22 0-.57.08-.87.41-.3.33-1.14 1.11-1.14 2.71s1.17 3.15 1.33 3.37c.16.22 2.3 3.51 5.57 4.92.78.34 1.39.54 1.86.69.78.25 1.49.21 2.05.13.63-.09 1.93-.79 2.2-1.55.27-.76.27-1.42.19-1.55-.08-.14-.3-.22-.63-.38Z"/></svg></span>0 (356) 715 82 83</div><div class="address-cell"><span class="ico">A</span><span class="address-text"><span>Kelkit Osb Mah. Beyllikbükü Cad. No:8</span><strong>ERBAA/TOKAT</strong></span></div></section>
 <section class="content"><div class="doc-head"><div class="title-wrap"><div class="customer-name"><?php echo e($customer); ?></div><?php if ($customerAddress !== ''): ?><div class="customer-info"><div><b>Adres</b><span><?php echo e($customerAddress); ?></span></div></div><?php endif; ?><div class="city"><?php echo e($city ?: '-'); ?></div></div><div class="date-box"><div class="date-row"><b>SİPARİŞ TARİHİ</b><strong><?php echo e(tr_date($dispatchDate)); ?></strong></div><div class="date-row"><b>SİPARİŞ NO</b><strong><?php echo e($dispatchNo); ?></strong></div></div></div>
-<table class="items"><thead><tr><?php if ($hasProductType): ?><th style="width:15%">BARKOD</th><th style="width:30%">ÜRÜN ADI</th><th style="width:21%">ÜRÜN CİNSİ / AÇIKLAMA</th><th style="width:10%"><?php echo e($quantityLabel); ?></th><th style="width:11%">BİRİM FİYAT</th><th style="width:13%">TUTAR</th><?php else: ?><th style="width:17%">BARKOD</th><th style="width:39%">ÜRÜN ADI</th><th style="width:12%"><?php echo e($quantityLabel); ?></th><th style="width:14%">BİRİM FİYAT</th><th style="width:18%">TUTAR</th><?php endif; ?></tr></thead><tbody><?php foreach ($rows as $r): $barcode=trim((string)($r['product_barcode'] ?? '')); $name=trim((string)($r['product_name'] ?? '')); $ptype=trim((string)($r['product_type'] ?? '')); $qty=(float)($r['quantity'] ?? 0); $price=(float)($r['unit_price'] ?? 0); $line=(float)($r['line_total'] ?? 0); $has=$barcode!=='' || $name!=='' || $ptype!=='' || $qty>0 || $price>0; ?><tr><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($barcode); ?></td><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($name); ?></td><?php if ($hasProductType): ?><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($ptype); ?></td><?php endif; ?><td class="center"><?php echo $qty > 0 ? e(number_format($qty, 0, ',', '.')) : ''; ?></td><td class="right"><?php echo $price > 0 ? e(teklif_money($price)) : ''; ?></td><td class="right"><?php echo $line > 0 ? e(teklif_money($line)) : ''; ?></td></tr><?php endforeach; ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">ARA TOPLAM</td><td class="amount"><?php echo e(teklif_money($subtotal)); ?> <?php echo e($currency); ?></td></tr><?php if ($discountEnabled): ?><tr class="total-line discount"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">İSKONTO (%<?php echo e((string)$discountRate); ?>)</td><td class="amount">-<?php echo e(teklif_money($discountAmount)); ?> <?php echo e($currency); ?></td></tr><?php endif; ?><?php if ($vatEnabled): ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">KDV (%<?php echo e((string)$vatRate); ?>)</td><td class="amount"><?php echo e(teklif_money($vatAmount)); ?> <?php echo e($currency); ?></td></tr><?php endif; ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">GENEL TOPLAM</td><td class="amount"><?php echo e(teklif_money($grandTotal)); ?> <?php echo e($currency); ?></td></tr></tbody></table>
+<table class="items"><thead><tr><?php if ($hasProductType): ?><th style="width:15%">BARKOD</th><th style="width:30%">ÜRÜN ADI</th><th style="width:21%">ÜRÜN CİNSİ / AÇIKLAMA</th><th style="width:10%"><?php echo e($quantityLabel); ?></th><th style="width:11%">BİRİM FİYAT</th><th style="width:13%">TUTAR</th><?php else: ?><th style="width:17%">BARKOD</th><th style="width:39%">ÜRÜN ADI</th><th style="width:12%"><?php echo e($quantityLabel); ?></th><th style="width:14%">BİRİM FİYAT</th><th style="width:18%">TUTAR</th><?php endif; ?></tr></thead><tbody><?php foreach ($rows as $r): $barcode=trim((string)($r['product_barcode'] ?? '')); $name=trim((string)($r['product_name'] ?? '')); $ptype=trim((string)($r['product_type'] ?? '')); $qty=(float)($r['quantity'] ?? 0); $price=(float)($r['unit_price'] ?? 0); $line=(float)($r['line_total'] ?? 0); $has=$barcode!=='' || $name!=='' || $ptype!=='' || $qty>0 || $price>0; ?><tr<?php echo $has ? '' : ' class="empty-row"'; ?>><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($barcode); ?></td><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($name); ?></td><?php if ($hasProductType): ?><td class="<?php echo $has ? '' : 'empty'; ?>"><?php echo e($ptype); ?></td><?php endif; ?><td class="center"><?php echo $qty > 0 ? e(number_format($qty, 0, ',', '.')) : ''; ?></td><td class="right"><?php echo $price > 0 ? e(teklif_money($price)) : ''; ?></td><td class="right"><?php echo $line > 0 ? e(teklif_money($line)) : ''; ?></td></tr><?php endforeach; ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">ARA TOPLAM</td><td class="amount"><?php echo e(teklif_money($subtotal)); ?> <?php echo e($currency); ?></td></tr><?php if ($discountEnabled): ?><tr class="total-line discount"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">İSKONTO (%<?php echo e((string)$discountRate); ?>)</td><td class="amount">-<?php echo e(teklif_money($discountAmount)); ?> <?php echo e($currency); ?></td></tr><?php endif; ?><?php if ($vatEnabled): ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">KDV (%<?php echo e((string)$vatRate); ?>)</td><td class="amount"><?php echo e(teklif_money($vatAmount)); ?> <?php echo e($currency); ?></td></tr><?php endif; ?><tr class="total-line"><td colspan="<?php echo $totalBlankColspan; ?>"></td><td class="label">GENEL TOPLAM</td><td class="amount"><?php echo e(teklif_money($grandTotal)); ?> <?php echo e($currency); ?></td></tr></tbody></table>
 <section class="balance-summary" aria-label="Cari bakiye özeti">
 <?php foreach (['old'=>'Eski Bakiye', 'dispatch'=>'Bu Fiş', 'new'=>'Yeni Bakiye'] as $key=>$label): ?>
 <div class="balance-row"><span><?php echo e($label); ?></span><strong><?php echo $balanceSummary[$key] === null ? '—' : e(teklif_money($balanceSummary[$key]).' '.$balanceSummary['currency']); ?></strong></div>
