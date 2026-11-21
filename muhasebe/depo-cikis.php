@@ -54,7 +54,7 @@ page_header('Depo Çıkış','depo_cikis');
     <label><span>KDV oranı (%)</span><input id="wdVatRate" name="vat_rate" inputmode="decimal" value="<?php echo e((string)($edit['vat_rate']??'10')); ?>" placeholder="10"></label>
    </div>
    <datalist id="wdProductOptions"><?php foreach($productRows as $p): ?><option value="<?php echo e($p['name']); ?>"<?php if(trim((string)($p['barcode']??''))!==''): ?> label="<?php echo e((string)$p['barcode']); ?>"<?php endif; ?>></option><?php endforeach; ?></datalist>
-   <small class="wd-product-help">Ürün adını yazmaya başlayınca Sipariş Ver bölümünde kayıtlı ürünler hatırlatma olarak çıkar. Örn: 6000 → 6000 BİTKE ERKEK MODAL ÇORAP.</small>
+   <small class="wd-product-help">Ürün adından hatırladığın kelimeleri yaz; eşleşen kayıtlı ürünleri aşağıdan seçebilirsin. Örn: MOFİY ERKEK 3 LÜ ÇORAP.</small>
    <div class="wd-table"><table id="wdRows"><thead><tr><th>Barkod</th><th class="wd-col-name">Ürün adı</th><th class="wd-col-desc">Açıklama</th><th class="wd-col-qty">Miktar</th><th class="wd-col-price">Birim fiyat</th><th class="wd-col-total">Tutar</th><th class="wd-col-remove"></th></tr></thead><tbody><?php for($i=0;$i<$rows;$i++): ?><tr><td><input name="product_barcode[]" class="product-barcode" value="<?php echo e($items[$i]['product_barcode']??''); ?>"></td><td class="wd-col-name"><input name="product_name[]" list="wdProductOptions" class="product-name" autocomplete="off" value="<?php echo e($items[$i]['product_name']??''); ?>"></td><td class="wd-col-desc"><input name="product_type[]" class="product-type" autocomplete="off" value="<?php echo e($items[$i]['product_type']??''); ?>" placeholder="Ürün açıklaması"></td><td class="wd-col-qty"><input class="calc qty" name="quantity[]" inputmode="decimal" value="<?php echo e($items[$i]['quantity']??''); ?>"></td><td class="wd-col-price"><input class="calc price" name="unit_price[]" inputmode="decimal" value="<?php echo e($items[$i]['unit_price']??''); ?>"></td><td class="line wd-col-total">0,00</td><td class="wd-col-remove"><button type="button" class="remove">×</button></td></tr><?php endfor; ?></tbody></table></div>
    <div class="wd-totals">
     <div class="wd-total-line"><span>Ara toplam:</span><strong id="wdSubtotal">0,00 TL</strong></div>
@@ -165,4 +165,5 @@ foreach(array_unique($shareIds) as $shareId) depo_cikis_share_form($shareId);
 })();
 </script>
 <script src="assets/musteri-urun-son-fiyat.js?v=6"></script>
+<script src="assets/belge-urun-oneri.js?v=1"></script>
 <?php page_footer(); ?>
