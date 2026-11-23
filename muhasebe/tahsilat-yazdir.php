@@ -1,6 +1,7 @@
 <?php
+require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/tahsilat-db.php';
-require_login();
+require_receipt_modules();
 
 $id = (int)($_GET['id'] ?? 0);
 $r = tahsilat_load($id);
