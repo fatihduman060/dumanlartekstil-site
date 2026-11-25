@@ -41,8 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'to_warehouse') {
             $id = (int)($_POST['id'] ?? 0);
             $dispatchId = depo_cikis_from_offer($id);
-            flash('success', 'Teklif Depo Çıkışına gönderildi. Gönderilmiş fişler bölümüne taşındı.');
-            redirect('teklif-ver.php#sent-offers');
+            $dispatch = depo_cikis_load($dispatchId);
+            flash('success', $dispatch && depo_cikis_awaiting_preparation($dispatch)
+                ? 'Teklif depoya gönderildi. Sipariş, Hazırlanmayı Bekleyen Siparişler bölümünde.'
+                : 'Bu teklifin depo fişi zaten mevcut; mevcut durumuyla açılıyor.');
+            redirect('depo-cikis.php#depo-list');
         }
         if ($action === 'delete') {
             $id = (int)($_POST['id'] ?? 0);

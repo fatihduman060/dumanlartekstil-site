@@ -25,6 +25,7 @@
     var realRows=rows.filter(function(row){return row.children.length>=6;});
     if(!realRows.length) return;
 
+    var preparationRows=[];
     var pendingRows=[];
     var completedRows=[];
     var groups={};
@@ -34,8 +35,9 @@
       var cells=row.children;
       var status=(cells[3].textContent||'').replace(/\s+/g,' ').trim();
       var customer=(cells[1].textContent||'').replace(/\s+/g,' ').trim()||'Cari seçilmemiş';
+      var stage=row.getAttribute('data-dispatch-stage')||'';
 
-      if(/Cariye işlendi/i.test(status)){
+      if(stage==='posted'||(!stage&&/Cariye işlendi/i.test(status))){
         var key=norm(customer);
         if(!groups[key]){
           groups[key]={name:customer,rows:[]};
@@ -45,7 +47,12 @@
         return;
       }
 
-      if(/Çıkışı yapıldı|Çıkış yapıldı|İşlendi/i.test(status)){
+      if(stage==='preparation'||(!stage&&/Hazırlanmayı bekliyor/i.test(status))){
+        preparationRows.push(row);
+        return;
+      }
+
+      if(stage==='completed'||(!stage&&/Çıkışı yapıldı|Çıkış yapıldı|İşlendi/i.test(status))){
         completedRows.push(row);
         return;
       }
@@ -67,6 +74,9 @@
       head.innerHTML='<td colspan="6"><strong>'+escapeHtml(title)+'</strong><small>'+(count?count+' kayıt':escapeHtml(emptyText||'Kayıt yok'))+'</small></td>';
       tbody.appendChild(head);
     }
+
+    sectionTitle('Hazırlanmayı Bekleyen Siparişler',preparationRows.length,'wd-group-preparation-title','Hazırlanmayı bekleyen sipariş yok');
+    preparationRows.forEach(function(row){tbody.appendChild(row);});
 
     sectionTitle('Bekleyenler',pendingRows.length,'wd-group-pending-title','Bekleyen fiş yok');
     pendingRows.forEach(function(row){tbody.appendChild(row);});
@@ -124,7 +134,7 @@
     var style=document.createElement('style');
     style.id='wdCariGroupStyle';
     style.textContent=''
-      +'.wd-group-section-title td{background:#f7f1e7!important;padding:10px 12px!important;border-bottom:1px solid #e5dccf!important}.wd-group-section-title strong{color:#173f29}.wd-group-section-title small{display:block;margin-top:2px;color:#776f64;font-size:11px}.wd-group-pending-title td{background:#fff6df!important}.wd-group-completed-title td{background:#edf7f0!important}.wd-group-archived-title td{background:#e8f1f8!important}'
+      +'.wd-group-section-title td{background:#f7f1e7!important;padding:10px 12px!important;border-bottom:1px solid #e5dccf!important}.wd-group-section-title strong{color:#173f29}.wd-group-section-title small{display:block;margin-top:2px;color:#776f64;font-size:11px}.wd-group-preparation-title td{background:#fff0d5!important}.wd-group-pending-title td{background:#fff6df!important}.wd-group-completed-title td{background:#edf7f0!important}.wd-group-archived-title td{background:#e8f1f8!important}'
       +'.wd-cari-group-head td{padding:0!important;background:#fff!important;border-bottom:1px solid #e5dccf!important}.wd-cari-group-toggle{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;width:100%;border:0;background:#fbfaf7;color:#173f29;text-align:left;padding:11px 13px;cursor:pointer}.wd-cari-group-toggle:hover{background:#f4f8f5}.wd-cari-group-toggle strong{font-size:13px}.wd-cari-group-toggle small{color:#776f64;font-size:11px;font-weight:750}.wd-cari-group-arrow{width:18px;color:#216b39;font-size:11px}.wd-cari-group-head[aria-expanded="true"] .wd-cari-group-toggle{background:#edf7f0}.wd-cari-group-row[hidden]{display:none!important}'
       +'@media(max-width:700px){.wd-cari-group-toggle{grid-template-columns:auto 1fr}.wd-cari-group-toggle small{grid-column:2}}';
     document.head.appendChild(style);

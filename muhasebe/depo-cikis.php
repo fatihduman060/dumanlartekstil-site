@@ -8,6 +8,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     require_csrf(); $action=(string)($_POST['action']??''); $id=(int)($_POST['id']??0);
     try{
         if($action==='save'){$id=depo_cikis_save($id);flash('success','Depo çıkış fişi kaydedildi.');redirect('depo-cikis.php?edit='.$id);}
+        if($action==='prepared'){depo_cikis_mark_prepared($id);flash('success','Fiş Hazırlandı olarak işaretlendi.');redirect('depo-cikis.php#depo-list');}
         if($action==='processed'){depo_cikis_mark_processed($id);flash('success','Fiş Çıkış Yapıldı olarak işaretlendi.');redirect('depo-cikis.php#depo-list');}
         if($action==='post_cari'){$mid=depo_cikis_post_to_cari($id);flash('success','Fiş cariye işlendi. Hareket #'.$mid);redirect('depo-cikis.php#depo-list');}
     }catch(Throwable $e){flash('error',$e->getMessage());}
@@ -35,8 +36,9 @@ page_header('Depo Çıkış','depo_cikis');
 <style>
 .wd{display:grid;gap:16px;max-width:1500px;margin:auto}.wd-hero{padding:20px 22px;border-radius:22px;background:linear-gradient(135deg,#102818,#23613c);color:#fff}.wd-hero h2{margin:4px 0}.wd-hero p{margin:0;color:#e4f0e8}.wd-card{padding:18px;border:1px solid #e5dccf;border-radius:20px;background:#fff}.wd-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}.wd-grid label{display:grid;gap:5px;font-size:12px;font-weight:850}.wd-grid .wide{grid-column:span 2}.wd-grid input,.wd-grid select,.wd-grid textarea{width:100%;min-height:42px;padding:9px;border:1px solid #ddd2c1;border-radius:11px}.wd-check{display:flex!important;align-items:center;gap:9px;min-height:42px;padding:9px 11px;border:1px solid #ddd2c1;border-radius:11px;background:#fff}.wd-check input{width:auto!important;min-height:auto!important}.wd-table{overflow:auto;margin-top:15px;border:1px solid #e5dccf;border-radius:14px}.wd table{width:100%;border-collapse:collapse;min-width:980px;table-layout:auto}.wd th{padding:10px;background:#16482e;color:#fff;text-align:left;font-size:11px}.wd td{padding:8px;border-bottom:1px solid #eee5d9;vertical-align:top}.wd-table input{width:100%;min-height:38px;padding:7px;border:1px solid #ddd2c1;border-radius:9px}.wd-col-name{min-width:280px}.wd-col-desc{width:190px;min-width:190px;max-width:190px}.wd-col-qty{width:110px;min-width:110px}.wd-col-price{width:130px;min-width:130px}.wd-col-total{width:120px;min-width:120px}.wd-col-remove{width:42px;min-width:42px;text-align:center}.wd-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}.wd-actions a,.wd-actions button{display:inline-flex;align-items:center;border:1px solid #d9cfbf;border-radius:999px;padding:8px 12px;background:#fff;color:#173f29;font-weight:850;text-decoration:none;cursor:pointer}.wd-actions .primary{background:#16482e;color:#fff}.wd-actions form{display:inline}.status{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:900;background:#fff2d8;color:#885f0b}.status.done{background:#e7f6eb;color:#216b39}.wd-totals{display:grid;justify-content:end;gap:5px;margin-top:12px;color:#173f29}.wd-total-line{display:grid;grid-template-columns:160px 160px;gap:10px;text-align:right;align-items:center}.wd-total-line strong{font-size:16px}.wd-total-line.discount strong{color:#b64242}.wd-total-line.grand strong{font-size:22px}.muted{color:#776f64}.wd-product-help{display:block;margin-top:8px;color:#776f64;font-size:11px;font-weight:700}@media(max-width:800px){.wd-grid{grid-template-columns:1fr 1fr}.wd-grid .wide{grid-column:1/-1}}@media(max-width:520px){.wd-grid{grid-template-columns:1fr}.wd-grid .wide{grid-column:1}.wd-card{padding:12px}.wd-hero{padding:17px}.wd-total-line{grid-template-columns:1fr 1fr}}
 </style>
+<style>.status.preparation{background:#fff0d5;color:#80531a}</style>
 <div class="wd" style="display:grid!important">
- <section class="wd-hero"><small>MAĞAZA / DEPO ÇIKIŞ</small><h2>Sipariş fişi hazırla</h2><p>Depodan çıkan ürünleri kaydet, düzenle ve yazdır.</p></section>
+ <section class="wd-hero"><small>MAĞAZA / DEPO ÇIKIŞ</small><h2>Sipariş fişi hazırla</h2><p>Siparişleri hazırla, depo çıkışını tamamla ve fişleri yazdır.</p></section>
  <section class="wd-card">
   <h3><?php echo $edit?'Fişi düzenle':'Yeni depo çıkış fişi'; ?></h3>
   <?php if($edit) satis_bag_display('dispatch',(int)$edit['id']); ?>
@@ -65,7 +67,44 @@ page_header('Depo Çıkış','depo_cikis');
    <div class="wd-actions"><button class="primary">Kaydet</button><button type="button" id="wdAdd">Satır ekle</button><?php if($edit): ?><a target="_blank" rel="noopener noreferrer" href="depo-cikis-yazdir.php?id=<?php echo e($edit['id']); ?>">Yazdır</a><a target="_blank" rel="noopener noreferrer" href="depo-cikis-yazdir.php?id=<?php echo e($edit['id']); ?>&pdf=1">PDF görüntüle</a><?php depo_cikis_share_button((int)$edit['id']); ?><a href="depo-cikis.php">Yeni fiş</a><?php endif; ?></div>
   </form>
  </section>
- <section class="wd-card" id="depo-list"><h3>Depo çıkış takibi</h3><div class="wd-table"><table><thead><tr><th>Tarih / No</th><th>Firma</th><th>Toplam</th><th>Durum</th><th>Oluşturan</th><th>İşlemler</th></tr></thead><tbody><?php if(!$list): ?><tr><td colspan="6">Henüz kayıt yok.</td></tr><?php endif; ?><?php foreach($list as $r): ?><tr><td><?php echo e(tr_date($r['dispatch_date'])); ?><br><small>#<?php echo e($r['dispatch_no']); ?></small></td><td><?php echo e($r['customer_name']); ?></td><td><strong><?php echo e(money((float)$r['total'])); ?> TL</strong><?php if((int)($r['discount_enabled']??0)===1): ?><br><small>%<?php echo e((string)$r['discount_rate']); ?> iskonto</small><?php endif; ?><?php if((int)($r['vat_enabled']??0)===1): ?><br><small>%<?php echo e((string)$r['vat_rate']); ?> KDV</small><?php endif; ?></td><td><span class="status <?php echo (int)$r['processed']?'done':''; ?>"><?php echo satis_bag_active((int)($r['cari_movement_id']??0))?'Cariye işlendi':((int)$r['processed']?'Çıkışı yapıldı':'Bekliyor'); ?></span><?php satis_bag_display('dispatch',(int)$r['id']); ?></td><td><?php echo e($r['creator_name']?:'-'); ?></td><td><div class="wd-actions"><?php if(depo_cikis_can_edit($r)): ?><a href="depo-cikis.php?edit=<?php echo e($r['id']); ?>">Düzenle</a><?php endif; ?><a target="_blank" rel="noopener noreferrer" href="depo-cikis-yazdir.php?id=<?php echo e($r['id']); ?>">Yazdır</a><a target="_blank" rel="noopener noreferrer" href="depo-cikis-yazdir.php?id=<?php echo e($r['id']); ?>&pdf=1">PDF görüntüle</a><?php depo_cikis_share_button((int)$r['id']); ?><?php if(!(int)$r['processed'] && depo_cikis_can_mark_processed()): ?><form method="post" onsubmit="return confirm('Bu fişin depo çıkışı tamamlandı mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="processed"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button>Çıkış Yapıldı</button></form><?php endif; ?><?php if(can_process_warehouse_dispatch() && ((int)$r['processed'] || (int)$r['posted_to_cari'])): ?><form method="post" onsubmit="return confirm('Bu fiş cariye işlensin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="post_cari"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button><?php echo satis_bag_active((int)($r['cari_movement_id']??0))?(satis_bag_get('dispatch',(int)$r['id'])?'Cari bağlantısını kontrol et':'Cariyi Güncelle'):'Cariye İşle'; ?></button></form><?php endif; ?></div></td></tr><?php endforeach; ?></tbody></table></div></section>
+ <section class="wd-card" id="depo-list">
+  <h3>Depo çıkış takibi</h3>
+  <div class="wd-table"><table>
+   <thead><tr><th>Tarih / No</th><th>Firma</th><th>Toplam</th><th>Durum</th><th>Oluşturan</th><th>İşlemler</th></tr></thead>
+   <tbody>
+    <?php if(!$list): ?><tr><td colspan="6">Henüz kayıt yok.</td></tr><?php endif; ?>
+    <?php foreach($list as $r): ?>
+     <?php
+      $posted=satis_bag_active((int)($r['cari_movement_id']??0));
+      $preparing=depo_cikis_awaiting_preparation($r);
+      $stage=$posted?'posted':($preparing?'preparation':((int)$r['processed']?'completed':'pending'));
+      $statusLabel=$posted?'Cariye işlendi':($preparing?'Hazırlanmayı bekliyor':((int)$r['processed']?'Çıkışı yapıldı':'Bekliyor'));
+     ?>
+     <tr data-dispatch-stage="<?php echo e($stage); ?>">
+      <td><?php echo e(tr_date($r['dispatch_date'])); ?><br><small>#<?php echo e($r['dispatch_no']); ?></small></td>
+      <td><?php echo e($r['customer_name']); ?></td>
+      <td><strong><?php echo e(money((float)$r['total'])); ?> TL</strong><?php if((int)($r['discount_enabled']??0)===1): ?><br><small>%<?php echo e((string)$r['discount_rate']); ?> iskonto</small><?php endif; ?><?php if((int)($r['vat_enabled']??0)===1): ?><br><small>%<?php echo e((string)$r['vat_rate']); ?> KDV</small><?php endif; ?></td>
+      <td><span class="status <?php echo $preparing?'preparation':((int)$r['processed']?'done':''); ?>"><?php echo e($statusLabel); ?></span><?php satis_bag_display('dispatch',(int)$r['id']); ?></td>
+      <td><?php echo e($r['creator_name']?:'-'); ?></td>
+      <td><div class="wd-actions">
+       <?php if(depo_cikis_can_edit($r)): ?><a href="depo-cikis.php?edit=<?php echo e($r['id']); ?>">Düzenle</a><?php endif; ?>
+       <a target="_blank" rel="noopener noreferrer" href="depo-cikis-yazdir.php?id=<?php echo e($r['id']); ?>">Yazdır</a>
+       <a target="_blank" rel="noopener noreferrer" href="depo-cikis-yazdir.php?id=<?php echo e($r['id']); ?>&pdf=1">PDF görüntüle</a>
+       <?php depo_cikis_share_button((int)$r['id']); ?>
+       <?php if($preparing && depo_cikis_can_mark_processed()): ?>
+        <form method="post" onsubmit="return confirm('Bu sipariş hazırlandı mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="prepared"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button>Hazırlandı</button></form>
+       <?php elseif(!(int)$r['processed'] && depo_cikis_can_mark_processed()): ?>
+        <form method="post" onsubmit="return confirm('Bu fişin depo çıkışı tamamlandı mı?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="processed"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button>Çıkış Yapıldı</button></form>
+       <?php endif; ?>
+       <?php if(can_process_warehouse_dispatch() && ((int)$r['processed'] || (int)$r['posted_to_cari'])): ?>
+        <form method="post" onsubmit="return confirm('Bu fiş cariye işlensin mi?');"><?php echo csrf_field(); ?><input type="hidden" name="action" value="post_cari"><input type="hidden" name="id" value="<?php echo e($r['id']); ?>"><button><?php echo $posted?(satis_bag_get('dispatch',(int)$r['id'])?'Cari bağlantısını kontrol et':'Cariyi Güncelle'):'Cariye İşle'; ?></button></form>
+       <?php endif; ?>
+      </div></td>
+     </tr>
+    <?php endforeach; ?>
+   </tbody>
+  </table></div>
+ </section>
 </div>
 <?php
 $shareIds=array_map('intval',array_column($list,'id'));

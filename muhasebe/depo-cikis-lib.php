@@ -25,6 +25,7 @@ function depo_cikis_db_ensure(): void
         discount_enabled INTEGER NOT NULL DEFAULT 0, discount_rate REAL NOT NULL DEFAULT 0, discount_amount REAL NOT NULL DEFAULT 0,
         vat_enabled INTEGER NOT NULL DEFAULT 0, vat_rate REAL NOT NULL DEFAULT 10, vat_amount REAL NOT NULL DEFAULT 0,
         total REAL NOT NULL DEFAULT 0,
+        preparation_status TEXT NOT NULL DEFAULT 'ready', prepared_at TEXT, prepared_by INTEGER,
         processed INTEGER NOT NULL DEFAULT 0, processed_at TEXT, processed_by INTEGER,
         posted_to_cari INTEGER NOT NULL DEFAULT 0, cari_movement_id INTEGER,
         source_offer_id INTEGER,
@@ -33,6 +34,9 @@ function depo_cikis_db_ensure(): void
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
     )");
     try { ensure_column($pdo, 'warehouse_dispatches', 'source_offer_id', 'INTEGER'); } catch (Throwable $e) {}
+    try { ensure_column($pdo, 'warehouse_dispatches', 'preparation_status', "TEXT NOT NULL DEFAULT 'ready'"); } catch (Throwable $e) {}
+    try { ensure_column($pdo, 'warehouse_dispatches', 'prepared_at', 'TEXT'); } catch (Throwable $e) {}
+    try { ensure_column($pdo, 'warehouse_dispatches', 'prepared_by', 'INTEGER'); } catch (Throwable $e) {}
     try { ensure_column($pdo, 'warehouse_dispatches', 'is_cancelled', 'INTEGER NOT NULL DEFAULT 0'); } catch (Throwable $e) {}
     try { ensure_column($pdo, 'warehouse_dispatches', 'cancelled_at', 'TEXT'); } catch (Throwable $e) {}
     try { ensure_column($pdo, 'warehouse_dispatches', 'cancelled_by', 'INTEGER'); } catch (Throwable $e) {}
@@ -144,8 +148,8 @@ function depo_cikis_from_offer(int $offerId): int
         $stmt = $pdo->prepare('INSERT INTO warehouse_dispatches
             (dispatch_no,dispatch_date,cari_id,customer_name,customer_city,customer_address,note,currency,
              subtotal,discount_enabled,discount_rate,discount_amount,vat_enabled,vat_rate,vat_amount,total,
-             processed,posted_to_cari,source_offer_id,created_by,created_at,updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?,?)');
+             preparation_status,processed,posted_to_cari,source_offer_id,created_by,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?,?)');
         $stmt->execute([
             $dispatchNo,
             $dispatchDate,
@@ -163,6 +167,7 @@ function depo_cikis_from_offer(int $offerId): int
             (float)($offer['vat_rate'] ?? 10),
             round((float)($offer['vat_amount'] ?? 0), 2),
             round((float)($offer['grand_total'] ?? 0), 2),
+            'awaiting',
             $offerId,
             (int)(current_user()['id'] ?? 0) ?: null,
             now(),
@@ -387,6 +392,42 @@ function depo_cikis_can_mark_processed(): bool
     return can_process_warehouse_dispatch() || is_warehouse_dispatch_operator();
 }
 
+function depo_cikis_awaiting_preparation(array $row): bool
+{
+    return (string)($row['preparation_status'] ?? 'ready') === 'awaiting'
+        && (int)($row['processed'] ?? 0) !== 1
+        && (int)($row['posted_to_cari'] ?? 0) !== 1;
+}
+
+function depo_cikis_mark_prepared(int $id): void
+{
+    if (!depo_cikis_can_mark_processed()) throw new RuntimeException('Bu işlem için yetkiniz yok.');
+    $row = depo_cikis_load($id);
+    if (!$row) throw new RuntimeException('Fiş bulunamadı.');
+    if ((int)($row['is_cancelled'] ?? 0) === 1) throw new RuntimeException('İptal edilmiş fiş hazırlanamaz.');
+    if (!depo_cikis_awaiting_preparation($row)) throw new RuntimeException('Bu fiş hazırlık aşamasında değil.');
+
+    $now = now();
+    $userId = current_user()['id'] ?? null;
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare("UPDATE warehouse_dispatches SET preparation_status='ready',prepared_at=?,prepared_by=?,updated_at=?
+            WHERE id=? AND COALESCE(is_cancelled,0)=0 AND COALESCE(preparation_status,'ready')='awaiting'
+            AND processed=0 AND posted_to_cari=0");
+        $stmt->execute([$now, $userId, $now, $id]);
+        if ($stmt->rowCount() !== 1) throw new RuntimeException('Fişin durumu değişti; sayfayı yenileyin.');
+        audit_action('depo_cikis', $id, 'hazirlandi', $row, [
+            'preparation_status'=>'ready', 'prepared_at'=>$now, 'prepared_by'=>$userId,
+        ], trim((string)($row['dispatch_no'] ?? '')));
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+    log_action('Depo çıkış fişi hazırlandı', trim((string)($row['dispatch_no'] ?? ('#' . $id))));
+}
+
 function depo_cikis_mark_processed(int $id): void
 {
     if(!depo_cikis_can_mark_processed()) throw new RuntimeException('Bu işlem için yetkiniz yok.');
@@ -394,11 +435,14 @@ function depo_cikis_mark_processed(int $id): void
     if(!$row) throw new RuntimeException('Fiş bulunamadı.');
     if((int)($row['is_cancelled']??0)===1) throw new RuntimeException('İptal edilmiş fiş çıkışı yapıldı olarak işaretlenemez.');
     if((int)($row['processed']??0)===1) return;
+    if(depo_cikis_awaiting_preparation($row)) throw new RuntimeException('Önce fişi Hazırlandı olarak işaretleyin.');
 
     $now=now();
     $userId=current_user()['id']??null;
-    db()->prepare('UPDATE warehouse_dispatches SET processed=1,processed_at=?,processed_by=?,updated_at=? WHERE id=? AND COALESCE(is_cancelled,0)=0')
-        ->execute([$now,$userId,$now,$id]);
+    $stmt=db()->prepare("UPDATE warehouse_dispatches SET processed=1,processed_at=?,processed_by=?,updated_at=?
+        WHERE id=? AND COALESCE(is_cancelled,0)=0 AND COALESCE(preparation_status,'ready')='ready' AND processed=0");
+    $stmt->execute([$now,$userId,$now,$id]);
+    if($stmt->rowCount()!==1) throw new RuntimeException('Fişin durumu değişti; sayfayı yenileyin.');
 
     audit_action('depo_cikis',$id,'cikis_yapildi',$row,[
         'processed'=>1,
@@ -413,6 +457,7 @@ function depo_cikis_post_to_cari(int $id): int
     if(!can_process_warehouse_dispatch()) throw new RuntimeException('Bu işlem için yetkiniz yok.');
     $row=depo_cikis_load($id); if(!$row)throw new RuntimeException('Fiş bulunamadı.');
     if((int)($row['is_cancelled']??0)===1)throw new RuntimeException('İptal edilmiş fiş cariye işlenemez.');
+    if(depo_cikis_awaiting_preparation($row)) throw new RuntimeException('Önce fişi Hazırlandı olarak işaretleyin.');
     if((int)($row['posted_to_cari']??0)!==1 && (int)($row['processed']??0)!==1) throw new RuntimeException('Önce fişi Çıkış Yapıldı olarak işaretleyin.');
     $cariId=(int)($row['cari_id']??0); if($cariId<=0)throw new RuntimeException('Cariye işlemek için fişte cari seçilmeli.');
     $total=(float)($row['total']??0); if($total<=0)throw new RuntimeException('Fiş toplamı bulunamadı.');
@@ -422,6 +467,7 @@ function depo_cikis_post_to_cari(int $id): int
         satis_bag_lock();
         $row=satis_bag_row('warehouse_dispatches',$id);
         if(!empty($row['is_cancelled'])) throw new RuntimeException('İptal edilmiş fiş cariye işlenemez.');
+        if(depo_cikis_awaiting_preparation($row)) throw new RuntimeException('Önce fişi Hazırlandı olarak işaretleyin.');
         $cariId=(int)$row['cari_id']; $total=(float)$row['total'];
         if($cariId<=0 || $total<=0) throw new RuntimeException('Cari ve fiş toplamını kontrol edin.');
         if(empty($row['processed']) && empty($row['posted_to_cari'])) throw new RuntimeException('Önce fişi Çıkış Yapıldı olarak işaretleyin.');
