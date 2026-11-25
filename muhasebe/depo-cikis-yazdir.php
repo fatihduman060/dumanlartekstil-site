@@ -102,6 +102,11 @@ $editUrl = 'depo-cikis.php?edit='.(int)$row['id'];
   .page.dense-print .balance-row{font-size:2.6mm}
   .page.dense-print .note{font-size:2.8mm}
 }
+.note-text{font-size:3.8mm;font-weight:900;color:#b42318;line-height:1.25;overflow-wrap:anywhere}
+@media print{
+  .note-text{color:#b42318!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .page.dense-print .note-text{font-size:3.5mm}
+}
 </style>
 </head>
 <body>
